@@ -1,0 +1,357 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="./">
+<head>
+  <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Properties of a Network3D Object &mdash; NetTracer3D 0.6.8 documentation</title>
+      <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=b86133f3" />
+      <link rel="stylesheet" type="text/css" href="_static/css/theme.css?v=e59714d7" />
+
+  
+      <script src="_static/jquery.js?v=5d32c60e"></script>
+      <script src="_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+      <script src="_static/documentation_options.js?v=ac3b80e6"></script>
+      <script src="_static/doctools.js?v=9bcbadda"></script>
+      <script src="_static/sphinx_highlight.js?v=dc90522c"></script>
+    <script src="_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="genindex.html" />
+    <link rel="search" title="Search" href="search.html" />
+    <link rel="next" title="Right Clicking - All Options Available by Right Clicking in the GUI" href="right_clicking.html" />
+    <link rel="prev" title="Labeling Branches and Branch Networks" href="branches.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="index.html" class="icon icon-home">
+            NetTracer3D
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">User Guide:</span></p>
+<ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="installation.html">Installation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="quickstart.html">Quickstart - Segmenting Data and Generating Networks</a></li>
+<li class="toctree-l1"><a class="reference internal" href="branches.html">Labeling Branches and Branch Networks</a></li>
+<li class="toctree-l1 current"><a class="current reference internal" href="#">Properties of a Network3D Object</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="#main-properties">Main Properties</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#necessary-structures-to-properties-stored-in-csvs">Necessary Structures to Properties stored in CSVs</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#temp-properties">Temp Properties</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#next-steps">Next Steps</a></li>
+</ul>
+</li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Detailed Function Guide:</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="right_clicking.html">Right Clicking - All Options Available by Right Clicking in the GUI</a></li>
+<li class="toctree-l1"><a class="reference internal" href="file_menu.html">All File Menu Options</a></li>
+<li class="toctree-l1"><a class="reference internal" href="analyze_menu.html">All Analyze Menu Options</a></li>
+<li class="toctree-l1"><a class="reference internal" href="process_menu.html">All Process Menu Options</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="index.html">NetTracer3D</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="index.html" class="icon icon-home" aria-label="Home"></a></li>
+      <li class="breadcrumb-item active">Properties of a Network3D Object</li>
+      <li class="wy-breadcrumbs-aside">
+            <a href="_sources/properties.rst.txt" rel="nofollow"> View page source</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <section id="properties-of-a-network3d-object">
+<span id="properties"></span><h1>Properties of a Network3D Object<a class="headerlink" href="#properties-of-a-network3d-object" title="Link to this heading"></a></h1>
+<section id="main-properties">
+<h2>Main Properties<a class="headerlink" href="#main-properties" title="Link to this heading"></a></h2>
+<p>The Network3D Object is how NetTracer3D groups together the data in an ongoing session. These properties will be saved/loaded when using ‘File -&gt; Save (As) Network 3D Object’, or the equivalent load.
+Many of NetTracer3D’s methods may need to reference one or more of these properties to function correctly.</p>
+<ul class="simple">
+<li><dl class="simple">
+<dt>These properties are as follows:</dt><dd><ol class="arabic simple">
+<li><p>Nodes - the image in the nodes channel that represents objects to be grouped in a network.</p></li>
+<li><p>Edges - the image in the edges channel that represents objects to use to connect nodes together.</p></li>
+<li><p>Overlay 1 - the image in the overlay1 channel</p></li>
+<li><p>Overlay 2 - the image in the overlay2 channel</p></li>
+<li><p>Network - The network itself.</p></li>
+<li><p>Node Centroids - The [Z,Y,X] centroid of each node.</p></li>
+<li><p>Edge Centroids - The [Z, Y, X] centroid of each edge.</p></li>
+<li><p>Node Communities - The communities that nodes in the network belong to.</p></li>
+<li><p>Node identities - The assigned identities of nodes in the network.</p></li>
+<li><p>xy_scale - The real-dimension per pixel of the 2D x/y plane (ie, 5 microns per pixel). This value will always be the same for both x and y. NetTracer3D does not currently support differentially scaled x and y dimensions.</p></li>
+<li><p>z_scale - The real dimension per voxel-depth of the 3D z plane.</p></li>
+</ol>
+</dd>
+</dl>
+</li>
+<li><dl class="simple">
+<dt>Whenever ‘Process -&gt; Calculate Connectivity Network’ is run, NetTracer3D will aquire an additional hidden property.</dt><dd><p>12. Search Region - An image of the nodes after they have been expanded by the desired parameter to search for edge connections.
+* Note this property does occupy RAM. It will be saved alongside the ‘Network 3D Object’ if it exists, but it will not be loaded in when loading ‘Network 3D Object’.
+* The main reason this exists is to allow it to be saved, after which the user can simply load the Search Region itself into the nodes channel, so that they may compute Connectivity Networks under new parameters, while being able to skip the node_search step completely (which is the slow step).</p>
+</dd>
+</dl>
+</li>
+<li><p>Note that the majority of the properties can be purged from RAM by using ‘Image -&gt; Properties’. <strong>The xy_scale and z_scale values should also be assigned here.</strong></p></li>
+</ul>
+</section>
+<section id="necessary-structures-to-properties-stored-in-csvs">
+<h2>Necessary Structures to Properties stored in CSVs<a class="headerlink" href="#necessary-structures-to-properties-stored-in-csvs" title="Link to this heading"></a></h2>
+<ul class="simple">
+<li><p>When NetTracer3D saves its properties, it organizes several into csv spreadsheets, containing specific data organization that it expects to find when loading the same properties back in.</p></li>
+<li><p>Some users may wish to load these properties in from elsewhere (.csv or .xlsx can be used to load). For example, if they want to manually assign nodes to certain centroids or identities by editing microsoft excel, or batch organizing datasets for import this way using something like the pandas module in python.</p></li>
+<li><p>These structures are as follows (make sure to use correct headers):</p></li>
+</ul>
+<ol class="arabic simple">
+<li><p>network property:</p></li>
+</ol>
+<ul class="simple">
+<li><p>Network tables are organized with this structure. Adjacent nodes in the same row are connected. The edge to the right of a node-pair in the same row is the edge that was found to connect them. If labeled edges were not used, this value is simply 0.</p></li>
+<li><p>For example, this table specifically is saying node 18 is paired to node 20, connected via edge 175, etc.</p></li>
+</ul>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Node 1A</p></th>
+<th class="head"><p>Node 1B</p></th>
+<th class="head"><p>Edge 1C</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>18</p></td>
+<td><p>20</p></td>
+<td><p>175</p></td>
+</tr>
+<tr class="row-odd"><td><p>16</p></td>
+<td><p>20</p></td>
+<td><p>176</p></td>
+</tr>
+</tbody>
+</table>
+<ul class="simple">
+<li><p>It may be worth mentioning that for very large networks that exceed the .csv column length limit, the rows begin to populate besides each other like this:</p></li>
+</ul>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Node 1A</p></th>
+<th class="head"><p>Node 1B</p></th>
+<th class="head"><p>Edge 1C</p></th>
+<th class="head"><p>Node 2A</p></th>
+<th class="head"><p>Node 2B</p></th>
+<th class="head"><p>Edge 2C</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>18</p></td>
+<td><p>20</p></td>
+<td><p>175</p></td>
+<td><p>21</p></td>
+<td><p>22</p></td>
+<td><p>177</p></td>
+</tr>
+<tr class="row-odd"><td><p>16</p></td>
+<td><p>20</p></td>
+<td><p>176</p></td>
+<td><p>19</p></td>
+<td><p>23</p></td>
+<td><p>178</p></td>
+</tr>
+</tbody>
+</table>
+<ul class="simple">
+<li><p>These new columns should be thought of their own rows, as in node 21 is paired to node 22, connected by edge 177. Note that that once these additional columns hit the column length limit, another set of rows will populate to the right, but this time with the number ‘3’ instead of the number ‘2’. This can continue as long as it needs to.</p></li>
+</ul>
+<ol class="arabic simple" start="2">
+<li><p>node_identities:</p></li>
+</ol>
+<ul class="simple">
+<li><p>Node identities are organized with a simple Node:Identity structure. Note that as of yet, these tables do not handle overflow in the .csv column length.</p></li>
+</ul>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>NodeID</p></th>
+<th class="head"><p>Identity</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>1</p></td>
+<td><p>[Value]</p></td>
+</tr>
+<tr class="row-odd"><td><p>2</p></td>
+<td><p>[Value]</p></td>
+</tr>
+<tr class="row-even"><td><p>3</p></td>
+<td><p>[Value]</p></td>
+</tr>
+</tbody>
+</table>
+<ol class="arabic simple" start="3">
+<li><p>node_communities:</p></li>
+</ol>
+<ul class="simple">
+<li><p>This property has the same structure as node_identities, and similarly does not handle column overflow.</p></li>
+</ul>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>NodeID</p></th>
+<th class="head"><p>Community</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>1</p></td>
+<td><p>[Value]</p></td>
+</tr>
+<tr class="row-odd"><td><p>2</p></td>
+<td><p>[Value]</p></td>
+</tr>
+<tr class="row-even"><td><p>3</p></td>
+<td><p>[Value]</p></td>
+</tr>
+</tbody>
+</table>
+<ol class="arabic simple" start="4">
+<li><p>node_centroids:</p></li>
+</ol>
+<ul class="simple">
+<li><p>Node centroids organize using Node:Zval:Yval:Xval. Again, they do not handle column overflow.</p></li>
+<li><p>Make sure to use Z, Y, X. This is because of the way numpy organizes dimensions.</p></li>
+<li><p>Coordinates should generally be ints greater than 0.</p></li>
+</ul>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Node ID</p></th>
+<th class="head"><p>Z</p></th>
+<th class="head"><p>Y</p></th>
+<th class="head"><p>X</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>1</p></td>
+<td><p>[Val]</p></td>
+<td><p>[Val]</p></td>
+<td><p>[Val]</p></td>
+</tr>
+<tr class="row-odd"><td><p>2</p></td>
+<td><p>[Val]</p></td>
+<td><p>[Val]</p></td>
+<td><p>[Val]</p></td>
+</tr>
+<tr class="row-even"><td><p>3</p></td>
+<td><p>[Val]</p></td>
+<td><p>[Val]</p></td>
+<td><p>[Val]</p></td>
+</tr>
+</tbody>
+</table>
+<ol class="arabic simple" start="4">
+<li><p>edge_centroids:</p></li>
+</ol>
+<ul class="simple">
+<li><p>Edge centroids are ostensibly the same as node centroids, albeit with a different header.</p></li>
+</ul>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Edge ID</p></th>
+<th class="head"><p>Z</p></th>
+<th class="head"><p>Y</p></th>
+<th class="head"><p>X</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>1</p></td>
+<td><p>[Val]</p></td>
+<td><p>[Val]</p></td>
+<td><p>[Val]</p></td>
+</tr>
+<tr class="row-odd"><td><p>2</p></td>
+<td><p>[Val]</p></td>
+<td><p>[Val]</p></td>
+<td><p>[Val]</p></td>
+</tr>
+<tr class="row-even"><td><p>3</p></td>
+<td><p>[Val]</p></td>
+<td><p>[Val]</p></td>
+<td><p>[Val]</p></td>
+</tr>
+</tbody>
+</table>
+</section>
+<section id="temp-properties">
+<h2>Temp Properties<a class="headerlink" href="#temp-properties" title="Link to this heading"></a></h2>
+<ul>
+<li><dl>
+<dt>The following properties will be maintained for the duration of an active session but are neither saved nor loaded with ‘Network 3D Objects’:</dt><dd><ol class="arabic simple">
+<li><p>Object volumes.</p></li>
+<li><p>Object Radii.</p></li>
+</ol>
+<ul class="simple">
+<li><p>While both of these properties exist in the active session, they will be displayed when their corresponding objects are clicked in the ‘Info on Object’ table.</p></li>
+</ul>
+</dd>
+</dl>
+</li>
+</ul>
+</section>
+<section id="next-steps">
+<h2>Next Steps<a class="headerlink" href="#next-steps" title="Link to this heading"></a></h2>
+<p>This concludes the tutorial section about using NetTracer3D. Although I covered many network-generating options in some detail, there are a plethora of other features and functions to learn about. The rest of this guide will go over all the algorithms and associated parameters within NetTracer3D in detail, in a more informative and less tutorial-oriented style. For questions about any particular function, please locate the section in the corresponding section guide to read more about it.</p>
+</section>
+</section>
+
+
+           </div>
+          </div>
+          <footer><div class="rst-footer-buttons" role="navigation" aria-label="Footer">
+        <a href="branches.html" class="btn btn-neutral float-left" title="Labeling Branches and Branch Networks" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left" aria-hidden="true"></span> Previous</a>
+        <a href="right_clicking.html" class="btn btn-neutral float-right" title="Right Clicking - All Options Available by Right Clicking in the GUI" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right" aria-hidden="true"></span></a>
+    </div>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2025, Liam McLaughlin.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

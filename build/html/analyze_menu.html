@@ -1,0 +1,887 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="./">
+<head>
+  <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>All Analyze Menu Options &mdash; NetTracer3D 0.6.8 documentation</title>
+      <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=b86133f3" />
+      <link rel="stylesheet" type="text/css" href="_static/css/theme.css?v=e59714d7" />
+
+  
+      <script src="_static/jquery.js?v=5d32c60e"></script>
+      <script src="_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+      <script src="_static/documentation_options.js?v=ac3b80e6"></script>
+      <script src="_static/doctools.js?v=9bcbadda"></script>
+      <script src="_static/sphinx_highlight.js?v=dc90522c"></script>
+    <script src="_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="genindex.html" />
+    <link rel="search" title="Search" href="search.html" />
+    <link rel="next" title="All Process Menu Options" href="process_menu.html" />
+    <link rel="prev" title="All File Menu Options" href="file_menu.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="index.html" class="icon icon-home">
+            NetTracer3D
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">User Guide:</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="installation.html">Installation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="quickstart.html">Quickstart - Segmenting Data and Generating Networks</a></li>
+<li class="toctree-l1"><a class="reference internal" href="branches.html">Labeling Branches and Branch Networks</a></li>
+<li class="toctree-l1"><a class="reference internal" href="properties.html">Properties of a Network3D Object</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Detailed Function Guide:</span></p>
+<ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="right_clicking.html">Right Clicking - All Options Available by Right Clicking in the GUI</a></li>
+<li class="toctree-l1"><a class="reference internal" href="file_menu.html">All File Menu Options</a></li>
+<li class="toctree-l1 current"><a class="current reference internal" href="#">All Analyze Menu Options</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="#analyze-network-show-network">‘Analyze -&gt; Network -&gt; Show Network’</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#parameter-explanations">Parameter Explanations</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="#analyze-network-community-partition-generic-network-stats">‘Analyze -&gt; Network -&gt; Community Partition+ Generic Network Stats’</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#id1">Parameter Explanations</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="#analyze-network-identity-makeup-of-network">‘Analyze -&gt; Network -&gt; Identity Makeup of Network…’</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#algorithm-explanation">Algorithm Explanation</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="#analyze-stats-calculate-generic-network-stats">‘Analyze -&gt; Stats -&gt; Calculate Generic Network Stats’</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#analyze-stats-radial-distribution-analysis">‘Analyze -&gt; Stats -&gt; Radial Distribution Analysis’</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#id2">Parameter Explanations</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="#analyze-stats-degree-distribution-analysis">‘Analyze -&gt; Stats -&gt; Degree Distribution Analysis’</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#analyze-stats-identity-distribution-of-neighbors">‘Analyze -&gt; Stats -&gt; Identity Distribution of Neighbors’</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#id3">Parameter Explanations</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#id4">Algorithm Explanation</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="#analyze-stats-generate-equivalent-random-network">‘Analyze -&gt; Stats -&gt; Generate Equivalent Random Network’</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#analyze-stats-calculate-volumes">‘Analyze -&gt; Stats -&gt; Calculate Volumes’</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#analyze-stats-calculate-radii">‘Analyze -&gt; Stats -&gt; Calculate Radii’</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#parameter-explanation">Parameter Explanation</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#id5">Algorithm Explanation</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="#analyze-stats-calculate-node-edge-interactions">‘Analyze -&gt; Stats -&gt; Calculate Node &lt; &gt; Edge Interactions’</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#id6">Parameter Explanations</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#id7">Algorithm Explanation</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="#analyze-data-overlays-get-degree-information">‘Analyze -&gt; Data/Overlays -&gt; Get Degree Information’</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#id8">Parameter Explanations</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="#analyze-data-overlays-get-hub-information">‘Analyze -&gt; Data/Overlays -&gt; Get Hub Information’</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#id9">Parameter Explanations</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="#analyze-data-overlays-get-mother-nodes">‘Analyze -&gt; Data/Overlays -&gt; Get Mother Nodes’</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#id10">Parameter Explanations</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="#analyze-data-overlays-code-communities">‘Analyze -&gt; Data/Overlays -&gt; Code Communities’</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#id11">Parameter Explanations</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="#analyze-data-overlays-code-identities">‘Analyze -&gt; Data/Overlays -&gt; Code Identities’</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#id12">Parameter Explanations</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="#next-steps">Next Steps</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="process_menu.html">All Process Menu Options</a></li>
+<li class="toctree-l1"><a class="reference internal" href="image_menu.html">All Image Menu Options</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Development:</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="contact.html">Contact</a></li>
+<li class="toctree-l1"><a class="reference internal" href="changelog.html">Changelog</a></li>
+<li class="toctree-l1"><a class="reference internal" href="roadmap.html">Road Map</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="index.html">NetTracer3D</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="index.html" class="icon icon-home" aria-label="Home"></a></li>
+      <li class="breadcrumb-item active">All Analyze Menu Options</li>
+      <li class="wy-breadcrumbs-aside">
+            <a href="_sources/analyze_menu.rst.txt" rel="nofollow"> View page source</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <section id="all-analyze-menu-options">
+<span id="analyze-menu"></span><h1>All Analyze Menu Options<a class="headerlink" href="#all-analyze-menu-options" title="Link to this heading"></a></h1>
+<p>The Analyze Menu offers options for creating graphs and statistical tables.</p>
+<ul class="simple">
+<li><p>The first submenu is the network menu, which has functions for visualizing networks and analyzing network communities.</p></li>
+</ul>
+<section id="analyze-network-show-network">
+<h2>‘Analyze -&gt; Network -&gt; Show Network’<a class="headerlink" href="#analyze-network-show-network" title="Link to this heading"></a></h2>
+<ul class="simple">
+<li><p>Use this function to visualize the method in an interactable matplotlib graph.</p></li>
+<li><p>Note that this window will be very slow for graphs with a huge number of nodes.</p></li>
+<li><p>Selecting this displays the following menu:</p></li>
+</ul>
+<a class="reference internal image-reference" href="_images/analyze_1.png"><img alt="Network Vis Menu" src="_images/analyze_1.png" style="width: 300px;" />
+</a>
+<section id="parameter-explanations">
+<h3>Parameter Explanations<a class="headerlink" href="#parameter-explanations" title="Link to this heading"></a></h3>
+<ol class="arabic simple">
+<li><dl class="simple">
+<dt>Enable the ‘geo_layout’ button to have nodes be placed in representative regions of their 3D location.</dt><dd><ul class="simple">
+<li><p>Their XY position in the graph will correspond to the image, while the node size will represent their Z-position (with larger nodes representing smaller Z-vals, ie. closer to the viewer).</p></li>
+<li><p>Note that this method may run rather slowly on graphs with a huge number of nodes.</p></li>
+<li><p>Keeping this unselected will group nodes using the NetworkX spring layout.</p></li>
+</ul>
+</dd>
+</dl>
+</li>
+<li><dl class="simple">
+<dt>Execution Mode (Menu Includes the following options):</dt><dd><ol class="arabic simple">
+<li><dl class="simple">
+<dt>Default:</dt><dd><ul class="simple">
+<li><p>All nodes are represented by their numerical ID, and nothing else.</p></li>
+</ul>
+</dd>
+</dl>
+</li>
+<li><dl class="simple">
+<dt>Community Coded (Uses Current…)</dt><dd><ul class="simple">
+<li><p>Colors nodes by their community, assuming they have already been community partitioned.</p></li>
+</ul>
+</dd>
+</dl>
+</li>
+<li><dl class="simple">
+<dt>Community Coded (Redo Label Propogation…)</dt><dd><ul class="simple">
+<li><p>Re-partition nodes using label propogation, then display them color-coded by their community.</p></li>
+</ul>
+</dd>
+</dl>
+</li>
+<li><dl class="simple">
+<dt>Community Coded (Redo Louvain…)</dt><dd><ul class="simple">
+<li><p>Re-partition nodes using louvain, then display them color-coded by their community.</p></li>
+</ul>
+</dd>
+</dl>
+</li>
+<li><dl class="simple">
+<dt>Node-ID Coded</dt><dd><ul class="simple">
+<li><p>Display nodes color-coded by their node ID (if it exists).</p></li>
+</ul>
+</dd>
+</dl>
+</li>
+</ol>
+</dd>
+</dl>
+</li>
+<li><dl class="simple">
+<dt>Output directory</dt><dd><ul class="simple">
+<li><p>If a string path is included to a directory, the resulting graph will be autosaved there.</p></li>
+<li><p>Note these graphs can be saved in the matplotlib window anyway.</p></li>
+</ul>
+</dd>
+</dl>
+</li>
+</ol>
+<ul class="simple">
+<li><p>Press Show Network to open a new matplotlib window displaying the graph.</p></li>
+</ul>
+</section>
+</section>
+<section id="analyze-network-community-partition-generic-network-stats">
+<h2>‘Analyze -&gt; Network -&gt; Community Partition+ Generic Network Stats’<a class="headerlink" href="#analyze-network-community-partition-generic-network-stats" title="Link to this heading"></a></h2>
+<ul class="simple">
+<li><p>Use this function to partition the nodes into communities.</p></li>
+<li><p>Node communities will be saved and loaded with any ‘Save/Load Network3D object’ options.</p></li>
+<li><p>Selecting this displays the following menu:</p></li>
+</ul>
+<a class="reference internal image-reference" href="_images/analyze2.png"><img alt="Com Menu" src="_images/analyze2.png" style="width: 300px;" />
+</a>
+<section id="id1">
+<h3>Parameter Explanations<a class="headerlink" href="#id1" title="Link to this heading"></a></h3>
+<ol class="arabic">
+<li><dl class="simple">
+<dt>Use Weighted Network</dt><dd><ul class="simple">
+<li><p>Enabling this option has the community partition consider graph weights.</p></li>
+<li><p>By default, generated networks aquire weights when two or more discrete node objects join objects together.</p></li>
+<li><p>Objects joined by heavily weighted edges will be more likely to be grouped into the same community.</p></li>
+</ul>
+</dd>
+</dl>
+</li>
+<li><dl>
+<dt>Execution Mode (Menu Includes the following options):</dt><dd><ol class="arabic simple">
+<li><dl class="simple">
+<dt>Label Propogation</dt><dd><ul class="simple">
+<li><p>Partition the network using NetworkX’s label propogation algorithm.</p></li>
+</ul>
+</dd>
+</dl>
+</li>
+<li><dl class="simple">
+<dt>Louvain</dt><dd><ul class="simple">
+<li><p>Partition the network using python-louvain’s louvain algorithm.</p></li>
+</ul>
+</dd>
+</dl>
+</li>
+</ol>
+<ul class="simple">
+<li><p>Both of these options are quick, efficient ways to group networks. Label propogation is a bit faster but more variable.</p></li>
+<li><p>Note that network community detection in general (and in these cases) has some degree of randomness in how it decides to group objects (based on what nodes it starts from).</p></li>
+</ul>
+</dd>
+</dl>
+</li>
+<li><dl class="simple">
+<dt>Community Stats</dt><dd><ul class="simple">
+<li><p>Whether or not to calculate community-based stats for the graph</p></li>
+<li><dl class="simple">
+<dt>If yes, these are the stats that are returned, referring to the entire network:</dt><dd><ul>
+<li><p>Modularity Entire Network (From python-louvain when louvain, or NetworkX when label propogation.)</p></li>
+<li><p>Number of Communities</p></li>
+<li><p>Community Sizes</p></li>
+<li><p>Average Community Size</p></li>
+<li><p>Number of Iterations (Louvain only - the number of iterations the algorithm ran)</p></li>
+<li><p>Global Clustering Coefficient (NetworkX)</p></li>
+<li><p>Assortativity (NetworkX)</p></li>
+<li><p>Inter-community Edges (How many edges exist between communities)</p></li>
+<li><p>Mixing Parameter (ratio of external to total edges for nodes)</p></li>
+</ul>
+</dd>
+</dl>
+</li>
+<li><dl class="simple">
+<dt>And for each discrete community, these stats are returned:</dt><dd><ul>
+<li><p>Density (NetworkX)</p></li>
+<li><p>Conductance (NetworkX)</p></li>
+<li><p>Average Clustering (NetworkX)</p></li>
+<li><p>Degree Centrality (NetworkX)</p></li>
+<li><p>Average Shortest Path Length</p></li>
+</ul>
+</dd>
+</dl>
+</li>
+<li><p>Many of these stats come from the NetworkX or python-louvain packages (specified above). Please see the below documentation for more information:</p></li>
+<li><p>python-louvain documentation: <a class="reference external" href="https://python-louvain.readthedocs.io/en/latest/api">https://python-louvain.readthedocs.io/en/latest/api</a>.html#</p></li>
+<li><p>networkx documentation: <a class="reference external" href="https://networkx.org/">https://networkx.org/</a></p></li>
+</ul>
+</dd>
+</dl>
+</li>
+</ol>
+<ul class="simple">
+<li><p>Press partition to seperate the nodes into communities based on the selected parameters. In addition to setting the node_communities property, tables showing the community for each node and the stats will be generated in the tabulated data widget.</p></li>
+</ul>
+</section>
+</section>
+<section id="analyze-network-identity-makeup-of-network">
+<h2>‘Analyze -&gt; Network -&gt; Identity Makeup of Network…’<a class="headerlink" href="#analyze-network-identity-makeup-of-network" title="Link to this heading"></a></h2>
+<ul class="simple">
+<li><p>This method is designed to be run on groups of nodes that have been community partitioned.</p></li>
+<li><p>When selected, it will give a weighted average out of one that represents what proportion of nodes of some ID (as defined in the node_identities property) exist in any random community.</p></li>
+<li><p>The communities are weighted by size, so larger communities contribute to this value more.</p></li>
+<li><p>When selected, this method will create a table with the results that looks like this:</p></li>
+</ul>
+<a class="reference internal image-reference" href="_images/analyze3.png"><img alt="Com Comp Menu" src="_images/analyze3.png" style="width: 800px;" />
+</a>
+<ul class="simple">
+<li><p>This method can be a good way to characterize what communities in the network consist of. For example, if I have grouped neighborhoods of different cell types and am wondering what a generic community looks like.</p></li>
+</ul>
+<section id="algorithm-explanation">
+<h3>Algorithm Explanation<a class="headerlink" href="#algorithm-explanation" title="Link to this heading"></a></h3>
+<p>This algorithm:</p>
+<ol class="arabic simple">
+<li><p>Groups nodes by their community ID</p></li>
+<li><p>For each community, counts the number of nodes with each identity type</p></li>
+<li><p>Weights these counts by the size of the community</p></li>
+<li><p>Sums these weighted counts across all communities</p></li>
+<li><p>Normalizes the results twice: first by the total number of nodes, then to ensure all proportions sum to 1</p></li>
+<li><p>Returns a dictionary mapping each identity type to its weighted proportion in the network</p></li>
+</ol>
+<ul class="simple">
+<li><p>The second submenu is ‘Stats’, and is primarily used to create tables and graphs about the network or image morphology.</p></li>
+</ul>
+</section>
+</section>
+<section id="analyze-stats-calculate-generic-network-stats">
+<h2>‘Analyze -&gt; Stats -&gt; Calculate Generic Network Stats’<a class="headerlink" href="#analyze-stats-calculate-generic-network-stats" title="Link to this heading"></a></h2>
+<ul class="simple">
+<li><p>This function simply generates and displays (in the tabulated data widget) a number of generic stats about the network.</p></li>
+<li><dl class="simple">
+<dt>The following stats will be generated:</dt><dd><ul>
+<li><p>num_nodes</p></li>
+<li><p>num_edges</p></li>
+<li><p>density</p></li>
+<li><p>is_directed (Note that networks currently will always be undirected)</p></li>
+<li><p>is_connected</p></li>
+<li><p>num_connected_components</p></li>
+<li><p>largest_component_size</p></li>
+<li><p>avg_degree</p></li>
+<li><p>max_degree</p></li>
+<li><p>min_degree</p></li>
+<li><p>avg_betweenness_centrality</p></li>
+<li><p>avg_closeness_centrality</p></li>
+<li><p>avg_eigenvector_centrality</p></li>
+<li><p>avg_clustering_coefficient</p></li>
+<li><p>transitivity</p></li>
+<li><p>diameter</p></li>
+<li><p>avg_shortest_path_length</p></li>
+<li><p>is_tree</p></li>
+<li><p>num_triangles</p></li>
+<li><p>degree_assortativity</p></li>
+<li><p>Unconnected nodes (left out from node image)</p></li>
+</ul>
+</dd>
+</dl>
+</li>
+<li><p>These stats are all more or less generated by networkx.</p></li>
+<li><p>Please see networkx documentation for more information: <a class="reference external" href="https://networkx.org/">https://networkx.org/</a></p></li>
+</ul>
+</section>
+<section id="analyze-stats-radial-distribution-analysis">
+<h2>‘Analyze -&gt; Stats -&gt; Radial Distribution Analysis’<a class="headerlink" href="#analyze-stats-radial-distribution-analysis" title="Link to this heading"></a></h2>
+<ul class="simple">
+<li><p>This method creates a graph showing the average number of neighboring nodes (of any given node) on the y axis and the distance from any given node in the x axis.</p></li>
+<li><p>Use this method to evaluate how far apart your connected nodes tend to be in 3D space, and how those relationships are distributed.</p></li>
+<li><p>For example, we would typically expect more efficient networks to mostly have an abundance of short connections and a minority of long connections.</p></li>
+</ul>
+<section id="id2">
+<h3>Parameter Explanations<a class="headerlink" href="#id2" title="Link to this heading"></a></h3>
+<ol class="arabic simple">
+<li><dl class="simple">
+<dt>Bucket Distance…</dt><dd><ul class="simple">
+<li><p>This is the distance that will be used as a step size while searching outward from nodes in the graph to evaluate how close in 3D space their neighbors are.</p></li>
+</ul>
+</dd>
+</dl>
+</li>
+<li><dl class="simple">
+<dt>Output Directory</dt><dd><ul class="simple">
+<li><p>If a string path is included to a directory, the resulting graph will be autosaved there.</p></li>
+<li><p>Note these graphs can be saved in the matplotlib window anyway.</p></li>
+</ul>
+</dd>
+</dl>
+</li>
+</ol>
+<ul class="simple">
+<li><p>Press ‘Get Radial Distribution’ to open a new matplotlib window showing the graph, and also place the obtained data in as a new table in the tabulated data widget.</p></li>
+</ul>
+</section>
+</section>
+<section id="analyze-stats-degree-distribution-analysis">
+<h2>‘Analyze -&gt; Stats -&gt; Degree Distribution Analysis’<a class="headerlink" href="#analyze-stats-degree-distribution-analysis" title="Link to this heading"></a></h2>
+<ul class="simple">
+<li><p>This method creates a graph showing the degree (of any given node) on the x axis and the total proportion of nodes with that degree in the network on the y axis. (Note that degree = the number of neighbors a node has).</p></li>
+<li><p>Use this method to evaluate how connected the network is, and how meaningful those connections tend to be.</p></li>
+<li><p>For example, we would typically expect more efficient networks to mostly have an abundance of low-degree nodes and a minority of high degree nodes.</p></li>
+<li><p>The only parameter it asks for is an output directory (If a string path is included to a directory, the resulting graph will be autosaved there).</p></li>
+<li><p>Press ‘Get Degree Distribution’ to open a new matplotlib window showing the graph, and also place the obtained data in as a new table in the tabulated data widget.</p></li>
+</ul>
+</section>
+<section id="analyze-stats-identity-distribution-of-neighbors">
+<h2>‘Analyze -&gt; Stats -&gt; Identity Distribution of Neighbors’<a class="headerlink" href="#analyze-stats-identity-distribution-of-neighbors" title="Link to this heading"></a></h2>
+<ul class="simple">
+<li><p>This method allows us to explore what kinds of nodes (as categorized by their node_identities) tend to be located nearby/connected to nodes of some desired ID.</p></li>
+<li><p>Use this method when you want to characterize what interacts with what, for example, if I have cellular neighborhoods and want to know what’s near what.</p></li>
+<li><p>Selecting this displays the following menu:</p></li>
+</ul>
+<a class="reference internal image-reference" href="_images/analyze4.png"><img alt="NeighborID Menu" src="_images/analyze4.png" style="width: 200px;" />
+</a>
+<section id="id3">
+<h3>Parameter Explanations<a class="headerlink" href="#id3" title="Link to this heading"></a></h3>
+<ol class="arabic simple">
+<li><dl class="simple">
+<dt>Root Identity to Search…</dt><dd><ul class="simple">
+<li><p>This is the identity of the sorts of nodes we will search outward from. The neighborhoods of these nodes will be characterized.</p></li>
+</ul>
+</dd>
+</dl>
+</li>
+<li><dl class="simple">
+<dt>Output Directory</dt><dd><ul class="simple">
+<li><p>If a string path is included to a directory, the resulting outputs will be autosaved there.</p></li>
+</ul>
+</dd>
+</dl>
+</li>
+<li><dl class="simple">
+<dt>Mode (Menu Includes the following options):</dt><dd><ol class="arabic simple">
+<li><dl class="simple">
+<dt>From Network - Based on Absolute Connectivity</dt><dd><ul class="simple">
+<li><p>Reveals information about neighors based on the connectivity of the network.</p></li>
+</ul>
+</dd>
+</dl>
+</li>
+<li><dl class="simple">
+<dt>Use Labeled Nodes - Based on Morphological Densities</dt><dd><ul class="simple">
+<li><p>Reveals information about neighors based on what sorts of nodes are physically in the vicinity.</p></li>
+</ul>
+</dd>
+</dl>
+</li>
+</ol>
+</dd>
+</dl>
+</li>
+<li><dl class="simple">
+<dt>Search Radius (if using Mode 2)</dt><dd><ul class="simple">
+<li><p>The distance that nodes will search to characterize their neighborhoods. Option one currently will always just search for immediate network neighbors.</p></li>
+</ul>
+</dd>
+</dl>
+</li>
+<li><dl class="simple">
+<dt>Fast dilation option (if using Mode 2)</dt><dd><ul class="simple">
+<li><p>If disabled, searching will be done with perfect distance transforms. If enabled, searching will be done with with psuedo-3D kernels which may be faster but less accurate. For more information on this algorithm, see <a class="reference internal" href="process_menu.html#dilation"><span class="std std-ref">‘Process -&gt; Image -&gt; Dilate’</span></a>.</p></li>
+</ul>
+</dd>
+</dl>
+</li>
+</ol>
+<ul class="simple">
+<li><p>Press ‘Get Neighborhood Identity Distribution’ to display a few matplotlib barcharts, with associated data tables being added to the tabulated data widget.</p></li>
+<li><p>The following tables (and corresponding graphs) will appear:</p></li>
+<li><dl class="simple">
+<dt>If using mode 1:</dt><dd><ol class="arabic simple">
+<li><dl class="simple">
+<dt>Neighborhood Distribution of Nodes in Network from Nodes: ‘X’</dt><dd><ul>
+<li><p>Shows how many total neighbors of each ID that nodes of ID ‘X’ have (including other type ‘X’).</p></li>
+</ul>
+</dd>
+</dl>
+</li>
+<li><dl class="simple">
+<dt>Neighborhood Distribution of Nodes in Network from Nodes ‘X’ as a proportion of total nodes of that ID.</dt><dd><ul>
+<li><p>For each ID category, shows what proportion of that node type in the network are neighbors of nodes of ID ‘X’ (including other type ‘X’)</p></li>
+</ul>
+</dd>
+</dl>
+</li>
+</ol>
+</dd>
+</dl>
+</li>
+<li><dl class="simple">
+<dt>If using mode 2:</dt><dd><ol class="arabic simple">
+<li><dl class="simple">
+<dt>Volumetric Neighborhood Distribution of Nodes in image that are ‘y’ distance from nodes: ‘X’</dt><dd><ul>
+<li><p>Shows the total volumes of nodes of each ID within distance ‘y’ from nodes of ID ‘X’ (does not include other type ‘X’)</p></li>
+</ul>
+</dd>
+</dl>
+</li>
+<li><dl class="simple">
+<dt>Density Distribution of Nodes in image that are ‘y’ from Nodes ‘X’ as a proportion of totaly node volume of that ID.</dt><dd><ul>
+<li><p>For each ID category, shows what proportion of the volume of that node type are within distance ‘y’ from nodes of ID ‘X’ (does not include other type ‘X’)</p></li>
+</ul>
+</dd>
+</dl>
+</li>
+<li><dl class="simple">
+<dt>Clustering Factor of Node Identities within ‘y’ from nodes ‘X’</dt><dd><ul>
+<li><p>For each ID category, shows the volumetric density of nodes of that ID type within distance ‘y’ from nodes of ID ‘X’, divided by the densities of nodes of that ID type in the entire image. (does not include other type ‘X’)</p></li>
+<li><p>This is also known as relative density. Essentially, a val greater than 1 means said node ID is unevenly distributed to be closer to nodes of ID ‘X’, while a val less than 1 means they are preferentially avoiding nodes of ID ‘X’.</p></li>
+</ul>
+</dd>
+</dl>
+</li>
+</ol>
+</dd>
+</dl>
+</li>
+</ul>
+</section>
+<section id="id4">
+<h3>Algorithm Explanation<a class="headerlink" href="#id4" title="Link to this heading"></a></h3>
+<ol class="arabic simple">
+<li><p>Mode 1 just counts neighbors that are immediate neighbors in the network of the desired node ID.</p></li>
+<li><p>Mode 2 searches using either a distance transform or psuedo-3D binary dilation. It searches outward from nodes of the desired ID type, and hence does not actually include them. This is why this option never evaluates its own clustering.</p></li>
+</ol>
+</section>
+</section>
+<section id="analyze-stats-generate-equivalent-random-network">
+<h2>‘Analyze -&gt; Stats -&gt; Generate Equivalent Random Network’<a class="headerlink" href="#analyze-stats-generate-equivalent-random-network" title="Link to this heading"></a></h2>
+<ul class="simple">
+<li><p>This method allows us to generate a random network with an equivalent number of edges and nodes as the current network.</p></li>
+<li><p>The purpose of this method is a quick way to compare our network to a similar random one, which can be used to demonstrate presence of non-randomness, for example.</p></li>
+<li><dl class="simple">
+<dt>The only parameter is ‘weighted’. If selected, edges in the random network will be allowed to stack into weighted edges.</dt><dd><ul>
+<li><p>Note if my network is weighted, weights are included in total edge counts for the purpose of this method, so three nodes with one edge of weight one and one edge of weight two will allow three connections to be made in the corresponding random network.</p></li>
+<li><p>The weighted param just tells the random network whether its allowed to use these total edges to make weighted edges (a weighted edge of 2 would <em>cost</em> the random network 2 of its available edges, so to speak).</p></li>
+<li><p>The weighted param does not tell the random network to ignore weights in the original network. To do that, first de-weight the network with ‘Process -&gt; Modify Network’.</p></li>
+</ul>
+</dd>
+</dl>
+</li>
+<li><dl class="simple">
+<dt>Press ‘Generate Random Network’ to place the random network in the ‘Selection’ network table. From here, it can be right clicked to either save it or to swap it into the active network.</dt><dd><ul>
+<li><p>Note that swapping the random network to active runs the risk of overriding the old active network if a new selection is made, so be sure to save it first.</p></li>
+</ul>
+</dd>
+</dl>
+</li>
+</ul>
+</section>
+<section id="analyze-stats-calculate-volumes">
+<h2>‘Analyze -&gt; Stats -&gt; Calculate Volumes’<a class="headerlink" href="#analyze-stats-calculate-volumes" title="Link to this heading"></a></h2>
+<ul class="simple">
+<li><p>This method finds the volumes of all objects in the ‘Active Image’.</p></li>
+<li><p>The volumes are scaled by the axis scalings and returned as a table in the tabulated data widget.</p></li>
+<li><p>Algorithm explanation: This method uses the np.bincount() method to count each label and then just multiplies the outputs by the scalings.</p></li>
+</ul>
+</section>
+<section id="analyze-stats-calculate-radii">
+<h2>‘Analyze -&gt; Stats -&gt; Calculate Radii’<a class="headerlink" href="#analyze-stats-calculate-radii" title="Link to this heading"></a></h2>
+<ul class="simple">
+<li><p>This method finds the largest radii of all objects in the ‘Active Image’.</p></li>
+<li><p>It may be good to use, for example, on labeled branches to evaluate how thick the branches are.</p></li>
+</ul>
+<section id="parameter-explanation">
+<h3>Parameter Explanation<a class="headerlink" href="#parameter-explanation" title="Link to this heading"></a></h3>
+<ul class="simple">
+<li><p>This method has one parameter, ‘GPU’</p></li>
+<li><p>If you enable it, the system will attempt to attempt to use the GPU to calculate. Note that this is only possible with a working CUDA toolkit.</p></li>
+</ul>
+</section>
+<section id="id5">
+<h3>Algorithm Explanation<a class="headerlink" href="#id5" title="Link to this heading"></a></h3>
+<ol class="arabic simple">
+<li><p>The scipy.ndimage.find_objects() method is used to get bounding boxes around all the labeled objects.</p></li>
+<li><p>For each object, a subarray is cut out around it using its bounding box, with padding on all sides.</p></li>
+<li><p>The object in question is boolen indexed within its subarray.</p></li>
+<li><p>The scipy.ndimage.distance_transform_edt() method is used to get a distance transform for the object, with the maximum value (ie, furthest from the background) representing the largest radii.</p></li>
+<li><p>This process is paralellized across all available CPU cores. It <em>will</em> hog your entire machine if given a big task.</p></li>
+</ol>
+</section>
+</section>
+<section id="analyze-stats-calculate-node-edge-interactions">
+<h2>‘Analyze -&gt; Stats -&gt; Calculate Node &lt; &gt; Edge Interactions’<a class="headerlink" href="#analyze-stats-calculate-node-edge-interactions" title="Link to this heading"></a></h2>
+<ul class="simple">
+<li><p>This method will provide information about the volume of positive ‘edge’ image surrounding each labeled object in your ‘node’ image.</p></li>
+<li><p>You would essentially use it for a basic measurement of how much the edge channel image is surrounding each node.</p></li>
+<li><p>This measurement is performed for every node in the image individually.</p></li>
+<li><p>When you select this option, you will see this menu:</p></li>
+</ul>
+<a class="reference internal image-reference" href="_images/analyze5.png"><img alt="edgenode Menu" src="_images/analyze5.png" style="width: 800px;" />
+</a>
+<section id="id6">
+<h3>Parameter Explanations<a class="headerlink" href="#id6" title="Link to this heading"></a></h3>
+<ol class="arabic simple">
+<li><dl class="simple">
+<dt>node_search:</dt><dd><ul class="simple">
+<li><p>This value represents the distance one would like to search outwards from the nodes image to quantify edge interactions, and is scaled with the current image scalings.</p></li>
+</ul>
+</dd>
+</dl>
+</li>
+<li><dl class="simple">
+<dt>Execution Mode:</dt><dd><ul class="simple">
+<li><dl class="simple">
+<dt>This dropdown menu has two options:</dt><dd><ol class="arabic simple">
+<li><p>‘Include regions inside node’ will include the node itself in the search region.</p></li>
+<li><p>‘Exclude regions inside node’ will have the node only use the regions outside of it to search.</p></li>
+</ol>
+</dd>
+</dl>
+</li>
+</ul>
+</dd>
+</dl>
+</li>
+<li><dl class="simple">
+<dt>Use Fast Dilation…</dt><dd><ul class="simple">
+<li><p>If disabled, searching will be done with perfect distance transforms.</p></li>
+<li><p>If enabled, searching will be done with psuedo-3D kernels, which may be faster but imperfect at measuring.</p></li>
+<li><p>For more information on this algorithm, see <a class="reference internal" href="process_menu.html#dilation"><span class="std std-ref">‘Process -&gt; Image -&gt; Dilate’</span></a>.</p></li>
+</ul>
+</dd>
+</dl>
+</li>
+</ol>
+<ul class="simple">
+<li><p>Press Calculate to run the method with the desired parameters. The output data will be used to create a new table in the tabulated data widget.</p></li>
+</ul>
+</section>
+<section id="id7">
+<h3>Algorithm Explanation<a class="headerlink" href="#id7" title="Link to this heading"></a></h3>
+<ol class="arabic simple">
+<li><p>The scipy.ndimage.find_objects() method is used to get bounding boxes around all the labeled objects in the nodes channel.</p></li>
+<li><p>For each object, a subarray is cut out around it using its bounding box, that includes the object plus any additional space that it will need to perform a search/dilation.</p></li>
+<li><p>The same subarray is cut out of the edges channel (for neighborhood comparison).</p></li>
+<li><p>The node object in question is boolen indexed within its subarray.</p></li>
+<li><p>If not using the fast dilation option, then the scipy.ndimage.distance_transform_edt() method is used to get a distance transform for the object. This distance transform is thresholded based on the desired distance away from the node we want, then binarized.</p></li>
+<li><p>If using fast dilation, the above is performed using psuedo-3D binary kernels without having to take a dt.</p></li>
+<li><p>If internal regions are being excluded, an inverted boolean array of the original shape is used to ‘cut out’ the core from the dilated binary mask. The binary dilated mask is then multiplied against the edge subarray to isolate edges specific to the dilated region.</p></li>
+<li><p>These edges are then counted, scaled volumetrically (by multiplying the three axis dimensions by the counted number), then added to a label:volume dictionary that will be eventually returned.</p></li>
+<li><p>This process is paralellized across all available CPU cores. It <em>will</em> hog your entire machine if given a big task.</p></li>
+</ol>
+<ul class="simple">
+<li><p>The third submenu, ‘Data/Overlays’, has hybrid functions that both produce data while generating Overlays for the Image Viewer Window</p></li>
+</ul>
+</section>
+</section>
+<section id="analyze-data-overlays-get-degree-information">
+<h2>‘Analyze -&gt; Data/Overlays -&gt; Get Degree Information’<a class="headerlink" href="#analyze-data-overlays-get-degree-information" title="Link to this heading"></a></h2>
+<ul class="simple">
+<li><p>This method can be used to extract information about the degrees of nodes in the image, while generating Overlays representing the same.</p></li>
+<li><p>When you select this option, you will see this menu:</p></li>
+</ul>
+<a class="reference internal image-reference" href="_images/analyze6.png"><img alt="edgenode Menu" src="_images/analyze6.png" style="width: 800px;" />
+</a>
+<section id="id8">
+<h3>Parameter Explanations<a class="headerlink" href="#id8" title="Link to this heading"></a></h3>
+<ol class="arabic simple">
+<li><dl class="simple">
+<dt>Execution Mode</dt><dd><ul class="simple">
+<li><dl class="simple">
+<dt>This dropdown menu has three options:</dt><dd><ol class="arabic simple">
+<li><p>‘Just make table’ - places a table with the ID of each node and its degree in the tabulated data widget, without generating any overlays.</p></li>
+<li><p>‘Draw Degree of Node as Overlay…’ - This method creates an overlay where the degree value of each node is literally drawn onto its centroid as an overlay (ie, a node of degree 5 has a 5 drawn at its centroid). This can be used to quickly eyeball node connectivity.</p></li>
+<li><dl class="simple">
+<dt>‘Label Nodes by Degree…’ - This method takes each node label and reassigns its label to its degree. The idea would be to export the image and do downstream analysis elsewhere while thresholding for specific degree values.</dt><dd><ul>
+<li><p>Note this thresholding can be done in NetTracer3D by using the intensity thresholder.</p></li>
+</ul>
+</dd>
+</dl>
+</li>
+</ol>
+</dd>
+</dl>
+</li>
+</ul>
+</dd>
+</dl>
+</li>
+<li><dl class="simple">
+<dt>Proportion of high degree nodes to keep…</dt><dd><ul class="simple">
+<li><p>By default this is set to 1 (meaning all nodes). Set this to a smaller float val between 0-1 to return that sub-proportion of nodes, prioritizing, high-degree ones. For example, a value of 0.1 would return the top 10% highest degree nodes in the output overlay only.</p></li>
+</ul>
+</dd>
+</dl>
+</li>
+<li><dl class="simple">
+<dt>down_factor…</dt><dd><ul class="simple">
+<li><p>Temporarily downsamples the image to speed up overlay creation. Downsampling is done in all three dimensions by the inputed factor.</p></li>
+</ul>
+</dd>
+</dl>
+</li>
+</ol>
+<ul class="simple">
+<li><p>Press ‘Get Degrees’ to run the method with the desired parameters. The output data will be used to create a new table in the tabulated data widget. The overlay will go into the Overlay 2 channel.</p></li>
+</ul>
+</section>
+</section>
+<section id="analyze-data-overlays-get-hub-information">
+<h2>‘Analyze -&gt; Data/Overlays -&gt; Get Hub Information’<a class="headerlink" href="#analyze-data-overlays-get-hub-information" title="Link to this heading"></a></h2>
+<ul class="simple">
+<li><p>This method can be used to extract information about hub nodes, which are the nodes that are the fewest degrees of seperation from any other node.</p></li>
+</ul>
+<section id="id9">
+<h3>Parameter Explanations<a class="headerlink" href="#id9" title="Link to this heading"></a></h3>
+<ul class="simple">
+<li><p>This method only has two parameters.</p></li>
+</ul>
+<ol class="arabic simple">
+<li><dl class="simple">
+<dt>Make Overlay.</dt><dd><ul class="simple">
+<li><p>If enabled, this method will create an overlay isolating the hub nodes.</p></li>
+</ul>
+</dd>
+</dl>
+</li>
+<li><dl class="simple">
+<dt>‘Proportion of most connected hubs to keep…’</dt><dd><ul class="simple">
+<li><p>A 0-1 float val that tells the program how many ‘nodes’ you want back in the output. For example, 0.10 would return the top 10% nodes with the fewest degrees of separation. 1 would just return all the nodes.</p></li>
+</ul>
+</dd>
+</dl>
+</li>
+</ol>
+<ul class="simple">
+<li><p>Press ‘Get hubs’ to run the method with the desired parameters. The output data will be used to create a new table in the tabulated data widget. The overlay will go into the Overlay 2 channel.</p></li>
+</ul>
+</section>
+</section>
+<section id="analyze-data-overlays-get-mother-nodes">
+<h2>‘Analyze -&gt; Data/Overlays -&gt; Get Mother Nodes’<a class="headerlink" href="#analyze-data-overlays-get-mother-nodes" title="Link to this heading"></a></h2>
+<ul class="simple">
+<li><p>This method can be used to extract information about ‘mother nodes’, which are we define as those nodes that contain connections between one community and another.</p></li>
+<li><p>This method would be used to identify what nodes enable interaction between seperate communities.</p></li>
+</ul>
+<section id="id10">
+<h3>Parameter Explanations<a class="headerlink" href="#id10" title="Link to this heading"></a></h3>
+<ul class="simple">
+<li><p>This method only has one parameter.</p></li>
+</ul>
+<ol class="arabic simple">
+<li><dl class="simple">
+<dt>Make Overlay.</dt><dd><ul class="simple">
+<li><p>If enabled, this method will create an overlay isolating the mother nodes.</p></li>
+</ul>
+</dd>
+</dl>
+</li>
+</ol>
+<ul class="simple">
+<li><p>Press ‘Get Mothers’ to run the method with the desired parameters. The output data will be used to create a new table in the tabulated data widget. The overlay will go into the Overlay 1 channel.</p></li>
+</ul>
+</section>
+</section>
+<section id="analyze-data-overlays-code-communities">
+<h2>‘Analyze -&gt; Data/Overlays -&gt; Code Communities’<a class="headerlink" href="#analyze-data-overlays-code-communities" title="Link to this heading"></a></h2>
+<ul class="simple">
+<li><p>This method can be used to generate an overlay that shows what nodes belong to which community.</p></li>
+</ul>
+<section id="id11">
+<h3>Parameter Explanations<a class="headerlink" href="#id11" title="Link to this heading"></a></h3>
+<ul class="simple">
+<li><p>This method only has two parameters.</p></li>
+</ul>
+<ol class="arabic simple">
+<li><dl class="simple">
+<dt>down_factor</dt><dd><ul class="simple">
+<li><p>Temporarily downsamples the image to speed up overlay creation. Downsampling is done in all three dimensions by the inputed factor. This is particularly useful for the color overlay.</p></li>
+</ul>
+</dd>
+</dl>
+</li>
+<li><dl class="simple">
+<dt>Execution Mode:</dt><dd><ul class="simple">
+<li><dl class="simple">
+<dt>This dropdown menu has two options:</dt><dd><ol class="arabic simple">
+<li><p>‘Color Coded’ - Create an RGB color overlay where each node is colored according to its community. This overlay is great for easily visualizing communities.</p></li>
+<li><p>‘Grayscale Coded’ - Create a grayscale overlay where each node is labeled by the community number it was assigned in the node_communities parameter. The purpose of this overlay is to create an image where nodes can then be thresholded by their community, for more specific analysis.</p></li>
+</ol>
+</dd>
+</dl>
+</li>
+</ul>
+</dd>
+</dl>
+</li>
+</ol>
+<ul class="simple">
+<li><p>Press ‘Community Code’ to run the method with the desired parameters. The overlay will go into the Overlay 2 channel. Additionally, a legend displaying what label belongs to which community will be placed into the tabulated data widget.</p></li>
+</ul>
+</section>
+</section>
+<section id="analyze-data-overlays-code-identities">
+<h2>‘Analyze -&gt; Data/Overlays -&gt; Code Identities’<a class="headerlink" href="#analyze-data-overlays-code-identities" title="Link to this heading"></a></h2>
+<ul class="simple">
+<li><p>This method can be used to generate an overlay that shows what nodes belong to which identity.</p></li>
+</ul>
+<section id="id12">
+<h3>Parameter Explanations<a class="headerlink" href="#id12" title="Link to this heading"></a></h3>
+<ul class="simple">
+<li><p>This method only has two parameters.</p></li>
+</ul>
+<ol class="arabic simple">
+<li><dl class="simple">
+<dt>down_factor</dt><dd><ul class="simple">
+<li><p>Temporarily downsamples the image to speed up overlay creation. Downsampling is done in all three dimensions by the inputed factor. This is particularly useful for the color overlay.</p></li>
+</ul>
+</dd>
+</dl>
+</li>
+<li><dl class="simple">
+<dt>Execution Mode:</dt><dd><ul class="simple">
+<li><dl class="simple">
+<dt>This dropdown menu has two options:</dt><dd><ol class="arabic simple">
+<li><p>‘Color Coded’ - Create an RGB color overlay where each node is colored according to its identity. This overlay is great for easily visualizing identities.</p></li>
+<li><p>‘Grayscale Coded’ - Create a grayscale overlay where each node is labeled by numerical identities (with the number corresponding each to one of the identity subtypes). The purpose of this overlay is to create an image where nodes can then be thresholded by their identity, for more specific analysis.</p></li>
+</ol>
+</dd>
+</dl>
+</li>
+</ul>
+</dd>
+</dl>
+</li>
+</ol>
+<ul class="simple">
+<li><p>Press ‘Identity Code’ to run the method with the desired parameters. The overlay will go into the Overlay 2 channel. Additionally, a legend displaying what label belongs to which identity will be placed into the tabulated data widget.</p></li>
+</ul>
+</section>
+</section>
+<section id="next-steps">
+<h2>Next Steps<a class="headerlink" href="#next-steps" title="Link to this heading"></a></h2>
+<p>This concludes the explanations of the analyze functions. Next, proceed to <a class="reference internal" href="process_menu.html"><span class="doc">All Process Menu Options</span></a> for information on the process menu functions.</p>
+</section>
+</section>
+
+
+           </div>
+          </div>
+          <footer><div class="rst-footer-buttons" role="navigation" aria-label="Footer">
+        <a href="file_menu.html" class="btn btn-neutral float-left" title="All File Menu Options" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left" aria-hidden="true"></span> Previous</a>
+        <a href="process_menu.html" class="btn btn-neutral float-right" title="All Process Menu Options" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right" aria-hidden="true"></span></a>
+    </div>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2025, Liam McLaughlin.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>
