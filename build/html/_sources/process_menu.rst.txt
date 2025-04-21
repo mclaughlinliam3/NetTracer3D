@@ -559,7 +559,7 @@ Algorithm Explanations
 
 'Process -> Image -> Watershed'
 -------------------------------------
-* This method can be used to skeletonize an image, which splits (via labeling) apart fused objects that 'look' like two seperate objects.
+* This method can be used to watershed an image, which splits (via labeling) apart fused objects that 'look' like two seperate objects.
 * This method is ideal for seperating overlapping objects in a binary segmentation, for example adjacent cells.
 * Selecting this method will show the following menu:
 

@@ -6,8 +6,14 @@
 NetTracer3D documentation
 =========================
 
+
+
 Welcome to NetTracer3D
 ---------------------
+
+.. image:: _static/logo_small.png
+   :width: 400px
+   :alt: Logo
 
 NetTracer3D is a powerful tool for 2D and 3D analysis of microscopic/medical images. It supports generation of 3D networks showing relationships between objects in three dimensional space, either by proximity, grouped by interactivity with another object such as nerves, or between branches of objects like vessels or nerves.
 
@@ -51,3 +57,5 @@ To get started with NetTracer3D, check out the :doc:`installation` guide and the
    contact
    changelog
    roadmap
+   about
+   usage
