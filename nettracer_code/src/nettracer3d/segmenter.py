@@ -75,6 +75,12 @@ class InteractiveSegmenter:
         self.dogs = [(1, 2), (2, 4), (4, 8)]
         self.master_chunk = 49
 
+        #Data when loading prev model:
+        self.previous_foreground = None
+        self.previous_background = None
+        self.previous_z_fore = None
+        self.previous_z_back = None
+
     def segment_slice_chunked(self, slice_z, block_size = 49):
         """
         A completely standalone method to segment a single z-slice in chunks
@@ -1757,10 +1763,11 @@ class InteractiveSegmenter:
             except:
                 pass
 
-    def train_batch(self, foreground_array, speed = True, use_gpu = False, use_two = False, mem_lock = False):
+    def train_batch(self, foreground_array, speed = True, use_gpu = False, use_two = False, mem_lock = False, saving = False):
         """Train directly on foreground and background arrays"""
 
-        print("Training model...")
+        if not saving:
+            print("Training model...")
         self.speed = speed
         self.cur_gpu = use_gpu
         if mem_lock != self.mem_lock:
@@ -1969,12 +1976,40 @@ class InteractiveSegmenter:
                 z_back, y_back, x_back = np.where(foreground_array == 2)
                 background_features = self.feature_cache[z_back, y_back, x_back]
             except:
-                print("Features maps computed, but no segmentation examples were provided so the model was not trained")
+                pass
 
+
+        if self.previous_foreground is not None:
+            failed = True
+            try:
+                foreground_features = np.vstack([self.previous_foreground, foreground_features])
+                failed = False
+            except:
+                pass
+            try:
+                background_features = np.vstack([self.previous_background, background_features])
+                failed = False
+            except:
+                pass
+            try:
+                z_fore = np.concatenate([self.previous_z_fore, z_fore])
+            except:
+                pass
+            try:
+                z_back = np.concatenate([self.previous_z_back, z_back])
+            except:
+                pass
+            if failed:
+                print("Could not combine new model with old loaded model. Perhaps you are trying to combine a quick model with a deep model? I cannot combine these...")
+
+        if saving:
+
+            return foreground_features, background_features, z_fore, z_back
 
         # Combine features and labels
         X = np.vstack([foreground_features, background_features])
         y = np.hstack([np.ones(len(z_fore)), np.zeros(len(z_back))])
+
         
         # Train the model
         try:
@@ -1987,6 +2022,54 @@ class InteractiveSegmenter:
                 
 
 
+
+        print("Done")
+
+
+    def save_model(self, file_name, foreground_array):
+
+        print("Saving model data")
+
+        foreground_features, background_features, z_fore, z_back = self.train_batch(foreground_array, speed = self.speed, use_gpu = self.use_gpu, use_two = self.use_two, mem_lock = self.mem_lock, saving = True)
+
+
+        np.savez(file_name, 
+                 foreground_features=foreground_features,
+                 background_features=background_features,
+                 z_fore=z_fore,
+                 z_back=z_back,
+                 speed=self.speed,
+                 use_gpu=self.use_gpu,
+                 use_two=self.use_two,
+                 mem_lock=self.mem_lock)
+
+        print(f"Model data saved to {file_name}")
+
+
+    def load_model(self, file_name):
+
+        print("Loading model data")
+
+        data = np.load(file_name)
+
+        # Unpack the arrays
+        self.previous_foreground = data['foreground_features']
+        self.previous_background = data['background_features']
+        self.previous_z_fore = data['z_fore']
+        self.previous_z_back = data['z_back']
+        self.speed = bool(data['speed'])
+        self.use_gpu = bool(data['use_gpu'])
+        self.use_two = bool(data['use_two'])
+        self.mem_lock = bool(data['mem_lock'])
+
+        X = np.vstack([self.previous_foreground, self.previous_background])
+        y = np.hstack([np.ones(len(self.previous_z_fore)), np.zeros(len(self.previous_z_back))])
+
+        try:
+            self.model.fit(X, y)
+        except:
+            print(X)
+            print(y)
 
         print("Done")
 

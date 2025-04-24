@@ -188,9 +188,6 @@ def dilate_3D_dt(array, search_distance, xy_scaling=1.0, z_scaling=1.0, GPU = Fa
     Returns:
     Dilated 3D array
     """
-    if array.shape[0] == 1:
-
-        return nettracer.dilate_2D(array, search_distance, scaling = xy_scaling)
 
     # Determine which dimension needs resampling. the moral of the story is read documentation before you do something unecessary.
     """
@@ -234,7 +231,6 @@ def dilate_3D_dt(array, search_distance, xy_scaling=1.0, z_scaling=1.0, GPU = Fa
     
     # Threshold the distance transform to get dilated result
     inv = inv <= search_distance
-
 
     return inv.astype(np.uint8), indices, array
 
@@ -475,6 +471,7 @@ def compute_distance_transform_GPU(nodes, return_dists = False, sampling = [1, 1
     is_pseudo_3d = nodes.shape[0] == 1
     if is_pseudo_3d:
         nodes = np.squeeze(nodes)  # Convert to 2D for processing
+        del sampling[0]
     
     # Convert numpy array to CuPy array
     nodes_cp = cp.asarray(nodes)
@@ -507,6 +504,7 @@ def compute_distance_transform(nodes, return_dists = False, sampling = [1, 1, 1]
     is_pseudo_3d = nodes.shape[0] == 1
     if is_pseudo_3d:
         nodes = np.squeeze(nodes)  # Convert to 2D for processing
+        del sampling[0]
 
     dists, nearest_label_indices = distance_transform_edt(nodes, return_indices=True, sampling = sampling)
 
@@ -533,6 +531,7 @@ def compute_distance_transform_distance_GPU(nodes, sampling = [1, 1, 1]):
     is_pseudo_3d = nodes.shape[0] == 1
     if is_pseudo_3d:
         nodes = np.squeeze(nodes)  # Convert to 2D for processing
+        del sampling[0]
 
     # Convert numpy array to CuPy array
     nodes_cp = cp.asarray(nodes)
@@ -554,6 +553,7 @@ def compute_distance_transform_distance(nodes, sampling = [1, 1, 1]):
     is_pseudo_3d = nodes.shape[0] == 1
     if is_pseudo_3d:
         nodes = np.squeeze(nodes)  # Convert to 2D for processing
+        del sampling[0]
 
     # Fallback to CPU if there's an issue with GPU computation
     distance = distance_transform_edt(nodes, sampling = sampling)

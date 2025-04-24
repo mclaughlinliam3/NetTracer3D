@@ -6,17 +6,18 @@
   <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
 
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Changelog &mdash; NetTracer3D 0.6.9 documentation</title>
+  <title>Changelog &mdash; NetTracer3D 0.7.0 documentation</title>
       <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=b86133f3" />
       <link rel="stylesheet" type="text/css" href="_static/css/theme.css?v=e59714d7" />
 
   
       <script src="_static/jquery.js?v=5d32c60e"></script>
       <script src="_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
-      <script src="_static/documentation_options.js?v=084304ff"></script>
+      <script src="_static/documentation_options.js?v=fe7df9b0"></script>
       <script src="_static/doctools.js?v=9bcbadda"></script>
       <script src="_static/sphinx_highlight.js?v=dc90522c"></script>
     <script src="_static/js/theme.js"></script>
+    <link rel="author" title="About these documents" href="about.html" />
     <link rel="index" title="Index" href="genindex.html" />
     <link rel="search" title="Search" href="search.html" />
     <link rel="next" title="Road Map" href="roadmap.html" />
@@ -62,6 +63,8 @@
 <li class="toctree-l1"><a class="reference internal" href="contact.html">Contact</a></li>
 <li class="toctree-l1 current"><a class="current reference internal" href="#">Changelog</a></li>
 <li class="toctree-l1"><a class="reference internal" href="roadmap.html">Road Map</a></li>
+<li class="toctree-l1"><a class="reference internal" href="about.html">About</a></li>
+<li class="toctree-l1"><a class="reference internal" href="usage.html">Usage</a></li>
 </ul>
 
         </div>
@@ -90,7 +93,31 @@
              
   <section id="changelog">
 <span id="id1"></span><h1>Changelog<a class="headerlink" href="#changelog" title="Link to this heading"></a></h1>
-<p>As this documentation was written for version 0.6.9, I will add updates for versions any beyond 0.6.9 here.</p>
+<p>Version 0.7.0 Updates:</p>
+<ol class="arabic simple">
+<li><dl class="simple">
+<dt>Added new function in ‘Analyze -&gt; Stats -&gt; Cluster Analysis’</dt><dd><ul class="simple">
+<li><p>This function allows the user to create a ripley’s K or H function to compare the relative clustering of two types of nodes, or of one type of node vs itself.</p></li>
+</ul>
+</dd>
+</dl>
+</li>
+<li><dl class="simple">
+<dt>Added new function in ‘Analyze -&gt; Randomize -&gt; Scramble Nodes’</dt><dd><ul class="simple">
+<li><p>This function randomly rearranges the node (centroids) for comparison with other centroid-using methods, as a possible way to demonstrate non-random behavior.</p></li>
+<li><p>The randomize menu is likewise new and the ‘Generate Equivalent Random Network’ method was moved there.</p></li>
+</ul>
+</dd>
+</dl>
+</li>
+<li><dl class="simple">
+<dt>Bug fixes.</dt><dd><ul class="simple">
+<li><p>Importantly fixed a bug with dt-based dilation not working in 2D, which I had accidentally introduced recently.</p></li>
+</ul>
+</dd>
+</dl>
+</li>
+</ol>
 </section>
 
 

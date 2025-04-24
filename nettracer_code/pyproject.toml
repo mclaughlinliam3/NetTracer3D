@@ -1,8 +1,8 @@
 [project]
 name = "nettracer3d"
-version = "0.6.9"
+version = "0.7.0"
 authors = [
-  { name="Liam McLaughlin", email="mclaughlinliam99@gmail.com" },
+  { name="Liam McLaughlin", email="liamm@wustl.edu" },
 ]
 description = "Scripts for intializing and analyzing networks from segmentations of three dimensional images."
 
@@ -49,5 +49,6 @@ cupy = [
 nettracer3d = "nettracer3d.run:main"
 
 [project.urls]
-User_Tutorial = "https://www.youtube.com/watch?v=cRatn5VTWDY"
+Documentation = "https://nettracer3d.readthedocs.io/en/latest/"
+Video_Tutorial = "https://www.youtube.com/watch?v=cRatn5VTWDY"
 Reference_Citation_For_Use = "https://doi.org/10.1101/2024.07.29.605633"

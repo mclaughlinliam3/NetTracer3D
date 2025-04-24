@@ -1,5 +1,9 @@
 NetTracer3D is a python package developed for both 2D and 3D analysis of microscopic images in the .tif file format. It supports generation of 3D networks showing the relationships between objects (or nodes) in three dimensional space, either based on their own proximity or connectivity via connecting objects such as nerves or blood vessels. In addition to these functionalities are several advanced 3D data processing algorithms, such as labeling of branched structures or abstraction of branched structures into networks. Note that nettracer3d uses segmented data, which can be segmented from other softwares such as ImageJ and imported into NetTracer3D, although it does offer its own segmentation via intensity and volumetric thresholding, or random forest machine learning segmentation. NetTracer3D currently has a fully functional GUI. To use the GUI, after installing the nettracer3d package via pip, enter the command 'nettracer3d' in your command prompt:
 
+--- Documentation ---
+
+Please see: https://nettracer3d.readthedocs.io/en/latest/
+
 --- Installation ---
 
 To install nettracer3d, simply install Python and use this command in your command terminal:
@@ -21,19 +25,23 @@ If your CUDA toolkit is version 12: pip install nettracer3d[CUDA12]
 If you just want the entire cupy library: pip install nettracer3d[cupy]
 
 
-This gui is built from the PyQt6 package and therefore may not function on dockers or virtual envs that are unable to support PyQt6 displays. More advanced documentation is coming down the line, but for now please see: https://www.youtube.com/watch?v=cRatn5VTWDY
-for a video tutorial on using the GUI.
+This gui is built from the PyQt6 package and therefore may not function on dockers or virtual envs that are unable to support PyQt6 displays.
+
+
+For a (slightly outdated) video tutorial on using the GUI: https://www.youtube.com/watch?v=cRatn5VTWDY
 
 NetTracer3D is free to use/fork for academic/nonprofit use so long as citation is provided, and is available for commercial use at a fee (see license file for information).
 
 NetTracer3D was developed by Liam McLaughlin while working under Dr. Sanjay Jain at Washington University School of Medicine.
 
--- Version 0.6.9 updates --
+-- Version 0.7.0 Updates -- 
 
-1. Adjusted all distance transform-based dilation/radius calculating methods to simply use the already supported scipy.ndimage.distance_transform_edt() sampling parameter to account for differentially scaled axis (previously the image was being resampled but now it no longer will need to do that).
+1. Added new function in 'Analyze -> Stats -> Cluster Analysis'
+    * This function allows the user to create a ripley's K or H function to compare the relative clustering of two types of nodes, or of one type of node vs itself.
 
-2. Added new right click option to extract highlighted regions and implant their data onto a separate image or into a new empty image.
+2. Added new function in 'Analyze -> Randomize -> Scramble Nodes'
+    * This function randomly rearranges the node (centroids) for comparison with other centroid-using methods, as a possible way to demonstrate non-random behavior.
+    * The randomize menu is likewise new and the 'Generate Equivalent Random Network' method was moved there.
 
-3. General bug fixes and improvements.
-
-4. Now specifies python 3.11. 
+3. Bug fixes.
+    * Importantly fixed a bug with dt-based dilation not working in 2D, which I had accidentally introduced recently.

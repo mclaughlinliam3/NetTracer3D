@@ -4431,6 +4431,101 @@ class Network_3D:
         return neighborhood_dict, proportion_dict, title1, title2, densities
 
 
+    def get_ripley(self, root = None, targ = None, distance = 1, edgecorrect = True, bounds = None, ignore_dims = False, proportion = 0.5):
+
+
+        if root is None or targ is None: #Self clustering in this case
+            roots = self._node_centroids.values()
+            targs = self._node_centroids.values()
+        else:
+            roots = []
+            targs = []
+
+            for node, nodeid in self.node_identities.items(): #Otherwise we need to pull out this info
+                if nodeid == root:
+                    roots.append(self._node_centroids[node])
+                elif nodeid == targ:
+                    targs.append(self._node_centroids[node])
+        
+        rooties = proximity.convert_centroids_to_array(roots, xy_scale = self.xy_scale, z_scale = self.z_scale)
+        targs = proximity.convert_centroids_to_array(roots, xy_scale = self.xy_scale, z_scale = self.z_scale)
+        points_array = np.vstack((rooties, targs))
+        del rooties
+
+        try:
+            if self.nodes.shape[0] == 1:
+                dim = 2
+            else:
+                dim = 3
+        except:
+            dim = 2
+            for centroid in self.node_centroids.values():
+                if centroid[0] != 0:
+                    dim = 3
+                    break
+
+
+        if ignore_dims:
+
+            factor = 0.25
+
+
+            if bounds is None:
+                if dim == 2:
+                    min_coords = np.array([0,0])
+                else:
+                    min_coords = np.array([0,0,0])
+                max_coords = np.max(points_array, axis=0)
+                max_coords = np.flip(max_coords)
+                bounds = (min_coords, max_coords)
+            else:
+                min_coords, max_coords = bounds
+
+            dim_list = max_coords - min_coords
+
+            new_list = []
+
+
+            if dim == 3:
+                for centroid in roots:
+
+                    if ((centroid[2] - min_coords[0]) > dim_list[0] * factor) and ((max_coords[0] - centroid[2]) > dim_list[0]  * factor) and ((centroid[1] - min_coords[1]) > dim_list[1] * factor) and ((max_coords[1] - centroid[1]) > dim_list[1] * factor) and ((centroid[0] - min_coords[2]) > dim_list[2] * factor) and ((max_coords[2] - centroid[0]) > dim_list[2] * factor):
+                        new_list.append(centroid)
+                        #print(f"dim_list: {dim_list}, centroid: {centroid}, min_coords: {min_coords}, max_coords: {max_coords}")
+            else:
+                for centroid in roots:
+
+                    if ((centroid[2] - min_coords[0]) > dim_list[0] * factor) and ((max_coords[0] - centroid[2]) > dim_list[0]  * factor) and ((centroid[1] - min_coords[1]) > dim_list[1] * factor) and ((max_coords[1] - centroid[1]) > dim_list[1] * factor):
+                        new_list.append(centroid)
+
+            roots = new_list
+            print(f"Utilizing {len(roots)} root points. Note that low n values are unstable.")
+            is_subset = True
+        else:
+            is_subset = False
+
+
+
+
+        roots = proximity.convert_centroids_to_array(roots, xy_scale = self.xy_scale, z_scale = self.z_scale)
+
+
+        if dim == 2:
+            roots = proximity.convert_augmented_array_to_points(roots)
+            targs = proximity.convert_augmented_array_to_points(targs)
+
+        r_vals = proximity.generate_r_values(points_array, distance, bounds = bounds, dim = dim, max_proportion=proportion)
+
+        k_vals =  proximity.optimized_ripleys_k(roots, targs, r_vals, bounds=bounds, edge_correction=edgecorrect, dim = dim, is_subset = is_subset)
+
+        h_vals = proximity.compute_ripleys_h(k_vals, r_vals, dim)
+
+        proximity.plot_ripley_functions(r_vals, k_vals, h_vals, dim)
+
+        return r_vals, k_vals, h_vals
+
+
+
 
 #Morphological stats or network linking:
 
@@ -4489,6 +4584,87 @@ class Network_3D:
         array = proximity.populate_array(self.node_centroids)
 
         return array
+
+
+
+    def random_nodes(self, bounds = None, mask = None):
+
+        if self.nodes is not None:
+            try:
+                self.nodes = np.zeros_like(self.nodes)
+            except:
+                pass
+
+
+        if mask is not None:
+            coords = np.argwhere(mask != 0)
+        else:
+            if bounds is not None:
+                (z1, y1, x1), (z2, y2, x2) = bounds
+                z1, y1, x1 = int(z1), int(y1), int(x1)
+                z2, y2, x2 = int(z2), int(y2), int(x2)
+                z_range = np.arange(z1, z2 + 1)
+                y_range = np.arange(y1, y2 + 1)
+                x_range = np.arange(x1, x2 + 1)
+                z_grid, y_grid, x_grid = np.meshgrid(z_range, y_range, x_range, indexing='ij')
+                del z_range
+                del y_range
+                del x_range
+                coords = np.stack([z_grid.flatten(), y_grid.flatten(), x_grid.flatten()], axis=1)
+                del z_grid
+                del y_grid
+                del x_grid
+            else:
+                shape = ()
+                try:
+                    shape = self.nodes.shape
+                except:
+                    try:
+                        shape = self.edges.shape
+                    except:
+                        try:
+                            shape = self._network_overlay.shape
+                        except:
+                            try:
+                                shape = self._id_overlay.shape
+                            except:
+                                pass
+
+                ranges = [np.arange(s) for s in shape]
+                
+                # Create meshgrid
+                mesh = np.meshgrid(*ranges, indexing='ij')
+                del ranges
+
+                # Stack and reshape
+                coords = np.stack(mesh, axis=-1).reshape(-1, len(shape))
+                del mesh
+
+        if len(coords) < len(self.node_centroids):
+            print(f"Warning: Only {len(coords)} positions available for {len(self.node_centroids)} labels")
+
+        new_centroids = {}
+        
+        # Generate random indices without replacement
+        available_count = min(len(coords), len(self.node_centroids))
+        rand_indices = np.random.choice(len(coords), available_count, replace=False)
+        
+        # Assign random positions to labels
+        for i, label in enumerate(self.node_centroids.keys()):
+            if i < len(rand_indices):
+                centroid = coords[rand_indices[i]]
+                new_centroids[label] = centroid
+                z, y, x = centroid
+                try:
+                    self.nodes[z, y, x] = label
+                except:
+                    pass
+        
+        # Update the centroids dictionary
+        self.node_centroids = new_centroids
+
+        return self.node_centroids, self._nodes
+
 
     def community_id_info(self):
         def invert_dict(d):

@@ -7,6 +7,7 @@ from scipy import ndimage
 import concurrent.futures
 import multiprocessing as mp
 import pandas as pd
+import matplotlib.pyplot as plt
 from typing import Dict, Union, Tuple, List, Optional
 
 
@@ -288,7 +289,6 @@ def create_voronoi_3d_kdtree(centroids: Dict[Union[int, str], Union[Tuple[int, i
     Returns:
         3D numpy array where each cell contains the label of the closest centroid as uint32
     """
-    from scipy.spatial import cKDTree
     
     # Convert string labels to integers if necessary
     if any(isinstance(k, str) for k in centroids.keys()):
@@ -305,7 +305,7 @@ def create_voronoi_3d_kdtree(centroids: Dict[Union[int, str], Union[Tuple[int, i
         shape = tuple(max_coord + 1 for max_coord in max_coords)
     
     # Create KD-tree
-    tree = cKDTree(centroid_points)
+    tree = KDTree(centroid_points)
     
     # Create coordinate arrays
     coords = np.array(np.meshgrid(
@@ -323,3 +323,327 @@ def create_voronoi_3d_kdtree(centroids: Dict[Union[int, str], Union[Tuple[int, i
     
     # Reshape to final shape
     return label_array.reshape(shape)
+
+
+
+#Ripley cluster analysis:
+
+def convert_centroids_to_array(centroids_list, xy_scale = 1, z_scale = 1):
+    """
+    Convert a dictionary of centroids to a numpy array suitable for Ripley's K calculation.
+    
+    Parameters:
+    centroids_list: List of centroid coordinate arrays
+    
+    Returns:
+    numpy array of shape (n, d) where n is number of points and d is dimensionality
+    """
+    # Determine how many centroids we have
+    n_points = len(centroids_list)
+    
+    # Get dimensionality from the first centroid
+    dim = len(list(centroids_list)[0])
+    
+    # Create empty array
+    points_array = np.zeros((n_points, dim))
+    
+    # Fill array with coordinates
+    for i, coords in enumerate(centroids_list):
+        points_array[i] = coords
+
+    points_array[:, 1:] = points_array[:, 1:] * xy_scale #account for scaling
+
+    points_array[:, 0] = points_array[:, 0] * z_scale #account for scaling
+        
+    return points_array
+
+def generate_r_values(points_array, step_size, bounds = None, dim = 2, max_proportion=0.5):
+    """
+    Generate an array of r values based on point distribution and step size.
+    
+    Parameters:
+    points_array: numpy array of shape (n, d) with point coordinates
+    step_size: user-defined step size for r values
+    max_proportion: maximum proportion of the study area extent to use (default 0.5)
+                   This prevents analyzing at distances where edge effects dominate
+    
+    Returns:
+    numpy array of r values
+    """
+
+    if bounds is None:
+        if dim == 2:
+            min_coords = np.array([0,0])
+        else:
+            min_coords = np.array([0,0,0])
+        max_coords = np.max(points_array, axis=0)
+        max_coords = np.flip(max_coords)
+    else:
+        min_coords, max_coords = bounds
+
+    
+    # Calculate the longest dimension
+    dimensions = max_coords - min_coords
+    max_dimension = np.max(dimensions)
+    
+    # Calculate maximum r value (typically half the shortest side for 2D,
+    # or scaled by max_proportion for general use)
+    max_r = max_dimension * max_proportion
+    
+    # Generate r values from 0 to max_r with step_size increments
+    num_steps = int(max_r / step_size)
+    r_values = np.linspace(step_size, max_r, num_steps)
+
+    if r_values[0] == 0:
+        np.delete(r_values, 0)
+    
+    return r_values
+
+def convert_augmented_array_to_points(augmented_array):
+    """
+    Convert an array where first column is 1 and remaining columns are coordinates.
+    
+    Parameters:
+    augmented_array: 2D array where first column is 1 and rest are coordinates
+    
+    Returns:
+    numpy array with just the coordinate columns
+    """
+    # Extract just the coordinate columns (all except first column)
+    return augmented_array[:, 1:]
+
+def optimized_ripleys_k(reference_points, subset_points, r_values, bounds=None, edge_correction=True, dim = 2, is_subset = False):
+    """
+    Optimized computation of Ripley's K function using KD-Tree with simplified but effective edge correction.
+    
+    Parameters:
+    reference_points: numpy array of shape (n, d) containing coordinates (d=2 or d=3)
+    subset_points: numpy array of shape (m, d) containing coordinates
+    r_values: numpy array of distances at which to compute K
+    bounds: tuple of (min_coords, max_coords) defining the study area boundaries
+    edge_correction: Boolean indicating whether to apply edge correction
+    
+    Returns:
+    K_values: numpy array of K values corresponding to r_values
+    """
+    n_ref = len(reference_points)
+    n_subset = len(subset_points)
+    
+    # Determine bounds if not provided
+    if bounds is None:
+        min_coords = np.min(reference_points, axis=0)
+        max_coords = np.max(reference_points, axis=0)
+        bounds = (min_coords, max_coords)
+    
+    # Calculate volume of study area
+    min_bounds, max_bounds = bounds
+    sides = max_bounds - min_bounds
+    volume = np.prod(sides)
+    
+    # Point intensity (points per unit volume)
+    intensity = n_ref / volume
+    
+    # Build KD-Tree for efficient nearest neighbor search
+    tree = KDTree(reference_points)
+    
+    # Initialize K values
+    K_values = np.zeros(len(r_values))
+    
+    # For each r value, compute cumulative counts
+    for i, r in enumerate(r_values):
+        total_count = 0
+        
+        # Query the tree for all points within radius r of each subset point
+        for j, point in enumerate(subset_points):
+            # Find all reference points within radius r
+            indices = tree.query_ball_point(point, r)
+            count = len(indices)
+            
+            # Apply edge correction if needed
+            if edge_correction:
+                # Calculate edge correction weight
+                weight = 1.0
+                
+                if dim == 2:
+                    # For 2D - check all four boundaries
+                    x, y = point
+                    
+                    # Distances to all boundaries
+                    x_min_dist = x - min_bounds[0]
+                    x_max_dist = max_bounds[0] - x
+                    y_min_dist = y - min_bounds[1]
+                    y_max_dist = max_bounds[1] - y
+                    
+                    proportion_in = 1.0
+                    # Apply correction for each boundary if needed
+                    if x_min_dist < r:
+                        proportion_in -= 0.5 * (1 - x_min_dist/r)
+                    if x_max_dist < r:
+                        proportion_in -= 0.5 * (1 - x_max_dist/r)
+                    if y_min_dist < r:
+                        proportion_in -= 0.5 * (1 - y_min_dist/r)
+                    if y_max_dist < r:
+                        proportion_in -= 0.5 * (1 - y_max_dist/r)
+                    
+                    # Corner correction
+                    if ((x_min_dist < r and y_min_dist < r) or 
+                        (x_min_dist < r and y_max_dist < r) or
+                        (x_max_dist < r and y_min_dist < r) or
+                        (x_max_dist < r and y_max_dist < r)):
+                        proportion_in += 0.1  # Add a small boost for corners
+                    
+                elif dim == 3:
+                    # For 3D - check all six boundaries
+                    x, y, z = point
+                    
+                    # Distances to all boundaries
+                    x_min_dist = x - min_bounds[0]
+                    x_max_dist = max_bounds[0] - x
+                    y_min_dist = y - min_bounds[1]
+                    y_max_dist = max_bounds[1] - y
+                    z_min_dist = z - min_bounds[2]
+                    z_max_dist = max_bounds[2] - z
+                    
+                    proportion_in = 1.0
+                    # Apply correction for each boundary if needed
+                    if x_min_dist < r:
+                        proportion_in -= 0.25 * (1 - x_min_dist/r)
+                    if x_max_dist < r:
+                        proportion_in -= 0.25 * (1 - x_max_dist/r)
+                    if y_min_dist < r:
+                        proportion_in -= 0.25 * (1 - y_min_dist/r)
+                    if y_max_dist < r:
+                        proportion_in -= 0.25 * (1 - y_max_dist/r)
+                    if z_min_dist < r:
+                        proportion_in -= 0.25 * (1 - z_min_dist/r)
+                    if z_max_dist < r:
+                        proportion_in -= 0.25 * (1 - z_max_dist/r)
+                    
+                    # Corner correction for 3D (if point is near a corner)
+                    num_close_edges = (
+                        (x_min_dist < r) + (x_max_dist < r) +
+                        (y_min_dist < r) + (y_max_dist < r) +
+                        (z_min_dist < r) + (z_max_dist < r)
+                    )
+                    if num_close_edges >= 2:
+                        proportion_in += 0.05 * num_close_edges  # Stronger boost for more edges
+                
+                # Ensure proportion_in stays within reasonable bounds
+                proportion_in = max(0.1, min(1.0, proportion_in))
+                weight = 1.0 / proportion_in
+                
+                count *= weight
+            
+            total_count += count
+        
+        # Subtract self-counts if points appear in both sets
+        if is_subset or np.array_equal(reference_points, subset_points):
+            total_count -= n_ref  # Subtract all self-counts
+        
+        # Normalize
+        K_values[i] = total_count / (n_subset * intensity)
+    
+    return K_values
+
+def ripleys_h_function_3d(k_values, r_values):
+    """
+    Convert K values to H values for 3D point patterns with edge correction.
+    
+    Parameters:
+    k_values: numpy array of K function values
+    r_values: numpy array of distances at which K was computed
+    edge_weights: optional array of edge correction weights
+    
+    Returns:
+    h_values: numpy array of H function values
+    """
+    h_values = np.cbrt(k_values / (4/3 * np.pi)) - r_values
+    
+    return h_values
+
+def ripleys_h_function_2d(k_values, r_values):
+    """
+    Convert K values to H values for 2D point patterns with edge correction.
+    
+    Parameters:
+    k_values: numpy array of K function values
+    r_values: numpy array of distances at which K was computed
+    edge_weights: optional array of edge correction weights
+    
+    Returns:
+    h_values: numpy array of H function values
+    """
+    h_values = np.sqrt(k_values / np.pi) - r_values
+    
+    return h_values
+
+def compute_ripleys_h(k_values, r_values, dimension=2):
+    """
+    Compute Ripley's H function (normalized K) with edge correction.
+    
+    Parameters:
+    k_values: numpy array of K function values
+    r_values: numpy array of distances at which K was computed
+    edge_weights: optional array of edge correction weights
+    dimension: dimensionality of the point pattern (2 for 2D, 3 for 3D)
+    
+    Returns:
+    h_values: numpy array of H function values
+    """
+    if dimension == 2:
+        return ripleys_h_function_2d(k_values, r_values)
+    elif dimension == 3:
+        return ripleys_h_function_3d(k_values, r_values)
+    else:
+        raise ValueError("Dimension must be 2 or 3")
+
+def plot_ripley_functions(r_values, k_values, h_values, dimension=2, figsize=(12, 5)):
+    """
+    Plot Ripley's K and H functions with theoretical Poisson distribution references
+    adjusted for edge effects.
+    
+    Parameters:
+    r_values: numpy array of distances at which K and H were computed
+    k_values: numpy array of K function values
+    h_values: numpy array of H function values (normalized K)
+    edge_weights: optional array of edge correction weights
+    dimension: dimensionality of the point pattern (2 for 2D, 3 for 3D)
+    figsize: tuple specifying figure size (width, height)
+    """
+
+    #plt.figure()
+    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=figsize)
+    
+    # Theoretical values for complete spatial randomness (CSR)
+    if dimension == 2:
+        theo_k = np.pi * r_values**2  # πr² for 2D
+    elif dimension == 3:
+        theo_k = (4/3) * np.pi * r_values**3  # (4/3)πr³ for 3D
+    else:
+        raise ValueError("Dimension must be 2 or 3")
+    
+    # Theoretical H values are always 0 for CSR
+    theo_h = np.zeros_like(r_values)
+    
+    # Plot K function
+    ax1.plot(r_values, k_values, 'b-', label='Observed K(r)')
+    ax1.plot(r_values, theo_k, 'r--', label='Theoretical K(r) for CSR')
+    ax1.set_xlabel('Distance (r)')
+    ax1.set_ylabel('L(r)')
+    ax1.set_title("Ripley's K Function")
+    ax1.legend()
+    ax1.grid(True, alpha=0.3)
+    
+    # Plot H function
+    ax2.plot(r_values, h_values, 'b-', label='Observed H(r)')
+    ax2.plot(r_values, theo_h, 'r--', label='Theoretical H(r) for CSR')
+    ax2.set_xlabel('Distance (r)')
+    ax2.set_ylabel('L(r) Normalized')
+    ax2.set_title("Ripley's H Function")
+    ax2.axhline(y=0, color='k', linestyle='-', alpha=0.3)
+    ax2.legend()
+    ax2.grid(True, alpha=0.3)
+    
+    plt.tight_layout()
+    plt.show()
+    #plt.clf()

@@ -168,6 +168,8 @@ Referencing the above image, the ML segmentation uses the following options:
 * Train by 3D Patterns (Processing Options): When selected, the model will be trained using 3D feature maps.
 * Train Quick Model (Training): Click to train the model to segment your image based on the regions selected in your training data.
 * Train More Detailed Model (Training): Does the same as above but has additional feature training.
+* Save Model (Training): Saves purely the extracted training data from the current model as a .npz file. 
+* Load Model (Training): Loads the saved training data in the .npz file into a new model. This new model can receive additional trainings from seperate images while maintaining its previous data. Note that loaded quick models can only be layered onto new quick models, while loaded detailed models can only be layered onto new detailed models. Attempting to combine seperate model types will ignore the previous model data.
 * Preview Segment (Segmentation): When clicked, the model will begin segmenting your image as a preview, without interrupting the current training session. Use this to assess the current state of the model to decide if it needs additional training. This preview will be displayed in the highlight overlay, with foreground denoted by yellow and background denoted by blue.
 * Segment All (Segmentation): When clicked (after a warning), the training session will pause to segment the entire image with the current model. It is recommended that you save your images before doing this (File -> Save Network 3D Object As), in case the segmentation needs to be interrupted (It can only be paused by terminating the program). When finished, the binary segmentation will be placed in Overlay 2.
 

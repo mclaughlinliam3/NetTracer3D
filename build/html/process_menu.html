@@ -6,17 +6,18 @@
   <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
 
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>All Process Menu Options &mdash; NetTracer3D 0.6.9 documentation</title>
+  <title>All Process Menu Options &mdash; NetTracer3D 0.7.0 documentation</title>
       <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=b86133f3" />
       <link rel="stylesheet" type="text/css" href="_static/css/theme.css?v=e59714d7" />
 
   
       <script src="_static/jquery.js?v=5d32c60e"></script>
       <script src="_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
-      <script src="_static/documentation_options.js?v=084304ff"></script>
+      <script src="_static/documentation_options.js?v=fe7df9b0"></script>
       <script src="_static/doctools.js?v=9bcbadda"></script>
       <script src="_static/sphinx_highlight.js?v=dc90522c"></script>
     <script src="_static/js/theme.js"></script>
+    <link rel="author" title="About these documents" href="about.html" />
     <link rel="index" title="Index" href="genindex.html" />
     <link rel="search" title="Search" href="search.html" />
     <link rel="next" title="All Image Menu Options" href="image_menu.html" />
@@ -151,6 +152,8 @@
 <li class="toctree-l1"><a class="reference internal" href="contact.html">Contact</a></li>
 <li class="toctree-l1"><a class="reference internal" href="changelog.html">Changelog</a></li>
 <li class="toctree-l1"><a class="reference internal" href="roadmap.html">Road Map</a></li>
+<li class="toctree-l1"><a class="reference internal" href="about.html">About</a></li>
+<li class="toctree-l1"><a class="reference internal" href="usage.html">Usage</a></li>
 </ul>
 
         </div>
@@ -769,15 +772,17 @@
 <li><p>If we did the distance transform method, we also have it return the ‘indices’ (of the distance transform of the inverted array), which populates each index in the array with the index of the background value it was closest to. Note that this data structure is more cumbersome than just a distance transform. It occupies 3x as much RAM. But we can use it to essentially query any index in the array and see what ‘node’ it belongs to, since in our inverted image, the nodes became the background.</p></li>
 <li><p>The dilated regions are taken by subtracting out the original binary nodes from the binary dilated image. These shell regions are split up and paralellized across all CPU cores.</p></li>
 <li><p>We then search through the indices of all the shell regions, get the index of the node it ‘belongs’ to from the distance transform index image, find the label of said node, and finally reassign the binary index in the dilated image to be its proper label instead.</p></li>
+<li><p>The chunks are recombined to get the label-dilated array.</p></li>
 </ol>
-<p>5. The chunks are recombined to get the label-dilated array.
-* Note that if fast dilation (pseudo-3D kernels) is being used, and this method runs out of RAM while using the GPU, it will downsample inverted nodes image and attempt to get the distance transform again. It will do this until the GPU manages to produce a distance transform, and after the dilated (with +1 search region in this instance) image in the downsampled image is found, it will be upsampled. Then, the full-sized binary, dilated image that we got earlier will be used to boolean-index the image we just upsampled, producing the final output.
-* Assuming no nodes are lost during the downsample, the output is ostensibly the same as doing it on the full sized image. This is essentially because we are using the downsampled image with distance transform to approximate a ‘nearest label map’ which can be applied to the upsample image, with the only difference being some minor margin errors between nodes.
-* However if any nodes have a dimension smaller than the downsample factor the system attempts to use (which will be told to you in the command window), they risk being removed from the downsampled image and therefore will not establish a ‘label territory’, which will cause them to be lost.
-* As a result, this behavior is not good for large images with rather small nodes. In such a case, do not use fast dilation together with GPU.
-* The purpose of this method is that it offers a rather accelerated option for certain cases. For example, connectivity networks can be found with decent accuracy assuming the dilation is not significantly larger than the nodes, and that the nodes aren’t too small if downsampling occurs.
-* Note this GPU behavior will not occur with distance transforms. This is because we need to get a distance transform to compute the dilation in the first place, so a downsampled alternative cannot be really used to ‘seed’ a full sized dilation as a way to preserve speed.
-* In both cases if the GPU does fail for any reason (besides memory-related for fast dilation), the system will reattempt with CPU.</p>
+<ul class="simple">
+<li><p>Note that if fast dilation (pseudo-3D kernels) is being used, and this method runs out of VRAM while using the GPU, it will downsample inverted nodes image and attempt to get the distance transform again. It will do this until the GPU manages to produce a distance transform, and after the dilated (with +1 search region in this instance) image in the downsampled image is found, it will be upsampled. Then, the full-sized binary, dilated image that we got earlier will be used to boolean-index the image we just upsampled, producing the final output.</p></li>
+<li><p>Assuming no nodes are lost during the downsample, the output is ostensibly the same as doing it on the full sized image. This is essentially because we are using the downsampled image with distance transform to approximate a ‘nearest label map’ which can be applied to the upsample image, with the only difference being some minor margin errors between nodes.</p></li>
+<li><p>However if any nodes have a dimension smaller than the downsample factor the system attempts to use (which will be told to you in the command window), they risk being removed from the downsampled image and therefore will not establish a ‘label territory’, which will cause them to be lost.</p></li>
+<li><p>As a result, this behavior is not good for large images with rather small nodes. In such a case, do not use fast dilation together with GPU.</p></li>
+<li><p>The purpose of this method is that it offers a rather accelerated option for certain cases. For example, connectivity networks can be found with decent accuracy assuming the dilation is not significantly larger than the nodes, and that the nodes aren’t too small if downsampling occurs.</p></li>
+<li><p>Note this GPU behavior will not occur with distance transforms. This is because we need to get a distance transform to compute the dilation in the first place, so a downsampled alternative cannot be really used to ‘seed’ a full sized dilation as a way to preserve speed.</p></li>
+<li><p>In both cases if the GPU does fail for any reason (besides memory-related for fast dilation), the system will reattempt with CPU.</p></li>
+</ul>
 </section>
 </section>
 <section id="process-image-erode">
@@ -956,13 +961,15 @@
 <li><p>The prelabeled array is binarized, inverted, and then a distance transform with indices is calculated for that array, providing a map of which indices ‘belong’ to labeled regions in the prelabeled array.</p></li>
 <li><p>The binary array is split up and paralellized across all CPU cores.</p></li>
 <li><p>We then search through the indices of all the positive binary array regions, get the index of the label it ‘belongs’ to from the distance transform index image, and finally reassign the binary index in the binary image to be its nearest label instead.</p></li>
+<li><p>The chunks are recombined to get the label-dilated array.</p></li>
 </ol>
-<p>4. The chunks are recombined to get the label-dilated array.
-* Note that if this method runs out of VRAM while using the GPU, it will downsample inverted label image and attempt to get the distance transform again. It will do this until the GPU manages to produce a distance transform. The binary image is equivalently downsampled, 3D dilated by one voxel, and assigned labels using the above algorithm. This labeled, downsampled image can be upsampled, with the original binary array then used to ‘stamp out’ its correct shape from the upsampled, labeled array.
-* Assuming no labeled regions are lost during the downsample, the output is ostensibly the same as doing it on the full sized image. This is essentially because we are using the downsampled image with distance transform to approximate a ‘nearest label map’ which can be applied to the upsample image, with the only difference being some minor margin errors between regions.
-* However if any labels have a dimension smaller than the downsample factor the system attempts to use (which will be told to you in the command window), they risk being removed from the downsampled image and therefore will not establish a ‘label territory’, which will cause them to be lost.
-* As a result, this behavior is not good for large images with rather small labels. In such a case, do not use the GPU.
-* If the GPU does fail for any reason (besides memory-related), the system will reattempt with CPU.</p>
+<ul class="simple">
+<li><p>Note that if this method runs out of VRAM while using the GPU, it will downsample inverted label image and attempt to get the distance transform again. It will do this until the GPU manages to produce a distance transform. The binary image is equivalently downsampled, 3D dilated by one voxel, and assigned labels using the above algorithm. This labeled, downsampled image can be upsampled, with the original binary array then used to ‘stamp out’ its correct shape from the upsampled, labeled array.</p></li>
+<li><p>Assuming no labeled regions are lost during the downsample, the output is ostensibly the same as doing it on the full sized image. This is essentially because we are using the downsampled image with distance transform to approximate a ‘nearest label map’ which can be applied to the upsample image, with the only difference being some minor margin errors between regions.</p></li>
+<li><p>However if any labels have a dimension smaller than the downsample factor the system attempts to use (which will be told to you in the command window), they risk being removed from the downsampled image and therefore will not establish a ‘label territory’, which will cause them to be lost.</p></li>
+<li><p>As a result, this behavior is not good for large images with rather small labels. In such a case, do not use the GPU.</p></li>
+<li><p>If the GPU does fail for any reason (besides memory-related), the system will reattempt with CPU.</p></li>
+</ul>
 </section>
 </section>
 <section id="process-image-threshold-segment">

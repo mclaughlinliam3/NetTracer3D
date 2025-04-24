@@ -1246,7 +1246,7 @@ class ImageViewerWindow(QMainWindow):
             except:
                 pass
 
-            print(f"Found {len(filtered_df)} direct connections between nodes of ID {sort} and their neighbors (of any ID)")
+            #print(f"Found {len(filtered_df)} direct connections between nodes of ID {sort} and their neighbors (of any ID)")
 
             if self.channel_data[0].shape[0] * self.channel_data[0].shape[1] * self.channel_data[0].shape[2] > self.mini_thresh:
                 self.mini_overlay = True
@@ -2687,8 +2687,8 @@ class ImageViewerWindow(QMainWindow):
         degree_dist_action.triggered.connect(self.show_degree_dist_dialog)
         neighbor_id_action = stats_menu.addAction("Identity Distribution of Neighbors")
         neighbor_id_action.triggered.connect(self.show_neighbor_id_dialog)
-        random_action = stats_menu.addAction("Generate Equivalent Random Network")
-        random_action.triggered.connect(self.show_random_dialog)
+        ripley_action = stats_menu.addAction("Clustering Analysis")
+        ripley_action.triggered.connect(self.show_ripley_dialog)
         vol_action = stats_menu.addAction("Calculate Volumes")
         vol_action.triggered.connect(self.volumes)
         rad_action = stats_menu.addAction("Calculate Radii")
@@ -2706,6 +2706,13 @@ class ImageViewerWindow(QMainWindow):
         community_code_action.triggered.connect(lambda: self.show_code_dialog(sort = 'Community'))
         id_code_action = overlay_menu.addAction("Code Identities")
         id_code_action.triggered.connect(lambda: self.show_code_dialog(sort = 'Identity'))
+
+        rand_menu = analysis_menu.addMenu("Randomize")
+        random_action = rand_menu.addAction("Generate Equivalent Random Network")
+        random_action.triggered.connect(self.show_random_dialog)
+        random_nodes = rand_menu.addAction("Scramble Nodes (Centroids)")
+        random_nodes.triggered.connect(self.show_randnode_dialog)
+
 
 
         # Process menu
@@ -3501,8 +3508,8 @@ class ImageViewerWindow(QMainWindow):
                         nii_img = nib.load(filename)
                         # Get data and transpose to match TIFF orientation
                         # If X needs to become Z, we move axis 2 (X) to position 0 (Z)
-                        data = nii_img.get_fdata()
-                        self.channel_data[channel_index] = np.transpose(data, (2, 1, 0))
+                        arraydata = nii_img.get_fdata()
+                        self.channel_data[channel_index] = np.transpose(arraydata, (2, 1, 0))
                         
                     elif file_extension in ['jpg', 'jpeg', 'png']:
                         from PIL import Image
@@ -4157,8 +4164,16 @@ class ImageViewerWindow(QMainWindow):
         dialog = NeighborIdentityDialog(self)
         dialog.exec()
 
+    def show_ripley_dialog(self):
+        dialog = RipleyDialog(self)
+        dialog.exec()
+
     def show_random_dialog(self):
         dialog = RandomDialog(self)
+        dialog.exec()
+
+    def show_randnode_dialog(self):
+        dialog = RandNodeDialog(self)
         dialog.exec()
 
     def show_rad_dialog(self):
@@ -5977,9 +5992,121 @@ class NeighborIdentityDialog(QDialog):
 
 
 
+class RipleyDialog(QDialog):
+
+    def __init__(self, parent=None):
+
+        super().__init__(parent)
+        self.setWindowTitle(f"Find Ripley's H Function From Centroids")
+        self.setModal(True)
+
+        layout = QFormLayout(self)
+
+        if my_network.node_identities is not None:
+            self.root = QComboBox()
+            self.root.addItems(list(set(my_network.node_identities.values())))  
+            self.root.setCurrentIndex(0)
+            layout.addRow("Root Identity to Search for Neighbors", self.root)
+        else:
+            self.root = None
+
+        if my_network.node_identities is not None:
+            self.targ = QComboBox()
+            self.targ.addItems(list(set(my_network.node_identities.values())))  
+            self.targ.setCurrentIndex(0)
+            layout.addRow("Targ Identity to be Searched For", self.targ)
+        else:
+            self.targ = None
+
+        self.distance = QLineEdit("5")
+        layout.addRow("Bucket Distance for Searching For Clusters (automatically scaled by xy and z scales):", self.distance)
 
 
+        self.proportion = QLineEdit("0.5")
+        layout.addRow("Proportion of image to search? (0-1, high vals increase border artifacts): ", self.proportion)
 
+        self.edgecorrect = QPushButton("Border Correction")
+        self.edgecorrect.setCheckable(True)
+        self.edgecorrect.setChecked(False)
+        layout.addRow("Use Border Correction (Extrapolate for points beyond the border):", self.edgecorrect)
+
+        self.ignore = QPushButton("Ignore Border Roots")
+        self.ignore.setCheckable(True)
+        self.ignore.setChecked(False)
+        layout.addRow("Exclude Root Nodes Near Borders?:", self.ignore)
+
+        # Add Run button
+        run_button = QPushButton("Get Ripley's H")
+        run_button.clicked.connect(self.ripley)
+        layout.addWidget(run_button)
+
+    def ripley(self):
+
+        try:
+
+            if my_network.node_centroids is None:
+                self.parent().show_centroid_dialog()
+
+            try:
+                root = self.root.currentText()
+            except:
+                root = None
+
+            try:
+                targ = self.targ.currentText()
+            except:
+                targ = None
+
+            try:
+                distance = float(self.distance.text())
+            except:
+                return
+
+
+            try:
+                proportion = abs(float(self.proportion.text()))
+            except:
+                proportion = 0.5
+
+            if proportion > 1 or proportion <= 0:
+                print("Utilizing proportion = 0.5")
+                proportion = 0.5
+
+
+            edgecorrect = self.edgecorrect.isChecked()
+
+            ignore = self.ignore.isChecked()
+
+            if my_network.nodes is not None:
+
+                if my_network.nodes.shape[0] == 1:
+                    bounds = (np.array([0, 0]), np.array([my_network.nodes.shape[2], my_network.nodes.shape[1]]))
+                else:
+                    bounds = (np.array([0, 0, 0]), np.array([my_network.nodes.shape[2], my_network.nodes.shape[1], my_network.nodes.shape[0]]))
+            else:
+                bounds = None
+
+            r_vals, k_vals, h_vals = my_network.get_ripley(root, targ, distance, edgecorrect, bounds, ignore, proportion)
+            
+            k_dict = dict(zip(r_vals, k_vals))
+            h_dict = dict(zip(r_vals, h_vals))
+
+
+            self.parent().format_for_upperright_table(k_dict, metric='Radius (scaled)', value='L Value', title="Ripley's K")
+            self.parent().format_for_upperright_table(h_dict, metric='Radius (scaled)', value='L Normed', title="Ripley's H")
+
+
+            self.accept()
+
+        except Exception as e:
+            QMessageBox.critical(
+                self,
+                "Error:",
+                f"Failed to preform cluster analysis: {str(e)}"
+            )
+            import traceback
+            print(traceback.format_exc())
+            print(f"Error: {e}")
 
 class RandomDialog(QDialog):
 
@@ -6018,6 +6145,79 @@ class RandomDialog(QDialog):
         self.parent().selection_button.click()
 
         self.accept()
+
+class RandNodeDialog(QDialog):
+
+    def __init__(self, parent=None):
+
+        super().__init__(parent)
+        self.setWindowTitle("Random Node Parameters")
+        self.setModal(True)
+        layout = QFormLayout(self)
+
+
+        self.mode = QComboBox()
+        self.mode.addItems(["Anywhere", "Within Dimensional Bounds of Nodes", "Within Masked Bounds of Edges", "Within Masked Bounds of Overlay1", "Within Masked Bounds of Overlay2"])
+        self.mode.setCurrentIndex(0)
+        layout.addRow("Mode", self.mode)
+
+        # Add Run button
+        run_button = QPushButton("Get Random Nodes (Will go in Nodes)")
+        run_button.clicked.connect(self.random)
+        layout.addWidget(run_button)
+
+    def random(self):
+
+        try:
+
+            if my_network.node_centroids is None:
+                self.parent().show_centroid_dialog()
+
+            bounds = None
+            mask = None
+
+            mode = self.mode.currentIndex()
+
+            if mode == 0 and not (my_network.nodes is None and my_network.edges is None and my_network.network_overlay is None and my_network.id_overlay is None):
+                pass
+            elif mode == 1 or (my_network.nodes is None and my_network.edges is None and my_network.network_overlay is None and my_network.id_overlay is None):
+                print("HELLO")
+                # Convert string labels to integers if necessary
+                if any(isinstance(k, str) for k in my_network.node_centroids.keys()):
+                    label_map = {label: idx for idx, label in enumerate(my_network.node_centroids.keys())}
+                    my_network.node_centroids = {label_map[k]: v for k, v in my_network.node_centroids.items()}
+                
+                # Convert centroids to array and keep track of labels
+                labels = np.array(list(my_network.node_centroids.keys()), dtype=np.uint32)
+                centroid_points = np.array([my_network.node_centroids[label] for label in labels])
+                
+                # Calculate shape if not provided
+                max_coords = centroid_points.max(axis=0)
+                max_shape = tuple(max_coord + 1 for max_coord in max_coords)
+                min_coords = centroid_points.min(axis=0)
+                min_shape = tuple(min_coord + 1 for min_coord in min_coords)
+                bounds = (min_shape, max_shape)
+            else:
+                mask = n3d.binarize(self.parent().channel_data[mode - 1])
+
+            centroids, array = my_network.random_nodes(bounds = bounds, mask = mask)
+
+            if my_network.nodes is not None:
+                try:
+                    self.parent().load_channel(0, array, data = True)
+                except:
+                    pass
+
+            self.parent().format_for_upperright_table(my_network.node_centroids, 'NodeID', ['Z', 'Y', 'X'], 'Node Centroids')
+
+        except Exception as e:
+            QMessageBox.critical(
+                self,
+                "Error:",
+                f"Failed to randomize: {str(e)}"
+            )
+            print(f"Error: {e}")
+
 
 class RadDialog(QDialog):
 
@@ -7208,8 +7408,14 @@ class MachineWindow(QMainWindow):
         train_quick.clicked.connect(lambda: self.train_model(speed=True))
         train_detailed = QPushButton("Train More Detailed Model")
         train_detailed.clicked.connect(lambda: self.train_model(speed=False))
+        save = QPushButton("Save Model")
+        save.clicked.connect(self.save_model)
+        load = QPushButton("Load Model")
+        load.clicked.connect(self.load_model)
         training_layout.addWidget(train_quick)
         training_layout.addWidget(train_detailed)
+        training_layout.addWidget(save)
+        training_layout.addWidget(load)
         training_group.setLayout(training_layout)
 
         # Group 4: Segmentation Options
@@ -7280,6 +7486,33 @@ class MachineWindow(QMainWindow):
             except:
                 pass
 
+    def save_model(self):
+
+        filename, _ = QFileDialog.getSaveFileName(
+            self,
+            f"Save Model As",
+            "",  # Default directory
+            "numpy data (*.npz);;All Files (*)"  # File type filter
+        )
+        
+        if filename:  # Only proceed if user didn't cancel
+            # If user didn't type an extension, add .tif
+            if not filename.endswith(('.npz')):
+                filename += '.npz'
+
+        self.segmenter.save_model(filename, self.parent().channel_data[2])
+
+    def load_model(self):
+
+        filename, _ = QFileDialog.getOpenFileName(
+            self,
+            f"Load Model",
+            "",
+            "numpy data (*.npz)"
+        )
+
+        self.segmenter.load_model(filename)
+        self.trained = True
 
     def toggle_two(self):
         if self.two.isChecked():

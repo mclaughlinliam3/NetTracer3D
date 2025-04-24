@@ -6,17 +6,18 @@
   <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
 
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Quickstart - Segmenting Data and Generating Networks &mdash; NetTracer3D 0.6.9 documentation</title>
+  <title>Quickstart - Segmenting Data and Generating Networks &mdash; NetTracer3D 0.7.0 documentation</title>
       <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=b86133f3" />
       <link rel="stylesheet" type="text/css" href="_static/css/theme.css?v=e59714d7" />
 
   
       <script src="_static/jquery.js?v=5d32c60e"></script>
       <script src="_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
-      <script src="_static/documentation_options.js?v=084304ff"></script>
+      <script src="_static/documentation_options.js?v=fe7df9b0"></script>
       <script src="_static/doctools.js?v=9bcbadda"></script>
       <script src="_static/sphinx_highlight.js?v=dc90522c"></script>
     <script src="_static/js/theme.js"></script>
+    <link rel="author" title="About these documents" href="about.html" />
     <link rel="index" title="Index" href="genindex.html" />
     <link rel="search" title="Search" href="search.html" />
     <link rel="next" title="Labeling Branches and Branch Networks" href="branches.html" />
@@ -81,6 +82,8 @@
 <li class="toctree-l1"><a class="reference internal" href="contact.html">Contact</a></li>
 <li class="toctree-l1"><a class="reference internal" href="changelog.html">Changelog</a></li>
 <li class="toctree-l1"><a class="reference internal" href="roadmap.html">Road Map</a></li>
+<li class="toctree-l1"><a class="reference internal" href="about.html">About</a></li>
+<li class="toctree-l1"><a class="reference internal" href="usage.html">Usage</a></li>
 </ul>
 
         </div>
@@ -289,6 +292,8 @@ Presegmented data can be used directly, however our data is not yet segmented, s
 <li><p>Train by 3D Patterns (Processing Options): When selected, the model will be trained using 3D feature maps.</p></li>
 <li><p>Train Quick Model (Training): Click to train the model to segment your image based on the regions selected in your training data.</p></li>
 <li><p>Train More Detailed Model (Training): Does the same as above but has additional feature training.</p></li>
+<li><p>Save Model (Training): Saves purely the extracted training data from the current model as a .npz file.</p></li>
+<li><p>Load Model (Training): Loads the saved training data in the .npz file into a new model. This new model can receive additional trainings from seperate images while maintaining its previous data. Note that loaded quick models can only be layered onto new quick models, while loaded detailed models can only be layered onto new detailed models. Attempting to combine seperate model types will ignore the previous model data.</p></li>
 <li><p>Preview Segment (Segmentation): When clicked, the model will begin segmenting your image as a preview, without interrupting the current training session. Use this to assess the current state of the model to decide if it needs additional training. This preview will be displayed in the highlight overlay, with foreground denoted by yellow and background denoted by blue.</p></li>
 <li><p>Segment All (Segmentation): When clicked (after a warning), the training session will pause to segment the entire image with the current model. It is recommended that you save your images before doing this (File -&gt; Save Network 3D Object As), in case the segmentation needs to be interrupted (It can only be paused by terminating the program). When finished, the binary segmentation will be placed in Overlay 2.</p></li>
 </ul>

@@ -215,16 +215,78 @@ Algorithm Explanation
 1. Mode 1 just counts neighbors that are immediate neighbors in the network of the desired node ID.
 2. Mode 2 searches using either a distance transform or psuedo-3D binary dilation. It searches outward from nodes of the desired ID type, and hence does not actually include them. This is why this option never evaluates its own clustering.
 
-'Analyze -> Stats -> Generate Equivalent Random Network'
+
+'Analyze -> Stats -> Cluster Analysis'
 -----------------------------------------
-* This method allows us to generate a random network with an equivalent number of edges and nodes as the current network.
-* The purpose of this method is a quick way to compare our network to a similar random one, which can be used to demonstrate presence of non-randomness, for example.   
-* The only parameter is 'weighted'. If selected, edges in the random network will be allowed to stack into weighted edges.
-    * Note if my network is weighted, weights are included in total edge counts for the purpose of this method, so three nodes with one edge of weight one and one edge of weight two will allow three connections to be made in the corresponding random network.
-    * The weighted param just tells the random network whether its allowed to use these total edges to make weighted edges (a weighted edge of 2 would *cost* the random network 2 of its available edges, so to speak).
-    * The weighted param does not tell the random network to ignore weights in the original network. To do that, first de-weight the network with 'Process -> Modify Network'.
-* Press 'Generate Random Network' to place the random network in the 'Selection' network table. From here, it can be right clicked to either save it or to swap it into the active network.
-    * Note that swapping the random network to active runs the risk of overriding the old active network if a new selection is made, so be sure to save it first.
+* This method generates a Ripley's K curve, which is a function that compares relative object clustering to distance r from some random node.
+* It is a good way to identify if objects are clustering or dispersed, and how that varies through an image.
+* This method can evaluate if a node of some identity is clustered around a node of another identity type, or just if nodes of one type are clustered with themselves. 
+* This method can be run with labeled nodes, or just node centroids themselves. It will prompt for node centroids if they do not exist. Since it uses centroids, it says nothing about the actual shapes of nodes.
+* Selecting this option displays the following menu:
+
+.. image:: _static/ripley_menu.png
+   :width: 400px
+   :alt: Ripley Menu
+
+Parameter Explanations
+~~~~~~~~~~~~~~~
+#. Root Identity to Search for Neighbors
+    * This is the node identity type whose neighborhood you want to evaluate for clustered objects.
+#. Targ Identity to be Searched For
+    * This is the node identity who will be evaluated for cluster behavior around param 1.
+    * Note that param 1 and 2 only appear if identities are assigned. Otherwise, all nodes will just evaluate clustering against themselves.
+#. Bucket Distance for Searching For Clusters...
+    * This is the bucket distance for each iteration of r. It is auto-scaled for your image, so enter a true distance here if you have scaling properties set.
+    * Note that smaller buckets will slow down processing time (in exchange for higher fidelity).
+#. Proportion of image to search...
+    * A 0-1 float representing the proportion of the image to search from each node.
+    * A value of 1 will have each node try to evaluate the clustering of every other node in the image, while values closer to 0 will restrict the function calculation to just the immediate neighborhood.
+    * Note that higher values will increase border artifacts (Since the method can't 'see' nodes beyond the image borders so it presumes those regions to be empty, decreasing clustering appraisal).
+#. Use Border Correction...
+    * As mentioned in param 4, search regions near the border will result in reduced appraisal. 
+    * Activating this method has NetTracer3D approximate how much of the search region is in-bounds and extrapolate how many extra clustered neighbors it'd inspect in the full search region. Note that this will increase computation time.
+    * In short, this will increase the clustering appraisal at higher r values, however it is not an exact calculation. Additionally, edge effects will become extreme with very narrow dimensions, for example a short z-stack.
+    * In such a situation, try z-projecting to force a 2D calculation instead.
+#. Exclude Root Nodes Near Borders?
+    * As an alternative to param 5, enabling this method will avoid searching from any nodes within 25% of your image borders.
+    * This avoids requiring as much extrapolation, however keep in mind that search regions can still get clipped if param 4 > 0.25.
+    * Params 5 and 6 can be combined, which can result in even stronger border-corrections.
+
+* Press "Get Ripley's H" to have the program calculate both the Ripley's K function and Ripley's H function for your dataset. Tables for each will populate the tabulated data widget, while some form of the following graph will appear:
+
+.. image:: _static/ripley_graph.png
+   :width: 400px
+   :alt: Ripley Graph
+*In this case, the x axis represents the distance from any random node, and the y, a factor representing the clustering intensity observed around nodes at that distance. The blue line is our observed line, while the red line represents expected behaviors from a Poisson distribution of nodes. Essentially, regions above the red dotted line are unexpectedly clustered, while those below are unexpectedly dispersed. The right graph is a normalized version of the left, to have a straight center line. Note that due the possibility of border artifacts in the datasets, it might be best to compare between multiple datasets or with a dataset of randomly-seeded nodes, rather than directly to the red line*
+
+Algorithm Explanations
+~~~~~~~~~~~~~~~
+* This algorithm is an implementation of the Ripley's K function. See 10.1016/j.bpj.2009.05.039
+#. We take two sets of points: root points and target points (these can be the same set)
+#. We build a KDTree from the root points for efficient nearest-neighbor searches
+#. We calculate the volume/area of the study region
+#. We compute the intensity (λ) as number of reference points divided by volume
+#. For each root point at each distance in our bucketed r_values, we find Neighbors using KDTree and record how many target points are within this radius
+#. Edge Correction (if enabled), if the point is near a boundary:
+    * For 2D:
+        * Check distance to all four boundaries (left, right, top, bottom)
+        * For each boundary closer than r, apply a correction factor
+        * The correction reduces the "proportion_in" (percentage of the circle that falls inside the study area)
+        * The reduction follows a simple linear approximation: 0.5 * (1 - distance/r)
+        * Add a small boost if the point is near a corner (where two boundaries are close)
+    * For 3D:
+        * Same concept, but check all six boundaries (±x, ±y, ±z)
+        * Each boundary reduces proportion_in by 0.25 * (1 - distance/r)
+        * Count how many boundaries are close, apply stronger corner correction for points near multiple boundaries
+#. Calculate weight as 1.0 / proportion_in (Weights only exist for border correction). Multiply the neighbor count by this weight. This adjusts for the "missing" area/volume outside the boundaries
+#. If we're comparing a set to itself, remove self-counts to avoid counting points as their own neighbors.
+#. Sum all the weighted counts and normalize by:
+    * Number of subset points (n_subset)
+    * Point intensity (λ)
+#. Return the array of K values for each radius value
+#. K values can then be normalized to H values by 'h_values = np.sqrt(k_values / np.pi) - r_values' (in 2D), or 'h_values = np.cbrt(k_values / (4/3 * np.pi)) - r_values' (in 3D)
+#. These are plotted versus the theoretical functions 'theo_k = np.pi * r_values**2' (2D) or 'theo_k = (4/3) * np.pi * r_values**3' (3D), while theoretical H values are just 0.
+
 
 'Analyze -> Stats -> Calculate Volumes'
 -----------------------------------------
@@ -385,3 +447,34 @@ Parameter Explanations
 Next Steps
 ---------
 This concludes the explanations of the analyze functions. Next, proceed to :doc:`process_menu` for information on the process menu functions.
+
+
+* The last submenu is 'Randomize', and is used to generate random variants of data.
+
+
+'Analyze -> Randomize -> Generate Equivalent Random Network'
+-----------------------------------------
+* This method allows us to generate a random network with an equivalent number of edges and nodes as the current network.
+* The purpose of this method is a quick way to compare our network to a similar random one, which can be used to demonstrate presence of non-randomness, for example.   
+* The only parameter is 'weighted'. If selected, edges in the random network will be allowed to stack into weighted edges.
+    * Note if my network is weighted, weights are included in total edge counts for the purpose of this method, so three nodes with one edge of weight one and one edge of weight two will allow three connections to be made in the corresponding random network.
+    * The weighted param just tells the random network whether its allowed to use these total edges to make weighted edges (a weighted edge of 2 would *cost* the random network 2 of its available edges, so to speak).
+    * The weighted param does not tell the random network to ignore weights in the original network. To do that, first de-weight the network with 'Process -> Modify Network'.
+* Press 'Generate Random Network' to place the random network in the 'Selection' network table. From here, it can be right clicked to either save it or to swap it into the active network.
+    * Note that swapping the random network to active runs the risk of overriding the old active network if a new selection is made, so be sure to save it first.
+
+'Analyze -> Randomize -> Scramble Nodes (Centroids)'
+-------------------------------------------------------------
+* This method allows us to randomize our node locations, for the purposes of comparing our dataset to a random one.
+* This method uses our node centroids and randomizes the centroids themselves - 3D node objects are not included for this purpose.
+* Selecting this option will display a window with a single parameter, 'Mode'. Its dropdown menu includes the following option.
+    1. Anywhere - The nodes can go anywhere in the image bounds.
+    2. Within Dimensional Bounds of Nodes - The nodes can go anywhere within the min/max boundaries of the current nodes (In the bounding box).
+    3. Within Masked Bounds of Edges - The nodes can go anywhere the edge channel is non-zero.
+    4. Within Masked Bounds of Overlay1 - The nodes can go anywhere the Overlay1 channel is non-zero.
+    5. Within Masked Bounds of Overlay2 - The nodes can go anywhere the Overlay2 channel is non-zero.
+
+* If a nodes channel image exists, it will be overrided by a equivalently-sized image.
+* If a nodes channel image does not exist, no new image will be loaded and only the centroids will be randomized.
+    * These centroids will be randomized within the bounds of any other available image channel. If there are none, they will use the min/max bounds of the current centroids.
+* The purpose of params 3-5 is to allow creation of arbitrary boundary regions, for example by dilating data of interest, to allow the nodes to populate.

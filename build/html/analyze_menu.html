@@ -6,17 +6,18 @@
   <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
 
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>All Analyze Menu Options &mdash; NetTracer3D 0.6.9 documentation</title>
+  <title>All Analyze Menu Options &mdash; NetTracer3D 0.7.0 documentation</title>
       <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=b86133f3" />
       <link rel="stylesheet" type="text/css" href="_static/css/theme.css?v=e59714d7" />
 
   
       <script src="_static/jquery.js?v=5d32c60e"></script>
       <script src="_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
-      <script src="_static/documentation_options.js?v=084304ff"></script>
+      <script src="_static/documentation_options.js?v=fe7df9b0"></script>
       <script src="_static/doctools.js?v=9bcbadda"></script>
       <script src="_static/sphinx_highlight.js?v=dc90522c"></script>
     <script src="_static/js/theme.js"></script>
+    <link rel="author" title="About these documents" href="about.html" />
     <link rel="index" title="Index" href="genindex.html" />
     <link rel="search" title="Search" href="search.html" />
     <link rel="next" title="All Process Menu Options" href="process_menu.html" />
@@ -77,39 +78,45 @@
 <li class="toctree-l3"><a class="reference internal" href="#id4">Algorithm Explanation</a></li>
 </ul>
 </li>
-<li class="toctree-l2"><a class="reference internal" href="#analyze-stats-generate-equivalent-random-network">‘Analyze -&gt; Stats -&gt; Generate Equivalent Random Network’</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#analyze-stats-cluster-analysis">‘Analyze -&gt; Stats -&gt; Cluster Analysis’</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#id5">Parameter Explanations</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#algorithm-explanations">Algorithm Explanations</a></li>
+</ul>
+</li>
 <li class="toctree-l2"><a class="reference internal" href="#analyze-stats-calculate-volumes">‘Analyze -&gt; Stats -&gt; Calculate Volumes’</a></li>
 <li class="toctree-l2"><a class="reference internal" href="#analyze-stats-calculate-radii">‘Analyze -&gt; Stats -&gt; Calculate Radii’</a><ul>
 <li class="toctree-l3"><a class="reference internal" href="#parameter-explanation">Parameter Explanation</a></li>
-<li class="toctree-l3"><a class="reference internal" href="#id5">Algorithm Explanation</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#id6">Algorithm Explanation</a></li>
 </ul>
 </li>
 <li class="toctree-l2"><a class="reference internal" href="#analyze-stats-calculate-node-edge-interactions">‘Analyze -&gt; Stats -&gt; Calculate Node &lt; &gt; Edge Interactions’</a><ul>
-<li class="toctree-l3"><a class="reference internal" href="#id6">Parameter Explanations</a></li>
-<li class="toctree-l3"><a class="reference internal" href="#id7">Algorithm Explanation</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#id7">Parameter Explanations</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#id8">Algorithm Explanation</a></li>
 </ul>
 </li>
 <li class="toctree-l2"><a class="reference internal" href="#analyze-data-overlays-get-degree-information">‘Analyze -&gt; Data/Overlays -&gt; Get Degree Information’</a><ul>
-<li class="toctree-l3"><a class="reference internal" href="#id8">Parameter Explanations</a></li>
-</ul>
-</li>
-<li class="toctree-l2"><a class="reference internal" href="#analyze-data-overlays-get-hub-information">‘Analyze -&gt; Data/Overlays -&gt; Get Hub Information’</a><ul>
 <li class="toctree-l3"><a class="reference internal" href="#id9">Parameter Explanations</a></li>
 </ul>
 </li>
-<li class="toctree-l2"><a class="reference internal" href="#analyze-data-overlays-get-mother-nodes">‘Analyze -&gt; Data/Overlays -&gt; Get Mother Nodes’</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="#analyze-data-overlays-get-hub-information">‘Analyze -&gt; Data/Overlays -&gt; Get Hub Information’</a><ul>
 <li class="toctree-l3"><a class="reference internal" href="#id10">Parameter Explanations</a></li>
 </ul>
 </li>
-<li class="toctree-l2"><a class="reference internal" href="#analyze-data-overlays-code-communities">‘Analyze -&gt; Data/Overlays -&gt; Code Communities’</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="#analyze-data-overlays-get-mother-nodes">‘Analyze -&gt; Data/Overlays -&gt; Get Mother Nodes’</a><ul>
 <li class="toctree-l3"><a class="reference internal" href="#id11">Parameter Explanations</a></li>
 </ul>
 </li>
-<li class="toctree-l2"><a class="reference internal" href="#analyze-data-overlays-code-identities">‘Analyze -&gt; Data/Overlays -&gt; Code Identities’</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="#analyze-data-overlays-code-communities">‘Analyze -&gt; Data/Overlays -&gt; Code Communities’</a><ul>
 <li class="toctree-l3"><a class="reference internal" href="#id12">Parameter Explanations</a></li>
 </ul>
 </li>
+<li class="toctree-l2"><a class="reference internal" href="#analyze-data-overlays-code-identities">‘Analyze -&gt; Data/Overlays -&gt; Code Identities’</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#id13">Parameter Explanations</a></li>
+</ul>
+</li>
 <li class="toctree-l2"><a class="reference internal" href="#next-steps">Next Steps</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#analyze-randomize-generate-equivalent-random-network">‘Analyze -&gt; Randomize -&gt; Generate Equivalent Random Network’</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#analyze-randomize-scramble-nodes-centroids">‘Analyze -&gt; Randomize -&gt; Scramble Nodes (Centroids)’</a></li>
 </ul>
 </li>
 <li class="toctree-l1"><a class="reference internal" href="process_menu.html">All Process Menu Options</a></li>
@@ -120,6 +127,8 @@
 <li class="toctree-l1"><a class="reference internal" href="contact.html">Contact</a></li>
 <li class="toctree-l1"><a class="reference internal" href="changelog.html">Changelog</a></li>
 <li class="toctree-l1"><a class="reference internal" href="roadmap.html">Road Map</a></li>
+<li class="toctree-l1"><a class="reference internal" href="about.html">About</a></li>
+<li class="toctree-l1"><a class="reference internal" href="usage.html">Usage</a></li>
 </ul>
 
         </div>
@@ -542,28 +551,131 @@
 </ol>
 </section>
 </section>
-<section id="analyze-stats-generate-equivalent-random-network">
-<h2>‘Analyze -&gt; Stats -&gt; Generate Equivalent Random Network’<a class="headerlink" href="#analyze-stats-generate-equivalent-random-network" title="Link to this heading"></a></h2>
+<section id="analyze-stats-cluster-analysis">
+<h2>‘Analyze -&gt; Stats -&gt; Cluster Analysis’<a class="headerlink" href="#analyze-stats-cluster-analysis" title="Link to this heading"></a></h2>
 <ul class="simple">
-<li><p>This method allows us to generate a random network with an equivalent number of edges and nodes as the current network.</p></li>
-<li><p>The purpose of this method is a quick way to compare our network to a similar random one, which can be used to demonstrate presence of non-randomness, for example.</p></li>
+<li><p>This method generates a Ripley’s K curve, which is a function that compares relative object clustering to distance r from some random node.</p></li>
+<li><p>It is a good way to identify if objects are clustering or dispersed, and how that varies through an image.</p></li>
+<li><p>This method can evaluate if a node of some identity is clustered around a node of another identity type, or just if nodes of one type are clustered with themselves.</p></li>
+<li><p>This method can be run with labeled nodes, or just node centroids themselves. It will prompt for node centroids if they do not exist. Since it uses centroids, it says nothing about the actual shapes of nodes.</p></li>
+<li><p>Selecting this option displays the following menu:</p></li>
+</ul>
+<a class="reference internal image-reference" href="_images/ripley_menu.png"><img alt="Ripley Menu" src="_images/ripley_menu.png" style="width: 400px;" />
+</a>
+<section id="id5">
+<h3>Parameter Explanations<a class="headerlink" href="#id5" title="Link to this heading"></a></h3>
+<ol class="arabic simple">
 <li><dl class="simple">
-<dt>The only parameter is ‘weighted’. If selected, edges in the random network will be allowed to stack into weighted edges.</dt><dd><ul>
-<li><p>Note if my network is weighted, weights are included in total edge counts for the purpose of this method, so three nodes with one edge of weight one and one edge of weight two will allow three connections to be made in the corresponding random network.</p></li>
-<li><p>The weighted param just tells the random network whether its allowed to use these total edges to make weighted edges (a weighted edge of 2 would <em>cost</em> the random network 2 of its available edges, so to speak).</p></li>
-<li><p>The weighted param does not tell the random network to ignore weights in the original network. To do that, first de-weight the network with ‘Process -&gt; Modify Network’.</p></li>
+<dt>Root Identity to Search for Neighbors</dt><dd><ul class="simple">
+<li><p>This is the node identity type whose neighborhood you want to evaluate for clustered objects.</p></li>
 </ul>
 </dd>
 </dl>
 </li>
 <li><dl class="simple">
-<dt>Press ‘Generate Random Network’ to place the random network in the ‘Selection’ network table. From here, it can be right clicked to either save it or to swap it into the active network.</dt><dd><ul>
-<li><p>Note that swapping the random network to active runs the risk of overriding the old active network if a new selection is made, so be sure to save it first.</p></li>
+<dt>Targ Identity to be Searched For</dt><dd><ul class="simple">
+<li><p>This is the node identity who will be evaluated for cluster behavior around param 1.</p></li>
+<li><p>Note that param 1 and 2 only appear if identities are assigned. Otherwise, all nodes will just evaluate clustering against themselves.</p></li>
+</ul>
+</dd>
+</dl>
+</li>
+<li><dl class="simple">
+<dt>Bucket Distance for Searching For Clusters…</dt><dd><ul class="simple">
+<li><p>This is the bucket distance for each iteration of r. It is auto-scaled for your image, so enter a true distance here if you have scaling properties set.</p></li>
+<li><p>Note that smaller buckets will slow down processing time (in exchange for higher fidelity).</p></li>
+</ul>
+</dd>
+</dl>
+</li>
+<li><dl class="simple">
+<dt>Proportion of image to search…</dt><dd><ul class="simple">
+<li><p>A 0-1 float representing the proportion of the image to search from each node.</p></li>
+<li><p>A value of 1 will have each node try to evaluate the clustering of every other node in the image, while values closer to 0 will restrict the function calculation to just the immediate neighborhood.</p></li>
+<li><p>Note that higher values will increase border artifacts (Since the method can’t ‘see’ nodes beyond the image borders so it presumes those regions to be empty, decreasing clustering appraisal).</p></li>
+</ul>
+</dd>
+</dl>
+</li>
+<li><dl class="simple">
+<dt>Use Border Correction…</dt><dd><ul class="simple">
+<li><p>As mentioned in param 4, search regions near the border will result in reduced appraisal.</p></li>
+<li><p>Activating this method has NetTracer3D approximate how much of the search region is in-bounds and extrapolate how many extra clustered neighbors it’d inspect in the full search region. Note that this will increase computation time.</p></li>
+<li><p>In short, this will increase the clustering appraisal at higher r values, however it is not an exact calculation. Additionally, edge effects will become extreme with very narrow dimensions, for example a short z-stack.</p></li>
+<li><p>In such a situation, try z-projecting to force a 2D calculation instead.</p></li>
+</ul>
+</dd>
+</dl>
+</li>
+<li><dl class="simple">
+<dt>Exclude Root Nodes Near Borders?</dt><dd><ul class="simple">
+<li><p>As an alternative to param 5, enabling this method will avoid searching from any nodes within 25% of your image borders.</p></li>
+<li><p>This avoids requiring as much extrapolation, however keep in mind that search regions can still get clipped if param 4 &gt; 0.25.</p></li>
+<li><p>Params 5 and 6 can be combined, which can result in even stronger border-corrections.</p></li>
+</ul>
+</dd>
+</dl>
+</li>
+</ol>
+<ul class="simple">
+<li><p>Press “Get Ripley’s H” to have the program calculate both the Ripley’s K function and Ripley’s H function for your dataset. Tables for each will populate the tabulated data widget, while some form of the following graph will appear:</p></li>
+</ul>
+<a class="reference internal image-reference" href="_images/ripley_graph.png"><img alt="Ripley Graph" src="_images/ripley_graph.png" style="width: 400px;" />
+</a>
+<p><em>In this case, the x axis represents the distance from any random node, and the y, a factor representing the clustering intensity observed around nodes at that distance. The blue line is our observed line, while the red line represents expected behaviors from a Poisson distribution of nodes. Essentially, regions above the red dotted line are unexpectedly clustered, while those below are unexpectedly dispersed. The right graph is a normalized version of the left, to have a straight center line. Note that due the possibility of border artifacts in the datasets, it might be best to compare between multiple datasets or with a dataset of randomly-seeded nodes, rather than directly to the red line</em></p>
+</section>
+<section id="algorithm-explanations">
+<h3>Algorithm Explanations<a class="headerlink" href="#algorithm-explanations" title="Link to this heading"></a></h3>
+<ul class="simple">
+<li><p>This algorithm is an implementation of the Ripley’s K function. See 10.1016/j.bpj.2009.05.039</p></li>
+</ul>
+<ol class="arabic simple">
+<li><p>We take two sets of points: root points and target points (these can be the same set)</p></li>
+<li><p>We build a KDTree from the root points for efficient nearest-neighbor searches</p></li>
+<li><p>We calculate the volume/area of the study region</p></li>
+<li><p>We compute the intensity (λ) as number of reference points divided by volume</p></li>
+<li><p>For each root point at each distance in our bucketed r_values, we find Neighbors using KDTree and record how many target points are within this radius</p></li>
+<li><dl class="simple">
+<dt>Edge Correction (if enabled), if the point is near a boundary:</dt><dd><ul class="simple">
+<li><dl class="simple">
+<dt>For 2D:</dt><dd><ul>
+<li><p>Check distance to all four boundaries (left, right, top, bottom)</p></li>
+<li><p>For each boundary closer than r, apply a correction factor</p></li>
+<li><p>The correction reduces the “proportion_in” (percentage of the circle that falls inside the study area)</p></li>
+<li><p>The reduction follows a simple linear approximation: 0.5 * (1 - distance/r)</p></li>
+<li><p>Add a small boost if the point is near a corner (where two boundaries are close)</p></li>
+</ul>
+</dd>
+</dl>
+</li>
+<li><dl class="simple">
+<dt>For 3D:</dt><dd><ul>
+<li><p>Same concept, but check all six boundaries (±x, ±y, ±z)</p></li>
+<li><p>Each boundary reduces proportion_in by 0.25 * (1 - distance/r)</p></li>
+<li><p>Count how many boundaries are close, apply stronger corner correction for points near multiple boundaries</p></li>
 </ul>
 </dd>
 </dl>
 </li>
 </ul>
+</dd>
+</dl>
+</li>
+<li><p>Calculate weight as 1.0 / proportion_in (Weights only exist for border correction). Multiply the neighbor count by this weight. This adjusts for the “missing” area/volume outside the boundaries</p></li>
+<li><p>If we’re comparing a set to itself, remove self-counts to avoid counting points as their own neighbors.</p></li>
+<li><dl class="simple">
+<dt>Sum all the weighted counts and normalize by:</dt><dd><ul class="simple">
+<li><p>Number of subset points (n_subset)</p></li>
+<li><p>Point intensity (λ)</p></li>
+</ul>
+</dd>
+</dl>
+</li>
+<li><p>Return the array of K values for each radius value</p></li>
+<li><p>K values can then be normalized to H values by ‘h_values = np.sqrt(k_values / np.pi) - r_values’ (in 2D), or ‘h_values = np.cbrt(k_values / (4/3 * np.pi)) - r_values’ (in 3D)</p></li>
+<li><p>These are plotted versus the theoretical functions ‘theo_k = np.pi * r_values**2’ (2D) or ‘theo_k = (4/3) * np.pi * r_values**3’ (3D), while theoretical H values are just 0.</p></li>
+</ol>
+</section>
 </section>
 <section id="analyze-stats-calculate-volumes">
 <h2>‘Analyze -&gt; Stats -&gt; Calculate Volumes’<a class="headerlink" href="#analyze-stats-calculate-volumes" title="Link to this heading"></a></h2>
@@ -586,8 +698,8 @@
 <li><p>If you enable it, the system will attempt to attempt to use the GPU to calculate. Note that this is only possible with a working CUDA toolkit.</p></li>
 </ul>
 </section>
-<section id="id5">
-<h3>Algorithm Explanation<a class="headerlink" href="#id5" title="Link to this heading"></a></h3>
+<section id="id6">
+<h3>Algorithm Explanation<a class="headerlink" href="#id6" title="Link to this heading"></a></h3>
 <ol class="arabic simple">
 <li><p>The scipy.ndimage.find_objects() method is used to get bounding boxes around all the labeled objects.</p></li>
 <li><p>For each object, a subarray is cut out around it using its bounding box, with padding on all sides.</p></li>
@@ -607,8 +719,8 @@
 </ul>
 <a class="reference internal image-reference" href="_images/analyze5.png"><img alt="edgenode Menu" src="_images/analyze5.png" style="width: 800px;" />
 </a>
-<section id="id6">
-<h3>Parameter Explanations<a class="headerlink" href="#id6" title="Link to this heading"></a></h3>
+<section id="id7">
+<h3>Parameter Explanations<a class="headerlink" href="#id7" title="Link to this heading"></a></h3>
 <ol class="arabic simple">
 <li><dl class="simple">
 <dt>node_search:</dt><dd><ul class="simple">
@@ -645,8 +757,8 @@
 <li><p>Press Calculate to run the method with the desired parameters. The output data will be used to create a new table in the tabulated data widget.</p></li>
 </ul>
 </section>
-<section id="id7">
-<h3>Algorithm Explanation<a class="headerlink" href="#id7" title="Link to this heading"></a></h3>
+<section id="id8">
+<h3>Algorithm Explanation<a class="headerlink" href="#id8" title="Link to this heading"></a></h3>
 <ol class="arabic simple">
 <li><p>The scipy.ndimage.find_objects() method is used to get bounding boxes around all the labeled objects in the nodes channel.</p></li>
 <li><p>For each object, a subarray is cut out around it using its bounding box, that includes the object plus any additional space that it will need to perform a search/dilation.</p></li>
@@ -671,8 +783,8 @@
 </ul>
 <a class="reference internal image-reference" href="_images/analyze6.png"><img alt="edgenode Menu" src="_images/analyze6.png" style="width: 800px;" />
 </a>
-<section id="id8">
-<h3>Parameter Explanations<a class="headerlink" href="#id8" title="Link to this heading"></a></h3>
+<section id="id9">
+<h3>Parameter Explanations<a class="headerlink" href="#id9" title="Link to this heading"></a></h3>
 <ol class="arabic simple">
 <li><dl class="simple">
 <dt>Execution Mode</dt><dd><ul class="simple">
@@ -720,8 +832,8 @@
 <ul class="simple">
 <li><p>This method can be used to extract information about hub nodes, which are the nodes that are the fewest degrees of seperation from any other node.</p></li>
 </ul>
-<section id="id9">
-<h3>Parameter Explanations<a class="headerlink" href="#id9" title="Link to this heading"></a></h3>
+<section id="id10">
+<h3>Parameter Explanations<a class="headerlink" href="#id10" title="Link to this heading"></a></h3>
 <ul class="simple">
 <li><p>This method only has two parameters.</p></li>
 </ul>
@@ -752,8 +864,8 @@
 <li><p>This method can be used to extract information about ‘mother nodes’, which are we define as those nodes that contain connections between one community and another.</p></li>
 <li><p>This method would be used to identify what nodes enable interaction between seperate communities.</p></li>
 </ul>
-<section id="id10">
-<h3>Parameter Explanations<a class="headerlink" href="#id10" title="Link to this heading"></a></h3>
+<section id="id11">
+<h3>Parameter Explanations<a class="headerlink" href="#id11" title="Link to this heading"></a></h3>
 <ul class="simple">
 <li><p>This method only has one parameter.</p></li>
 </ul>
@@ -776,8 +888,8 @@
 <ul class="simple">
 <li><p>This method can be used to generate an overlay that shows what nodes belong to which community.</p></li>
 </ul>
-<section id="id11">
-<h3>Parameter Explanations<a class="headerlink" href="#id11" title="Link to this heading"></a></h3>
+<section id="id12">
+<h3>Parameter Explanations<a class="headerlink" href="#id12" title="Link to this heading"></a></h3>
 <ul class="simple">
 <li><p>This method only has two parameters.</p></li>
 </ul>
@@ -814,8 +926,8 @@
 <ul class="simple">
 <li><p>This method can be used to generate an overlay that shows what nodes belong to which identity.</p></li>
 </ul>
-<section id="id12">
-<h3>Parameter Explanations<a class="headerlink" href="#id12" title="Link to this heading"></a></h3>
+<section id="id13">
+<h3>Parameter Explanations<a class="headerlink" href="#id13" title="Link to this heading"></a></h3>
 <ul class="simple">
 <li><p>This method only has two parameters.</p></li>
 </ul>
@@ -850,6 +962,59 @@
 <section id="next-steps">
 <h2>Next Steps<a class="headerlink" href="#next-steps" title="Link to this heading"></a></h2>
 <p>This concludes the explanations of the analyze functions. Next, proceed to <a class="reference internal" href="process_menu.html"><span class="doc">All Process Menu Options</span></a> for information on the process menu functions.</p>
+<ul class="simple">
+<li><p>The last submenu is ‘Randomize’, and is used to generate random variants of data.</p></li>
+</ul>
+</section>
+<section id="analyze-randomize-generate-equivalent-random-network">
+<h2>‘Analyze -&gt; Randomize -&gt; Generate Equivalent Random Network’<a class="headerlink" href="#analyze-randomize-generate-equivalent-random-network" title="Link to this heading"></a></h2>
+<ul class="simple">
+<li><p>This method allows us to generate a random network with an equivalent number of edges and nodes as the current network.</p></li>
+<li><p>The purpose of this method is a quick way to compare our network to a similar random one, which can be used to demonstrate presence of non-randomness, for example.</p></li>
+<li><dl class="simple">
+<dt>The only parameter is ‘weighted’. If selected, edges in the random network will be allowed to stack into weighted edges.</dt><dd><ul>
+<li><p>Note if my network is weighted, weights are included in total edge counts for the purpose of this method, so three nodes with one edge of weight one and one edge of weight two will allow three connections to be made in the corresponding random network.</p></li>
+<li><p>The weighted param just tells the random network whether its allowed to use these total edges to make weighted edges (a weighted edge of 2 would <em>cost</em> the random network 2 of its available edges, so to speak).</p></li>
+<li><p>The weighted param does not tell the random network to ignore weights in the original network. To do that, first de-weight the network with ‘Process -&gt; Modify Network’.</p></li>
+</ul>
+</dd>
+</dl>
+</li>
+<li><dl class="simple">
+<dt>Press ‘Generate Random Network’ to place the random network in the ‘Selection’ network table. From here, it can be right clicked to either save it or to swap it into the active network.</dt><dd><ul>
+<li><p>Note that swapping the random network to active runs the risk of overriding the old active network if a new selection is made, so be sure to save it first.</p></li>
+</ul>
+</dd>
+</dl>
+</li>
+</ul>
+</section>
+<section id="analyze-randomize-scramble-nodes-centroids">
+<h2>‘Analyze -&gt; Randomize -&gt; Scramble Nodes (Centroids)’<a class="headerlink" href="#analyze-randomize-scramble-nodes-centroids" title="Link to this heading"></a></h2>
+<ul class="simple">
+<li><p>This method allows us to randomize our node locations, for the purposes of comparing our dataset to a random one.</p></li>
+<li><p>This method uses our node centroids and randomizes the centroids themselves - 3D node objects are not included for this purpose.</p></li>
+<li><dl class="simple">
+<dt>Selecting this option will display a window with a single parameter, ‘Mode’. Its dropdown menu includes the following option.</dt><dd><ol class="arabic simple">
+<li><p>Anywhere - The nodes can go anywhere in the image bounds.</p></li>
+<li><p>Within Dimensional Bounds of Nodes - The nodes can go anywhere within the min/max boundaries of the current nodes (In the bounding box).</p></li>
+<li><p>Within Masked Bounds of Edges - The nodes can go anywhere the edge channel is non-zero.</p></li>
+<li><p>Within Masked Bounds of Overlay1 - The nodes can go anywhere the Overlay1 channel is non-zero.</p></li>
+<li><p>Within Masked Bounds of Overlay2 - The nodes can go anywhere the Overlay2 channel is non-zero.</p></li>
+</ol>
+</dd>
+</dl>
+</li>
+<li><p>If a nodes channel image exists, it will be overrided by a equivalently-sized image.</p></li>
+<li><dl class="simple">
+<dt>If a nodes channel image does not exist, no new image will be loaded and only the centroids will be randomized.</dt><dd><ul>
+<li><p>These centroids will be randomized within the bounds of any other available image channel. If there are none, they will use the min/max bounds of the current centroids.</p></li>
+</ul>
+</dd>
+</dl>
+</li>
+<li><p>The purpose of params 3-5 is to allow creation of arbitrary boundary regions, for example by dilating data of interest, to allow the nodes to populate.</p></li>
+</ul>
 </section>
 </section>
 
