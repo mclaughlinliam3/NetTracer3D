@@ -749,6 +749,11 @@ Algorithm Explanations
 
 Parameter Explanations
 ~~~~~~~~~~~~~~~~~~~~~~~
+#. Remove Unsassigned IDs from Centroid List?
+    * Some of the ID-oriented functions expect all the nodes to have an id.
+    * This method specifically removes all centroids of nodes that are not associated with an id.
+    * Then we can use the centroids to make proximity networks without having to worry about unassigned ids.
+    * That's all it does. This function is somewhat niche because I needed it for something I was doing.
 #. Remove Trunk...?
     * Sometimes networks will have regions that are widely connected by a central trunk structure.
     * If we are interested in evaluating more downstream connections, it may be a good idea to remove the trunk, or otherwise it will dominate the network.

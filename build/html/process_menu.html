@@ -6,14 +6,14 @@
   <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
 
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>All Process Menu Options &mdash; NetTracer3D 0.7.0 documentation</title>
+  <title>All Process Menu Options &mdash; NetTracer3D 0.7.2 documentation</title>
       <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=b86133f3" />
       <link rel="stylesheet" type="text/css" href="_static/css/theme.css?v=e59714d7" />
 
   
       <script src="_static/jquery.js?v=5d32c60e"></script>
       <script src="_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
-      <script src="_static/documentation_options.js?v=fe7df9b0"></script>
+      <script src="_static/documentation_options.js?v=6dfdf7c3"></script>
       <script src="_static/doctools.js?v=9bcbadda"></script>
       <script src="_static/sphinx_highlight.js?v=dc90522c"></script>
     <script src="_static/js/theme.js"></script>
@@ -1466,6 +1466,16 @@
 <section id="id28">
 <h3>Parameter Explanations<a class="headerlink" href="#id28" title="Link to this heading"></a></h3>
 <ol class="arabic simple">
+<li><dl class="simple">
+<dt>Remove Unsassigned IDs from Centroid List?</dt><dd><ul class="simple">
+<li><p>Some of the ID-oriented functions expect all the nodes to have an id.</p></li>
+<li><p>This method specifically removes all centroids of nodes that are not associated with an id.</p></li>
+<li><p>Then we can use the centroids to make proximity networks without having to worry about unassigned ids.</p></li>
+<li><p>That’s all it does. This function is somewhat niche because I needed it for something I was doing.</p></li>
+</ul>
+</dd>
+</dl>
+</li>
 <li><dl class="simple">
 <dt>Remove Trunk…?</dt><dd><ul class="simple">
 <li><p>Sometimes networks will have regions that are widely connected by a central trunk structure.</p></li>

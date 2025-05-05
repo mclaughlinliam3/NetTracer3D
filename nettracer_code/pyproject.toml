@@ -1,33 +1,33 @@
 [project]
 name = "nettracer3d"
-version = "0.7.0"
+version = "0.7.2"
 authors = [
   { name="Liam McLaughlin", email="liamm@wustl.edu" },
 ]
 description = "Scripts for intializing and analyzing networks from segmentations of three dimensional images."
 
 dependencies = [
-    "numpy == 1.26.4",
-    "scipy == 1.14.1",
-    "scikit-image == 0.25.0",
-    "Pillow == 11.1.0",
-    "matplotlib == 3.9.2",
-    "networkx == 3.2.1",
-    "opencv-python-headless == 4.10.0.84",
-    "openpyxl == 3.1.2",
-    "pandas == 2.2.0",
-    "napari == 0.5.5",
-    "python-louvain == 0.16",
-    "tifffile == 2023.7.18",
-    "qtrangeslider == 0.1.5",
-    "PyQt6 == 6.8.0",
-    "scikit-learn == 1.6.1",
-    "nibabel == 5.2.0",
-    "setuptools >= 65.0.0"
+    "numpy",
+    "scipy",
+    "scikit-image",
+    "Pillow",
+    "matplotlib",
+    "networkx",
+    "opencv-python-headless",
+    "openpyxl",
+    "pandas == 2.2.5",
+    "napari",
+    "python-louvain",
+    "tifffile",
+    "qtrangeslider",
+    "PyQt6",
+    "scikit-learn",
+    "nibabel",
+    "setuptools"
 ]
 
 readme = "README.md"
-requires-python = "==3.11"
+requires-python = ">=3.7"
 classifiers = [
     "Programming Language :: Python :: 3",
     "License :: Other/Proprietary License",

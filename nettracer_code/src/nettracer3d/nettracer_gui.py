@@ -2384,7 +2384,10 @@ class ImageViewerWindow(QMainWindow):
 
 
             if self.selection_rect is not None:
-                self.selection_rect.remove()
+                try:
+                    self.selection_rect.remove()
+                except:
+                    pass
                 self.selection_rect = None
                 self.canvas.draw()
 
@@ -2792,6 +2795,21 @@ class ImageViewerWindow(QMainWindow):
         arbitrary_action.triggered.connect(self.show_arbitrary_dialog)
         show3d_action = image_menu.addAction("Show 3D (Napari)")
         show3d_action.triggered.connect(self.show3d_dialog)
+
+        # Help
+
+        help_button = menubar.addAction("Help")
+        help_button.triggered.connect(self.help_me)
+
+    def help_me(self):
+
+        import webbrowser
+        try:
+            webbrowser.open('https://nettracer3d.readthedocs.io/en/latest/')
+            return True
+        except Exception as e:
+            print(f"Error opening URL: {e}")
+            return False
 
 
     def stats(self):
@@ -3526,12 +3544,11 @@ class ImageViewerWindow(QMainWindow):
                 except Exception as e:
                     QMessageBox.critical(self, "Error", f"Error loading image: {str(e)}")
 
-
-                if len(self.channel_data[channel_index].shape) == 2:  # handle 2d data
-                    self.channel_data[channel_index] = np.expand_dims(self.channel_data[channel_index], axis=0)
-
             else:
                 self.channel_data[channel_index] = channel_data
+
+            if len(self.channel_data[channel_index].shape) == 2:  # handle 2d data
+                self.channel_data[channel_index] = np.expand_dims(self.channel_data[channel_index], axis=0)
 
             try:
                 if len(self.channel_data[channel_index].shape) == 3:  # potentially 2D RGB
@@ -3673,8 +3690,8 @@ class ImageViewerWindow(QMainWindow):
             # Update corresponding network property
             if channel_index == 0:
                 my_network.nodes = None
-                my_network.node_centroids = None
-                my_network.node_identities = None
+                #my_network.node_centroids = None
+                #my_network.node_identities = None
             elif channel_index == 1:
                 my_network.edges = None
                 my_network.edge_centroids = None
@@ -6181,7 +6198,6 @@ class RandNodeDialog(QDialog):
             if mode == 0 and not (my_network.nodes is None and my_network.edges is None and my_network.network_overlay is None and my_network.id_overlay is None):
                 pass
             elif mode == 1 or (my_network.nodes is None and my_network.edges is None and my_network.network_overlay is None and my_network.id_overlay is None):
-                print("HELLO")
                 # Convert string labels to integers if necessary
                 if any(isinstance(k, str) for k in my_network.node_centroids.keys()):
                     label_map = {label: idx for idx, label in enumerate(my_network.node_centroids.keys())}
@@ -9528,6 +9544,11 @@ class ModifyDialog(QDialog):
         self.setWindowTitle("Modify Network Qualities")
         self.setModal(True)
         layout = QFormLayout(self)
+
+        self.revid = QPushButton("Remove Unassigned")
+        self.revid.setCheckable(True)
+        self.revid.setChecked(False)
+        layout.addRow("Remove Unassigned IDs from Centroid List?:", self.revid)
         
         # trunk checkbox (default false)
         self.trunk = QPushButton("Remove Trunk")
@@ -9595,6 +9616,7 @@ class ModifyDialog(QDialog):
 
         try:
 
+            revid = self.revid.isChecked()
             trunk = self.trunk.isChecked()
             if not trunk:
                 trunknode = self.trunknode.isChecked()
@@ -9609,6 +9631,15 @@ class ModifyDialog(QDialog):
 
             if isolate and my_network.node_identities is not None:
                 self.show_isolate_dialog()
+
+            if revid:
+                try:
+                    my_network.remove_ids()
+                    self.parent().format_for_upperright_table(my_network.node_centroids, 'NodeID', ['Z', 'Y', 'X'], 'Node Centroids')
+                except:
+                    pass
+
+
 
             if edgeweight:
                 my_network.remove_edge_weights()

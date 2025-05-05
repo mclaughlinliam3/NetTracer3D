@@ -518,7 +518,7 @@ def compute_distance_transform_distance_GPU(nodes, sampling = [1,1,1]):
     is_pseudo_3d = nodes.shape[0] == 1
     if is_pseudo_3d:
         nodes = cp.squeeze(nodes)  # Convert to 2D for processing
-        del sampling[0]
+        sampling = [sampling[1], sampling[2]]
     
     # Compute the distance transform on the GPU
     distance = cpx.distance_transform_edt(nodes, sampling = sampling)
@@ -534,7 +534,7 @@ def compute_distance_transform_distance(nodes, sampling = [1,1,1]):
     is_pseudo_3d = nodes.shape[0] == 1
     if is_pseudo_3d:
         nodes = np.squeeze(nodes)  # Convert to 2D for processing
-        del sampling[0]
+        sampling = [sampling[1], sampling[2]]
 
     # Fallback to CPU if there's an issue with GPU computation
     distance = ndimage.distance_transform_edt(nodes, sampling = sampling)

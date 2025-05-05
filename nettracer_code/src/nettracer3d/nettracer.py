@@ -3948,6 +3948,19 @@ class Network_3D:
         except:
             print("Could not update voxel scaling")
 
+
+
+    def remove_ids(self):
+
+        new_centroids = {}
+
+        for node in self.node_identities.keys():
+            new_centroids[node] = self.node_centroids[node]
+
+        self.node_centroids = new_centroids
+
+
+
     def remove_trunk_post(self):
         """
         Removes the 'edge' trunk from a network. In this case, the trunk is the edge that creates the most node-node connections. There may be times when many nodes are connected by a single, expansive edge that obfuscates the rest of the edges. Removing the trunk to a node can better reveal these edges.
@@ -4444,11 +4457,11 @@ class Network_3D:
             for node, nodeid in self.node_identities.items(): #Otherwise we need to pull out this info
                 if nodeid == root:
                     roots.append(self._node_centroids[node])
-                elif nodeid == targ:
+                if nodeid == targ:
                     targs.append(self._node_centroids[node])
-        
+
         rooties = proximity.convert_centroids_to_array(roots, xy_scale = self.xy_scale, z_scale = self.z_scale)
-        targs = proximity.convert_centroids_to_array(roots, xy_scale = self.xy_scale, z_scale = self.z_scale)
+        targs = proximity.convert_centroids_to_array(targs, xy_scale = self.xy_scale, z_scale = self.z_scale)
         points_array = np.vstack((rooties, targs))
         del rooties
 

@@ -165,7 +165,7 @@ def dilate_3D_old(tiff_array, dilated_x=3, dilated_y=3, dilated_z=3):
     # Handle special case for 2D arrays
     if tiff_array.shape[0] == 1:
         # Call 2D dilation function if needed
-        return dilate_2D(tiff_array, 1)  # For a 3x3 kernel, radius is 1
+        return nettracer.dilate_2D(tiff_array, 1)  # For a 3x3 kernel, radius is 1
     
     # Create a simple 3x3x3 cubic kernel (all ones)
     kernel = np.ones((3, 3, 3), dtype=bool)
@@ -471,7 +471,7 @@ def compute_distance_transform_GPU(nodes, return_dists = False, sampling = [1, 1
     is_pseudo_3d = nodes.shape[0] == 1
     if is_pseudo_3d:
         nodes = np.squeeze(nodes)  # Convert to 2D for processing
-        del sampling[0]
+        sampling = [sampling[1], sampling[2]]
     
     # Convert numpy array to CuPy array
     nodes_cp = cp.asarray(nodes)
@@ -504,7 +504,7 @@ def compute_distance_transform(nodes, return_dists = False, sampling = [1, 1, 1]
     is_pseudo_3d = nodes.shape[0] == 1
     if is_pseudo_3d:
         nodes = np.squeeze(nodes)  # Convert to 2D for processing
-        del sampling[0]
+        sampling = [sampling[1], sampling[2]]
 
     dists, nearest_label_indices = distance_transform_edt(nodes, return_indices=True, sampling = sampling)
 
@@ -531,7 +531,7 @@ def compute_distance_transform_distance_GPU(nodes, sampling = [1, 1, 1]):
     is_pseudo_3d = nodes.shape[0] == 1
     if is_pseudo_3d:
         nodes = np.squeeze(nodes)  # Convert to 2D for processing
-        del sampling[0]
+        sampling = [sampling[1], sampling[2]]
 
     # Convert numpy array to CuPy array
     nodes_cp = cp.asarray(nodes)
@@ -553,7 +553,7 @@ def compute_distance_transform_distance(nodes, sampling = [1, 1, 1]):
     is_pseudo_3d = nodes.shape[0] == 1
     if is_pseudo_3d:
         nodes = np.squeeze(nodes)  # Convert to 2D for processing
-        del sampling[0]
+        sampling = [sampling[1], sampling[2]]
 
     # Fallback to CPU if there's an issue with GPU computation
     distance = distance_transform_edt(nodes, sampling = sampling)

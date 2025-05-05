@@ -34,12 +34,9 @@ NetTracer3D is free to use/fork for academic/nonprofit use so long as citation i
 
 NetTracer3D was developed by Liam McLaughlin while working under Dr. Sanjay Jain at Washington University School of Medicine.
 
--- Version 0.6.9 updates --
+-- Version 0.7.2 Updates -- 
 
-1. Adjusted all distance transform-based dilation/radius calculating methods to simply use the already supported scipy.ndimage.distance_transform_edt() sampling parameter to account for differentially scaled axis (previously the image was being resampled but now it no longer will need to do that).
-
-2. Added new right click option to extract highlighted regions and implant their data onto a separate image or into a new empty image.
-
-3. General bug fixes and improvements.
-
-4. Now specifies python 3.11. 
+    * Added new option to the modify network qualities menu to remove node centroids with unassigned id values.
+    * Bug fixes, mainly:
+        * Had to fix a bug with the ripley's function that was making it always evaluate nodes of one id against themselves even when a seperate id was specified.
+        * Fixed some bugs when processing 2D images.

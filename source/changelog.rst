@@ -15,3 +15,12 @@ Version 0.7.0 Updates:
 
 3. Bug fixes.
     * Importantly fixed a bug with dt-based dilation not working in 2D, which I had accidentally introduced recently.
+
+Version 0.7.1 Updates:
+    * This was just a quick change of loosening package version requirements because I had made them too strict and it was making the package tough to install.
+
+Version 0.7.2 Updates:
+    * Added new option to the modify network qualities menu to remove node centroids with unassigned id values.
+    * Bug fixes, mainly:
+        * Had to fix a bug with the ripley's function that was making it always evaluate nodes of one id against themselves even when a seperate id was specified.
+        * Fixed some bugs when processing 2D images.

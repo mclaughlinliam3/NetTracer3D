@@ -428,7 +428,7 @@ def optimized_ripleys_k(reference_points, subset_points, r_values, bounds=None, 
     """
     n_ref = len(reference_points)
     n_subset = len(subset_points)
-    
+
     # Determine bounds if not provided
     if bounds is None:
         min_coords = np.min(reference_points, axis=0)

@@ -34,14 +34,9 @@ NetTracer3D is free to use/fork for academic/nonprofit use so long as citation i
 
 NetTracer3D was developed by Liam McLaughlin while working under Dr. Sanjay Jain at Washington University School of Medicine.
 
--- Version 0.7.0 Updates -- 
+-- Version 0.7.2 Updates -- 
 
-1. Added new function in 'Analyze -> Stats -> Cluster Analysis'
-    * This function allows the user to create a ripley's K or H function to compare the relative clustering of two types of nodes, or of one type of node vs itself.
-
-2. Added new function in 'Analyze -> Randomize -> Scramble Nodes'
-    * This function randomly rearranges the node (centroids) for comparison with other centroid-using methods, as a possible way to demonstrate non-random behavior.
-    * The randomize menu is likewise new and the 'Generate Equivalent Random Network' method was moved there.
-
-3. Bug fixes.
-    * Importantly fixed a bug with dt-based dilation not working in 2D, which I had accidentally introduced recently.
+    * Added new option to the modify network qualities menu to remove node centroids with unassigned id values.
+    * Bug fixes, mainly:
+        * Had to fix a bug with the ripley's function that was making it always evaluate nodes of one id against themselves even when a seperate id was specified.
+        * Fixed some bugs when processing 2D images.
