@@ -12,7 +12,9 @@ src/nettracer3d/network_draw.py
 src/nettracer3d/node_draw.py
 src/nettracer3d/proximity.py
 src/nettracer3d/run.py
+src/nettracer3d/segmenter - Copy.py
 src/nettracer3d/segmenter.py
+src/nettracer3d/segmenter_GPU.py
 src/nettracer3d/simple_network.py
 src/nettracer3d/smart_dilate.py
 src/nettracer3d.egg-info/PKG-INFO

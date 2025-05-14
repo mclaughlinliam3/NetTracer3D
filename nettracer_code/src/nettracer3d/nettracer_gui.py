@@ -25,7 +25,7 @@ import multiprocessing as mp
 from concurrent.futures import ThreadPoolExecutor
 from functools import partial
 from nettracer3d import segmenter
-#from nettracer3d import segmenter_GPU <--- couldn't get this faster than CPU ¯\_(ツ)_/¯
+from nettracer3d import segmenter_GPU
 
 
 
@@ -2870,67 +2870,72 @@ class ImageViewerWindow(QMainWindow):
                     return val
             return val
         
-        if isinstance(data, (list, tuple, np.ndarray)):
-            # Handle list input - create single column DataFrame
-            df = pd.DataFrame({
-                metric: [convert_to_numeric(val) for val in data]
-            })
-            
-            # Format floating point numbers
-            df[metric] = df[metric].apply(lambda x: f"{x:.3f}" if isinstance(x, (float, np.float64)) else str(x))
-            
-        else:  # Dictionary input
-            # Get sample value to determine structure
-            sample_value = next(iter(data.values()))
-            is_multi_value = isinstance(sample_value, (list, tuple, np.ndarray))
-            
-            if is_multi_value:
-                # Handle multi-value case
-                if isinstance(value, str):
-                    # If single string provided for multi-values, generate numbered headers
-                    n_cols = len(sample_value)
-                    value_headers = [f"{value}_{i+1}" for i in range(n_cols)]
-                else:
-                    # Use provided list of headers
-                    value_headers = value
-                    if len(value_headers) != len(sample_value):
-                        raise ValueError("Number of headers must match number of values per key")
-                
-                # Create lists for each column
-                dict_data = {metric: list(data.keys())}
-                for i, header in enumerate(value_headers):
-                    # Convert values to numeric when possible before adding to DataFrame
-                    dict_data[header] = [convert_to_numeric(data[key][i]) for key in data.keys()]
-                
-                df = pd.DataFrame(dict_data)
-                
-                # Format floating point numbers in all value columns
-                for header in value_headers:
-                    df[header] = df[header].apply(lambda x: f"{x:.3f}" if isinstance(x, (float, np.float64)) else str(x))
-                    
-            else:
-                # Single-value case
+        try:
+
+            if isinstance(data, (list, tuple, np.ndarray)):
+                # Handle list input - create single column DataFrame
                 df = pd.DataFrame({
-                    metric: data.keys(),
-                    value: [convert_to_numeric(val) for val in data.values()]
+                    metric: [convert_to_numeric(val) for val in data]
                 })
                 
                 # Format floating point numbers
-                df[value] = df[value].apply(lambda x: f"{x:.3f}" if isinstance(x, (float, np.float64)) else str(x))
-        
-        # Create new table
-        table = CustomTableView(self)
-        table.setModel(PandasModel(df))
-        
-        # Add to tabbed widget
-        if title is None:
-            self.tabbed_data.add_table(f"{metric} Analysis", table)
-        else:
-            self.tabbed_data.add_table(f"{title}", table)
-        
-        # Adjust column widths to content
-        for column in range(table.model().columnCount(None)):
-            table.resizeColumnToContents(column)
+                df[metric] = df[metric].apply(lambda x: f"{x:.3f}" if isinstance(x, (float, np.float64)) else str(x))
+                
+            else:  # Dictionary input
+                # Get sample value to determine structure
+                sample_value = next(iter(data.values()))
+                is_multi_value = isinstance(sample_value, (list, tuple, np.ndarray))
+                
+                if is_multi_value:
+                    # Handle multi-value case
+                    if isinstance(value, str):
+                        # If single string provided for multi-values, generate numbered headers
+                        n_cols = len(sample_value)
+                        value_headers = [f"{value}_{i+1}" for i in range(n_cols)]
+                    else:
+                        # Use provided list of headers
+                        value_headers = value
+                        if len(value_headers) != len(sample_value):
+                            raise ValueError("Number of headers must match number of values per key")
+                    
+                    # Create lists for each column
+                    dict_data = {metric: list(data.keys())}
+                    for i, header in enumerate(value_headers):
+                        # Convert values to numeric when possible before adding to DataFrame
+                        dict_data[header] = [convert_to_numeric(data[key][i]) for key in data.keys()]
+                    
+                    df = pd.DataFrame(dict_data)
+                    
+                    # Format floating point numbers in all value columns
+                    for header in value_headers:
+                        df[header] = df[header].apply(lambda x: f"{x:.3f}" if isinstance(x, (float, np.float64)) else str(x))
+                        
+                else:
+                    # Single-value case
+                    df = pd.DataFrame({
+                        metric: data.keys(),
+                        value: [convert_to_numeric(val) for val in data.values()]
+                    })
+                    
+                    # Format floating point numbers
+                    df[value] = df[value].apply(lambda x: f"{x:.3f}" if isinstance(x, (float, np.float64)) else str(x))
+            
+            # Create new table
+            table = CustomTableView(self)
+            table.setModel(PandasModel(df))
+            
+            # Add to tabbed widget
+            if title is None:
+                self.tabbed_data.add_table(f"{metric} Analysis", table)
+            else:
+                self.tabbed_data.add_table(f"{title}", table)
+            
+            # Adjust column widths to content
+            for column in range(table.model().columnCount(None)):
+                table.resizeColumnToContents(column)
+
+        except:
+            pass
 
 
     def show_watershed_dialog(self):
@@ -7412,7 +7417,11 @@ class MachineWindow(QMainWindow):
         self.three.setCheckable(True)
         self.three.setChecked(True)
         self.three.clicked.connect(self.toggle_three)
-        #processing_layout.addWidget(self.GPU)   [Decided to hold off on this until its more robust]
+        self.GPU = QPushButton("GPU")
+        self.GPU.setCheckable(True)
+        self.GPU.setChecked(False)
+        self.GPU.clicked.connect(self.toggle_GPU)
+        processing_layout.addWidget(self.GPU)
         processing_layout.addWidget(self.two)
         processing_layout.addWidget(self.three)
         processing_group.setLayout(processing_layout)
@@ -7549,6 +7558,35 @@ class MachineWindow(QMainWindow):
             # If button three is checked, ensure button two is unchecked
             self.two.setChecked(True)
             self.use_two = True
+
+    def toggle_GPU(self):
+
+        if self.parent().active_channel == 0:
+            if self.parent().channel_data[0] is not None:
+                try:
+                    active_data = self.parent().channel_data[0]
+                    act_channel = 0
+                except:
+                    active_data = self.parent().channel_data[1]
+                    act_channel = 1
+            else:
+                active_data = self.parent().channel_data[1]
+                act_channel = 1
+
+        if self.GPU.isChecked():
+
+            try:
+                self.segmenter = segmenter_GPU.InteractiveSegmenter(active_data)
+                print("Using GPU")
+            except:
+                self.GPU.setChecked(False)
+                print("Could not detect GPU")
+                import traceback
+                traceback.print_exc()
+
+        else:
+            self.segmenter = segmenter.InteractiveSegmenter(active_data, use_gpu=False)
+            print("Using CPU")
 
 
 
@@ -7836,17 +7874,11 @@ class MachineWindow(QMainWindow):
             self.parent().highlight_overlay = array3 #Clear this out for the segmenter to use
 
             print("Segmenting entire volume with model...")
-            foreground_coords, background_coords = self.segmenter.segment_volume(gpu = self.use_gpu)
+            #foreground_coords, background_coords = self.segmenter.segment_volume(array = self.parent().highlight_overlay)
+            self.parent().highlight_overlay = self.segmenter.segment_volume(array = self.parent().highlight_overlay)
 
             # Clean up when done
             self.segmenter.cleanup()
-
-        fg_array = np.array(list(foreground_coords))
-        if len(fg_array) > 0:  # Check if we have any foreground coordinates
-            # Unpack into separate coordinate arrays
-            z_coords, y_coords, x_coords = fg_array[:, 0], fg_array[:, 1], fg_array[:, 2]
-            # Assign values in a single vectorized operation
-            self.parent().highlight_overlay[z_coords, y_coords, x_coords] = 255
 
         self.parent().load_channel(3, self.parent().highlight_overlay, True)
 

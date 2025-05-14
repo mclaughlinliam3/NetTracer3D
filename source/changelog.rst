@@ -24,3 +24,12 @@ Version 0.7.2 Updates:
     * Bug fixes, mainly:
         * Had to fix a bug with the ripley's function that was making it always evaluate nodes of one id against themselves even when a seperate id was specified.
         * Fixed some bugs when processing 2D images.
+
+Version 0.7.3 Updates:
+    * Loosened package restrictions again because they were calling install issues.
+
+Version 0.7.4 Updates
+
+	* Bug fixes
+	* The segmenter now has a GPU option that actually works quite a bit faster! Only available with CUDA toolkit and cupy.
+	* The segmenter also now no longer leaks any memory.

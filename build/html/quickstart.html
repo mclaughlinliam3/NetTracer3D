@@ -6,14 +6,14 @@
   <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
 
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Quickstart - Segmenting Data and Generating Networks &mdash; NetTracer3D 0.7.2 documentation</title>
+  <title>Quickstart - Segmenting Data and Generating Networks &mdash; NetTracer3D 0.7.4 documentation</title>
       <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=b86133f3" />
       <link rel="stylesheet" type="text/css" href="_static/css/theme.css?v=e59714d7" />
 
   
       <script src="_static/jquery.js?v=5d32c60e"></script>
       <script src="_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
-      <script src="_static/documentation_options.js?v=6dfdf7c3"></script>
+      <script src="_static/documentation_options.js?v=020ce317"></script>
       <script src="_static/doctools.js?v=9bcbadda"></script>
       <script src="_static/sphinx_highlight.js?v=dc90522c"></script>
     <script src="_static/js/theme.js"></script>
@@ -288,6 +288,7 @@ Presegmented data can be used directly, however our data is not yet segmented, s
 <li><p>Brush Widget (Drawing Tools): Click to enter the brush mode. This works similar to the pen mode described above, but without 3D/Fill Can features. Click with the brush in the Image Viewer Window to mark what objects we want to keep (Foreground) and what objects we want to exclude (Background). This training data will be written directly into Overlay1 (with vals of 1 representing the foreground and 2 the background). Right click can be used to erase these markings. Use ctrl + mouse wheel to enlarge/shrink the brush.</p></li>
 <li><p>Foreground (Drawing Tool): Select to have the brush mark foreground (denoted by green markings). Press a to toggle with background.</p></li>
 <li><p>Background (Drawing Tools): Select to have the brush mark background (denoted by red markings). Press a to toggle with foreground.</p></li>
+<li><p>GPU: If you have a working CUDA toolkit and have installed NetTracer3D with the cupy package option, the system will use the GPU to segment instead. (This will speed up ‘Segment All’ by quite a bit although the model training and preview segment will be slightly slower due to numpy to cupy bottlenecking. Regardless, segment all is definitely the slow point here so I would highly recommend using this if you have a CUDA toolkit working. For ref it was taking me around 10 mins to segment a 6.5 GB image with this on my 5070Ti).</p></li>
 <li><p>Train by 2D Slice Patterns (Processing Options): When selected, the model will be trained using 2D feature maps.</p></li>
 <li><p>Train by 3D Patterns (Processing Options): When selected, the model will be trained using 3D feature maps.</p></li>
 <li><p>Train Quick Model (Training): Click to train the model to segment your image based on the regions selected in your training data.</p></li>

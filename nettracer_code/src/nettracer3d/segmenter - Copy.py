@@ -12,13 +12,35 @@ class InteractiveSegmenter:
         self.image_3d = image_3d
         self.patterns = []
 
-        self.use_gpu = False
+        try:
+            self.use_gpu = use_gpu and cp.cuda.is_available()
+        except:
+            self.use_gpu = False
+        if self.use_gpu:
+            try:
+                print(f"Using GPU: {torch.cuda.get_device_name()}")
+            except:
+                pass
+            self.image_gpu = cp.asarray(image_3d)
+            try:
+                self.model = cuRandomForestClassifier(
+                    n_estimators=100,
+                    max_depth=None
+                )
+            except:
+                self.model = RandomForestClassifier(
+                    n_estimators=100,
+                    n_jobs=-1,
+                    max_depth=None
+                )
 
-        self.model = RandomForestClassifier(
-            n_estimators=100,
-            n_jobs=-1,
-            max_depth=None
-        )
+        else:
+
+            self.model = RandomForestClassifier(
+                n_estimators=100,
+                n_jobs=-1,
+                max_depth=None
+            )
 
         self.feature_cache = None
         self.lock = threading.Lock()
@@ -180,7 +202,73 @@ class InteractiveSegmenter:
             if self._currently_processing == slice_z:
                 self._currently_processing = None
 
+    def compute_deep_feature_maps_cpu(self, image_3d = None):
+        """Compute feature maps using CPU"""
+        features = []
+        if image_3d is None:
+            image_3d = self.image_3d
+        original_shape = image_3d.shape
+        
+        # Gaussian and DoG using scipy
+        #print("Obtaining gaussians")
+        for sigma in self.alphas:
+            smooth = ndimage.gaussian_filter(image_3d, sigma)
+            features.append(smooth)
 
+        # Difference of Gaussians
+        for (s1, s2) in self.dogs:
+            g1 = ndimage.gaussian_filter(image_3d, s1)
+            g2 = ndimage.gaussian_filter(image_3d, s2)
+            dog = g1 - g2
+            features.append(dog)
+        
+        #print("Computing local statistics")
+        # Local statistics using scipy's convolve
+        window_size = self.windows
+        kernel = np.ones((window_size, window_size, window_size)) / (window_size**3)
+        
+        # Local mean
+        local_mean = ndimage.convolve(image_3d, kernel, mode='reflect')
+        features.append(local_mean)
+        
+        # Local variance
+        mean = np.mean(image_3d)
+        local_var = ndimage.convolve((image_3d - mean)**2, kernel, mode='reflect')
+        features.append(local_var)
+        
+        #print("Computing sobel and gradients")
+        # Gradient computations using scipy
+        gx = ndimage.sobel(image_3d, axis=2, mode='reflect')
+        gy = ndimage.sobel(image_3d, axis=1, mode='reflect')
+        gz = ndimage.sobel(image_3d, axis=0, mode='reflect')
+        
+        # Gradient magnitude
+        gradient_magnitude = np.sqrt(gx**2 + gy**2 + gz**2)
+        features.append(gradient_magnitude)
+        
+        #print("Computing second-order features")
+        # Second-order gradients
+        gxx = ndimage.sobel(gx, axis=2, mode='reflect')
+        gyy = ndimage.sobel(gy, axis=1, mode='reflect')
+        gzz = ndimage.sobel(gz, axis=0, mode='reflect')
+        
+        # Laplacian (sum of second derivatives)
+        laplacian = gxx + gyy + gzz
+        features.append(laplacian)
+        
+        # Hessian determinant
+        hessian_det = gxx * gyy * gzz
+        features.append(hessian_det)
+        
+        #print("Verifying shapes")
+        for i, feat in enumerate(features):
+            if feat.shape != original_shape:
+                feat_adjusted = np.expand_dims(feat, axis=0)
+                if feat_adjusted.shape != original_shape:
+                    raise ValueError(f"Feature {i} has shape {feat.shape}, expected {original_shape}")
+                features[i] = feat_adjusted
+        
+        return np.stack(features, axis=-1)
 
     def compute_deep_feature_maps_cpu_parallel(self, image_3d=None):
         """Compute deep feature maps using CPU with thread-based parallelism"""
@@ -351,6 +439,66 @@ class InteractiveSegmenter:
         
         return np.stack(features, axis=-1)
 
+    def compute_deep_feature_maps_cpu_2d(self, z = None):
+        """Compute 2D feature maps using CPU"""
+        features = []
+
+        image_2d = self.image_3d[z, :, :]
+        original_shape = image_2d.shape
+        
+        # Gaussian using scipy
+        for sigma in [0.5, 1.0, 2.0, 4.0]:
+            smooth = ndimage.gaussian_filter(image_2d, sigma)
+            features.append(smooth)
+        
+        # Local statistics using scipy's convolve - adjusted for 2D
+        window_size = 5
+        kernel = np.ones((window_size, window_size)) / (window_size**2)
+        
+        # Local mean
+        local_mean = ndimage.convolve(image_2d, kernel, mode='reflect')
+        features.append(local_mean)
+        
+        # Local variance
+        mean = np.mean(image_2d)
+        local_var = ndimage.convolve((image_2d - mean)**2, kernel, mode='reflect')
+        features.append(local_var)
+        
+        # Gradient computations using scipy - adjusted axes for 2D
+        gx = ndimage.sobel(image_2d, axis=1, mode='reflect')  # x direction
+        gy = ndimage.sobel(image_2d, axis=0, mode='reflect')  # y direction
+        
+        # Gradient magnitude (2D version)
+        gradient_magnitude = np.sqrt(gx**2 + gy**2)
+        features.append(gradient_magnitude)
+        
+        # Second-order gradients
+        gxx = ndimage.sobel(gx, axis=1, mode='reflect')
+        gyy = ndimage.sobel(gy, axis=0, mode='reflect')
+        
+        # Laplacian (sum of second derivatives) - 2D version
+        laplacian = gxx + gyy
+        features.append(laplacian)
+        
+        # Hessian determinant - 2D version
+        hessian_det = gxx * gyy - ndimage.sobel(gx, axis=0, mode='reflect') * ndimage.sobel(gy, axis=1, mode='reflect')
+        features.append(hessian_det)
+        
+        for i, feat in enumerate(features):
+            if feat.shape != original_shape:
+                # Check dimensionality and expand if needed
+                if len(feat.shape) < len(original_shape):
+                    feat_adjusted = feat
+                    missing_dims = len(original_shape) - len(feat.shape)
+                    for _ in range(missing_dims):
+                        feat_adjusted = np.expand_dims(feat_adjusted, axis=0)
+                    
+                    if feat_adjusted.shape != original_shape:
+                        raise ValueError(f"Feature {i} has shape {feat.shape}, expected {original_shape}")
+                    
+                    features[i] = feat_adjusted
+        
+        return np.stack(features, axis=-1)
 
     def compute_deep_feature_maps_cpu_2d_parallel(self, z=None):
         """Compute 2D feature maps using CPU with thread-based parallelism"""
@@ -525,6 +673,195 @@ class InteractiveSegmenter:
         
         return np.stack(features, axis=-1)
 
+    def compute_feature_maps(self):
+        """Compute all feature maps using GPU acceleration"""
+        #if not self.use_gpu:
+            #return super().compute_feature_maps()
+        
+        features = []
+        image = self.image_gpu
+        image_3d = self.image_3d
+        original_shape = self.image_3d.shape
+
+
+        
+        # Gaussian smoothing at different scales
+        print("Obtaining gaussians")
+        for sigma in [0.5, 1.0, 2.0, 4.0]:
+            smooth = cp.asnumpy(self.gaussian_filter_gpu(image, sigma))
+            features.append(smooth)
+        
+        print("Obtaining dif of gaussians")
+
+        # Difference of Gaussians
+        for (s1, s2) in [(1, 2), (2, 4)]:
+            g1 = self.gaussian_filter_gpu(image, s1)
+            g2 = self.gaussian_filter_gpu(image, s2)
+            dog = cp.asnumpy(g1 - g2)
+            features.append(dog)
+        
+        # Convert image to PyTorch tensor for gradient operations
+        image_torch = torch.from_numpy(image_3d).cuda()
+        image_torch = image_torch.float().unsqueeze(0).unsqueeze(0)
+        
+        # Calculate required padding
+        kernel_size = 3
+        padding = kernel_size // 2
+        
+        # Create a single padded version with same padding
+        pad = torch.nn.functional.pad(image_torch, (padding, padding, padding, padding, padding, padding), mode='replicate')
+
+        print("Computing sobel kernels")
+
+        # Create sobel kernels
+        sobel_x = torch.tensor([-1, 0, 1], device='cuda').float().view(1,1,1,1,3)
+        sobel_y = torch.tensor([-1, 0, 1], device='cuda').float().view(1,1,1,3,1)
+        sobel_z = torch.tensor([-1, 0, 1], device='cuda').float().view(1,1,3,1,1)
+        
+        # Compute gradients
+        print("Computing gradiants")
+
+        gx = torch.nn.functional.conv3d(pad, sobel_x, padding=0)[:,:,:original_shape[0],:original_shape[1],:original_shape[2]]
+        gy = torch.nn.functional.conv3d(pad, sobel_y, padding=0)[:,:,:original_shape[0],:original_shape[1],:original_shape[2]]
+        gz = torch.nn.functional.conv3d(pad, sobel_z, padding=0)[:,:,:original_shape[0],:original_shape[1],:original_shape[2]]
+        
+        # Compute gradient magnitude
+        print("Computing gradiant mags")
+
+        gradient_magnitude = torch.sqrt(gx**2 + gy**2 + gz**2)
+        gradient_feature = gradient_magnitude.cpu().numpy().squeeze()
+        
+        features.append(gradient_feature)
+
+        print(features.shape)
+        
+        # Verify shapes
+        for i, feat in enumerate(features):
+            if feat.shape != original_shape:
+                # Create a copy of the feature to modify
+                feat_adjusted = np.expand_dims(feat, axis=0)
+                if feat_adjusted.shape != original_shape:
+                    raise ValueError(f"Feature {i} has shape {feat.shape}, expected {original_shape}")
+                # Important: Update the original features list with the expanded version
+                features[i] = feat_adjusted
+        
+        return np.stack(features, axis=-1)
+
+    def compute_feature_maps_2d(self, z=None):
+        """Compute all feature maps for 2D images using GPU acceleration"""
+        
+        features = []
+
+        image = self.image_gpu[z, :, :]
+        image_2d = self.image_3d[z, :, :]
+        original_shape = image_2d.shape
+
+        # Gaussian smoothing at different scales
+        print("Obtaining gaussians")
+        for sigma in [0.5, 1.0, 2.0, 4.0]:
+            smooth = cp.asnumpy(self.gaussian_filter_gpu(image, sigma))
+            features.append(smooth)
+        
+        print("Obtaining diff of gaussians")
+        # Difference of Gaussians
+        for (s1, s2) in [(1, 2), (2, 4)]:
+            g1 = self.gaussian_filter_gpu(image, s1)
+            g2 = self.gaussian_filter_gpu(image, s2)
+            dog = cp.asnumpy(g1 - g2)
+            features.append(dog)
+        
+        # Convert image to PyTorch tensor for gradient operations
+        image_torch = torch.from_numpy(image_2d).cuda()
+        image_torch = image_torch.float().unsqueeze(0).unsqueeze(0)
+        
+        # Calculate required padding
+        kernel_size = 3
+        padding = kernel_size // 2
+        
+        # Create a single padded version with same padding
+        pad = torch.nn.functional.pad(image_torch, (padding, padding, padding, padding), mode='replicate')
+        
+        print("Computing sobel kernels")
+        # Create 2D sobel kernels
+        sobel_x = torch.tensor([-1, 0, 1], device='cuda').float().view(1, 1, 1, 3)
+        sobel_y = torch.tensor([-1, 0, 1], device='cuda').float().view(1, 1, 3, 1)
+        
+        # Compute gradients
+        print("Computing gradients")
+        gx = torch.nn.functional.conv2d(pad, sobel_x, padding=0)[:, :, :original_shape[0], :original_shape[1]]
+        gy = torch.nn.functional.conv2d(pad, sobel_y, padding=0)[:, :, :original_shape[0], :original_shape[1]]
+        
+        # Compute gradient magnitude (no z component in 2D)
+        print("Computing gradient mags")
+        gradient_magnitude = torch.sqrt(gx**2 + gy**2)
+        gradient_feature = gradient_magnitude.cpu().numpy().squeeze()
+        
+        features.append(gradient_feature)
+        
+        # Verify shapes
+        for i, feat in enumerate(features):
+            if feat.shape != original_shape:
+                # Create a copy of the feature to modify
+                feat_adjusted = feat
+                # Check dimensionality and expand if needed
+                if len(feat.shape) < len(original_shape):
+                    missing_dims = len(original_shape) - len(feat.shape)
+                    for _ in range(missing_dims):
+                        feat_adjusted = np.expand_dims(feat_adjusted, axis=0)
+                
+                if feat_adjusted.shape != original_shape:
+                    raise ValueError(f"Feature {i} has shape {feat.shape}, expected {original_shape}")
+                
+                # Update the original features list with the adjusted version
+                features[i] = feat_adjusted
+        
+        return np.stack(features, axis=-1)
+
+    def compute_feature_maps_cpu_2d(self, z = None):
+        """Compute feature maps for 2D images using CPU"""
+
+
+        features = []
+
+        image_2d = self.image_3d[z, :, :]
+        original_shape = image_2d.shape
+        
+        # Gaussian smoothing at different scales
+        for sigma in [0.5, 1.0, 2.0, 4.0]:
+            smooth = ndimage.gaussian_filter(image_2d, sigma)
+            features.append(smooth)
+        
+        # Difference of Gaussians
+        for (s1, s2) in [(1, 2), (2, 4)]:
+            g1 = ndimage.gaussian_filter(image_2d, s1)
+            g2 = ndimage.gaussian_filter(image_2d, s2)
+            dog = g1 - g2
+            features.append(dog)
+        
+        # Gradient computations using scipy - note axis changes for 2D
+        gx = ndimage.sobel(image_2d, axis=1, mode='reflect')  # x direction
+        gy = ndimage.sobel(image_2d, axis=0, mode='reflect')  # y direction
+        
+        # Gradient magnitude (no z component in 2D)
+        gradient_magnitude = np.sqrt(gx**2 + gy**2)
+        features.append(gradient_magnitude)
+        
+        # Verify shapes
+        for i, feat in enumerate(features):
+            if feat.shape != original_shape:
+                # Check dimensionality and expand if needed
+                if len(feat.shape) < len(original_shape):
+                    feat_adjusted = feat
+                    missing_dims = len(original_shape) - len(feat.shape)
+                    for _ in range(missing_dims):
+                        feat_adjusted = np.expand_dims(feat_adjusted, axis=0)
+                    
+                    if feat_adjusted.shape != original_shape:
+                        raise ValueError(f"Feature {i} has shape {feat.shape}, expected {original_shape}")
+                    
+                    features[i] = feat_adjusted
+        
+        return np.stack(features, axis=-1)
 
     def compute_feature_maps_cpu_2d_parallel(self, z=None):
         """Compute feature maps for 2D images using CPU with thread-based parallelism"""
@@ -612,6 +949,50 @@ class InteractiveSegmenter:
         
         return np.stack(features, axis=-1)
 
+    def compute_feature_maps_cpu(self, image_3d = None):
+        """Compute feature maps using CPU"""
+        features = []
+        if image_3d is None:
+            image_3d = self.image_3d
+
+        original_shape = image_3d.shape
+
+        
+        # Gaussian smoothing at different scales
+        #print("Obtaining gaussians")
+        for sigma in self.alphas:
+            smooth = ndimage.gaussian_filter(image_3d, sigma)
+            features.append(smooth)
+        
+        #print("Obtaining dif of gaussians")
+        # Difference of Gaussians
+        for (s1, s2) in self.dogs:
+            g1 = ndimage.gaussian_filter(image_3d, s1)
+            g2 = ndimage.gaussian_filter(image_3d, s2)
+            dog = g1 - g2
+            features.append(dog)
+        
+        #print("Computing sobel and gradients")
+        # Gradient computations using scipy
+        gx = ndimage.sobel(image_3d, axis=2, mode='reflect')  # x direction
+        gy = ndimage.sobel(image_3d, axis=1, mode='reflect')  # y direction
+        gz = ndimage.sobel(image_3d, axis=0, mode='reflect')  # z direction
+        
+        # Gradient magnitude
+        #print("Computing gradient magnitude")
+        gradient_magnitude = np.sqrt(gx**2 + gy**2 + gz**2)
+        features.append(gradient_magnitude)
+        
+        # Verify shapes
+        #print("Verifying shapes")
+        for i, feat in enumerate(features):
+            if feat.shape != original_shape:
+                feat_adjusted = np.expand_dims(feat, axis=0)
+                if feat_adjusted.shape != original_shape:
+                    raise ValueError(f"Feature {i} has shape {feat.shape}, expected {original_shape}")
+                features[i] = feat_adjusted
+        
+        return np.stack(features, axis=-1)
 
     def compute_feature_maps_cpu_parallel(self, image_3d=None):
         """Use ThreadPoolExecutor 
@@ -671,6 +1052,156 @@ class InteractiveSegmenter:
         
         return np.stack(features, axis=-1)
 
+    def compute_deep_feature_maps(self):
+        """Compute all feature maps using GPU acceleration"""
+        #if not self.use_gpu:
+            #return super().compute_feature_maps()
+        
+        features = []
+        image = self.image_gpu
+        original_shape = self.image_3d.shape
+        
+        # Original features (Gaussians and DoG)
+        print("Obtaining gaussians")
+        for sigma in [0.5, 1.0, 2.0, 4.0]:
+            smooth = cp.asnumpy(self.gaussian_filter_gpu(image, sigma))
+            features.append(smooth)
+        
+            print("Computing local statistics")
+            image_torch = torch.from_numpy(self.image_3d).cuda()
+            image_torch = image_torch.float().unsqueeze(0).unsqueeze(1)  # [1, 1, 1, 512, 384]
+
+            # Create kernel
+            window_size = 5
+            pad = window_size // 2
+
+            if image_torch.shape[2] == 1:  # Single slice case
+                # Squeeze out the z dimension for 2D operations
+                image_2d = image_torch.squeeze(2)  # Now [1, 1, 512, 384]
+                kernel_2d = torch.ones((1, 1, window_size, window_size), device='cuda')
+                kernel_2d = kernel_2d / (window_size**2)
+                
+                # 2D padding and convolution
+                padded = torch.nn.functional.pad(image_2d, 
+                                               (pad, pad,     # x dimension
+                                                pad, pad),    # y dimension
+                                               mode='reflect')
+                
+                local_mean = torch.nn.functional.conv2d(padded, kernel_2d)
+                local_mean = local_mean.unsqueeze(2)  # Add z dimension back
+                features.append(local_mean.cpu().numpy().squeeze())
+                
+                # Local variance
+                mean = torch.mean(image_2d)
+                padded_sq = torch.nn.functional.pad((image_2d - mean)**2, 
+                                                  (pad, pad, pad, pad),
+                                                  mode='reflect')
+                local_var = torch.nn.functional.conv2d(padded_sq, kernel_2d)
+                local_var = local_var.unsqueeze(2)  # Add z dimension back
+                features.append(local_var.cpu().numpy().squeeze())
+            else:
+                # Original 3D operations for multi-slice case
+                kernel = torch.ones((1, 1, window_size, window_size, window_size), device='cuda')
+                kernel = kernel / (window_size**3)
+                
+                padded = torch.nn.functional.pad(image_torch, 
+                                               (pad, pad,     # x dimension
+                                                pad, pad,     # y dimension
+                                                pad, pad),    # z dimension
+                                               mode='reflect')
+                local_mean = torch.nn.functional.conv3d(padded, kernel)
+                features.append(local_mean.cpu().numpy().squeeze())
+                
+                mean = torch.mean(image_torch)
+                padded_sq = torch.nn.functional.pad((image_torch - mean)**2, 
+                                                  (pad, pad, pad, pad, pad, pad),
+                                                  mode='reflect')
+                local_var = torch.nn.functional.conv3d(padded_sq, kernel)
+                features.append(local_var.cpu().numpy().squeeze())
+
+        # Original gradient computations
+        print("Computing sobel and gradients")
+        kernel_size = 3
+        padding = kernel_size // 2
+        pad = torch.nn.functional.pad(image_torch, (padding,)*6, mode='replicate')
+        
+        sobel_x = torch.tensor([-1, 0, 1], device='cuda').float().view(1,1,1,1,3)
+        sobel_y = torch.tensor([-1, 0, 1], device='cuda').float().view(1,1,1,3,1)
+        sobel_z = torch.tensor([-1, 0, 1], device='cuda').float().view(1,1,3,1,1)
+        
+        gx = torch.nn.functional.conv3d(pad, sobel_x, padding=0)[:,:,:original_shape[0],:original_shape[1],:original_shape[2]]
+        gy = torch.nn.functional.conv3d(pad, sobel_y, padding=0)[:,:,:original_shape[0],:original_shape[1],:original_shape[2]]
+        gz = torch.nn.functional.conv3d(pad, sobel_z, padding=0)[:,:,:original_shape[0],:original_shape[1],:original_shape[2]]
+        
+        gradient_magnitude = torch.sqrt(gx**2 + gy**2 + gz**2)
+        features.append(gradient_magnitude.cpu().numpy().squeeze())
+        
+        # Second-order gradients
+        print("Computing second-order features")
+        gxx = torch.nn.functional.conv3d(gx, sobel_x, padding=padding)
+        gyy = torch.nn.functional.conv3d(gy, sobel_y, padding=padding)
+        gzz = torch.nn.functional.conv3d(gz, sobel_z, padding=padding)
+
+        # Get minimum size in each dimension
+        min_size_0 = min(gxx.size(2), gyy.size(2), gzz.size(2))
+        min_size_1 = min(gxx.size(3), gyy.size(3), gzz.size(3))
+        min_size_2 = min(gxx.size(4), gyy.size(4), gzz.size(4))
+
+        # Crop to smallest common size
+        gxx = gxx[:, :, :min_size_0, :min_size_1, :min_size_2]
+        gyy = gyy[:, :, :min_size_0, :min_size_1, :min_size_2]
+        gzz = gzz[:, :, :min_size_0, :min_size_1, :min_size_2]
+
+        laplacian = gxx + gyy + gzz  # Second derivatives in each direction
+        features.append(laplacian.cpu().numpy().squeeze())
+
+        # Now they should have matching dimensions for multiplication
+        hessian_det = gxx * gyy * gzz
+        features.append(hessian_det.cpu().numpy().squeeze())
+
+        print("Verifying shapes")
+        for i, feat in enumerate(features):
+            if feat.shape != original_shape:
+                feat_adjusted = np.expand_dims(feat, axis=0)
+                if feat_adjusted.shape != original_shape:
+                    raise ValueError(f"Feature {i} has shape {feat.shape}, expected {original_shape}")
+                features[i] = feat_adjusted
+        
+        return np.stack(features, axis=-1)
+
+    def gaussian_filter_gpu(self, image, sigma):
+        """GPU-accelerated Gaussian filter"""
+        # Create Gaussian kernel
+        result = cpx.gaussian_filter(image, sigma=sigma)
+
+        return result
+
+    def process_chunk_GPU(self, chunk_coords):
+        """Process a chunk of coordinates using GPU acceleration"""
+        coords = np.array(chunk_coords)
+        z, y, x = coords.T
+        
+        # Extract features
+        features = self.feature_cache[z, y, x]
+        
+        if self.use_gpu:
+            # Move to GPU
+            features_gpu = cp.array(features)
+            
+            # Predict on GPU
+            predictions = self.model.predict(features_gpu)
+            predictions = cp.asnumpy(predictions)
+        else:
+            predictions = self.model.predict(features)
+        
+        # Split results
+        foreground_mask = predictions == 1
+        background_mask = ~foreground_mask
+        
+        foreground = set(map(tuple, coords[foreground_mask]))
+        background = set(map(tuple, coords[background_mask]))
+        
+        return foreground, background
 
     def organize_by_z(self, coordinates):
         """
@@ -709,53 +1240,58 @@ class InteractiveSegmenter:
         background = set()
         
         if self.previewing or not self.use_two:
+            if self.mem_lock:
+                # For mem_lock, we need to extract a subarray and compute features
 
-            if self.realtimechunks is None: #Presuming we're segmenting all
-                z_min, z_max = chunk_coords[0], chunk_coords[1]
-                y_min, y_max = chunk_coords[2], chunk_coords[3]
-                x_min, x_max = chunk_coords[4], chunk_coords[5]
+                if self.realtimechunks is None: #Presuming we're segmenting all
+                    z_min, z_max = chunk_coords[0], chunk_coords[1]
+                    y_min, y_max = chunk_coords[2], chunk_coords[3]
+                    x_min, x_max = chunk_coords[4], chunk_coords[5]
 
-                # Consider moving this to process chunk ??
-                chunk_coords = np.stack(np.meshgrid(
-                    np.arange(z_min, z_max),
-                    np.arange(y_min, y_max),
-                    np.arange(x_min, x_max),
-                    indexing='ij'
-                )).reshape(3, -1).T
-                
-                chunk_coords = (list(map(tuple, chunk_coords)))
-            else: #Presumes we're not segmenting all
-                # Find min/max bounds of the coordinates to get the smallest containing subarray
-                z_coords = [z for z, y, x in chunk_coords]
-                y_coords = [y for z, y, x in chunk_coords]
-                x_coords = [x for z, y, x in chunk_coords]
-                
-                z_min, z_max = min(z_coords), max(z_coords)
-                y_min, y_max = min(y_coords), max(y_coords)
-                x_min, x_max = min(x_coords), max(x_coords)
-
-            
-            # Extract the subarray
-            subarray = self.image_3d[z_min:z_max+1, y_min:y_max+1, x_min:x_max+1]
-            
-            # Compute features for this subarray
-            if self.speed:
-                feature_map = self.compute_feature_maps_cpu_parallel(subarray) #If the interactive segmenter is slow
-            else:                                                              #Due to the parallel, consider singleton implementation for it specifically
-                feature_map = self.compute_deep_feature_maps_cpu_parallel(subarray)
-            
-            # Extract features for each coordinate, adjusting for subarray offset
-            features = []
-            for z, y, x in chunk_coords:
-                # Transform global coordinates to local subarray coordinates
-                local_z = z - z_min
-                local_y = y - y_min
-                local_x = x - x_min
-                
-                # Get feature at this position
-                feature = feature_map[local_z, local_y, local_x]
-                features.append(feature)
+                    # Consider moving this to process chunk ??
+                    chunk_coords = np.stack(np.meshgrid(
+                        np.arange(z_min, z_max),
+                        np.arange(y_min, y_max),
+                        np.arange(x_min, x_max),
+                        indexing='ij'
+                    )).reshape(3, -1).T
                     
+                    chunk_coords = (list(map(tuple, chunk_coords)))
+                else: #Presumes we're not segmenting all
+                    # Find min/max bounds of the coordinates to get the smallest containing subarray
+                    z_coords = [z for z, y, x in chunk_coords]
+                    y_coords = [y for z, y, x in chunk_coords]
+                    x_coords = [x for z, y, x in chunk_coords]
+                    
+                    z_min, z_max = min(z_coords), max(z_coords)
+                    y_min, y_max = min(y_coords), max(y_coords)
+                    x_min, x_max = min(x_coords), max(x_coords)
+
+                
+                # Extract the subarray
+                subarray = self.image_3d[z_min:z_max+1, y_min:y_max+1, x_min:x_max+1]
+                
+                # Compute features for this subarray
+                if self.speed:
+                    feature_map = self.compute_feature_maps_cpu_parallel(subarray) #If the interactive segmenter is slow
+                else:                                                              #Due to the parallel, consider singleton implementation for it specifically
+                    feature_map = self.compute_deep_feature_maps_cpu_parallel(subarray)
+                
+                # Extract features for each coordinate, adjusting for subarray offset
+                features = []
+                for z, y, x in chunk_coords:
+                    # Transform global coordinates to local subarray coordinates
+                    local_z = z - z_min
+                    local_y = y - y_min
+                    local_x = x - x_min
+                    
+                    # Get feature at this position
+                    feature = feature_map[local_z, local_y, local_x]
+                    features.append(feature)
+                    
+            else:
+                # For non-mem_lock, simply use the feature cache
+                features = [self.feature_cache[z, y, x] for z, y, x in chunk_coords]
             
             # Make predictions
             predictions = self.model.predict(features)
@@ -769,7 +1305,8 @@ class InteractiveSegmenter:
 
         else:
 
-            chunk_coords = self.twodim_coords(chunk_coords[0], chunk_coords[1], chunk_coords[2], chunk_coords[3], chunk_coords[4])
+            if self.mem_lock:
+                chunk_coords = self.twodim_coords(chunk_coords[0], chunk_coords[1], chunk_coords[2], chunk_coords[3], chunk_coords[4])
 
             chunk_coords = self.organize_by_z(chunk_coords)
 
@@ -860,14 +1397,15 @@ class InteractiveSegmenter:
         
 
 
-    def segment_volume(self, array, chunk_size=None, gpu=False):
+    def segment_volume(self, chunk_size=None, gpu=False):
         """Segment volume using parallel processing of chunks with vectorized chunk creation"""
         #Change the above chunk size to None to have it auto-compute largest chunks (not sure which is faster, 64 seems reasonable in test cases)
 
         self.realtimechunks = None # Presumably no longer need this.
         self.map_slice = None
 
-        chunk_size = self.master_chunk #memory efficient chunk
+        if self.mem_lock:
+            chunk_size = self.master_chunk #memory efficient chunk
 
 
         def create_2d_chunks():
@@ -880,7 +1418,8 @@ class InteractiveSegmenter:
                 List of chunks, where each chunk contains the coordinates for one z-slice or subchunk
             """
             MAX_CHUNK_SIZE = 262144
-
+            if not self.mem_lock:
+                MAX_CHUNK_SIZE = 10000000000000000000000000 #unlimited i guess
             chunks = []
             
             for z in range(self.image_3d.shape[0]):
@@ -892,7 +1431,13 @@ class InteractiveSegmenter:
                 # If the slice is small enough, do not subchunk
                 if total_pixels <= MAX_CHUNK_SIZE:
 
-                    chunks.append([y_dim, x_dim, z, total_pixels, None])
+
+                    if not self.mem_lock:
+                        chunks.append(self.twodim_coords(y_dim, x_dim, z, total_pixels))
+                    else:
+                        chunks.append([y_dim, x_dim, z, total_pixels, None])
+
+
 
                 else:
                     # Determine which dimension to divide (the largest one)
@@ -908,8 +1453,10 @@ class InteractiveSegmenter:
                         for i in range(0, y_dim, div_size):
                             end_i = min(i + div_size, y_dim)
 
-
-                            chunks.append([y_dim, x_dim, z, None, ['y', i, end_i]])
+                            if not self.mem_lock:
+                                chunks.append(self.twodim_coords(y_dim, x_dim, z, None, ['y', i, end_i]))
+                            else:
+                                chunks.append([y_dim, x_dim, z, None, ['y', i, end_i]])
 
                     else:  # largest_dim == 'x'
                         div_size = int(np.ceil(x_dim / num_divisions))
@@ -917,9 +1464,23 @@ class InteractiveSegmenter:
                         for i in range(0, x_dim, div_size):
                             end_i = min(i + div_size, x_dim)
 
-                            chunks.append([y_dim, x_dim, z, None, ['x', i, end_i]])
+                            if not self.mem_lock:
+                                chunks.append(self.twodim_coords(y_dim, x_dim, z, None, ['x', i, end_i]))
+                            else:
+                                chunks.append([y_dim, x_dim, z, None, ['x', i, end_i]])
             
             return chunks
+
+        #try:
+            #from cuml.ensemble import RandomForestClassifier as cuRandomForestClassifier
+        #except:
+            #print("Cannot find cuML, using CPU to segment instead...")
+            #gpu = False
+
+        if self.feature_cache is None and not self.mem_lock and not self.use_two:
+            with self.lock:
+                if self.feature_cache is None:
+                    self.feature_cache = self.compute_feature_maps()
 
         print("Chunking data...")
         
@@ -961,8 +1522,22 @@ class InteractiveSegmenter:
                 y_end = min(y_start + chunk_size, self.image_3d.shape[1])
                 x_end = min(x_start + chunk_size, self.image_3d.shape[2])
                 
-                coords = [z_start, z_end, y_start, y_end, x_start, x_end]
-                chunks.append(coords)
+                if self.mem_lock:
+                    # Create coordinates for this chunk efficiently
+                    coords = [z_start, z_end, y_start, y_end, x_start, x_end]
+                    chunks.append(coords)
+
+                else:
+                    # Consider moving this to process chunk ??
+                    coords = np.stack(np.meshgrid(
+                        np.arange(z_start, z_end),
+                        np.arange(y_start, y_end),
+                        np.arange(x_start, x_end),
+                        indexing='ij'
+                    )).reshape(3, -1).T
+                
+                    chunks.append(list(map(tuple, coords)))
+
 
 
         else:
@@ -974,23 +1549,34 @@ class InteractiveSegmenter:
 
         print("Segmenting chunks...")
 
-        for i, chunk in enumerate(chunks):
-            fore, _ = self.process_chunk(chunk)
-            fg_array = np.array(list(fore))
-            del fore
-            if len(fg_array) > 0:  # Check if we have any foreground coordinates
-                # Unpack into separate coordinate arrays
-                z_coords, y_coords, x_coords = fg_array[:, 0], fg_array[:, 1], fg_array[:, 2]
-                # Assign values in a single vectorized operation
-                array[z_coords, y_coords, x_coords] = 255
-            try:
-                chunk[i] = None #Help garbage collection
-            except:
-                pass
-            print(f"Processed {i}/{len(chunks)} chunks")
+        if not self.mem_lock:
+            with ThreadPoolExecutor(max_workers=multiprocessing.cpu_count()) as executor:
+                if gpu:
+                    try:
+                        futures = [executor.submit(self.process_chunk_GPU, chunk) for chunk in chunks]
+                    except:
+                        futures = [executor.submit(self.process_chunk, chunk) for chunk in chunks]
+
+                else:
+                    futures = [executor.submit(self.process_chunk, chunk) for chunk in chunks]
+                
+                for i, future in enumerate(futures):
+                    fore, back = future.result()
+                    foreground_coords.update(fore)
+                    background_coords.update(back)
+                    print(f"Processed {i}/{len(chunks)} chunks")
+        else: #Prioritize RAM
+            for i, chunk in enumerate(chunks):
+                fore, back = self.process_chunk(chunk)
+                foreground_coords.update(fore)
+                background_coords.update(back)
+                try:
+                    chunk[i] = None #Help garbage collection
+                except:
+                    pass
+                print(f"Processed {i}/{len(chunks)} chunks")
         
-        #Ok so this should be returned one chunk at a time I presume.
-        return array
+        return foreground_coords, background_coords
 
     def update_position(self, z=None, x=None, y=None):
         """Update current position for chunk prioritization with safeguards"""
@@ -1079,6 +1665,13 @@ class InteractiveSegmenter:
 
 
     def segment_volume_realtime(self, gpu = False):
+
+        try:
+            from cuml.ensemble import RandomForestClassifier as cuRandomForestClassifier
+        except:
+            print("Cannot find cuML, using CPU to segment instead...")
+            gpu = False
+
 
 
         if self.realtimechunks is None:

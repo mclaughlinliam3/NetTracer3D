@@ -34,9 +34,8 @@ NetTracer3D is free to use/fork for academic/nonprofit use so long as citation i
 
 NetTracer3D was developed by Liam McLaughlin while working under Dr. Sanjay Jain at Washington University School of Medicine.
 
--- Version 0.7.2 Updates -- 
+-- Version 0.7.4 Updates -- 
 
-    * Added new option to the modify network qualities menu to remove node centroids with unassigned id values.
-    * Bug fixes, mainly:
-        * Had to fix a bug with the ripley's function that was making it always evaluate nodes of one id against themselves even when a seperate id was specified.
-        * Fixed some bugs when processing 2D images.
+	* Bug fixes
+	* The segmenter now has a GPU option that actually works quite a bit faster! Only available with CUDA toolkit and cupy.
+	* The segmenter also now no longer leaks any memory.

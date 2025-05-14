@@ -6,7 +6,7 @@ matplotlib
 networkx
 opencv-python-headless
 openpyxl
-pandas==2.2.5
+pandas
 napari
 python-louvain
 tifffile

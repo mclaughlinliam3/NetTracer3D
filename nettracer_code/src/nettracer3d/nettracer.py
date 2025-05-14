@@ -2913,6 +2913,7 @@ class Network_3D:
 
         if file_path is not None:
             self._node_centroids = network_analysis.read_centroids_to_dict(file_path)
+            self._node_centroids = self.clear_null(self._node_centroids)
             print("Succesfully loaded node centroids")
             return
 
@@ -2922,10 +2923,12 @@ class Network_3D:
             if item == 'node_centroids.xlsx' or item == 'node_centroids.csv':
                 if directory is not None:
                     self._node_centroids = network_analysis.read_centroids_to_dict(f'{directory}/{item}')
+                    self._node_centroids = self.clear_null(self._node_centroids)
                     print("Succesfully loaded node centroids")
                     return
                 else:
                     self._node_centroids = network_analysis.read_centroids_to_dict(item)
+                    self._node_centroids = self.clear_null(self._node_centroids)
                     print("Succesfully loaded node centroids")
                     return
 
@@ -2941,6 +2944,7 @@ class Network_3D:
 
         if file_path is not None:
             self._node_identities = network_analysis.read_excel_to_singval_dict(file_path)
+            self._node_identities = self.clear_null(self._node_identities)
             print("Succesfully loaded node identities")
             return
 
@@ -2950,10 +2954,12 @@ class Network_3D:
             if item == 'node_identities.xlsx' or item == 'node_identities.csv':
                 if directory is not None:
                     self._node_identities = network_analysis.read_excel_to_singval_dict(f'{directory}/{item}')
+                    self._node_identities = self.clear_null(self._node_identities)
                     print("Succesfully loaded node identities")
                     return
                 else:
                     self._node_identities = network_analysis.read_excel_to_singval_dict(item)
+                    self._node_identities = self.clear_null(self._node_identities)
                     print("Succesfully loaded node identities")
                     return
 
@@ -2968,7 +2974,8 @@ class Network_3D:
         """
 
         if file_path is not None:
-            self._node_identities = network_analysis.read_excel_to_singval_dict(file_path)
+            self._communities = network_analysis.read_excel_to_singval_dict(file_path)
+            self._communities = self.clear_null(self._communities)
             print("Succesfully loaded communities")
             return
 
@@ -2978,14 +2985,22 @@ class Network_3D:
             if item == 'node_communities.xlsx' or item == 'node_communities.csv':
                 if directory is not None:
                     self._communities = network_analysis.read_excel_to_singval_dict(f'{directory}/{item}')
+                    self._communities = self.clear_null(self._communities)
                     print("Succesfully loaded communities")
                     return
                 else:
                     self._communities = network_analysis.read_excel_to_singval_dict(item)
+                    self._communities = self.clear_null(self._communities)
                     print("Succesfully loaded communities")
                     return
 
         print("Could not find communities. They must be in the specified directory and named 'node_communities.xlsx'")
+
+    def clear_null(self, some_dict):
+
+        if some_dict == {}:
+            some_dict = None
+        return some_dict
 
     def load_edge_centroids(self, directory = None, file_path = None):
         """
@@ -2997,6 +3012,7 @@ class Network_3D:
 
         if file_path is not None:
             self._edge_centroids = network_analysis.read_centroids_to_dict(file_path)
+            self._edge_centroids = self.clear_null(self._edge_centroids)
             print("Succesfully loaded edge centroids")
             return
 
@@ -3006,10 +3022,12 @@ class Network_3D:
             if item == 'edge_centroids.xlsx' or item == 'edge_centroids.csv':
                 if directory is not None:
                     self._edge_centroids = network_analysis.read_centroids_to_dict(f'{directory}/{item}')
+                    self._edge_centroids = self.clear_null(self._edge_centroids)
                     print("Succesfully loaded edge centroids")
                     return
                 else:
                     self._edge_centroids = network_analysis.read_centroids_to_dict(item)
+                    self._edge_centroids = self.clear_null(self._edge_centroids)
                     print("Succesfully loaded edge centroids")
                     return
 
@@ -3427,10 +3445,11 @@ class Network_3D:
             self.calculate_search_region(search, GPU = GPU, fast_dil = fast_dil, GPU_downsample = GPU_downsample)
             #self._nodes = None # I originally put this here to micromanage RAM a little bit (it writes it to disk so I wanted to purge it from mem briefly but now idt thats necessary and I'd rather give it flexibility when lacking write permissions)
             search = None
-            try:
-                self.save_search_region(directory)
-            except:
-                pass
+            if directory is not None:
+                try:
+                    self.save_search_region(directory)
+                except:
+                    pass
 
         self.calculate_edges(edges, diledge = diledge, inners = inners, hash_inner_edges = hash_inners, search = search, remove_edgetrunk = remove_trunk, GPU = GPU, fast_dil = fast_dil, skeletonized = skeletonize)
         del edges
