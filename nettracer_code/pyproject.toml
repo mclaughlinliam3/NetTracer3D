@@ -1,6 +1,6 @@
 [project]
 name = "nettracer3d"
-version = "0.7.4"
+version = "0.7.6"
 authors = [
   { name="Liam McLaughlin", email="liamm@wustl.edu" },
 ]
@@ -17,7 +17,6 @@ dependencies = [
     "openpyxl",
     "pandas",
     "napari",
-    "python-louvain",
     "tifffile",
     "qtrangeslider",
     "PyQt6",

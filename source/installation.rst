@@ -67,6 +67,8 @@ If you encounter errors about conflicting dependencies, download anaconda and tr
 
     pip install nettracer3d
 
+The highest probability is that a version of a package you are running is not compatible with numpy version 2 and above. Please try updating the incompatible package in that case, or downgrading numpy to a version 1 distribution.
+
 Getting Help
 ~~~~~~~~~~~
 

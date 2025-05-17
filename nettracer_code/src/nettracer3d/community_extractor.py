@@ -8,7 +8,6 @@ from networkx.algorithms import community
 from scipy import ndimage
 from scipy.ndimage import zoom
 from networkx.algorithms import community
-from community import community_louvain
 import random
 from . import node_draw
 
@@ -229,38 +228,11 @@ def _isolate_connected(G, key = None):
         return G0
 
 
-def extract_mothers(nodes, excel_file_path, centroid_dic = None, directory = None, louvain = True, ret_nodes = False, called = False):
-
-    if type(nodes) == str:
-        nodes = tifffile.imread(nodes)
-
-        if np.unique(nodes) < 3:
-            structure_3d = np.ones((3, 3, 3), dtype=int)
-            nodes, num_nodes = ndimage.label(nodes, structure=structure_3d)
-
-    if type(excel_file_path) == str:
-        G, edge_weights = weighted_network(excel_file_path)
-    else:
-        G = excel_file_path
-
-    if not called:
-
-        if louvain:
-            # Apply the Louvain algorithm for community detection
-            partition = community_louvain.best_partition(G)
-            some_communities = set(partition.values())
-        else:
-            some_communities = list(nx.community.label_propagation_communities(G))
-            partition = {}
-            for i, community in enumerate(some_communities):
-                for node in community:
-                    partition[node] = i + 1
-    else:
-        partition = louvain
-        some_communities = (partition.keys())
+def extract_mothers(nodes, G, partition, centroid_dic = None, directory = None, ret_nodes = False, called = False):
 
 
     my_nodes, intercom_connections, connected_coms = get_border_nodes(partition, G)
+    some_communities = partition.keys()
 
     print(f"Number of intercommunity connections: {intercom_connections}")
     print(f"{len(connected_coms)} communities with any connectivity of {len(some_communities)} communities")
@@ -390,10 +362,14 @@ def find_hub_nodes(G: nx.Graph, proportion: float = 0.1) -> List:
     # Dictionary to store average path lengths for all nodes
     avg_path_lengths: Dict[int, float] = {}
     
+    output = []
+
     # Process each component separately
     for component in components:
         # Create subgraph for this component
         subgraph = G.subgraph(component)
+        if not (len(subgraph.nodes()) * proportion >= 0.75): #Skip components that are too small
+            continue
         
         # Calculate average shortest path length for each node in this component
         for node in subgraph.nodes():
@@ -403,16 +379,18 @@ def find_hub_nodes(G: nx.Graph, proportion: float = 0.1) -> List:
             avg_length = sum(path_lengths.values()) / (len(subgraph.nodes()) - 1)
             avg_path_lengths[node] = avg_length
     
-    # Sort nodes by average path length (ascending)
-    sorted_nodes = sorted(avg_path_lengths.items(), key=lambda x: x[1])
+        # Sort nodes by average path length (ascending)
+        sorted_nodes = sorted(avg_path_lengths.items(), key=lambda x: x[1])
+        
+        # Calculate number of nodes to return
+        num_nodes = int(np.ceil(len(G.nodes()) * proportion))
+        
+        # Return the top nodes (those with lowest average path lengths)
+        hub_nodes = [node for node, _ in sorted_nodes[:num_nodes]]
+        output.extend(hub_nodes)
+        avg_path_lengths: Dict[int, float] = {}
     
-    # Calculate number of nodes to return
-    num_nodes = int(np.ceil(len(G.nodes()) * proportion))
-    
-    # Return the top nodes (those with lowest average path lengths)
-    hub_nodes = [node for node, _ in sorted_nodes[:num_nodes]]
-    
-    return hub_nodes
+    return output
 
 def get_color_name_mapping():
     """Return a dictionary of common colors and their RGB values."""

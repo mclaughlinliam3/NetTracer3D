@@ -6,14 +6,14 @@
   <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
 
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>All Analyze Menu Options &mdash; NetTracer3D 0.7.4 documentation</title>
+  <title>All Analyze Menu Options &mdash; NetTracer3D 0.7.6 documentation</title>
       <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=b86133f3" />
       <link rel="stylesheet" type="text/css" href="_static/css/theme.css?v=e59714d7" />
 
   
       <script src="_static/jquery.js?v=5d32c60e"></script>
       <script src="_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
-      <script src="_static/documentation_options.js?v=020ce317"></script>
+      <script src="_static/documentation_options.js?v=918ced64"></script>
       <script src="_static/doctools.js?v=9bcbadda"></script>
       <script src="_static/sphinx_highlight.js?v=dc90522c"></script>
     <script src="_static/js/theme.js"></script>
@@ -59,7 +59,7 @@
 <li class="toctree-l3"><a class="reference internal" href="#parameter-explanations">Parameter Explanations</a></li>
 </ul>
 </li>
-<li class="toctree-l2"><a class="reference internal" href="#analyze-network-community-partition-generic-network-stats">‘Analyze -&gt; Network -&gt; Community Partition+ Generic Network Stats’</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="#analyze-network-community-partition-generic-network-stats">‘Analyze -&gt; Network -&gt; Community Partition + Generic Network Stats’</a><ul>
 <li class="toctree-l3"><a class="reference internal" href="#id1">Parameter Explanations</a></li>
 </ul>
 </li>
@@ -68,6 +68,7 @@
 </ul>
 </li>
 <li class="toctree-l2"><a class="reference internal" href="#analyze-stats-calculate-generic-network-stats">‘Analyze -&gt; Stats -&gt; Calculate Generic Network Stats’</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#analyze-stats-calculate-generic-network-histograms">‘Analyze -&gt; Stats -&gt; Calculate Generic Network Histograms’</a></li>
 <li class="toctree-l2"><a class="reference internal" href="#analyze-stats-radial-distribution-analysis">‘Analyze -&gt; Stats -&gt; Radial Distribution Analysis’</a><ul>
 <li class="toctree-l3"><a class="reference internal" href="#id2">Parameter Explanations</a></li>
 </ul>
@@ -193,21 +194,7 @@
 </li>
 <li><dl class="simple">
 <dt>Community Coded (Uses Current…)</dt><dd><ul class="simple">
-<li><p>Colors nodes by their community, assuming they have already been community partitioned.</p></li>
-</ul>
-</dd>
-</dl>
-</li>
-<li><dl class="simple">
-<dt>Community Coded (Redo Label Propogation…)</dt><dd><ul class="simple">
-<li><p>Re-partition nodes using label propogation, then display them color-coded by their community.</p></li>
-</ul>
-</dd>
-</dl>
-</li>
-<li><dl class="simple">
-<dt>Community Coded (Redo Louvain…)</dt><dd><ul class="simple">
-<li><p>Re-partition nodes using louvain, then display them color-coded by their community.</p></li>
+<li><p>Colors nodes by their community, assuming they have already been community partitioned. Will prompt the user to partition if not.</p></li>
 </ul>
 </dd>
 </dl>
@@ -238,7 +225,7 @@
 </section>
 </section>
 <section id="analyze-network-community-partition-generic-network-stats">
-<h2>‘Analyze -&gt; Network -&gt; Community Partition+ Generic Network Stats’<a class="headerlink" href="#analyze-network-community-partition-generic-network-stats" title="Link to this heading"></a></h2>
+<h2>‘Analyze -&gt; Network -&gt; Community Partition + Generic Network Stats’<a class="headerlink" href="#analyze-network-community-partition-generic-network-stats" title="Link to this heading"></a></h2>
 <ul class="simple">
 <li><p>Use this function to partition the nodes into communities.</p></li>
 <li><p>Node communities will be saved and loaded with any ‘Save/Load Network3D object’ options.</p></li>
@@ -269,7 +256,7 @@
 </li>
 <li><dl class="simple">
 <dt>Louvain</dt><dd><ul class="simple">
-<li><p>Partition the network using python-louvain’s louvain algorithm.</p></li>
+<li><p>Partition the network using NetworkX’s louvain algorithm.</p></li>
 </ul>
 </dd>
 </dl>
@@ -287,7 +274,7 @@
 <li><p>Whether or not to calculate community-based stats for the graph</p></li>
 <li><dl class="simple">
 <dt>If yes, these are the stats that are returned, referring to the entire network:</dt><dd><ul>
-<li><p>Modularity Entire Network (From python-louvain when louvain, or NetworkX when label propogation.)</p></li>
+<li><p>Modularity Entire Network</p></li>
 <li><p>Number of Communities</p></li>
 <li><p>Community Sizes</p></li>
 <li><p>Average Community Size</p></li>
@@ -311,17 +298,15 @@
 </dd>
 </dl>
 </li>
-<li><p>Many of these stats come from the NetworkX or python-louvain packages (specified above). Please see the below documentation for more information:</p></li>
-<li><p>python-louvain documentation: <a class="reference external" href="https://python-louvain.readthedocs.io/en/latest/api">https://python-louvain.readthedocs.io/en/latest/api</a>.html#</p></li>
+<li><p>These stats come from the NetworkX. Please see the below documentation for more information:</p></li>
 <li><p>networkx documentation: <a class="reference external" href="https://networkx.org/">https://networkx.org/</a></p></li>
 </ul>
 </dd>
 </dl>
 </li>
 </ol>
-<ul class="simple">
-<li><p>Press partition to seperate the nodes into communities based on the selected parameters. In addition to setting the node_communities property, tables showing the community for each node and the stats will be generated in the tabulated data widget.</p></li>
-</ul>
+<p>4. Seed (int): Sets the random seed for the community partition to use (since the starting point effects the outcome). You should use the same seed each time for reproducibility, or vary the seed to see how it effects partitioning. Leaving the seed empty will just use the seed of the rand (and numpy random) modules, which is initialized at program start.
+* Press partition to seperate the nodes into communities based on the selected parameters. In addition to setting the node_communities property, tables showing the community for each node and the stats will be generated in the tabulated data widget.</p>
 </section>
 </section>
 <section id="analyze-network-identity-makeup-of-network">
@@ -386,6 +371,13 @@
 </li>
 <li><p>These stats are all more or less generated by networkx.</p></li>
 <li><p>Please see networkx documentation for more information: <a class="reference external" href="https://networkx.org/">https://networkx.org/</a></p></li>
+</ul>
+</section>
+<section id="analyze-stats-calculate-generic-network-histograms">
+<h2>‘Analyze -&gt; Stats -&gt; Calculate Generic Network Histograms’<a class="headerlink" href="#analyze-stats-calculate-generic-network-histograms" title="Link to this heading"></a></h2>
+<ul class="simple">
+<li><p>This function simply generates and displays (as matplotlib histos and in the tabulated data widget) a number of generic histograms about distributions of node properties in the network.</p></li>
+<li><p>The histograms displayed were taken verbatim from this networkx analysis example page: <a class="reference external" href="https://networkx.org/nx-guides/content/exploratory_notebooks/facebook_notebook.html">https://networkx.org/nx-guides/content/exploratory_notebooks/facebook_notebook.html</a> (Please use this reference for information about the histograms)</p></li>
 </ul>
 </section>
 <section id="analyze-stats-radial-distribution-analysis">
@@ -855,6 +847,7 @@
 </ol>
 <ul class="simple">
 <li><p>Press ‘Get hubs’ to run the method with the desired parameters. The output data will be used to create a new table in the tabulated data widget. The overlay will go into the Overlay 2 channel.</p></li>
+<li><p>Note that the hubs are considered independently for each seperate, distinct network component. Additionally, components that have too few nodes will not return any hubs if the upper proportion threshold is particularly small.</p></li>
 </ul>
 </section>
 </section>

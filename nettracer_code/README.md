@@ -34,8 +34,6 @@ NetTracer3D is free to use/fork for academic/nonprofit use so long as citation i
 
 NetTracer3D was developed by Liam McLaughlin while working under Dr. Sanjay Jain at Washington University School of Medicine.
 
--- Version 0.7.4 Updates -- 
+-- Version 0.7.6 Updates -- 
 
-	* Bug fixes
-	* The segmenter now has a GPU option that actually works quite a bit faster! Only available with CUDA toolkit and cupy.
-	* The segmenter also now no longer leaks any memory.
+	* Bug Fixes

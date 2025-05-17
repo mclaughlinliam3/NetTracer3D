@@ -3564,12 +3564,12 @@ class Network_3D:
 
     #Some methods that may be useful:
 
-    def community_partition(self, weighted = False, style = 0, dostats = True):
+    def community_partition(self, weighted = False, style = 0, dostats = True, seed = None):
         """
         Sets the communities attribute by splitting the network into communities
         """
 
-        self._communities, self.normalized_weights, stats = modularity.community_partition(self._network_lists, weighted = weighted, style = style, dostats = dostats)
+        self._communities, self.normalized_weights, stats = modularity.community_partition(self._network_lists, weighted = weighted, style = style, dostats = dostats, seed = seed)
 
         return stats
 
@@ -4027,66 +4027,6 @@ class Network_3D:
         self._communities, self.normalized_weights = modularity.show_communities_flex(self._network, self._network_lists, self.normalized_weights, geo_info = [self._node_centroids, self._nodes.shape], geometric = geometric, directory = directory, weighted = weighted, partition = partition, style = style)
 
 
-    def show_communities(self, geometric = False, directory = None):
-        """
-        Shows the network property, and some basic stats, as a graph where nodes are labelled by colors representing the community they belong to as determined by a label propogation algorithm. Does not support viewing edge weights.
-        :param geoemtric: (Optional - Val = False; boolean). If False, node placement in the graph will be random. If True, nodes
-        will be placed in their actual spatial location (from the original node segmentation) along the XY plane, using node_centroids.
-        The node size will then represent the nodes Z location, with smaller nodes representing a larger Z value. If False, nodes will be placed randomly.
-        :param directory: (Optional – Val = None; string). An optional string path to a directory to save the network plot image to. If not set, nothing will be saved.
-        """
-
-        if not geometric:
-
-            simple_network.show_community_network(self._network_lists, directory = directory)
-
-        else:
-            simple_network.show_community_network(self._network_lists, geometric = True, geo_info = [self._node_centroids, self._nodes.shape], directory = directory)
-
-
-    def show_communities_louvain(self, geometric = False, directory = None):
-        """
-        Shows the network property as a graph, and some basic stats, where nodes are labelled by colors representing the community they belong to as determined by a louvain algorithm. Supports viewing edge weights.
-        :param geoemtric: (Optional - Val = False; boolean). If False, node placement in the graph will be random. If True, nodes
-        will be placed in their actual spatial location (from the original node segmentation) along the XY plane, using node_centroids.
-        The node size will then represent the nodes Z location, with smaller nodes representing a larger Z value. If False, nodes will be placed randomly.
-        """
-
-        if not geometric:
-
-            modularity.louvain_mod(self._network_lists, directory = directory)
-        else:
-            modularity.louvain_mod(self._network_lists, geometric = True, geo_info = [self._node_centroids, self._nodes.shape], directory = directory)
-
-    def louvain_modularity(self, solo_mod = False):
-        """
-        Shows some basic stats of the network, including modularity (essentially strength of community structure), using a louvain algorithm that accounts for edge weights.
-        :param solo_mod: (Optional - Val = False; boolean). If True, will return a singular modularity for the network, taking into
-        account all disconnected components as pieces of a network. If False, will return the modularity of each singular disconnected component of the network with the number of nodes in the component as a key
-        and the modularity of the component as a value.
-        :returns: A dictionary containing the modularity for each disconnected component in the network, key-indexed by that component's node count, or a single modularity value accounting for all disconnected components of the network if the solo_mod param is True.
-        """
-
-        if not solo_mod:
-            mod = modularity._louvain_mod(self._network)
-        else:
-            mod = modularity._louvain_mod_solo(self._network)
-
-        return mod
-
-    def modularity(self, solo_mod = False):
-        """
-        Shows some basic stats of the network, including modularity (essentially strength of community structure), using a label propogation algorithm that does not consider edge weights.
-        :param solo_mod: (Optional - Val = False; boolean). If True, will return a singular modularity for the network, taking into
-        account all disconnected components as pieces of a network. If False, will return the modularity of each singular disconnected component of the network with the number of nodes in the component as a key
-        and the modularity of the component as a value.
-        :returns: A dictionary containing the modularity for each disconnected component in the network, key-indexed by that component's node count, or a single modularity value accounting for all disconnected components of the network if the solo_mod param is True.
-        """
-
-        modularity = simple_network.modularity(self._network, solo_mod = solo_mod)
-
-        return modularity
-
 
     def show_identity_network(self, geometric = False, directory = None):
         """
@@ -4149,7 +4089,7 @@ class Network_3D:
         return G
 
 
-    def isolate_mothers(self, directory = None, down_factor = 1, louvain = True, ret_nodes = False, called = False):
+    def isolate_mothers(self, directory = None, down_factor = 1, ret_nodes = False, called = False):
 
         """
         Method to isolate 'mother' nodes of a network (in this case, this means nodes that exist betwixt communities), also generating overlays that relate this information to the 3D structure.
@@ -4163,7 +4103,7 @@ class Network_3D:
         """
 
         if ret_nodes:
-            mothers = community_extractor.extract_mothers(None, self._network, louvain = louvain, ret_nodes = True, called = called)
+            mothers = community_extractor.extract_mothers(None, self._network, self._communities, ret_nodes = True, called = called)
             return mothers
         else:
 
@@ -4172,9 +4112,9 @@ class Network_3D:
                 for item in self._node_centroids:
                     centroids[item] = np.round((self._node_centroids[item]) / down_factor)
                 nodes = downsample(self._nodes, down_factor)
-                mothers, overlay = community_extractor.extract_mothers(nodes, self._network, directory = directory, centroid_dic = centroids, louvain = louvain, called = called)
+                mothers, overlay = community_extractor.extract_mothers(nodes, self._network, self._communities, directory = directory, centroid_dic = centroids, called = called)
             else:
-                mothers, overlay = community_extractor.extract_mothers(self._nodes, self._network, centroid_dic = self._node_centroids, directory = directory, louvain = louvain, called = called)
+                mothers, overlay = community_extractor.extract_mothers(self._nodes, self._network, self._communities, centroid_dic = self._node_centroids, directory = directory, called = called)
             return mothers, overlay
 
 
@@ -4186,7 +4126,7 @@ class Network_3D:
 
             hub_img = np.isin(self._nodes, hubs) * self._nodes
         else:
-            hub_iimg = None
+            hub_img = None
 
         return hubs, hub_img
 
@@ -4246,33 +4186,6 @@ class Network_3D:
 
         return array, output
         
-
-
-
-
-    def extract_communities_louvain(self, directory = None, down_factor = 1, color_code = True):
-        """
-        Method to generate overlays that relate community detection in a network to the 3D structure.
-        Overlays include a grayscale image where nodes are assigned a grayscale value corresponding to their community, a numerical index where numbers are drawn at nodes corresponding to their community, and a
-        color coded overlay where a nodes color corresponds to its community. Community detection will be done with louvain algorithm.
-        These will be saved to the active directory if none is specified.
-        :param directory: (Optional - Val = None; string). A path to a directory to save outputs.
-        :param down_factor: (Optional - Val = 1; int). A factor to downsample nodes by while drawing overlays. Note this option REQUIRES node_centroids to already be set.
-        :param color code: (Optional - Val = True; boolean). If set to False, the color-coded overlay will not be drawn.
-        :returns: A dictionary where nodes are grouped by community.
-        """
-
-        if down_factor > 1:
-            centroids = self._node_centroids.copy()
-            for item in self._node_centroids:
-                centroids[item] = np.round((self._node_centroids[item]) / down_factor)
-            nodes = downsample(self._nodes, down_factor)
-            partition = network_analysis.community_partition(nodes, self._network_lists, directory = directory, centroids = centroids, color_code = color_code)
-
-        else:
-            partition = network_analysis.community_partition(self._nodes, self._network_lists, directory = directory, centroids = self._node_centroids, color_code = color_code)
-
-        return partition
 
 
     #Methods related to analysis:

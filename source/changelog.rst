@@ -33,3 +33,15 @@ Version 0.7.4 Updates
 	* Bug fixes
 	* The segmenter now has a GPU option that actually works quite a bit faster! Only available with CUDA toolkit and cupy.
 	* The segmenter also now no longer leaks any memory.
+
+Version 0.7.5 Updates
+
+	* Bug fixes
+	* The segmenter GPU option has been updated to include 2D segmentation and to also be able to load/save models.
+	* A new function (Analyze -> Stats -> Calculate Generic Network Histograms has been added (gives a few histograms about the network and their corresponding tables. Previously stats mostly gave averages).
+	* The function 'Analyze -> Data/Overlays -> Get Hub Information' now looks for the upper hubs unique to each separate network component. It will also ignore smaller components that have too few nodes to be reasonably considered having hubs relative to the threshold the user sets.
+	* The function to split non-connected nodes has been improved a bit (its faster albeit still slowish - its a tough operation)
+	* Removed python-louvain dependence, now uses networkx for Louvain partitioning. (On top of this, now the user can set the random seed they desire for partitioning for reproducibility purposes).
+
+Version 0.7.6 Updates
+    * Bug Fixes

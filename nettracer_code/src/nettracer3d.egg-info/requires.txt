@@ -8,7 +8,6 @@ opencv-python-headless
 openpyxl
 pandas
 napari
-python-louvain
 tifffile
 qtrangeslider
 PyQt6

@@ -1,6 +1,6 @@
 import sys
 import networkx as nx
-from PyQt6.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout, 
+from PyQt6.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout, QGridLayout, 
                             QHBoxLayout, QSlider, QMenuBar, QMenu, QDialog, 
                             QFormLayout, QLineEdit, QPushButton, QFileDialog,
                             QLabel, QComboBox, QMessageBox, QTableView, QInputDialog,
@@ -1311,22 +1311,40 @@ class ImageViewerWindow(QMainWindow):
                 info_dict['Object Class'] = 'Node'
 
                 if my_network.node_identities is not None:
-                    info_dict['ID'] = my_network.node_identities[label]
+                    try:
+                        info_dict['ID'] = my_network.node_identities[label]
+                    except:
+                        pass
 
                 if my_network.network is not None:
-                    info_dict['Degree'] = my_network.network.degree(label)
+                    try:
+                        info_dict['Degree'] = my_network.network.degree(label)
+                    except:
+                        pass
 
                 if my_network.communities is not None:
-                    info_dict['Community'] = my_network.communities[label]
+                    try:
+                        info_dict['Community'] = my_network.communities[label]
+                    except:
+                        pass
 
                 if my_network.node_centroids is not None:
-                    info_dict['Centroid'] = my_network.node_centroids[label]
+                    try:
+                        info_dict['Centroid'] = my_network.node_centroids[label]
+                    except:
+                        pass
 
                 if self.volume_dict[0] is not None:
-                    info_dict['Volume (Scaled)'] = self.volume_dict[0][label]
+                    try:
+                        info_dict['Volume (Scaled)'] = self.volume_dict[0][label]
+                    except:
+                        pass
 
                 if self.radii_dict[0] is not None:
-                    info_dict['Max Radius (Scaled)'] = self.radii_dict[0][label]
+                    try:
+                        info_dict['Max Radius (Scaled)'] = self.radii_dict[0][label]
+                    except:
+                        pass
 
 
             elif sort == 'edge':
@@ -1338,19 +1356,27 @@ class ImageViewerWindow(QMainWindow):
                 info_dict['Object Class'] = 'Edge'
 
                 if my_network.edge_centroids is not None:
-                    info_dict['Centroid'] = my_network.edge_centroids[label]
+                    try:
+                        info_dict['Centroid'] = my_network.edge_centroids[label]
+                    except:
+                        pass
 
                 if self.volume_dict[1] is not None:
-                    info_dict['Volume (Scaled)'] = self.volume_dict[1][label]
+                    try:
+                        info_dict['Volume (Scaled)'] = self.volume_dict[1][label]
+                    except:
+                        pass
 
                 if self.radii_dict[1] is not None:
-                    info_dict['~Radius (Scaled)'] = self.radii_dict[1][label]
+                    try:
+                        info_dict['~Radius (Scaled)'] = self.radii_dict[1][label]
+                    except:
+                        pass
 
             self.format_for_upperright_table(info_dict, title = f'Info on Object')
 
         except:
             pass
-
 
 
 
@@ -1416,12 +1442,67 @@ class ImageViewerWindow(QMainWindow):
             print(f"An error has occured: {e}")
 
     def handle_seperate(self):
-        print("Note: I search each selected label one at a time and then split it with the ndimage.label method which uses C but still has to search the entire array each time, I may be a very slow with big operations :)")
+
+        import scipy.ndimage as ndi
+        from scipy.sparse import csr_matrix
+
+        print("Note, this method is a tad slow...")
+
+        def separate_nontouching_objects(input_array, max_val = 0):
+            """
+            Efficiently separate non-touching objects in a labeled array.
+            
+            Parameters:
+            -----------
+            input_array : numpy.ndarray
+                Input labeled array where each object has a unique label value > 0
+                
+            Returns:
+            --------
+            output_array : numpy.ndarray
+                Array with new labels where non-touching components have different labels
+            """
+            # Step 1: Perform connected component labeling on the entire binary mask
+            binary_mask = input_array > 0
+            structure = np.ones((3,) * input_array.ndim, dtype=bool)  # 3x3x3 connectivity for 3D or 3x3 for 2D
+            labeled_array, num_features = ndi.label(binary_mask, structure=structure)
+            
+            # Step 2: Map the original labels to the new connected components
+            # Create a sparse matrix to efficiently store label mappings
+            coords = np.nonzero(input_array)
+            original_values = input_array[coords]
+            new_labels = labeled_array[coords]
+            
+            # Create a mapping of (original_label, new_connected_component) pairs
+            label_mapping = {}
+            for orig, new in zip(original_values, new_labels):
+                if orig not in label_mapping:
+                    label_mapping[orig] = []
+                if new not in label_mapping[orig]:
+                    label_mapping[orig].append(new)
+            
+            # Step 3: Create a new output array with unique labels for each connected component
+            output_array = np.zeros_like(input_array)
+            next_label = 1 + max_val
+            
+            # Map of (original_label, connected_component) -> new_unique_label
+            unique_label_map = {}
+            
+            for orig_label, cc_list in label_mapping.items():
+                for cc in cc_list:
+                    unique_label_map[(orig_label, cc)] = next_label
+                    # Create a mask for this original label and connected component
+                    mask = (input_array == orig_label) & (labeled_array == cc)
+                    # Assign the new unique label
+                    output_array[mask] = next_label
+                    next_label += 1
+            
+            return output_array
+
         try:
             # Handle nodes
             if len(self.clicked_values['nodes']) > 0:
                 self.create_highlight_overlay(node_indices=self.clicked_values['nodes'])
-                max_val = np.max(my_network.nodes) + 1
                 
                 # Create a boolean mask for highlighted values
                 self.highlight_overlay = self.highlight_overlay != 0
@@ -1429,56 +1510,26 @@ class ImageViewerWindow(QMainWindow):
                 # Create array with just the highlighted values
                 highlighted_nodes = self.highlight_overlay * my_network.nodes
                 
-                # Get unique values in the highlighted regions (excluding 0)
-                vals = list(np.unique(highlighted_nodes))
-                if vals[0] == 0:
-                    del vals[0]
-                    
-                # Process each value separately
-                for val in vals:
-                    # Create a mask for this value
-                    val_mask = my_network.nodes == val
-                    
-                    # Create an array without this value
-                    temp = my_network.nodes - (val_mask * val)
-                    
-                    # Label the connected components for this value
-                    labeled_mask, num_components = n3d.label_objects(val_mask)
-                    
-                    if num_components > 1:
-                        # Set appropriate dtype based on max value
-                        if max_val + num_components < 256:
-                            dtype = np.uint8
-                        elif max_val + num_components < 65536:
-                            dtype = np.uint16
-                            labeled_mask = labeled_mask.astype(dtype)
-                            temp = temp.astype(dtype)
-                        else:
-                            dtype = np.uint32
-                            labeled_mask = labeled_mask.astype(dtype)
-                            temp = temp.astype(dtype)
-                        
-                        # Add new labels to the temporary array
-                        mask_nonzero = labeled_mask != 0
-                        labeled_mask = labeled_mask + max_val - 1  # -1 because we'll restore the first component
-                        labeled_mask = labeled_mask * mask_nonzero
-                        
-                        # Restore original value for first component
-                        first_component = labeled_mask == max_val
-                        labeled_mask = labeled_mask - (first_component * (max_val - val))
-                        
-                        # Add labeled components back to the array
-                        my_network.nodes = temp + labeled_mask
-                        
-                        # Update max value for next iteration
-                        max_val += num_components - 1  # -1 because we kept one original label
+                # Get non-highlighted part of the array
+                non_highlighted = my_network.nodes * (~self.highlight_overlay)
+
+                if (highlighted_nodes==non_highlighted).all():
+                    max_val = 0
+                else:
+                    max_val = np.max(non_highlighted)
+                
+                # Process highlighted part
+                processed_highlights = separate_nontouching_objects(highlighted_nodes, max_val)
+                
+                # Combine back with non-highlighted parts
+                my_network.nodes = non_highlighted + processed_highlights
                 
                 self.load_channel(0, my_network.nodes, True)
             
             # Handle edges
             if len(self.clicked_values['edges']) > 0:
+ 
                 self.create_highlight_overlay(edge_indices=self.clicked_values['edges'])
-                max_val = np.max(my_network.edges) + 1
                 
                 # Create a boolean mask for highlighted values
                 self.highlight_overlay = self.highlight_overlay != 0
@@ -1486,60 +1537,28 @@ class ImageViewerWindow(QMainWindow):
                 # Create array with just the highlighted values
                 highlighted_edges = self.highlight_overlay * my_network.edges
                 
-                # Get unique values in the highlighted regions (excluding 0)
-                vals = list(np.unique(highlighted_edges))
-                if vals[0] == 0:
-                    del vals[0]
-                    
-                # Process each value separately
-                for val in vals:
-                    # Create a mask for this value
-                    val_mask = my_network.edges == val
-                    
-                    # Create an array without this value
-                    temp = my_network.edges - (val_mask * val)
-                    
-                    # Label the connected components for this value
-                    labeled_mask, num_components = n3d.label_objects(val_mask)
-                    
-                    if num_components > 1:
-                        # Set appropriate dtype based on max value
-                        if max_val + num_components < 256:
-                            dtype = np.uint8
-                        elif max_val + num_components < 65536:
-                            dtype = np.uint16
-                            labeled_mask = labeled_mask.astype(dtype)
-                            temp = temp.astype(dtype)
-                        else:
-                            dtype = np.uint32
-                            labeled_mask = labeled_mask.astype(dtype)
-                            temp = temp.astype(dtype)
-                        
-                        # Add new labels to the temporary array
-                        mask_nonzero = labeled_mask != 0
-                        labeled_mask = labeled_mask + max_val - 1  # -1 because we'll restore the first component
-                        labeled_mask = labeled_mask * mask_nonzero
-                        
-                        # Restore original value for first component
-                        first_component = labeled_mask == max_val
-                        labeled_mask = labeled_mask - (first_component * (max_val - val))
-                        
-                        # Add labeled components back to the array
-                        my_network.edges = temp + labeled_mask
-                        
-                        # Update max value for next iteration
-                        max_val += num_components - 1  # -1 because we kept one original label
+                # Get non-highlighted part of the array
+                non_highlighted = my_network.edges * (~self.highlight_overlay)
+
+                if (highlighted_nodes==non_highlighted).all():
+                    max_val = 0
+                else:
+                    max_val = np.max(non_highlighted)
                 
+                # Process highlighted part
+                processed_highlights = separate_nontouching_objects(highlighted_edges, max_val)
+                
+                # Combine back with non-highlighted parts
+                my_network.edges = non_highlighted + processed_highlights
+
                 self.load_channel(1, my_network.edges, True)
-                
+            
             self.highlight_overlay = None
             self.update_display()
-            print("Network is not updated automatically, please recompute if necessary. Identities are not automatically updated.")
+            print("Network is not updated automatically, please recompute if necessary - this method has a high chance of disrupting the network. Identities are not automatically updated.")
             self.show_centroid_dialog()
         except Exception as e:
             print(f"Error separating: {e}")
-
-
 
 
 
@@ -2684,6 +2703,8 @@ class ImageViewerWindow(QMainWindow):
         stats_menu = analysis_menu.addMenu("Stats")
         allstats_action = stats_menu.addAction("Calculate Generic Network Stats")
         allstats_action.triggered.connect(self.stats)
+        histos_action = stats_menu.addAction("Calculate Generic Network Histograms")
+        histos_action.triggered.connect(self.histos)
         radial_action = stats_menu.addAction("Radial Distribution Analysis")
         radial_action.triggered.connect(self.show_radial_dialog)
         degree_dist_action = stats_menu.addAction("Degree Distribution Analysis")
@@ -2821,6 +2842,108 @@ class ImageViewerWindow(QMainWindow):
             self.format_for_upperright_table(stats, title = 'Network Stats')
         except Exception as e:
             print(f"Error finding stats: {e}")
+
+    def histos(self):
+
+        """from networkx documentation"""
+
+        try:
+
+            G = my_network.network
+
+            shortest_path_lengths = dict(nx.all_pairs_shortest_path_length(G))
+            diameter = max(nx.eccentricity(G, sp=shortest_path_lengths).values())
+            # We know the maximum shortest path length (the diameter), so create an array
+            # to store values from 0 up to (and including) diameter
+            path_lengths = np.zeros(diameter + 1, dtype=int)
+
+
+
+            # Extract the frequency of shortest path lengths between two nodes
+            for pls in shortest_path_lengths.values():
+                pl, cnts = np.unique(list(pls.values()), return_counts=True)
+                path_lengths[pl] += cnts
+
+            # Express frequency distribution as a percentage (ignoring path lengths of 0)
+            freq_percent = 100 * path_lengths[1:] / path_lengths[1:].sum()
+
+            # Plot the frequency distribution (ignoring path lengths of 0) as a percentage
+            fig, ax = plt.subplots(figsize=(15, 8))
+            ax.bar(np.arange(1, diameter + 1), height=freq_percent)
+            ax.set_title(
+                "Distribution of shortest path length in G", fontdict={"size": 35}, loc="center"
+            )
+            ax.set_xlabel("Shortest Path Length", fontdict={"size": 22})
+            ax.set_ylabel("Frequency (%)", fontdict={"size": 22})
+
+            plt.show()
+            freq_dict = {freq: length for length, freq in enumerate(freq_percent, start=1)}
+            self.format_for_upperright_table(freq_dict, metric='Frequency (%)', value='Shortest Path Length', title="Distribution of shortest path length in G")
+
+            degree_centrality = nx.centrality.degree_centrality(G)
+            plt.figure(figsize=(15, 8))
+            plt.hist(degree_centrality.values(), bins=25)
+            plt.xticks(ticks=[0, 0.025, 0.05, 0.1, 0.15, 0.2])  # set the x axis ticks
+            plt.title("Degree Centrality Histogram ", fontdict={"size": 35}, loc="center")
+            plt.xlabel("Degree Centrality", fontdict={"size": 20})
+            plt.ylabel("Counts", fontdict={"size": 20})
+            plt.show()
+            self.format_for_upperright_table(degree_centrality, metric='Node', value='Degree Centrality', title="Degree Centrality Table")
+
+
+            betweenness_centrality = nx.centrality.betweenness_centrality(
+                G
+            )
+            plt.figure(figsize=(15, 8))
+            plt.hist(betweenness_centrality.values(), bins=100)
+            plt.xticks(ticks=[0, 0.02, 0.1, 0.2, 0.3, 0.4, 0.5])  # set the x axis ticks
+            plt.title("Betweenness Centrality Histogram ", fontdict={"size": 35}, loc="center")
+            plt.xlabel("Betweenness Centrality", fontdict={"size": 20})
+            plt.ylabel("Counts", fontdict={"size": 20})
+            plt.show()
+            self.format_for_upperright_table(betweenness_centrality, metric='Node', value='Betweenness Centrality', title="Betweenness Centrality Table")
+
+
+            closeness_centrality = nx.centrality.closeness_centrality(
+                G
+            )
+            plt.figure(figsize=(15, 8))
+            plt.hist(closeness_centrality.values(), bins=60)
+            plt.title("Closeness Centrality Histogram ", fontdict={"size": 35}, loc="center")
+            plt.xlabel("Closeness Centrality", fontdict={"size": 20})
+            plt.ylabel("Counts", fontdict={"size": 20})
+            plt.show()
+            self.format_for_upperright_table(closeness_centrality, metric='Node', value='Closeness Centrality', title="Closeness Centrality Table")
+
+
+            eigenvector_centrality = nx.centrality.eigenvector_centrality(
+                G
+            )
+            plt.figure(figsize=(15, 8))
+            plt.hist(eigenvector_centrality.values(), bins=60)
+            plt.xticks(ticks=[0, 0.01, 0.02, 0.04, 0.06, 0.08])  # set the x axis ticks
+            plt.title("Eigenvector Centrality Histogram ", fontdict={"size": 35}, loc="center")
+            plt.xlabel("Eigenvector Centrality", fontdict={"size": 20})
+            plt.ylabel("Counts", fontdict={"size": 20})
+            plt.show()
+            self.format_for_upperright_table(eigenvector_centrality, metric='Node', value='Eigenvector Centrality', title="Eigenvector Centrality Table")
+
+
+
+            clusters = nx.clustering(G)
+            plt.figure(figsize=(15, 8))
+            plt.hist(clusters.values(), bins=50)
+            plt.title("Clustering Coefficient Histogram ", fontdict={"size": 35}, loc="center")
+            plt.xlabel("Clustering Coefficient", fontdict={"size": 20})
+            plt.ylabel("Counts", fontdict={"size": 20})
+            plt.show()
+            self.format_for_upperright_table(clusters, metric='Node', value='Clustering Coefficient', title="Clustering Coefficient Table")
+
+            bridges = list(nx.bridges(G))
+            self.format_for_upperright_table(bridges, metric = 'Node Pair', title="Bridges")
+
+        except Exception as e:
+            print(f"Error generating histograms: {e}")
 
     def volumes(self):
 
@@ -5756,7 +5879,7 @@ class NetShowDialog(QDialog):
         
         # Add mode selection dropdown
         self.mode_selector = QComboBox()
-        self.mode_selector.addItems(["Default", "Community Coded (Uses current communities or label propogation by default if no communities have been found)", "Community Coded (Redo Label Propogation Algorithm)", "Community Coded (Redo Louvain Algorithm)", "Node ID Coded"])
+        self.mode_selector.addItems(["Default", "Community Coded", "Node ID Coded"])
         self.mode_selector.setCurrentIndex(0)  # Default to Mode 1
         layout.addRow("Execution Mode:", self.mode_selector)
 
@@ -5778,6 +5901,10 @@ class NetShowDialog(QDialog):
     
     def show_network(self):
         # Get parameters and run analysis
+        if my_network.communities is None:
+            self.parent().show_partition_dialog()
+            if my_network.communities is None:
+                return
         geo = self.geo_layout.isChecked()
         if geo:
             if my_network.node_centroids is None:
@@ -5795,12 +5922,6 @@ class NetShowDialog(QDialog):
                 my_network.show_communities_flex(geometric=geo, directory = directory, weighted = weighted, partition = my_network.communities)
                 self.parent().format_for_upperright_table(my_network.communities, 'NodeID', 'CommunityID')
             elif accepted_mode == 2:
-                my_network.show_communities_flex(geometric=geo, directory = directory, weighted = weighted, partition = my_network.communities, style = 0)
-                self.parent().format_for_upperright_table(my_network.communities, 'NodeID', 'CommunityID')
-            elif accepted_mode ==3:
-                my_network.show_communities_flex(geometric=geo, directory = directory, weighted = weighted, partition = my_network.communities, style = 1)
-                self.parent().format_for_upperright_table(my_network.communities, 'NodeID', 'CommunityID')
-            elif accepted_mode == 4:
                 my_network.show_identity_network(geometric=geo, directory = directory)
             
             self.accept()
@@ -5836,6 +5957,9 @@ class PartitionDialog(QDialog):
         self.stats.setChecked(True)
         layout.addRow("Community Stats:", self.stats)
 
+        self.seed = QLineEdit("")
+        layout.addRow("Seed (int):", self.seed)
+
         # Add Run button
         run_button = QPushButton("Partition")
         run_button.clicked.connect(self.partition)
@@ -5847,10 +5971,16 @@ class PartitionDialog(QDialog):
         weighted = self.weighted.isChecked()
         dostats = self.stats.isChecked()
 
+        try:
+            seed = int(self.seed.text()) if self.seed.text() else None
+        except:
+            seed = None
+
+
         my_network.communities = None
 
         try:
-            stats = my_network.community_partition(weighted = weighted, style = accepted_mode, dostats = dostats)
+            stats = my_network.community_partition(weighted = weighted, style = accepted_mode, dostats = dostats, seed = seed)
             print(f"Discovered communities: {my_network.communities}")
 
             self.parent().format_for_upperright_table(my_network.communities, 'NodeID', 'CommunityID', title = 'Community Partition')
@@ -6565,21 +6695,21 @@ class MotherDialog(QDialog):
 
             overlay = self.overlay.isChecked()
 
+            if my_network.communities is None:
+                self.parent().show_partition_dialog()
+                if my_network.communities is None:
+                    return
+
             if my_network.node_centroids is None:
                 self.parent().show_centroid_dialog()
                 if my_network.node_centroids is None:
                     print("Error finding centroids")
                     overlay = False
 
-            if my_network.communities is None:
-                self.parent().show_partition_dialog()
-                if my_network.communities is None:
-                    return
-
             if not overlay:
-                G = my_network.isolate_mothers(self, louvain = my_network.communities, ret_nodes = True, called = True)
+                G = my_network.isolate_mothers(self, ret_nodes = True, called = True)
             else:
-                G, result = my_network.isolate_mothers(self, louvain = my_network.communities, ret_nodes = False, called = True)
+                G, result = my_network.isolate_mothers(self, ret_nodes = False, called = True)
                 self.parent().load_channel(2, channel_data = result, data = True)
 
             degree_dict = {}
@@ -7513,31 +7643,41 @@ class MachineWindow(QMainWindow):
 
     def save_model(self):
 
-        filename, _ = QFileDialog.getSaveFileName(
-            self,
-            f"Save Model As",
-            "",  # Default directory
-            "numpy data (*.npz);;All Files (*)"  # File type filter
-        )
-        
-        if filename:  # Only proceed if user didn't cancel
-            # If user didn't type an extension, add .tif
-            if not filename.endswith(('.npz')):
-                filename += '.npz'
+        try:
 
-        self.segmenter.save_model(filename, self.parent().channel_data[2])
+            filename, _ = QFileDialog.getSaveFileName(
+                self,
+                f"Save Model As",
+                "",  # Default directory
+                "numpy data (*.npz);;All Files (*)"  # File type filter
+            )
+            
+            if filename:  # Only proceed if user didn't cancel
+                # If user didn't type an extension, add .tif
+                if not filename.endswith(('.npz')):
+                    filename += '.npz'
+
+            self.segmenter.save_model(filename, self.parent().channel_data[2])
+
+        except Exception as e:
+            print(f"Error saving model: {e}")
 
     def load_model(self):
 
-        filename, _ = QFileDialog.getOpenFileName(
-            self,
-            f"Load Model",
-            "",
-            "numpy data (*.npz)"
-        )
+        try:
 
-        self.segmenter.load_model(filename)
-        self.trained = True
+            filename, _ = QFileDialog.getOpenFileName(
+                self,
+                f"Load Model",
+                "",
+                "numpy data (*.npz)"
+            )
+
+            self.segmenter.load_model(filename)
+            self.trained = True
+
+        except Exception as e:
+            print(f"Error loading model: {e}")
 
     def toggle_two(self):
         if self.two.isChecked():
@@ -7791,8 +7931,6 @@ class MachineWindow(QMainWindow):
                 traceback.print_exc()
 
     def segmentation_finished(self):
-        if not self.use_two:
-            print("Segmentation completed")
         
         current_xlim = self.parent().ax.get_xlim()
         current_ylim = self.parent().ax.get_ylim()
@@ -7994,7 +8132,7 @@ class SegmentationWorker(QThread):
                         current_time - self.last_update >= self.update_interval):
                         self.chunk_processed.emit()
                         self.chunks_since_update = 0
-                        self.last_update = current_time
+                        self.last_update = current_time 
             
             self.finished.emit()
             
@@ -9132,65 +9270,110 @@ class CentroidNodeDialog(QDialog):
 
 class GenNodesDialog(QDialog):
 
-    def __init__(self, parent=None, down_factor = None, called = False):
+    def __init__(self, parent=None, down_factor=None, called=False):
         super().__init__(parent)
         self.setWindowTitle("Create Nodes from Edge Vertices")
         self.setModal(True)
-
-        layout = QFormLayout(self)
+        
+        # Main layout
+        main_layout = QVBoxLayout(self)
         self.called = called
-
-        #self.directory = QLineEdit()
-        #self.directory.setPlaceholderText("Leave empty to save in active dir")
-        #layout.addRow("Output Directory:", self.directory)
-
+        
+        # Set down_factor and cubic
         if not down_factor:
             down_factor = None
+        
         if down_factor is None:
+            # --- Processing Options Group ---
+            process_group = QGroupBox("Processing Options")
+            process_layout = QGridLayout()
+            
+            # Downsample factor
             self.down_factor = QLineEdit("0")
-            layout.addRow("Downsample Factor (Speeds up calculation at the cost of fidelity):", self.down_factor)
+            process_layout.addWidget(QLabel("Downsample Factor (Speeds up calculation at the cost of fidelity):"), 0, 0)
+            process_layout.addWidget(self.down_factor, 0, 1)
+            
+            # Cubic checkbox
             self.cubic = QPushButton("Cubic Downsample")
             self.cubic.setCheckable(True)
             self.cubic.setChecked(False)
-            layout.addRow("(if downsampling): Use cubic downsample? (Slower but can preserve structure better)", self.cubic)
+            process_layout.addWidget(QLabel("Use cubic downsample? (Slower but preserves structure better):"), 1, 0)
+            process_layout.addWidget(self.cubic, 1, 1)
+            
+            # Fast dilation checkbox
+            self.fast_dil = QPushButton("Fast-Dil")
+            self.fast_dil.setCheckable(True)
+            self.fast_dil.setChecked(True)
+            process_layout.addWidget(QLabel("Use Fast Dilation (Higher speed, less accurate with large search regions):"), 2, 0)
+            process_layout.addWidget(self.fast_dil, 2, 1)
+            
+            process_group.setLayout(process_layout)
+            main_layout.addWidget(process_group)
         else:
             self.down_factor = down_factor[0]
             self.cubic = down_factor[1]
-
+            
+            # Fast dilation checkbox (still needed even if down_factor is provided)
+            process_group = QGroupBox("Processing Options")
+            process_layout = QGridLayout()
+            
+            self.fast_dil = QPushButton("Fast-Dil")
+            self.fast_dil.setCheckable(True)
+            self.fast_dil.setChecked(True)
+            process_layout.addWidget(QLabel("Use Fast Dilation (Higher speed, less accurate with large search regions):"), 0, 0)
+            process_layout.addWidget(self.fast_dil, 0, 1)
+            
+            process_group.setLayout(process_layout)
+            main_layout.addWidget(process_group)
+        
+        # --- Recommended Corrections Group ---
+        rec_group = QGroupBox("Recommended Corrections")
+        rec_layout = QGridLayout()
+        
+        # Branch removal
         self.branch_removal = QLineEdit("0")
-        layout.addRow("Skeleton Voxel Branch Length to Remove (int) (Compensates for spines off medial axis):", self.branch_removal)
-
-        self.max_vol = QLineEdit("0")
-        layout.addRow("Maximum Voxel Volume of Vertices to Retain (int - Compensates for skeleton looping - occurs before any node merging - the smallest objects are always 27 voxels):", self.max_vol)
-
-        self.comp_dil = QLineEdit("0")
-        layout.addRow("Voxel distance to merge nearby nodes (Int - compensates for multi-branch identification along thick branch regions):", self.comp_dil)
-
-        self.fast_dil = QPushButton("Fast-Dil")
-        self.fast_dil.setCheckable(True)
-        self.fast_dil.setChecked(True)
-        layout.addRow("(If using above) Use Fast Dilation (Higher speed, less accurate with search regions much larger than nodes):", self.fast_dil)
-
-        # auto checkbox (default True)
+        rec_layout.addWidget(QLabel("Skeleton Voxel Branch Length to Remove (Compensates for spines):"), 0, 0)
+        rec_layout.addWidget(self.branch_removal, 0, 1)
+        
+        # Auto checkbox
         self.auto = QPushButton("Auto")
         self.auto.setCheckable(True)
         self.auto.setChecked(True)
-        layout.addRow("Attempt to Auto Correct Skeleton Looping:", self.auto)
-
-
-        # retain checkbox (default True)
+        rec_layout.addWidget(QLabel("Attempt to Auto Correct Skeleton Looping:"), 1, 0)
+        rec_layout.addWidget(self.auto, 1, 1)
+        
+        rec_group.setLayout(rec_layout)
+        main_layout.addWidget(rec_group)
+        
+        # --- Optional Corrections Group ---
+        opt_group = QGroupBox("Optional Corrections")
+        opt_layout = QGridLayout()
+        
+        # Max volume
+        self.max_vol = QLineEdit("0")
+        opt_layout.addWidget(QLabel("Maximum Voxel Volume to Retain (Compensates for skeleton looping):"), 0, 0)
+        opt_layout.addWidget(self.max_vol, 0, 1)
+        
+        # Component dilation
+        self.comp_dil = QLineEdit("0")
+        opt_layout.addWidget(QLabel("Voxel distance to merge nearby nodes (Compensates for multi-branch regions):"), 1, 0)
+        opt_layout.addWidget(self.comp_dil, 1, 1)
+        
+        opt_group.setLayout(opt_layout)
+        main_layout.addWidget(opt_group)
+        
+        # Set retain variable but don't add to layout
         if not called:
             self.retain = QPushButton("Retain")
             self.retain.setCheckable(True)
             self.retain.setChecked(True)
-            #layout.addRow("Retain Original Edges? (Will be moved to overlay 2):", self.retain)
         else:
             self.retain = False
-
+        
         # Add Run button
         run_button = QPushButton("Run Node Generation")
         run_button.clicked.connect(self.run_gennodes)
-        layout.addRow(run_button)
+        main_layout.addWidget(run_button)
 
     def run_gennodes(self):
 
@@ -9311,49 +9494,84 @@ class BranchDialog(QDialog):
         super().__init__(parent)
         self.setWindowTitle("Label Branches (of edges)")
         self.setModal(True)
-
-        layout = QFormLayout(self)
-
-        # Nodes checkbox (default True)
-        self.nodes = QPushButton("Generate Nodes")
-        self.nodes.setCheckable(True)
-        self.nodes.setChecked(True)
-        layout.addRow("Generate nodes from edges? (Skip if already completed - presumes your edge skeleton from generate nodes is in Edges and that your original Edges are in Overlay 2):", self.nodes)
-
-        # GPU checkbox (default False)
-        self.GPU = QPushButton("GPU")
-        self.GPU.setCheckable(True)
-        self.GPU.setChecked(False)
-        layout.addRow("Use GPU (Note this may need to temporarily downsample your large images which may simplify outputs - Only memory errors but not permission errors for accessing VRAM are handled by default - CPU will never try to downsample):", self.GPU)
-
-        # Branch Fix checkbox (default False)
+        
+        # Main layout
+        main_layout = QVBoxLayout(self)
+        
+        # --- Correction Options Group ---
+        correction_group = QGroupBox("Correction Options")
+        correction_layout = QGridLayout()
+        
+        # Branch Fix checkbox
         self.fix = QPushButton("Auto-Correct Branches")
         self.fix.setCheckable(True)
         self.fix.setChecked(False)
-        layout.addRow("Attempt to auto-correct branch labels:", self.fix)
-
+        correction_layout.addWidget(QLabel("Attempt to auto-correct branch labels:"), 0, 0)
+        correction_layout.addWidget(self.fix, 0, 1)
+        
+        # Fix value
         self.fix_val = QLineEdit('4')
-        layout.addRow("If checked above - Avg Degree of Nearby Branch Communities to Merge (Attempt to fix branch labeling - try 4 to 6 to start or leave empty):", self.fix_val)
-
+        correction_layout.addWidget(QLabel("Avg Degree of Nearby Branch Communities to Merge (4-6 recommended):"), 1, 0)
+        correction_layout.addWidget(self.fix_val, 1, 1)
+        
+        # Seed
+        self.seed = QLineEdit('')
+        correction_layout.addWidget(QLabel("Random seed for auto correction (int - optional):"), 2, 0)
+        correction_layout.addWidget(self.seed, 2, 1)
+        
+        correction_group.setLayout(correction_layout)
+        main_layout.addWidget(correction_group)
+        
+        # --- Processing Options Group ---
+        processing_group = QGroupBox("Processing Options")
+        processing_layout = QGridLayout()
+        
+        # Downsample factor
         self.down_factor = QLineEdit("0")
-        layout.addRow("Internal downsample (will have to recompute nodes)?:", self.down_factor)
-
-        # cubic checkbox (default False)
+        processing_layout.addWidget(QLabel("Internal downsample factor (will recompute nodes):"), 0, 0)
+        processing_layout.addWidget(self.down_factor, 0, 1)
+        
+        # Cubic checkbox
         self.cubic = QPushButton("Cubic Downsample")
         self.cubic.setCheckable(True)
         self.cubic.setChecked(False)
-        layout.addRow("(if downsampling): Use cubic downsample? (Slower but can preserve structure better)", self.cubic)
-
+        processing_layout.addWidget(QLabel("Use cubic downsample? (Slower but preserves structure better):"), 1, 0)
+        processing_layout.addWidget(self.cubic, 1, 1)
+        
+        processing_group.setLayout(processing_layout)
+        main_layout.addWidget(processing_group)
+        
+        # --- Misc Options Group ---
+        misc_group = QGroupBox("Misc Options")
+        misc_layout = QGridLayout()
+        
+        # Nodes checkbox
+        self.nodes = QPushButton("Generate Nodes")
+        self.nodes.setCheckable(True)
+        self.nodes.setChecked(True)
+        misc_layout.addWidget(QLabel("Generate nodes from edges? (Skip if already completed):"), 0, 0)
+        misc_layout.addWidget(self.nodes, 0, 1)
+        
+        # GPU checkbox
+        self.GPU = QPushButton("GPU")
+        self.GPU.setCheckable(True)
+        self.GPU.setChecked(False)
+        misc_layout.addWidget(QLabel("Use GPU (May downsample large images):"), 1, 0)
+        misc_layout.addWidget(self.GPU, 1, 1)
+        
+        misc_group.setLayout(misc_layout)
+        main_layout.addWidget(misc_group)
+        
         # Add Run button
         run_button = QPushButton("Run Branch Label")
         run_button.clicked.connect(self.branch_label)
-        layout.addRow(run_button)
+        main_layout.addWidget(run_button)
 
-        if self.parent().channel_data[0] is not None:
+        if self.parent().channel_data[0] is not None or self.parent().channel_data[3] is not None:
             QMessageBox.critical(
                 self,
                 "Alert",
-                "The nodes channel will be intermittently overwritten when running this method"
+                "The nodes and overlay 2 channels will be intermittently overwritten when running this method"
             )
 
     def branch_label(self):
@@ -9370,8 +9588,7 @@ class BranchDialog(QDialog):
             cubic = self.cubic.isChecked()
             fix = self.fix.isChecked()
             fix_val = float(self.fix_val.text()) if self.fix_val.text() else None
-
-
+            seed = int(self.seed.text()) if self.seed.text() else None
 
             original_shape = my_network.edges.shape
             original_array = copy.deepcopy(my_network.edges)
@@ -9392,7 +9609,7 @@ class BranchDialog(QDialog):
 
                     temp_network.morph_proximity(search = [3,3], fastdil = True) #Detect network of nearby branches
 
-                    temp_network.community_partition(weighted = False, style = 1, dostats = False) #Find communities with louvain, unweighted params
+                    temp_network.community_partition(weighted = False, style = 1, dostats = False, seed = seed) #Find communities with louvain, unweighted params
 
                     targs = n3d.fix_branches(temp_network.nodes, temp_network.network, temp_network.communities, fix_val)
 

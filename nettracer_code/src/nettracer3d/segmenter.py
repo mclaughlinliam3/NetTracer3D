@@ -1188,24 +1188,12 @@ class InteractiveSegmenter:
 
         if self.current_speed != speed:
             self.feature_cache = None
-            if use_gpu:
-                try:
-                    self.model = cuRandomForestClassifier(
-                        n_estimators=100,
-                        max_depth=None
-                    )
-                except:
-                    self.model = RandomForestClassifier(
-                        n_estimators=100,
-                        n_jobs=-1,
-                        max_depth=None
-                    )
-            else:
-                self.model = RandomForestClassifier(
-                    n_estimators=100,
-                    n_jobs=-1,
-                    max_depth=None
-                )
+
+            self.model = RandomForestClassifier(
+                n_estimators=100,
+                n_jobs=-1,
+                max_depth=None
+            )
 
 
         if use_two:
@@ -1272,7 +1260,7 @@ class InteractiveSegmenter:
                         background_features.append(feature_vector)
 
 
-        elif mem_lock: #Forces ram efficiency
+        else: #Forces ram efficiency
 
             box_size = self.master_chunk
 
@@ -1348,32 +1336,6 @@ class InteractiveSegmenter:
                 for local_z, local_y, local_x in local_back_coords:
                     feature = subarray_features[local_z, local_y, local_x]
                     background_features.append(feature)
-
-        else:
-
-            self.two_slices = []
-
-            if self.use_two: #Clarifies if we need to redo feature cache for 3D
-
-                self.feature_cache = None
-                self.use_two = False
-
-            if self.feature_cache is None:
-                with self.lock:
-                    if self.feature_cache is None and speed:
-                        if use_gpu:
-                            self.feature_cache = self.compute_feature_maps()
-                        else:
-                            self.feature_cache = self.compute_feature_maps_cpu()
-
-                    elif self.feature_cache is None and not speed:
-                        if use_gpu:
-
-                            self.feature_cache = self.compute_deep_feature_maps()
-                        else:
-                            self.feature_cache = self.compute_deep_feature_maps_cpu()
-
-
             try:
                 # Get foreground coordinates and features
                 z_fore, y_fore, x_fore = np.where(foreground_array == 1)
@@ -1485,20 +1447,11 @@ class InteractiveSegmenter:
         if self._currently_segmenting is not None:
             return
 
-        #with self.lock <- cant remember why this was here
         if speed:
-
-            if self.mem_lock:
-                output = self.compute_feature_maps_cpu_2d_parallel(z = z)
-            else:
-                output = self.compute_feature_maps_cpu_2d(z = z)
+            output = self.compute_feature_maps_cpu_2d_parallel(z = z)
 
         elif not speed:
-
-            if self.mem_lock:
-                output = self.compute_deep_feature_maps_cpu_2d_parallel(z = z)
-            else:
-                output = self.compute_deep_feature_maps_cpu_2d(z = z)
+            output = self.compute_deep_feature_maps_cpu_2d_parallel(z = z)
 
         return output
 

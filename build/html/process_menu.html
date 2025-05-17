@@ -6,14 +6,14 @@
   <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
 
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>All Process Menu Options &mdash; NetTracer3D 0.7.4 documentation</title>
+  <title>All Process Menu Options &mdash; NetTracer3D 0.7.6 documentation</title>
       <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=b86133f3" />
       <link rel="stylesheet" type="text/css" href="_static/css/theme.css?v=e59714d7" />
 
   
       <script src="_static/jquery.js?v=5d32c60e"></script>
       <script src="_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
-      <script src="_static/documentation_options.js?v=020ce317"></script>
+      <script src="_static/documentation_options.js?v=918ced64"></script>
       <script src="_static/doctools.js?v=9bcbadda"></script>
       <script src="_static/sphinx_highlight.js?v=dc90522c"></script>
     <script src="_static/js/theme.js"></script>
@@ -1392,9 +1392,16 @@
 </dl>
 </li>
 <li><dl class="simple">
-<dt>If Checked above - Avg Degree of Nearby Branch Communities to Merge…</dt><dd><ul class="simple">
+<dt>Avg Degree of Nearby Branch Communities to Merge…</dt><dd><ul class="simple">
 <li><p>If param 3 is enabled, this dictates its behavior. Essentially, after the branches are labeled, they will be organized into network communities. Those communities with nodes with many neighbors can be collapsed back to one object. The threshold for average neighbors to collapse the communities is this param.</p></li>
 <li><p>Essentially lower vals are more aggressive and more likely to collapse communities.</p></li>
+</ul>
+</dd>
+</dl>
+</li>
+<li><dl class="simple">
+<dt>Random Seed For Auto Correction…</dt><dd><ul class="simple">
+<li><p>Sets the random seed for the branch grouping method to use (since the starting point effects the outcome). You should use the same seed each time for reproducibility, or vary the seed to see how it effects grouping. Leaving the seed empty will just use the seed of the rand (and numpy random) modules, which is initialized at program start.</p></li>
 </ul>
 </dd>
 </dl>

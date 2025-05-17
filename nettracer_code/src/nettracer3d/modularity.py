@@ -1,5 +1,4 @@
 from networkx.algorithms import community
-from community import community_louvain
 import pandas as pd
 import networkx as nx
 import matplotlib.pyplot as plt
@@ -104,77 +103,8 @@ def read_excel_to_lists(file_path, sheet_name=0):
 
 
 
-
-def louvain_mod_solo(G, edge_weights = None, identifier = None, directory_path = None):
-
-    if type(G) == str:
-        G, edge_weights = weighted_network(G)
-
-    if edge_weights is None:
-        edge_weights = get_edge_weights(G)
-
-    # Assuming G is your NetworkX graph
-    # Louvain community detection
-    partition = community_louvain.best_partition(G)
-
-    # Print modularity
-    modularity = community_louvain.modularity(partition, G)
-    number_of_nodes = G.number_of_nodes()
-    print("Modularity:", modularity)
-    num_components = nx.number_connected_components(G)
-
-    if directory_path:
-        with open(f'{directory_path}/{identifier} network stats.txt', 'a') as f:
-            f.write(f'\nlouvain full graph modularity: {modularity} constructed from {num_components} components containing {number_of_nodes} nodes')
-        f.close()
-
-    louvain_graph(edge_weights, identifier, directory_path)
-
-def louvain_mod(G, edge_weights=None, identifier=None, geometric = False, geo_info = None, directory = None):
-
-    if type(G) == list:
-        num_edge = len(G[0])
-    else:
-        num_edge = None
-
-
-    if type(G) == str or type(G) == list:
-        G, edge_weights = network_analysis.weighted_network(G)
-
-    if edge_weights is None:
-        edge_weights = get_edge_weights(G)
-
-    connected_components = list(nx.connected_components(G))
-    num_nodes = float(G.number_of_nodes())
-
-    print("Number of nodes:", num_nodes)
-    print("Number of edges:", num_edge)
-
-    # Calculate the average degree connectivity
-    average_degree_connectivity = nx.average_degree_connectivity(G)
-    print("Average degree connectivity:", average_degree_connectivity)
-
-    # Calculate the average number of edges attached to a node
-    average_edges_per_node = num_nodes/num_edge
-    print("Average edges per node:", average_edges_per_node)
-
-    for i, component in enumerate(connected_components):
-        # Apply the Louvain community detection on the subgraph
-        partition = community_louvain.best_partition(G.subgraph(component))
-    
-        # Calculate modularity
-        modularity = community_louvain.modularity(partition, G.subgraph(component))
-        num_nodes = len(component)
-
-        print(f"Louvain modularity for component with {num_nodes} nodes: {modularity}")
-
-
-    louvain_graph(edge_weights, identifier, directory, geometric, geo_info)
-
 def show_communities_flex(G, master_list, normalized_weights, geo_info = None, geometric=False, directory=None, weighted=True, partition=None, style=0):
-    if partition is None:
-        partition, normalized_weights, _ = community_partition(master_list, weighted=weighted, style=style)
-        print(partition)
+
     if normalized_weights is None:
         G, edge_weights = network_analysis.weighted_network(master_list)
 
@@ -276,13 +206,7 @@ def show_communities_flex(G, master_list, normalized_weights, geo_info = None, g
 
 
 
-
-
-
-
-
-
-def community_partition(master_list, weighted = False, style = 0, dostats = True):
+def community_partition(master_list, weighted = False, style = 0, dostats = True, seed = None):
 
     def calculate_network_stats(G, communities):
         """
@@ -392,7 +316,7 @@ def community_partition(master_list, weighted = False, style = 0, dostats = True
         
         return stats
 
-    def calculate_louvain_network_stats(G, partition):
+    def calculate_louvain_network_stats(G, partition, seed):
         """
         Calculate comprehensive network statistics for the graph using Louvain community detection.
         
@@ -410,17 +334,10 @@ def community_partition(master_list, weighted = False, style = 0, dostats = True
         """
         stats = {}
         
-        # Convert partition dict to communities list format
-        communities = []
-        max_community = max(partition.values())
-        for com_id in range(max_community + 1):
-            community_nodes = {node for node, com in partition.items() if com == com_id}
-            if community_nodes:  # Only add non-empty communities
-                communities.append(community_nodes)
         
         try:
             # Overall network modularity using Louvain
-            stats['Modularity Entire Network'] = community_louvain.modularity(partition, G)
+            stats['Modularity Entire Network'] = community.modularity(partition, G)
         except:
             pass
 
@@ -430,8 +347,8 @@ def community_partition(master_list, weighted = False, style = 0, dostats = True
             if len(connected_components) > 1:
                 for i, component in enumerate(connected_components):
                     subgraph = G.subgraph(component)
-                    subgraph_partition = community_louvain.best_partition(subgraph)
-                    modularity = community_louvain.modularity(subgraph_partition, subgraph)
+                    subgraph_partition = nx.community.louvain_communities(G, weight='weight', seed = seed)
+                    modularity = community.modularity(subgraph_partition, subgraph)
                     num_nodes = len(component)
                     stats[f'Modularity of component with {num_nodes} nodes'] = modularity
         except:
@@ -523,7 +440,6 @@ def community_partition(master_list, weighted = False, style = 0, dostats = True
         edge_weights = get_edge_weights(G)
 
     if style == 1 and weighted:
-
         G = nx.Graph()
 
         # Find the maximum and minimum edge weights
@@ -540,33 +456,38 @@ def community_partition(master_list, weighted = False, style = 0, dostats = True
         for edge, normalized_weight in normalized_weights.items():
             G.add_edge(edge[0], edge[1], weight=normalized_weight)
 
-        # Perform Louvain community detection
-        partition = community_louvain.best_partition(G)
+        # Replace Louvain with NetworkX's implementation
+        communities = list(nx.community.louvain_communities(G, weight='weight', seed = seed))
+        
+        # Convert to the same format as community_louvain.best_partition
+        output = {}
+        for i, com in enumerate(communities):
+            for node in com:
+                output[node] = i + 1
 
         if dostats:
+            stats = calculate_louvain_network_stats(G, communities, seed)
 
-            stats = calculate_louvain_network_stats(G, partition)
-
-
-        return partition, normalized_weights, stats
+        return output, normalized_weights, stats
 
     elif style == 1:
-
         edges = list(zip(master_list[0], master_list[1]))
-
         G = nx.Graph()
-
         G.add_edges_from(edges)
 
+        # Replace Louvain with NetworkX's implementation
+        communities = list(nx.community.louvain_communities(G, seed = seed))
 
-        # Perform Louvain community detection
-        partition = community_louvain.best_partition(G)
+        # Convert to the same format as community_louvain.best_partition
+        output = {}
+        for i, com in enumerate(communities):
+            for node in com:
+                output[node] = i + 1
 
         if dostats:
+            stats = calculate_louvain_network_stats(G, communities, seed)
 
-            stats = calculate_louvain_network_stats(G, partition)
-
-        return partition, None, stats
+        return output, None, stats
 
     elif style == 0 and weighted:
 
@@ -585,6 +506,13 @@ def community_partition(master_list, weighted = False, style = 0, dostats = True
         # Add edges to the graph with normalized weights
         for edge, normalized_weight in normalized_weights.items():
             G.add_edge(edge[0], edge[1], weight=normalized_weight)
+
+        if seed is not None:
+            import random
+            import numpy as np
+            # Set seeds
+            random.seed(seed)
+            np.random.seed(seed)
 
         # Detect communities using label propagation
         communities = list(community.label_propagation_communities(G))
@@ -614,6 +542,14 @@ def community_partition(master_list, weighted = False, style = 0, dostats = True
 
 
         # Detect communities using label propagation
+
+        if seed is not None:
+            import random
+            import numpy as np
+            # Set seeds
+            random.seed(seed)
+            np.random.seed(seed)
+
         communities = list(community.label_propagation_communities(G))
         output = {}
         for i, com in enumerate(communities):
@@ -626,127 +562,6 @@ def community_partition(master_list, weighted = False, style = 0, dostats = True
 
         return output, None, stats
 
-
-
-def _louvain_mod_solo(G, edge_weights = None):
-
-
-    if type(G) == str:
-        G, edge_weights = weighted_network(G)
-
-    # Louvain community detection
-    partition = community_louvain.best_partition(G)
-
-    # modularity
-    modularity = community_louvain.modularity(partition, G)
-
-    print(f"Modularity is {modularity}")
-
-    return modularity
-
-def _louvain_mod(G, edge_weights = None):
-
-    if type(G) == str:
-        G, edge_weights = weighted_network(G)
-
-    connected_components = list(nx.connected_components(G))
-    return_dict = {}
-
-    for i, component in enumerate(connected_components):
-        # Apply the Louvain community detection on the subgraph
-        partition = community_louvain.best_partition(G.subgraph(component))
-        
-        # Calculate modularity
-        modularity = community_louvain.modularity(partition, G.subgraph(component))
-        num_nodes = len(component)
-        return_dict[num_nodes] = modularity
-
-        print(f"Louvain modularity for component with {num_nodes} nodes: {modularity}")
-
-    return return_dict
-
-def louvain_graph(edge_weights, identifier, directory_path, geometric, geo_info):
-    G = nx.Graph()
-
-    # Find the maximum and minimum edge weights
-    max_weight = max(weight for edge, weight in edge_weights.items())
-    min_weight = min(weight for edge, weight in edge_weights.items())
-
-    if max_weight > 1:
-        # Normalize edge weights to the range [0.1, 1.0]
-        normalized_weights = {edge: 0.1 + 0.9 * ((weight - min_weight) / (max_weight - min_weight)) for edge, weight in edge_weights.items()}
-    else:
-        normalized_weights = {edge: 0.1 for edge, weight in edge_weights.items()}
-
-    # Add edges to the graph with normalized weights
-    for edge, normalized_weight in normalized_weights.items():
-        G.add_edge(edge[0], edge[1], weight=normalized_weight)
-
-    if geometric:
-        for node in list(G.nodes()):
-            if node not in geo_info[0]:
-                G.remove_node(node)
-                print(f"Removing node {node} from network visualization (no centroid - likely due to downsampling when finding centroids)")
-
-    # Perform Louvain community detection
-    partition = community_louvain.best_partition(G)
-
-    # Invert the partition dictionary to group nodes by their community
-    print(f"louvain_communities_initial: {partition}")
-    communities = {}
-    for node, community_id in partition.items():
-        communities.setdefault(community_id, []).append(node)
-
-    print(f"louvain_communities_after: {partition}")
-
-    # Prepare colors for each community
-    unique_communities = set(partition.values())
-    colors = [plt.cm.jet(i / len(unique_communities)) for i in range(len(unique_communities))]
-
-    if geometric:
-
-        pos, z_pos  = simple_network.geometric_positions(geo_info[0], geo_info[1])
-        #nx.draw(G, pos, with_labels=True, font_color='black', font_weight='bold', node_size = node_sizes_list, node_color = node_color_list, alpha=0.8, font_size = 12)
-
-        # Draw the nodes, coloring them according to their community
-        for community_id, nodes in communities.items():
-            node_sizes_list = [z_pos[node] for node in nodes]
-            nx.draw_networkx_nodes(G, pos, nodelist=nodes, node_color=[colors[community_id]], node_size=node_sizes_list, alpha=0.8)
-
-        # Modify edge drawing to consider normalized weights
-        for edge in G.edges():
-            normalized_weight = G[edge[0]][edge[1]]['weight']
-            
-            # Scale the width based on a constant factor (e.g., 5)
-            nx.draw_networkx_edges(G, pos, edgelist=[edge], width=5 * normalized_weight, edge_color='black')
-
-        # Optionally, draw node labels
-        nx.draw_networkx_labels(G, pos)
-
-
-    else:
-        # Position nodes using the spring layout
-        pos = nx.spring_layout(G)
-
-        # Draw the nodes, coloring them according to their community
-        for community_id, nodes in communities.items():
-            nx.draw_networkx_nodes(G, pos, nodelist=nodes, node_color=[colors[community_id]], node_size=100, alpha=0.8)
-
-        # Modify edge drawing to consider normalized weights
-        for edge in G.edges():
-            normalized_weight = G[edge[0]][edge[1]]['weight']
-            
-            # Scale the width based on a constant factor (e.g., 5)
-            nx.draw_networkx_edges(G, pos, edgelist=[edge], width=5 * normalized_weight, edge_color='black')
-
-        # Optionally, draw node labels
-        nx.draw_networkx_labels(G, pos)
-
-    plt.axis('off')
-    if directory_path is not None:
-        plt.savefig(f'{directory_path}/community_louvain_network_plot.png')
-
-    plt.show()
 
 def create_directory(directory_name):
     try:
@@ -782,43 +597,5 @@ def remove_small_components(G, threshold):
     return G
 
 
-def louvain_analysis_5x(G, excel_file, identifier, directory_path):
-    print("Performing Louvain Community Detection...")
-    df = pd.read_excel(excel_file)
-    G, edge_weights = weighted_network(excel_file)
-    threshold = find_threshold(G)
-    G = remove_small_components(G, threshold)
-    louvain_mod(G, identifier, directory_path)
-    louvain_graph(edge_weights, identifier, directory_path)
-    print("Done")
-
-def louvain_analysis_20x(G, excel_file, identifier, directory_path):
-    print("Performing Louvain Community Detection...")
-    df = pd.read_excel(excel_file)
-    G, edge_weights = weighted_network(excel_file)
-    louvain_mod_20x(G, identifier, directory_path)
-    louvain_graph(edge_weights, identifier, directory_path)
-    print("Done")
-
-
 if __name__ == "__main__":
-    excel_name = input("excel file?: ")
-    is_5x = input("Is 5x? (Type Y for 5x): ")
-    if is_5x == 'Y':
-
-        df = pd.read_excel(excel_name)
-        identifier = "output"
-        directory_path = 'output'
-        create_directory(directory_path)
-        G, edge_weights = weighted_network(excel_name)
-        #threshold = find_threshold(G)
-        #G = remove_small_components(G, threshold)
-        louvain_mod_solo(G, edge_weights, identifier, directory_path)
-
-    else:
-        df = pd.read_excel(excel_name)
-        identifier = "output"
-        directory_path = 'output'
-        create_directory(directory_path)
-        G, edge_weights = weighted_network(excel_name)
-        louvain_mod(G, edge_weights, identifier, directory_path)
+    pass

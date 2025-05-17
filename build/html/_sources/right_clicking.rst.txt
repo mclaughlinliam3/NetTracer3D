@@ -71,6 +71,7 @@ Clicking 'Selection' reveals the following options. (Note this option only appea
     * For all nodes (or edges) that are selected, this option will split any labeled objects that are not touching in space into distinct objects.
     * Note that this option will not automatically update the corresponding network, as it is hard to track what parts of the new objects go where in the network, so please run this before computing the network. 
     * This current implementation of this method may be slow on larger images when many nodes are selected.
+    * Note that running this method may likely disrupt the network labels for nodes and require the network to be recomputed, so it is better as a pre-caclulation tool.
 3. 'Delete Selection'
     * Removes any selected nodes (or edges) from both the image and the corresponding network property/table.
 4. 'Link Nodes'

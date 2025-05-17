@@ -6,14 +6,14 @@
   <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
 
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Changelog &mdash; NetTracer3D 0.7.4 documentation</title>
+  <title>Changelog &mdash; NetTracer3D 0.7.6 documentation</title>
       <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=b86133f3" />
       <link rel="stylesheet" type="text/css" href="_static/css/theme.css?v=e59714d7" />
 
   
       <script src="_static/jquery.js?v=5d32c60e"></script>
       <script src="_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
-      <script src="_static/documentation_options.js?v=020ce317"></script>
+      <script src="_static/documentation_options.js?v=918ced64"></script>
       <script src="_static/doctools.js?v=9bcbadda"></script>
       <script src="_static/sphinx_highlight.js?v=dc90522c"></script>
     <script src="_static/js/theme.js"></script>
@@ -148,6 +148,23 @@
 <li><p>The segmenter also now no longer leaks any memory.</p></li>
 </ul>
 </div></blockquote>
+<p>Version 0.7.5 Updates</p>
+<blockquote>
+<div><ul class="simple">
+<li><p>Bug fixes</p></li>
+<li><p>The segmenter GPU option has been updated to include 2D segmentation and to also be able to load/save models.</p></li>
+<li><p>A new function (Analyze -&gt; Stats -&gt; Calculate Generic Network Histograms has been added (gives a few histograms about the network and their corresponding tables. Previously stats mostly gave averages).</p></li>
+<li><p>The function ‘Analyze -&gt; Data/Overlays -&gt; Get Hub Information’ now looks for the upper hubs unique to each separate network component. It will also ignore smaller components that have too few nodes to be reasonably considered having hubs relative to the threshold the user sets.</p></li>
+<li><p>The function to split non-connected nodes has been improved a bit (its faster albeit still slowish - its a tough operation)</p></li>
+<li><p>Removed python-louvain dependence, now uses networkx for Louvain partitioning. (On top of this, now the user can set the random seed they desire for partitioning for reproducibility purposes).</p></li>
+</ul>
+</div></blockquote>
+<dl class="simple">
+<dt>Version 0.7.6 Updates</dt><dd><ul class="simple">
+<li><p>Bug Fixes</p></li>
+</ul>
+</dd>
+</dl>
 </section>
 
 

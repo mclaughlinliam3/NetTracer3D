@@ -6,14 +6,14 @@
   <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
 
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Right Clicking - All Options Available by Right Clicking in the GUI &mdash; NetTracer3D 0.7.4 documentation</title>
+  <title>Right Clicking - All Options Available by Right Clicking in the GUI &mdash; NetTracer3D 0.7.6 documentation</title>
       <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=b86133f3" />
       <link rel="stylesheet" type="text/css" href="_static/css/theme.css?v=e59714d7" />
 
   
       <script src="_static/jquery.js?v=5d32c60e"></script>
       <script src="_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
-      <script src="_static/documentation_options.js?v=020ce317"></script>
+      <script src="_static/documentation_options.js?v=918ced64"></script>
       <script src="_static/doctools.js?v=9bcbadda"></script>
       <script src="_static/sphinx_highlight.js?v=dc90522c"></script>
     <script src="_static/js/theme.js"></script>
@@ -249,6 +249,7 @@ These functions will only work correctly if the image data in the Nodes channel 
 <li><p>For all nodes (or edges) that are selected, this option will split any labeled objects that are not touching in space into distinct objects.</p></li>
 <li><p>Note that this option will not automatically update the corresponding network, as it is hard to track what parts of the new objects go where in the network, so please run this before computing the network.</p></li>
 <li><p>This current implementation of this method may be slow on larger images when many nodes are selected.</p></li>
+<li><p>Note that running this method may likely disrupt the network labels for nodes and require the network to be recomputed, so it is better as a pre-caclulation tool.</p></li>
 </ul>
 </dd>
 </dl>

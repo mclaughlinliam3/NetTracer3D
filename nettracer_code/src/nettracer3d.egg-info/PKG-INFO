@@ -1,6 +1,6 @@
 Metadata-Version: 2.4
 Name: nettracer3d
-Version: 0.7.4
+Version: 0.7.6
 Summary: Scripts for intializing and analyzing networks from segmentations of three dimensional images.
 Author-email: Liam McLaughlin <liamm@wustl.edu>
 Project-URL: Documentation, https://nettracer3d.readthedocs.io/en/latest/
@@ -22,7 +22,6 @@ Requires-Dist: opencv-python-headless
 Requires-Dist: openpyxl
 Requires-Dist: pandas
 Requires-Dist: napari
-Requires-Dist: python-louvain
 Requires-Dist: tifffile
 Requires-Dist: qtrangeslider
 Requires-Dist: PyQt6
@@ -73,8 +72,6 @@ NetTracer3D is free to use/fork for academic/nonprofit use so long as citation i
 
 NetTracer3D was developed by Liam McLaughlin while working under Dr. Sanjay Jain at Washington University School of Medicine.
 
--- Version 0.7.4 Updates -- 
+-- Version 0.7.6 Updates -- 
 
-	* Bug fixes
-	* The segmenter now has a GPU option that actually works quite a bit faster! Only available with CUDA toolkit and cupy.
-	* The segmenter also now no longer leaks any memory.
+	* Bug Fixes

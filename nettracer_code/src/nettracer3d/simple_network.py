@@ -119,109 +119,6 @@ def geometric_positions(centroids, shape):
     return xy_pos, z_pos
 
 
-def show_community_network(excel_file_path, geometric = False, geo_info = None, directory = None):
-
-    if type(excel_file_path) == str:
-        master_list = read_excel_to_lists(excel_file_path)
-    else:
-        master_list = excel_file_path
-
-    edges = list(zip(master_list[0], master_list[1]))
-
-    # Create a graph
-    G = nx.Graph()
-
-    # Add edges from the DataFrame
-    G.add_edges_from(edges)
-
-    # Print basic information about the graph
-    num_nodes = G.number_of_nodes()
-    num_edges = G.number_of_edges()
-
-    print("Number of nodes:", num_nodes)
-    print("Number of edges:", num_edges)
-
-    # Calculate the average degree connectivity
-    average_degree_connectivity = nx.average_degree_connectivity(G)
-    print("Average degree connectivity:", average_degree_connectivity)
-
-    # Calculate the average number of edges attached to a node
-    average_edges_per_node = num_nodes/num_edges
-    print("Average edges per node:", average_edges_per_node)
-
-    # Calculate and display modularity for each connected component
-    connected_components = list(nx.connected_components(G))
-    for i, component in enumerate(connected_components):
-        subgraph = G.subgraph(component)
-        component_communities = list(community.label_propagation_communities(subgraph))
-        modularity = community.modularity(subgraph, component_communities)
-        print(f"Label propogation modularity for component with {len(component)} nodes: {modularity}")
-
-    # Visualize the graph with nodes colored by community
-    pos = nx.spring_layout(G)
-
-    # Detect communities using label propagation
-    communities = list(community.label_propagation_communities(G))
-
-    print(f"label prop communities: {communities}")
-
-    # Assign a color to each node based on its community
-    node_colors = {}
-    for i, community_nodes in enumerate(communities):
-        color = mcolors.to_hex(plt.cm.tab10(i / len(communities))[:3])
-        for node in community_nodes:
-            node_colors[node] = color
-
-    if geometric:
-        for node in list(G.nodes()):
-            if node not in geo_info[0]:
-                G.remove_node(node)
-                print(f"Removing node {node} from network visualization (no centroid - likely due to downsampling when finding centroids)")
-
-        pos, z_pos  = geometric_positions(geo_info[0], geo_info[1])
-        node_sizes_list = [z_pos[node] for node in G.nodes()]
-        node_color_list = [node_colors[node] for node in G.nodes()]
-        nx.draw(G, pos, with_labels=True, font_color='black', font_weight='bold', node_size = node_sizes_list, node_color = node_color_list, alpha=0.8, font_size = 12)
-    else:
-        # Get color list for nodes
-        node_color_list = [node_colors[node] for node in G.nodes()]
-        # Draw the graph with node colors
-        nx.draw(G, pos, with_labels=True, font_color='black', font_weight='bold', node_size=100, node_color = node_color_list, alpha = 0.8)
-
-    if directory is not None:
-        plt.savefig(f'{directory}/community_label_propogation_network_plot.png')
-
-    plt.show()
-
-
-def modularity(G, solo_mod):
-
-    if not solo_mod:
-
-        # Calculate and display modularity for each connected component
-        return_dict = {}
-        connected_components = list(nx.connected_components(G))
-        for i, component in enumerate(connected_components):
-            subgraph = G.subgraph(component)
-            component_communities = list(community.label_propagation_communities(subgraph))
-            modularity = community.modularity(subgraph, component_communities)
-            print(f"Label propogation modularity for component with {len(component)} nodes: {modularity}")
-            return_dict[len(component)] = modularity
-
-        return return_dict
-
-    else:
-        # Step 1: Detect communities using label propagation
-        communities = list(community.label_propagation_communities(G))
-
-        # Step 2: Calculate modularity
-        modularity = community.modularity(G, communities)
-
-        print(f"Modularity of network is {modularity}")
-
-        return modularity
-
-
 def show_simple_network(excel_file_path, geometric = False, geo_info = None, directory = None):
 
     if type(excel_file_path) == str:
@@ -248,7 +145,7 @@ def show_simple_network(excel_file_path, geometric = False, geo_info = None, dir
         nx.draw(G, pos, with_labels=True, font_color='black', font_weight='bold', node_size= node_sizes_list, alpha=0.8, font_size = 12)
     else:
         # Visualize the graph with different edge colors for each community
-        pos = nx.spring_layout(G)
+        pos = nx.spring_layout(G, iterations = 15)
         nx.draw(G, pos, with_labels=True, font_color='red', font_weight='bold', node_size=10)
 
     if directory is not None:
@@ -372,49 +269,4 @@ def show_identity_network(excel_file_path, node_identities, geometric=False, geo
 
 if __name__ == "__main__":
 
-    # Read the Excel file into a pandas DataFrame
-    excel_file_path = input("Excel file?: ")
-
-    master_list = read_excel_to_lists(excel_file_path)
-
-    edges = zip(master_list[0], master_list[1])
-
-    #df = pd.read_excel(excel_file_path)
-
-    # Create a graph
-    G = nx.Graph()
-
-    # Add edges from the DataFrame
-    #edges = df.values  # Assuming the columns are named "Node1" and "Node2"
-    G.add_edges_from(edges)
-
-    # Print basic information about the graph
-    print("Number of nodes:", G.number_of_nodes())
-    print("Number of edges:", G.number_of_edges())
-
-    # Calculate the average degree connectivity
-    #average_degree_connectivity = nx.average_degree_connectivity(G)
-    #print("Average degree connectivity:", average_degree_connectivity)
-
-    # Calculate the average number of edges attached to a node
-    #average_edges_per_node = sum(k * v for k, v in average_degree_connectivity.items()) / G.number_of_nodes()
-    #print("Average edges per node:", average_edges_per_node)
-
-    # Visualize the graph with different edge colors for each community
-    pos = nx.spring_layout(G)
-    nx.draw(G, pos, with_labels=True, font_color='red', font_weight='bold', node_size=10)
-
-    #connected_components = list(nx.connected_components(G))
-    #for i, component in enumerate(connected_components):
-        #communities = community.label_propagation_communities(G.subgraph(component))
-        
-        # Assign a different color to each community
-        #colors = [mcolors.to_hex(plt.cm.tab10(i / len(connected_components))[:3]) for _ in range(len(component))]
-        
-        #nx.draw_networkx_edges(G, pos, edgelist=G.subgraph(component).edges(), edge_color=colors)
-
-        #num_nodes = len(component)
-        #modularity = community.modularity(G.subgraph(component), communities)
-        #print(f"Modularity for component with {num_nodes} nodes:", modularity)
-
-    plt.show()
+    pass
