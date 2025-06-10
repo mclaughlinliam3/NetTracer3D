@@ -6,14 +6,14 @@
   <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
 
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>All Analyze Menu Options &mdash; NetTracer3D 0.7.6 documentation</title>
+  <title>All Analyze Menu Options &mdash; NetTracer3D 0.7.8 documentation</title>
       <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=b86133f3" />
       <link rel="stylesheet" type="text/css" href="_static/css/theme.css?v=e59714d7" />
 
   
       <script src="_static/jquery.js?v=5d32c60e"></script>
       <script src="_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
-      <script src="_static/documentation_options.js?v=918ced64"></script>
+      <script src="_static/documentation_options.js?v=ddeecabf"></script>
       <script src="_static/doctools.js?v=9bcbadda"></script>
       <script src="_static/sphinx_highlight.js?v=dc90522c"></script>
     <script src="_static/js/theme.js"></script>
@@ -49,6 +49,7 @@
 <li class="toctree-l1"><a class="reference internal" href="quickstart.html">Quickstart - Segmenting Data and Generating Networks</a></li>
 <li class="toctree-l1"><a class="reference internal" href="branches.html">Labeling Branches and Branch Networks</a></li>
 <li class="toctree-l1"><a class="reference internal" href="properties.html">Properties of a Network3D Object</a></li>
+<li class="toctree-l1"><a class="reference internal" href="excel_helper.html">Using the Spreadsheet Loader</a></li>
 </ul>
 <p class="caption" role="heading"><span class="caption-text">Detailed Function Guide:</span></p>
 <ul class="current">
@@ -59,65 +60,81 @@
 <li class="toctree-l3"><a class="reference internal" href="#parameter-explanations">Parameter Explanations</a></li>
 </ul>
 </li>
+<li class="toctree-l2"><a class="reference internal" href="#analyze-network-generic-network-report">‘Analyze -&gt; Network -&gt; Generic Network Report’</a></li>
 <li class="toctree-l2"><a class="reference internal" href="#analyze-network-community-partition-generic-network-stats">‘Analyze -&gt; Network -&gt; Community Partition + Generic Network Stats’</a><ul>
 <li class="toctree-l3"><a class="reference internal" href="#id1">Parameter Explanations</a></li>
 </ul>
 </li>
-<li class="toctree-l2"><a class="reference internal" href="#analyze-network-identity-makeup-of-network">‘Analyze -&gt; Network -&gt; Identity Makeup of Network…’</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="#analyze-network-identity-makeup-of-network-communities-and-umap">‘Analyze -&gt; Network -&gt; Identity Makeup of Network Communities (And UMAP)’</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#id2">Parameter Explanations</a></li>
 <li class="toctree-l3"><a class="reference internal" href="#algorithm-explanation">Algorithm Explanation</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="#analyze-network-convert-network-communities-into-neighborhoods">‘Analyze -&gt; Network -&gt; Convert Network Communities Into Neighborhoods’</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#id3">Parameter Explanations</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#id4">Algorithm Explanation</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="#analyze-network-create-communities-based-on-cuboidal-proximity-cells">‘Analyze -&gt; Network -&gt; Create Communities Based on Cuboidal Proximity Cells?’</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#id5">Parameter Explanations</a></li>
 </ul>
 </li>
 <li class="toctree-l2"><a class="reference internal" href="#analyze-stats-calculate-generic-network-stats">‘Analyze -&gt; Stats -&gt; Calculate Generic Network Stats’</a></li>
 <li class="toctree-l2"><a class="reference internal" href="#analyze-stats-calculate-generic-network-histograms">‘Analyze -&gt; Stats -&gt; Calculate Generic Network Histograms’</a></li>
 <li class="toctree-l2"><a class="reference internal" href="#analyze-stats-radial-distribution-analysis">‘Analyze -&gt; Stats -&gt; Radial Distribution Analysis’</a><ul>
-<li class="toctree-l3"><a class="reference internal" href="#id2">Parameter Explanations</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#id6">Parameter Explanations</a></li>
 </ul>
 </li>
 <li class="toctree-l2"><a class="reference internal" href="#analyze-stats-degree-distribution-analysis">‘Analyze -&gt; Stats -&gt; Degree Distribution Analysis’</a></li>
 <li class="toctree-l2"><a class="reference internal" href="#analyze-stats-identity-distribution-of-neighbors">‘Analyze -&gt; Stats -&gt; Identity Distribution of Neighbors’</a><ul>
-<li class="toctree-l3"><a class="reference internal" href="#id3">Parameter Explanations</a></li>
-<li class="toctree-l3"><a class="reference internal" href="#id4">Algorithm Explanation</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#id7">Parameter Explanations</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#id8">Algorithm Explanation</a></li>
 </ul>
 </li>
-<li class="toctree-l2"><a class="reference internal" href="#analyze-stats-cluster-analysis">‘Analyze -&gt; Stats -&gt; Cluster Analysis’</a><ul>
-<li class="toctree-l3"><a class="reference internal" href="#id5">Parameter Explanations</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#analyze-stats-ripley-clustering-analysis">‘Analyze -&gt; Stats -&gt; Ripley Clustering Analysis’</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#id9">Parameter Explanations</a></li>
 <li class="toctree-l3"><a class="reference internal" href="#algorithm-explanations">Algorithm Explanations</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="#analyze-stats-community-cluster-heatmap">‘Analyze -&gt; Stats -&gt; Community Cluster Heatmap’</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#id10">Parameter Explanations</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#id11">Algorithm Explanations:</a></li>
 </ul>
 </li>
 <li class="toctree-l2"><a class="reference internal" href="#analyze-stats-calculate-volumes">‘Analyze -&gt; Stats -&gt; Calculate Volumes’</a></li>
 <li class="toctree-l2"><a class="reference internal" href="#analyze-stats-calculate-radii">‘Analyze -&gt; Stats -&gt; Calculate Radii’</a><ul>
 <li class="toctree-l3"><a class="reference internal" href="#parameter-explanation">Parameter Explanation</a></li>
-<li class="toctree-l3"><a class="reference internal" href="#id6">Algorithm Explanation</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#id12">Algorithm Explanation</a></li>
 </ul>
 </li>
 <li class="toctree-l2"><a class="reference internal" href="#analyze-stats-calculate-node-edge-interactions">‘Analyze -&gt; Stats -&gt; Calculate Node &lt; &gt; Edge Interactions’</a><ul>
-<li class="toctree-l3"><a class="reference internal" href="#id7">Parameter Explanations</a></li>
-<li class="toctree-l3"><a class="reference internal" href="#id8">Algorithm Explanation</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#id13">Parameter Explanations</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#id14">Algorithm Explanation</a></li>
 </ul>
 </li>
 <li class="toctree-l2"><a class="reference internal" href="#analyze-data-overlays-get-degree-information">‘Analyze -&gt; Data/Overlays -&gt; Get Degree Information’</a><ul>
-<li class="toctree-l3"><a class="reference internal" href="#id9">Parameter Explanations</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#id15">Parameter Explanations</a></li>
 </ul>
 </li>
 <li class="toctree-l2"><a class="reference internal" href="#analyze-data-overlays-get-hub-information">‘Analyze -&gt; Data/Overlays -&gt; Get Hub Information’</a><ul>
-<li class="toctree-l3"><a class="reference internal" href="#id10">Parameter Explanations</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#id16">Parameter Explanations</a></li>
 </ul>
 </li>
 <li class="toctree-l2"><a class="reference internal" href="#analyze-data-overlays-get-mother-nodes">‘Analyze -&gt; Data/Overlays -&gt; Get Mother Nodes’</a><ul>
-<li class="toctree-l3"><a class="reference internal" href="#id11">Parameter Explanations</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#id17">Parameter Explanations</a></li>
 </ul>
 </li>
 <li class="toctree-l2"><a class="reference internal" href="#analyze-data-overlays-code-communities">‘Analyze -&gt; Data/Overlays -&gt; Code Communities’</a><ul>
-<li class="toctree-l3"><a class="reference internal" href="#id12">Parameter Explanations</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#id18">Parameter Explanations</a></li>
 </ul>
 </li>
 <li class="toctree-l2"><a class="reference internal" href="#analyze-data-overlays-code-identities">‘Analyze -&gt; Data/Overlays -&gt; Code Identities’</a><ul>
-<li class="toctree-l3"><a class="reference internal" href="#id13">Parameter Explanations</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#id19">Parameter Explanations</a></li>
 </ul>
 </li>
-<li class="toctree-l2"><a class="reference internal" href="#next-steps">Next Steps</a></li>
 <li class="toctree-l2"><a class="reference internal" href="#analyze-randomize-generate-equivalent-random-network">‘Analyze -&gt; Randomize -&gt; Generate Equivalent Random Network’</a></li>
 <li class="toctree-l2"><a class="reference internal" href="#analyze-randomize-scramble-nodes-centroids">‘Analyze -&gt; Randomize -&gt; Scramble Nodes (Centroids)’</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#next-steps">Next Steps</a></li>
 </ul>
 </li>
 <li class="toctree-l1"><a class="reference internal" href="process_menu.html">All Process Menu Options</a></li>
@@ -224,6 +241,14 @@
 </ul>
 </section>
 </section>
+<section id="analyze-network-generic-network-report">
+<h2>‘Analyze -&gt; Network -&gt; Generic Network Report’<a class="headerlink" href="#analyze-network-generic-network-report" title="Link to this heading"></a></h2>
+<ul class="simple">
+<li><p>This option will have the program report some basic things about the current Network 3D Objects.</p></li>
+<li><p>This includes the number of nodes, the number of edges, the number of nodes per ‘node identity’ property category, and the number of nodes per ‘community’ (if assigned).</p></li>
+<li><p>The report will go in the upperright table.</p></li>
+</ul>
+</section>
 <section id="analyze-network-community-partition-generic-network-stats">
 <h2>‘Analyze -&gt; Network -&gt; Community Partition + Generic Network Stats’<a class="headerlink" href="#analyze-network-community-partition-generic-network-stats" title="Link to this heading"></a></h2>
 <ul class="simple">
@@ -309,22 +334,77 @@
 * Press partition to seperate the nodes into communities based on the selected parameters. In addition to setting the node_communities property, tables showing the community for each node and the stats will be generated in the tabulated data widget.</p>
 </section>
 </section>
-<section id="analyze-network-identity-makeup-of-network">
-<h2>‘Analyze -&gt; Network -&gt; Identity Makeup of Network…’<a class="headerlink" href="#analyze-network-identity-makeup-of-network" title="Link to this heading"></a></h2>
+<section id="analyze-network-identity-makeup-of-network-communities-and-umap">
+<h2>‘Analyze -&gt; Network -&gt; Identity Makeup of Network Communities (And UMAP)’<a class="headerlink" href="#analyze-network-identity-makeup-of-network-communities-and-umap" title="Link to this heading"></a></h2>
 <ul class="simple">
-<li><p>This method is designed to be run on groups of nodes that have been community partitioned.</p></li>
-<li><p>When selected, it will give a weighted average out of one that represents what proportion of nodes of some ID (as defined in the node_identities property) exist in any random community.</p></li>
-<li><p>The communities are weighted by size, so larger communities contribute to this value more.</p></li>
-<li><p>When selected, this method will create a table with the results that looks like this:</p></li>
+<li><p>This method is designed to be run on groups of nodes that have been community partitioned and have associated ‘node_identities’ property, to evaluate their general compositions.</p></li>
+<li><dl class="simple">
+<dt>It can yield compositional proportions of node identities per community or a weighted average of the compositions of all communities.</dt><dd><ul>
+<li><p>For the latter option, the communities are weighted by size, so larger communities contribute to this value more.</p></li>
 </ul>
-<a class="reference internal image-reference" href="_images/analyze3.png"><img alt="Com Comp Menu" src="_images/analyze3.png" style="width: 800px;" />
-</a>
-<ul class="simple">
+</dd>
+</dl>
+</li>
+<li><p>It can also generate a UMAP for the communities. Within the UMAP, communities that are in close proximity have more similar identity compositions.</p></li>
 <li><p>This method can be a good way to characterize what communities in the network consist of. For example, if I have grouped neighborhoods of different cell types and am wondering what a generic community looks like.</p></li>
 </ul>
+<section id="id2">
+<h3>Parameter Explanations<a class="headerlink" href="#id2" title="Link to this heading"></a></h3>
+<ol class="arabic simple">
+<li><dl class="simple">
+<dt>Mode</dt><dd><ul class="simple">
+<li><dl class="simple">
+<dt>The dropdown menu has two options:</dt><dd><ol class="arabic simple">
+<li><p>Average Identities per community - This option provides compositional info on all communities.</p></li>
+<li><p>Weighted Average Identity of All Communities - This option provides compositional info of all communities, weighted by community size. (Does not support UMAP)</p></li>
+</ol>
+</dd>
+</dl>
+</li>
+</ul>
+</dd>
+</dl>
+</li>
+<li><dl class="simple">
+<dt>Generate UMAP</dt><dd><ul class="simple">
+<li><p>Select this option to generate a UMAP comparing the community compositions.</p></li>
+</ul>
+</dd>
+</dl>
+</li>
+<li><dl class="simple">
+<dt>If Using Above - Label UMAP points?</dt><dd><ul class="simple">
+<li><p>This option labels the communities within the UMAP by their numerical label. Deselect this option to avoid these labels showing up on the graph.</p></li>
+</ul>
+</dd>
+</dl>
+</li>
+</ol>
+<ul class="simple">
+<li><p>Press ‘Get Community ID Info’ to populate the data to the upper right tabulated data widget, and to show the UMAP if selected.</p></li>
+</ul>
+</section>
 <section id="algorithm-explanation">
 <h3>Algorithm Explanation<a class="headerlink" href="#algorithm-explanation" title="Link to this heading"></a></h3>
-<p>This algorithm:</p>
+<ul class="simple">
+<li><p>If not using the weighted average of all communities:</p></li>
+</ul>
+<ol class="arabic simple">
+<li><p>Simply finds the proportion of each identity per community.</p></li>
+</ol>
+<ul class="simple">
+<li><p>If generating the UMAP (with the umap module):</p></li>
+</ul>
+<ol class="arabic simple">
+<li><p>Extract community data by getting community IDs and stacking their community composition arrays (from above) into a matrix</p></li>
+<li><p>Initialize UMAP reducer and random seed (42) for reproducible dimensionality reduction</p></li>
+<li><p>Transform compositions using UMAP to reduce high-dimensional cluster vectors to 2D coordinates</p></li>
+<li><p>Create scatter plot with points colored by cluster ID.</p></li>
+<li><p>Print composition analysis showing the raw data and identifying the two most dominant classes per community</p></li>
+</ol>
+<ul class="simple">
+<li><p>If using the weighted average for all communities (does not support UMAP):</p></li>
+</ul>
 <ol class="arabic simple">
 <li><p>Groups nodes by their community ID</p></li>
 <li><p>For each community, counts the number of nodes with each identity type</p></li>
@@ -333,7 +413,97 @@
 <li><p>Normalizes the results twice: first by the total number of nodes, then to ensure all proportions sum to 1</p></li>
 <li><p>Returns a dictionary mapping each identity type to its weighted proportion in the network</p></li>
 </ol>
+</section>
+</section>
+<section id="analyze-network-convert-network-communities-into-neighborhoods">
+<h2>‘Analyze -&gt; Network -&gt; Convert Network Communities Into Neighborhoods’<a class="headerlink" href="#analyze-network-convert-network-communities-into-neighborhoods" title="Link to this heading"></a></h2>
 <ul class="simple">
+<li><p>This method finds the average of compositions of all communities (assuming ‘node_identities’ exist - then uses the above function), then groups similar communities into ‘neighborhoods’.</p></li>
+<li><p>The purpose of this is to let the user crunch communities into a smaller set of neighborhoods for analysis of similar domains across the image.</p></li>
+<li><p>The number of neighborhoods assigned is up to the user.</p></li>
+<li><p>Running this method will also show a heatmap graph of what ‘node_identity’ is prominant in what neighborhood.</p></li>
+<li><dl class="simple">
+<dt>Running this method will reassign the ‘communities’ property to these neighborhoods instead, so be sure to save the former first.</dt><dd><ul>
+<li><p>This is so the user can use all community-associated functions on the new neighborhoods instead.</p></li>
+<li><p>However during an active session, this method will always run on the original communities and not the neighborhoods (it stores it in another temp property only for that purpose). This lets the user run this method with different params to evaluate different neighborhoods, but note that these temp communities are not used for anything else.</p></li>
+</ul>
+</dd>
+</dl>
+</li>
+</ul>
+<section id="id3">
+<h3>Parameter Explanations<a class="headerlink" href="#id3" title="Link to this heading"></a></h3>
+<ol class="arabic simple">
+<li><dl class="simple">
+<dt>Num Neighborhoods</dt><dd><ul class="simple">
+<li><p>The number of neighborhoods the user wants to group communities into. Presumably, you would want the number of communities to be larger by a logical amount than the number of new neighborhoods.</p></li>
+</ul>
+</dd>
+</dl>
+</li>
+<li><dl class="simple">
+<dt>Clustering Seed</dt><dd><ul class="simple">
+<li><p>The random seed (int) used for neighborhood assignment. By default this is 42.</p></li>
+</ul>
+</dd>
+</dl>
+</li>
+<li><dl class="simple">
+<dt>Min Community Size to be grouped…</dt><dd><ul class="simple">
+<li><p>If empty, this param does nothing.</p></li>
+<li><p>If an int is entered, any communities with nodes fewer than this val will be assigned to ‘Neighborhood 0’ — since we might not care about small, insignificant communities.</p></li>
+</ul>
+</dd>
+</dl>
+</li>
+</ol>
+</section>
+<section id="id4">
+<h3>Algorithm Explanation<a class="headerlink" href="#id4" title="Link to this heading"></a></h3>
+<ul class="simple">
+<li><p>This method primarily uses the sklearn.cluster KMeans algorithm: <a class="reference external" href="https://scikit-learn.org/stable/modules/generated/sklearn.cluster.KMeans.html">https://scikit-learn.org/stable/modules/generated/sklearn.cluster.KMeans.html</a></p></li>
+</ul>
+<ol class="arabic simple">
+<li><p>Finds the composition of all communities using ‘Analyze -&gt; Network -&gt; Identity Makeup of Communities’ logic.</p></li>
+<li><p>Converts compositions to numpy array to prepare data for scikit-learn clustering algorithm</p></li>
+<li><p>Applies K-means clustering with specified number of neighborhoods and random seed</p></li>
+</ol>
+</section>
+</section>
+<section id="analyze-network-create-communities-based-on-cuboidal-proximity-cells">
+<h2>‘Analyze -&gt; Network -&gt; Create Communities Based on Cuboidal Proximity Cells?’<a class="headerlink" href="#analyze-network-create-communities-based-on-cuboidal-proximity-cells" title="Link to this heading"></a></h2>
+<ul class="simple">
+<li><p>This method splits the image into cells (of user-defined size) and assigns nodes to be in communities based on whether they share a cell.</p></li>
+<li><p>It doesn’t have anything to do with the network but is an alternate way to group the nodes into communities, with a greater spatial focus.</p></li>
+</ul>
+<section id="id5">
+<h3>Parameter Explanations<a class="headerlink" href="#id5" title="Link to this heading"></a></h3>
+<ol class="arabic simple">
+<li><dl class="simple">
+<dt>Cell Size</dt><dd><ul class="simple">
+<li><p>The volume of a cell (Can be 2D or 3D). The cells will always be cubes (or squares).</p></li>
+</ul>
+</dd>
+</dl>
+</li>
+<li><dl class="simple">
+<dt>xy scale</dt><dd><ul class="simple">
+<li><p>The 2D plane scaling of the image.</p></li>
+</ul>
+</dd>
+</dl>
+</li>
+<li><dl class="simple">
+<dt>z scale</dt><dd><ul class="simple">
+<li><p>The 3D voxel depth scaling of the image.</p></li>
+</ul>
+</dd>
+</dl>
+</li>
+</ol>
+<ul class="simple">
+<li><p>The latter two params will scale the cell to be cuboidal based on provided scaling (ie its side lengths will be the same in true units).</p></li>
+<li><p>Press ‘Get Communities’ to assign the communities based on cells.</p></li>
 <li><p>The second submenu is ‘Stats’, and is primarily used to create tables and graphs about the network or image morphology.</p></li>
 </ul>
 </section>
@@ -387,8 +557,8 @@
 <li><p>Use this method to evaluate how far apart your connected nodes tend to be in 3D space, and how those relationships are distributed.</p></li>
 <li><p>For example, we would typically expect more efficient networks to mostly have an abundance of short connections and a minority of long connections.</p></li>
 </ul>
-<section id="id2">
-<h3>Parameter Explanations<a class="headerlink" href="#id2" title="Link to this heading"></a></h3>
+<section id="id6">
+<h3>Parameter Explanations<a class="headerlink" href="#id6" title="Link to this heading"></a></h3>
 <ol class="arabic simple">
 <li><dl class="simple">
 <dt>Bucket Distance…</dt><dd><ul class="simple">
@@ -430,8 +600,8 @@
 </ul>
 <a class="reference internal image-reference" href="_images/analyze4.png"><img alt="NeighborID Menu" src="_images/analyze4.png" style="width: 200px;" />
 </a>
-<section id="id3">
-<h3>Parameter Explanations<a class="headerlink" href="#id3" title="Link to this heading"></a></h3>
+<section id="id7">
+<h3>Parameter Explanations<a class="headerlink" href="#id7" title="Link to this heading"></a></h3>
 <ol class="arabic simple">
 <li><dl class="simple">
 <dt>Root Identity to Search…</dt><dd><ul class="simple">
@@ -535,16 +705,16 @@
 </li>
 </ul>
 </section>
-<section id="id4">
-<h3>Algorithm Explanation<a class="headerlink" href="#id4" title="Link to this heading"></a></h3>
+<section id="id8">
+<h3>Algorithm Explanation<a class="headerlink" href="#id8" title="Link to this heading"></a></h3>
 <ol class="arabic simple">
 <li><p>Mode 1 just counts neighbors that are immediate neighbors in the network of the desired node ID.</p></li>
 <li><p>Mode 2 searches using either a distance transform or psuedo-3D binary dilation. It searches outward from nodes of the desired ID type, and hence does not actually include them. This is why this option never evaluates its own clustering.</p></li>
 </ol>
 </section>
 </section>
-<section id="analyze-stats-cluster-analysis">
-<h2>‘Analyze -&gt; Stats -&gt; Cluster Analysis’<a class="headerlink" href="#analyze-stats-cluster-analysis" title="Link to this heading"></a></h2>
+<section id="analyze-stats-ripley-clustering-analysis">
+<h2>‘Analyze -&gt; Stats -&gt; Ripley Clustering Analysis’<a class="headerlink" href="#analyze-stats-ripley-clustering-analysis" title="Link to this heading"></a></h2>
 <ul class="simple">
 <li><p>This method generates a Ripley’s K curve, which is a function that compares relative object clustering to distance r from some random node.</p></li>
 <li><p>It is a good way to identify if objects are clustering or dispersed, and how that varies through an image.</p></li>
@@ -554,8 +724,8 @@
 </ul>
 <a class="reference internal image-reference" href="_images/ripley_menu.png"><img alt="Ripley Menu" src="_images/ripley_menu.png" style="width: 400px;" />
 </a>
-<section id="id5">
-<h3>Parameter Explanations<a class="headerlink" href="#id5" title="Link to this heading"></a></h3>
+<section id="id9">
+<h3>Parameter Explanations<a class="headerlink" href="#id9" title="Link to this heading"></a></h3>
 <ol class="arabic simple">
 <li><dl class="simple">
 <dt>Root Identity to Search for Neighbors</dt><dd><ul class="simple">
@@ -669,6 +839,48 @@
 </ol>
 </section>
 </section>
+<section id="analyze-stats-community-cluster-heatmap">
+<h2>‘Analyze -&gt; Stats -&gt; Community Cluster Heatmap’<a class="headerlink" href="#analyze-stats-community-cluster-heatmap" title="Link to this heading"></a></h2>
+<ul class="simple">
+<li><p>This method plots the nodes into a 2D or 3D graph, with a color corresponding to community density.</p></li>
+<li><p>Red nodes are higher density than expected in a community, blue ones are lower density than expected.</p></li>
+</ul>
+<section id="id10">
+<h3>Parameter Explanations<a class="headerlink" href="#id10" title="Link to this heading"></a></h3>
+<ol class="arabic simple">
+<li><dl class="simple">
+<dt>(Optional) - Total Number of Nodes</dt><dd><ul class="simple">
+<li><p>The total number of nodes is used to decide how many nodes belong in a community on average.</p></li>
+<li><p>If unassigned, the program will just get the number of nodes that exist in the current properties.</p></li>
+<li><p>This is here in case the nodes in the active session are a subset (ie some number of nodes have been filtered out with the excel helper). In that case, the user can still enter the number of nodes that belong in the dataset if the filtering had not occurred.</p></li>
+</ul>
+</dd>
+</dl>
+</li>
+<li><dl class="simple">
+<dt>Use 3D Plot…</dt><dd><ul class="simple">
+<li><p>By default, the program will graph the heatmap in 3D.</p></li>
+<li><p>Disable this if your data is 2D. Do not disable if it is 3D as the program will get confused.</p></li>
+</ul>
+</dd>
+</dl>
+</li>
+</ol>
+<ul class="simple">
+<li><p>Press ‘Run’ to show the heatmap graph, and yield a table showing community id vs density intensity.</p></li>
+<li><p>It will require you to get ‘node_centroids’ and ‘communities’ properties if unassigned.</p></li>
+</ul>
+</section>
+<section id="id11">
+<h3>Algorithm Explanations:<a class="headerlink" href="#id11" title="Link to this heading"></a></h3>
+<ol class="arabic simple">
+<li><p>Determine total nodes by trying multiple fallback sources: network nodes, centroids, identities, or unique node array values.</p></li>
+<li><p>Calculate baseline density as the expected nodes per community if randomly distributed (total nodes / num communities).</p></li>
+<li><p>Compute heat values using natural log ratio of actual community size to expected random size.</p></li>
+<li><p>Generate heatmap visualization with matplotlib.</p></li>
+</ol>
+</section>
+</section>
 <section id="analyze-stats-calculate-volumes">
 <h2>‘Analyze -&gt; Stats -&gt; Calculate Volumes’<a class="headerlink" href="#analyze-stats-calculate-volumes" title="Link to this heading"></a></h2>
 <ul class="simple">
@@ -690,8 +902,8 @@
 <li><p>If you enable it, the system will attempt to attempt to use the GPU to calculate. Note that this is only possible with a working CUDA toolkit.</p></li>
 </ul>
 </section>
-<section id="id6">
-<h3>Algorithm Explanation<a class="headerlink" href="#id6" title="Link to this heading"></a></h3>
+<section id="id12">
+<h3>Algorithm Explanation<a class="headerlink" href="#id12" title="Link to this heading"></a></h3>
 <ol class="arabic simple">
 <li><p>The scipy.ndimage.find_objects() method is used to get bounding boxes around all the labeled objects.</p></li>
 <li><p>For each object, a subarray is cut out around it using its bounding box, with padding on all sides.</p></li>
@@ -711,8 +923,8 @@
 </ul>
 <a class="reference internal image-reference" href="_images/analyze5.png"><img alt="edgenode Menu" src="_images/analyze5.png" style="width: 800px;" />
 </a>
-<section id="id7">
-<h3>Parameter Explanations<a class="headerlink" href="#id7" title="Link to this heading"></a></h3>
+<section id="id13">
+<h3>Parameter Explanations<a class="headerlink" href="#id13" title="Link to this heading"></a></h3>
 <ol class="arabic simple">
 <li><dl class="simple">
 <dt>node_search:</dt><dd><ul class="simple">
@@ -749,8 +961,8 @@
 <li><p>Press Calculate to run the method with the desired parameters. The output data will be used to create a new table in the tabulated data widget.</p></li>
 </ul>
 </section>
-<section id="id8">
-<h3>Algorithm Explanation<a class="headerlink" href="#id8" title="Link to this heading"></a></h3>
+<section id="id14">
+<h3>Algorithm Explanation<a class="headerlink" href="#id14" title="Link to this heading"></a></h3>
 <ol class="arabic simple">
 <li><p>The scipy.ndimage.find_objects() method is used to get bounding boxes around all the labeled objects in the nodes channel.</p></li>
 <li><p>For each object, a subarray is cut out around it using its bounding box, that includes the object plus any additional space that it will need to perform a search/dilation.</p></li>
@@ -775,8 +987,8 @@
 </ul>
 <a class="reference internal image-reference" href="_images/analyze6.png"><img alt="edgenode Menu" src="_images/analyze6.png" style="width: 800px;" />
 </a>
-<section id="id9">
-<h3>Parameter Explanations<a class="headerlink" href="#id9" title="Link to this heading"></a></h3>
+<section id="id15">
+<h3>Parameter Explanations<a class="headerlink" href="#id15" title="Link to this heading"></a></h3>
 <ol class="arabic simple">
 <li><dl class="simple">
 <dt>Execution Mode</dt><dd><ul class="simple">
@@ -824,8 +1036,8 @@
 <ul class="simple">
 <li><p>This method can be used to extract information about hub nodes, which are the nodes that are the fewest degrees of seperation from any other node.</p></li>
 </ul>
-<section id="id10">
-<h3>Parameter Explanations<a class="headerlink" href="#id10" title="Link to this heading"></a></h3>
+<section id="id16">
+<h3>Parameter Explanations<a class="headerlink" href="#id16" title="Link to this heading"></a></h3>
 <ul class="simple">
 <li><p>This method only has two parameters.</p></li>
 </ul>
@@ -857,8 +1069,8 @@
 <li><p>This method can be used to extract information about ‘mother nodes’, which are we define as those nodes that contain connections between one community and another.</p></li>
 <li><p>This method would be used to identify what nodes enable interaction between seperate communities.</p></li>
 </ul>
-<section id="id11">
-<h3>Parameter Explanations<a class="headerlink" href="#id11" title="Link to this heading"></a></h3>
+<section id="id17">
+<h3>Parameter Explanations<a class="headerlink" href="#id17" title="Link to this heading"></a></h3>
 <ul class="simple">
 <li><p>This method only has one parameter.</p></li>
 </ul>
@@ -881,8 +1093,8 @@
 <ul class="simple">
 <li><p>This method can be used to generate an overlay that shows what nodes belong to which community.</p></li>
 </ul>
-<section id="id12">
-<h3>Parameter Explanations<a class="headerlink" href="#id12" title="Link to this heading"></a></h3>
+<section id="id18">
+<h3>Parameter Explanations<a class="headerlink" href="#id18" title="Link to this heading"></a></h3>
 <ul class="simple">
 <li><p>This method only has two parameters.</p></li>
 </ul>
@@ -919,8 +1131,8 @@
 <ul class="simple">
 <li><p>This method can be used to generate an overlay that shows what nodes belong to which identity.</p></li>
 </ul>
-<section id="id13">
-<h3>Parameter Explanations<a class="headerlink" href="#id13" title="Link to this heading"></a></h3>
+<section id="id19">
+<h3>Parameter Explanations<a class="headerlink" href="#id19" title="Link to this heading"></a></h3>
 <ul class="simple">
 <li><p>This method only has two parameters.</p></li>
 </ul>
@@ -949,15 +1161,9 @@
 </ol>
 <ul class="simple">
 <li><p>Press ‘Identity Code’ to run the method with the desired parameters. The overlay will go into the Overlay 2 channel. Additionally, a legend displaying what label belongs to which identity will be placed into the tabulated data widget.</p></li>
-</ul>
-</section>
-</section>
-<section id="next-steps">
-<h2>Next Steps<a class="headerlink" href="#next-steps" title="Link to this heading"></a></h2>
-<p>This concludes the explanations of the analyze functions. Next, proceed to <a class="reference internal" href="process_menu.html"><span class="doc">All Process Menu Options</span></a> for information on the process menu functions.</p>
-<ul class="simple">
 <li><p>The last submenu is ‘Randomize’, and is used to generate random variants of data.</p></li>
 </ul>
+</section>
 </section>
 <section id="analyze-randomize-generate-equivalent-random-network">
 <h2>‘Analyze -&gt; Randomize -&gt; Generate Equivalent Random Network’<a class="headerlink" href="#analyze-randomize-generate-equivalent-random-network" title="Link to this heading"></a></h2>
@@ -1008,6 +1214,10 @@
 </li>
 <li><p>The purpose of params 3-5 is to allow creation of arbitrary boundary regions, for example by dilating data of interest, to allow the nodes to populate.</p></li>
 </ul>
+</section>
+<section id="next-steps">
+<h2>Next Steps<a class="headerlink" href="#next-steps" title="Link to this heading"></a></h2>
+<p>This concludes the explanations of the analyze functions. Next, proceed to <a class="reference internal" href="process_menu.html"><span class="doc">All Process Menu Options</span></a> for information on the process menu functions.</p>
 </section>
 </section>
 

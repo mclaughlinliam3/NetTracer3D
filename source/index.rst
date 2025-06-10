@@ -39,6 +39,7 @@ To get started with NetTracer3D, check out the :doc:`installation` guide and the
    quickstart
    branches
    properties
+   excel_helper
 
 .. toctree::
    :maxdepth: 2

@@ -337,7 +337,7 @@ def community_partition(master_list, weighted = False, style = 0, dostats = True
         
         try:
             # Overall network modularity using Louvain
-            stats['Modularity Entire Network'] = community.modularity(partition, G)
+            stats['Modularity Entire Network'] = community.modularity(G, partition)
         except:
             pass
 
@@ -348,7 +348,7 @@ def community_partition(master_list, weighted = False, style = 0, dostats = True
                 for i, component in enumerate(connected_components):
                     subgraph = G.subgraph(component)
                     subgraph_partition = nx.community.louvain_communities(G, weight='weight', seed = seed)
-                    modularity = community.modularity(subgraph_partition, subgraph)
+                    modularity = community.modularity(subgraph, subgraph_partition)
                     num_nodes = len(component)
                     stats[f'Modularity of component with {num_nodes} nodes'] = modularity
         except:
@@ -359,6 +359,7 @@ def community_partition(master_list, weighted = False, style = 0, dostats = True
             stats['Number of Communities'] = len(communities)
             community_sizes = [len(com) for com in communities]
             stats['Community Sizes'] = community_sizes
+            import numpy as np
             stats['Average Community Size'] = np.mean(community_sizes)
         except:
             pass
@@ -368,10 +369,6 @@ def community_partition(master_list, weighted = False, style = 0, dostats = True
             #stats['Partition Resolution'] = 1.0  # Default resolution parameter
         #except:
             #pass
-        try:
-            stats['Number of Iterations'] = len(set(partition.values()))
-        except:
-            pass
         
         # Global network metrics
         try:
@@ -423,12 +420,14 @@ def community_partition(master_list, weighted = False, style = 0, dostats = True
                 
                 # Degree centrality
                 degree_cent = nx.degree_centrality(subgraph)
+                import numpy as np
                 stats[f'Community {i+1} Avg Degree Centrality'] = np.mean(list(degree_cent.values()))
                 
                 # Average path length (only for connected subgraphs)
                 if nx.is_connected(subgraph):
                     stats[f'Community {i+1} Avg Path Length'] = nx.average_shortest_path_length(subgraph)
         except:
+            import traceback
             pass
         
         return stats
@@ -475,7 +474,7 @@ def community_partition(master_list, weighted = False, style = 0, dostats = True
         G = nx.Graph()
         G.add_edges_from(edges)
 
-        # Replace Louvain with NetworkX's implementation
+        # Louvain with NetworkX's implementation
         communities = list(nx.community.louvain_communities(G, seed = seed))
 
         # Convert to the same format as community_louvain.best_partition
@@ -524,8 +523,6 @@ def community_partition(master_list, weighted = False, style = 0, dostats = True
         if dostats:
 
             stats = calculate_network_stats(G, communities)
-
-
 
         return output, normalized_weights, stats
 

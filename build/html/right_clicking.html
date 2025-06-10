@@ -6,14 +6,14 @@
   <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
 
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Right Clicking - All Options Available by Right Clicking in the GUI &mdash; NetTracer3D 0.7.6 documentation</title>
+  <title>Right Clicking - All Options Available by Right Clicking in the GUI &mdash; NetTracer3D 0.7.8 documentation</title>
       <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=b86133f3" />
       <link rel="stylesheet" type="text/css" href="_static/css/theme.css?v=e59714d7" />
 
   
       <script src="_static/jquery.js?v=5d32c60e"></script>
       <script src="_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
-      <script src="_static/documentation_options.js?v=918ced64"></script>
+      <script src="_static/documentation_options.js?v=ddeecabf"></script>
       <script src="_static/doctools.js?v=9bcbadda"></script>
       <script src="_static/sphinx_highlight.js?v=dc90522c"></script>
     <script src="_static/js/theme.js"></script>
@@ -21,7 +21,7 @@
     <link rel="index" title="Index" href="genindex.html" />
     <link rel="search" title="Search" href="search.html" />
     <link rel="next" title="All File Menu Options" href="file_menu.html" />
-    <link rel="prev" title="Properties of a Network3D Object" href="properties.html" /> 
+    <link rel="prev" title="Using the Spreadsheet Loader" href="excel_helper.html" /> 
 </head>
 
 <body class="wy-body-for-nav"> 
@@ -49,6 +49,7 @@
 <li class="toctree-l1"><a class="reference internal" href="quickstart.html">Quickstart - Segmenting Data and Generating Networks</a></li>
 <li class="toctree-l1"><a class="reference internal" href="branches.html">Labeling Branches and Branch Networks</a></li>
 <li class="toctree-l1"><a class="reference internal" href="properties.html">Properties of a Network3D Object</a></li>
+<li class="toctree-l1"><a class="reference internal" href="excel_helper.html">Using the Spreadsheet Loader</a></li>
 </ul>
 <p class="caption" role="heading"><span class="caption-text">Detailed Function Guide:</span></p>
 <ul class="current">
@@ -60,7 +61,7 @@
 <li class="toctree-l3"><a class="reference internal" href="#show-identity">‘Show Identity’</a></li>
 <li class="toctree-l3"><a class="reference internal" href="#select-all">‘Select All’</a></li>
 <li class="toctree-l3"><a class="reference internal" href="#selection">‘Selection’</a></li>
-<li class="toctree-l3"><a class="reference internal" href="#measure">‘Measure’</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#measurements">‘Measurements’</a></li>
 <li class="toctree-l3"><a class="reference internal" href="#add-highlight-in-network-selection">‘Add Highlight in Network Selection’</a></li>
 </ul>
 </li>
@@ -302,19 +303,28 @@ These functions will only work correctly if the image data in the Nodes channel 
 </li>
 </ol>
 </section>
-<section id="measure">
-<h3>‘Measure’<a class="headerlink" href="#measure" title="Link to this heading"></a></h3>
-<p>This feature can be used to extract linear measurements anywhere in your dataset, both voxel-based and scaled. Clicking ‘Measure’ reveals the following options:</p>
+<section id="measurements">
+<h3>‘Measurements’<a class="headerlink" href="#measurements" title="Link to this heading"></a></h3>
+<p>This feature can be used to extract linear or angular measurements anywhere in your dataset, both voxel-based and scaled based on the xy and z scales set by user. Clicking ‘Measurements’ reveals the following options:</p>
 <ol class="arabic simple">
 <li><dl class="simple">
-<dt>‘Place Measurement Point’ (OR; ‘Place Second Point’)</dt><dd><ul class="simple">
+<dt>Distance - Use this menu to measure distances, revealing these options:</dt><dd><ul class="simple">
+<li><p>‘Place First Point’ (OR; ‘Place Second Point’)</p></li>
 <li><p>This option places a measurement point at the current mouse location. If one has been placed, ‘Place Second Point’ can then be used to create a measurement.</p></li>
 </ul>
 </dd>
 </dl>
 </li>
 <li><dl class="simple">
-<dt>‘Remove Measurement Points*</dt><dd><ul class="simple">
+<dt>Angle - Use this menu to measure angles from three points, revealing these options</dt><dd><ul class="simple">
+<li><p>‘Place First Point (A)’ (OR; ‘Place Second Point (B)’ OR; ‘PLACE Third Point (C)’)</p></li>
+<li><p>This option places points at the current mouse location. All three must be placed to measure an angle. Point ‘B’ will always be the vertex and the measured angle will always prefer the acute output.</p></li>
+</ul>
+</dd>
+</dl>
+</li>
+<li><dl class="simple">
+<dt>‘Remove All Measurements*</dt><dd><ul class="simple">
 <li><p>This option removes all measurement points in the active session.</p></li>
 </ul>
 </dd>
@@ -471,7 +481,7 @@ The only exception is the following option:</p>
            </div>
           </div>
           <footer><div class="rst-footer-buttons" role="navigation" aria-label="Footer">
-        <a href="properties.html" class="btn btn-neutral float-left" title="Properties of a Network3D Object" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left" aria-hidden="true"></span> Previous</a>
+        <a href="excel_helper.html" class="btn btn-neutral float-left" title="Using the Spreadsheet Loader" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left" aria-hidden="true"></span> Previous</a>
         <a href="file_menu.html" class="btn btn-neutral float-right" title="All File Menu Options" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right" aria-hidden="true"></span></a>
     </div>
 

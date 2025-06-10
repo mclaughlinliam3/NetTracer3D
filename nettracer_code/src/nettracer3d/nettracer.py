@@ -348,6 +348,7 @@ def create_and_save_dataframe(pairwise_connections, excel_filename = None):
 
 #General supporting methods below:
 
+
 def invert_array(array):
     """Internal method used to flip node array indices. 0 becomes 255 and vice versa."""
     inverted_array = np.where(array == 0, 255, 0).astype(np.uint8)
@@ -658,7 +659,84 @@ def threshold(arr, proportion, custom_rad = None):
 
     return arr
 
-def show_3d(arrays_3d=None, arrays_4d=None, down_factor=None, order=0, xy_scale=1, z_scale=1, colors=['red', 'green', 'white', 'cyan', 'yellow']):
+def generate_3d_bounding_box(shape, foreground_value=1, background_value=0):
+    """
+    Generate a 3D bounding box array with edges connecting the corners.
+    
+    Parameters:
+    -----------
+    shape : tuple
+        Shape of the array in format (Z, Y, X)
+    foreground_value : int or float, default=1
+        Value to use for the bounding box edges and corners
+    background_value : int or float, default=0
+        Value to use for the background
+    
+    Returns:
+    --------
+    numpy.ndarray
+        3D array with bounding box edges
+    """
+    if len(shape) > 3:
+        shape = (shape[0], shape[1], shape[2])
+
+    z_size, y_size, x_size = shape
+    
+    # Create empty array filled with background value
+    box_array = np.full(shape, background_value, dtype=np.float64)
+    
+    # Define the 8 corners of the 3D box
+    corners = [
+        (0, 0, 0),           # corner 0
+        (0, 0, x_size-1),    # corner 1
+        (0, y_size-1, 0),    # corner 2
+        (0, y_size-1, x_size-1),  # corner 3
+        (z_size-1, 0, 0),    # corner 4
+        (z_size-1, 0, x_size-1),  # corner 5
+        (z_size-1, y_size-1, 0),  # corner 6
+        (z_size-1, y_size-1, x_size-1)  # corner 7
+    ]
+    
+    # Set corner values
+    for corner in corners:
+        box_array[corner] = foreground_value
+    
+    # Define edges connecting adjacent corners
+    # Each edge connects two corners that differ by only one coordinate
+    edges = [
+        # Bottom face edges (z=0)
+        (0, 1), (1, 3), (3, 2), (2, 0),
+        # Top face edges (z=max)
+        (4, 5), (5, 7), (7, 6), (6, 4),
+        # Vertical edges connecting bottom to top
+        (0, 4), (1, 5), (2, 6), (3, 7)
+    ]
+    
+    # Draw edges using linspace
+    for start_idx, end_idx in edges:
+        start_corner = corners[start_idx]
+        end_corner = corners[end_idx]
+        
+        # Calculate the maximum distance along any axis to determine number of points
+        max_distance = max(
+            abs(end_corner[0] - start_corner[0]),
+            abs(end_corner[1] - start_corner[1]),
+            abs(end_corner[2] - start_corner[2])
+        )
+        num_points = max_distance + 1
+        
+        # Generate points along the edge using linspace
+        z_points = np.linspace(start_corner[0], end_corner[0], num_points, dtype=int)
+        y_points = np.linspace(start_corner[1], end_corner[1], num_points, dtype=int)
+        x_points = np.linspace(start_corner[2], end_corner[2], num_points, dtype=int)
+        
+        # Set foreground values along the edge
+        for z, y, x in zip(z_points, y_points, x_points):
+            box_array[int(z), int(y), int(x)] = foreground_value
+    
+    return box_array
+
+def show_3d(arrays_3d=None, arrays_4d=None, down_factor=None, order=0, xy_scale=1, z_scale=1, colors=['red', 'green', 'white', 'cyan', 'yellow'], box = False):
     """
     Show 3d (or 2d) displays of array data using napari.
     Params: arrays - A list of 3d or 2d numpy arrays to display
@@ -682,6 +760,7 @@ def show_3d(arrays_3d=None, arrays_4d=None, down_factor=None, order=0, xy_scale=
     # Add 3D arrays if provided
     if arrays_3d is not None:
         for arr, color in zip(arrays_3d, colors):
+            shape = arr.shape
             viewer.add_image(
                 arr,
                 scale=scale,
@@ -702,6 +781,8 @@ def show_3d(arrays_3d=None, arrays_4d=None, down_factor=None, order=0, xy_scale=
             if arr.shape[3] == 4:
                 arr = arr[:, :, :, :3]  # Remove alpha
             
+            shape = arr.shape
+
             # Add each color channel separately
             colors = ['red', 'green', 'blue']
             for c in range(3):
@@ -714,6 +795,19 @@ def show_3d(arrays_3d=None, arrays_4d=None, down_factor=None, order=0, xy_scale=
                     opacity=0.5,
                     name=f'Channel_{colors[c]}_{i}'
                 )
+
+    if box:
+        viewer.add_image(
+            generate_3d_bounding_box(shape),
+            scale=scale,
+            colormap='white',
+            rendering='mip',
+            blending='additive',
+            opacity=0.5,
+            name=f'Bounding Box'
+        )
+
+
 
     napari.run()
 
@@ -1673,20 +1767,16 @@ def label_branches(array, peaks = 0, branch_removal = 0, comp_dil = 0, max_vol =
     if nodes is not None and down_factor is not None:
         array = upsample_with_padding(array, down_factor, arrayshape)
 
-
-
     if nodes is None:
 
-        array = smart_dilate.smart_label(array, other_array, GPU = GPU)
+        array = smart_dilate.smart_label(array, other_array, GPU = GPU, remove_template = True)
 
     else:
         if down_factor is not None:
-            array = smart_dilate.smart_label(bonus_array, array, GPU = GPU, predownsample = down_factor)
+            array = smart_dilate.smart_label(bonus_array, array, GPU = GPU, predownsample = down_factor, remove_template = True)
         else:
 
-            array = smart_dilate.smart_label(bonus_array, array, GPU = GPU)
-
-
+            array = smart_dilate.smart_label(bonus_array, array, GPU = GPU, remove_template = True)
 
     if down_factor is not None and nodes is None:
         array = upsample_with_padding(array, down_factor, arrayshape)
@@ -1705,7 +1795,7 @@ def label_branches(array, peaks = 0, branch_removal = 0, comp_dil = 0, max_vol =
 
     return array
 
-def fix_branches(array, G, communities, fix_val = None):
+def fix_branches_network(array, G, communities, fix_val = None):
 
     def invert_dict(d):
         inverted = {}
@@ -1747,6 +1837,65 @@ def fix_branches(array, G, communities, fix_val = None):
 
 
     return targs
+
+def fix_branches(array, G, max_val):
+    """
+    Parameters:
+    array: numpy array containing the labeled regions
+    G: Graph representing connectivity relationships
+    max_val: The target value to find neighbors for
+    
+    Returns:
+    Modified array with fused regions
+    """
+    # Get all nodes
+    all_nodes = set(G.nodes())
+    
+    # Initially safe nodes are direct neighbors of max_val
+    safe_initial = set(G.neighbors(max_val))
+    
+    # Not-safe nodes are all other nodes except max_val
+    not_safe_initial = all_nodes - safe_initial - {max_val}
+    
+    # Get adjacency view (much faster for repeated neighbor lookups)
+    adj = G.adj
+    
+    # Find all neighbors of not_safe nodes in one pass
+    neighbors_of_not_safe = set()
+    for node in not_safe_initial:
+        neighbors_of_not_safe.update(adj[node])
+    
+    # Remove max_val if present
+    neighbors_of_not_safe.discard(max_val)
+    
+    # Find safe nodes that should be moved
+    nodes_to_move = safe_initial & neighbors_of_not_safe
+    
+    # Update sets
+    not_safe = not_safe_initial | nodes_to_move
+    
+    # The rest of the function - FIX STARTS HERE
+    targs = np.array(list(not_safe))
+    
+    if len(targs) == 0:
+        return array
+        
+    mask = np.isin(array, targs)
+    
+    labeled, num_components = label_objects(mask)
+    
+    # Get the current maximum label in the array to avoid collisions
+    current_max = np.max(array)
+    
+    # Assign new unique labels to each connected component
+    for component_id in range(1, num_components + 1):
+        component_mask = labeled == component_id
+        array[component_mask] = current_max + component_id
+    
+    return array
+
+
+
 
 
 
@@ -3564,7 +3713,7 @@ class Network_3D:
 
     #Some methods that may be useful:
 
-    def community_partition(self, weighted = False, style = 0, dostats = True, seed = None):
+    def community_partition(self, weighted = False, style = 0, dostats = True, seed = 42):
         """
         Sets the communities attribute by splitting the network into communities
         """
@@ -3680,6 +3829,41 @@ class Network_3D:
             self._nodes = self._nodes.astype(np.uint8)
         elif num_node < 65536:
             self._nodes = self._nodes.astype(np.uint16)
+
+
+    def com_by_size(self):
+        """Reassign communities based on size, starting with 1 for largest."""
+
+        from collections import Counter
+        
+        # Convert all community values to regular ints (handles numpy scalars)
+        clean_communities = {
+            node: comm.item() if hasattr(comm, 'item') else comm 
+            for node, comm in self.communities.items()
+        }
+        
+        # Count community sizes and create mapping in one go
+        community_sizes = Counter(clean_communities.values())
+        
+        # Create old->new mapping: sort by size (desc), then by community ID for ties
+        old_to_new = {
+            old_comm: new_comm 
+            for new_comm, (old_comm, _) in enumerate(
+                sorted(community_sizes.items(), key=lambda x: (-x[1], x[0])), 
+                start=1
+            )
+        }
+        
+        # Apply mapping
+        self.communities = {
+            node: old_to_new[comm] 
+            for node, comm in clean_communities.items()
+        }
+
+
+
+
+
 
 
     def com_to_node(self, targets = None):
@@ -3979,6 +4163,45 @@ class Network_3D:
         self.node_centroids = new_centroids
 
 
+    def purge_properties(self):
+
+        """Eliminate nodes from properties that are no longer present in the nodes channel"""
+
+        print("Trimming properties. Note this does not update the network...")
+
+        def filter_dict_by_list(input_dict, filter_list):
+            """
+            Remove dictionary entries where the key is not in the filter list.
+            
+            Args:
+                input_dict (dict): Dictionary with integer values
+                filter_list (list): List of integers to keep
+                
+            Returns:
+                dict: New dictionary with only keys that exist in filter_list
+            """
+            return {key: value for key, value in input_dict.items() if key in filter_list}
+
+        nodes = np.unique(self.nodes)
+
+        if 0 in nodes:
+            np.delete(nodes, 0)
+
+        try:
+            self.node_centroids = filter_dict_by_list(self.node_centroids, nodes)
+            print("Updated centroids")
+        except:
+            pass
+        try:
+            self.communities = filter_dict_by_list(self.communities, nodes)
+            print("Updated communities")
+        except:
+            pass
+        try:
+            self.node_identities = filter_dict_by_list(self.node_identities, nodes)
+            print("Updated identities")
+        except:
+            pass
 
     def remove_trunk_post(self):
         """
@@ -4523,12 +4746,19 @@ class Network_3D:
 
         self.remove_edge_weights()
 
-    def centroid_array(self):
+    def centroid_array(self, clip = False):
         """Use the centroids to populate a node array"""
 
-        array = proximity.populate_array(self.node_centroids)
+        if clip:
 
-        return array
+            array, centroids = proximity.populate_array(self.node_centroids, clip = True)
+            return array, centroids
+
+        else:
+
+            array = proximity.populate_array(self.node_centroids)
+
+            return array
 
 
 
@@ -4612,6 +4842,7 @@ class Network_3D:
 
 
     def community_id_info(self):
+
         def invert_dict(d):
             inverted = {}
             for key, value in d.items():
@@ -4654,7 +4885,99 @@ class Network_3D:
 
         return output
 
+    def community_id_info_per_com(self, umap = False, label = False):
 
+        def invert_dict(d):
+            inverted = {}
+            for key, value in d.items():
+                inverted.setdefault(value, []).append(key)
+            return inverted
+
+        community_dict = invert_dict(self.communities)
+        summation = 0
+        id_set = set(self.node_identities.values())
+        id_dict = {}
+        for i, iden in enumerate(id_set):
+            id_dict[iden] = i
+
+        output = {}
+
+        for community in community_dict:
+
+            counter = np.zeros(len(id_set))
+
+            nodes = community_dict[community]
+            size = len(nodes)
+
+            # Count identities in this community
+            for node in nodes:
+                counter[id_dict[self.node_identities[node]]] += 1 # Keep them as arrays
+
+            for i in range(len(counter)): # Translate them into proportions out of 1
+
+                counter[i] = counter[i]/size
+
+            output[community] = counter #Assign the finding here
+
+        if umap:
+            from . import neighborhoods
+            neighborhoods.visualize_cluster_composition_umap(output, id_set, label = label) 
+
+        return output, id_set
+
+
+    def assign_neighborhoods(self, seed, count, limit = None, prev_coms = None):
+
+        from . import neighborhoods
+
+        def invert_dict(d):
+            inverted = {}
+            for key, value in d.items():
+                inverted.setdefault(value, []).append(key)
+            return inverted
+
+        if prev_coms is not None:
+            self.communities = copy.deepcopy(prev_coms)
+
+        identities, _ = self.community_id_info_per_com()
+
+        if limit is not None:
+
+            coms = invert_dict(self.communities)
+
+            zero_group = {}
+
+            for com, nodes in coms.items():
+
+                if len(nodes) < limit:
+
+                    zero_group[com] = 0
+
+                    del identities[com]
+
+
+        clusters = neighborhoods.cluster_arrays(identities, count, seed = seed) # dict: {cluster_id: {'keys': [keys], 'arrays': [arrays]}}
+
+        coms = {}
+
+        neighbors = {}
+
+        for i, cluster in enumerate(clusters):
+
+            for com in cluster: # For community ID per list
+
+                coms[com] = i + 1
+
+        if limit is not None:
+            coms.update(zero_group)
+
+        for node, com in self.communities.items():
+
+            self.communities[node] = coms[com]
+
+        identities, id_set = self.community_id_info_per_com()
+
+        neighborhoods.plot_dict_heatmap(identities, id_set)
 
 
     def kd_network(self, distance = 100, targets = None, make_array = False):
@@ -4694,6 +5017,70 @@ class Network_3D:
 
             return array
 
+    def community_cells(self, size = 32, xy_scale = 1, z_scale = 1):
+
+        def invert_dict(d):
+            inverted = {}
+            for key, value_list in d.items():
+                for value in value_list:
+                    inverted[value] = key
+            return inverted
+
+        size_x = int(size * xy_scale)
+        size_z = int(size * z_scale)
+
+        if size_x == size_z:
+
+            com_dict = proximity.partition_objects_into_cells(self.node_centroids, size_x)
+
+        else:
+
+            com_dict = proximity.partition_objects_into_cells(self.node_centroids, (size_z, size_x, size_x))
+
+        self.communities = invert_dict(com_dict)
+
+    def community_heatmap(self, num_nodes = None, is3d = True):
+
+        import math
+
+        def invert_dict(d):
+            inverted = {}
+            for key, value in d.items():
+                inverted.setdefault(value, []).append(key)
+            return inverted
+
+        if num_nodes == None:
+
+            try:
+                num_nodes = len(self.network.nodes())
+            except:
+                try:
+                    num_nodes = len(self.node_centroids.keys())
+                except:
+                    try:
+                        num_nodes = len(self.node_identities.keys())
+                    except:
+                        try:
+                            unique = np.unique(self.nodes)
+                            num_nodes = len(unique)
+                            if unique[0] == 0:
+                                num_nodes -= 1
+                        except:
+                            return
+
+        coms = invert_dict(self.communities)
+
+        rand_dens = num_nodes / len(coms.keys())
+
+        heat_dict = {}
+
+        for com, nodes in coms.items():
+            heat_dict[com] = math.log(len(nodes)/rand_dens)
+
+        from . import neighborhoods
+        neighborhoods.create_community_heatmap(heat_dict, self.communities, self.node_centroids, is_3d=is3d)
+
+        return heat_dict
 
 
 

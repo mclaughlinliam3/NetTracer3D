@@ -34,6 +34,14 @@ NetTracer3D is free to use/fork for academic/nonprofit use so long as citation i
 
 NetTracer3D was developed by Liam McLaughlin while working under Dr. Sanjay Jain at Washington University School of Medicine.
 
--- Version 0.7.6 Updates -- 
+-- Version 0.7.8 (and 0.7.7) Updates -- 
 
 	* Bug Fixes
+	* Added the excel helper loader for better automated loading from QuPath exports specifically
+	* Added the ability to cluster communities into broader neighborhoods (with KMeans) based on their compositions.
+	* Added heatmap and UMAP graph displays based on community compositions.
+	* Added the ability to show heatmaps of nodes based on their density within their communities
+	* Added the ability to cluster nodes into communities based on spatial grouping in arbitrarily-sized cells (rather than just using the network)
+	* Added function to crop the current image
+	* More options under 'Modify Network'
+	* 'Show 3D' method now can render a bounding box.

@@ -158,4 +158,4 @@ Labeling branchpoint networks is an additional way to explore networks of branch
 
 Next Steps
 ---------
-For the final part of this tutorial, you may want to read :doc:`properties` to learn about what information is saved and loaded in Network3D Objects.
+Next, you may want to read :doc:`properties` to learn about what information is saved and loaded in Network3D Objects.

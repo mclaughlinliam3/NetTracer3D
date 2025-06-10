@@ -103,5 +103,7 @@ Parameter Explanations
     * Temporarily downsamples the image to speed up the 3D display. Downsampling is done in all three dimensions by the inputed factor.
 #. Use cubic downsample?:
     * Enable this to use the cubic resample algorithm, which is slower but may better preserve shapes.
+#. Include Bounding Box
+    * Enable this to draw in a bounding box around your channels in the visualization. Note the bounding box is an equivalently sized array as the other channels so it will demand the necesarry RAM.
 
 * Press 'Show 3D' to create the 3D display with the desired params. A new Napari window will open and show your desired channels. Note that any RGB images will be split into three seperate red, green, and blue channels.

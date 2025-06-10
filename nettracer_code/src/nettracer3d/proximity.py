@@ -9,6 +9,7 @@ import multiprocessing as mp
 import pandas as pd
 import matplotlib.pyplot as plt
 from typing import Dict, Union, Tuple, List, Optional
+from collections import defaultdict
 
 
 # Related to morphological border searching:
@@ -142,15 +143,17 @@ def find_shared_value_pairs(input_dict):
 
 #Related to kdtree centroid searching:
 
-def populate_array(centroids):
+def populate_array(centroids, clip=False):
     """
     Create a 3D array from centroid coordinates.
     
     Args:
         centroids: Dictionary where keys are object IDs and values are [z,y,x] coordinates
+        clip: Boolean, if True, transpose all centroids so minimum values become 0
     
     Returns:
-        3D numpy array where values are object IDs at their centroid locations
+        If clip=False: 3D numpy array where values are object IDs at their centroid locations
+        If clip=True: Tuple of (3D numpy array, dictionary with clipped centroids)
     """
     # Input validation
     if not centroids:
@@ -163,21 +166,39 @@ def populate_array(centroids):
     min_coords = coords.min(axis=0)
     max_coords = coords.max(axis=0)
     
-    # Check for negative coordinates
-    if np.any(min_coords < 0):
+    # Check for negative coordinates only if not clipping
+    if not clip and np.any(min_coords < 0):
         raise ValueError("Negative coordinates found in centroids")
+    
+    # Apply clipping if requested
+    clipped_centroids = {}
+    if clip:
+        # Transpose all coordinates so minimum becomes 0
+        coords = coords - min_coords
+        max_coords = max_coords - min_coords
+        min_coords = np.zeros_like(min_coords)
+        
+        # Create dictionary with clipped centroids
+        for i, obj_id in enumerate(centroids.keys()):
+            clipped_centroids[obj_id] = coords[i].tolist()
     
     # Create array
     array = np.zeros((max_coords[0] + 1, 
                      max_coords[1] + 1, 
                      max_coords[2] + 1), dtype=int)
     
-    # Populate array with rounded coordinates
-    for obj_id, coord in centroids.items():
-        z, y, x = np.round([coord[0], coord[1], coord[2]]).astype(int)
+    # Populate array with (possibly clipped) rounded coordinates
+    for i, (obj_id, coord) in enumerate(centroids.items()):
+        if clip:
+            z, y, x = coords[i]  # Use pre-computed clipped coordinates
+        else:
+            z, y, x = np.round([coord[0], coord[1], coord[2]]).astype(int)
         array[z, y, x] = obj_id
         
-    return array
+    if clip:
+        return array, clipped_centroids
+    else:
+        return array
 
 def find_neighbors_kdtree(radius, centroids=None, array=None, targets=None):
     # Get coordinates of nonzero points
@@ -647,3 +668,62 @@ def plot_ripley_functions(r_values, k_values, h_values, dimension=2, figsize=(12
     plt.tight_layout()
     plt.show()
     #plt.clf()
+
+
+
+
+def partition_objects_into_cells(object_centroids, cell_size):
+    """
+    Partition objects into 3D grid cells based on their centroids.
+    
+    Args:
+        object_centroids (dict): Dictionary with object labels as keys and [z,y,x] coordinates as values
+        cell_size (tuple or int): Size of each cell. If int, creates cubic cells. If tuple, (z_size, y_size, x_size)
+    
+    Returns:
+        dict: Dictionary with cell numbers as keys and lists of object labels as values
+    """
+    
+    if not object_centroids:
+        return {}
+    
+    # Handle cell_size input
+    if isinstance(cell_size, (int, float)):
+        cell_size = (cell_size, cell_size, cell_size)
+    elif len(cell_size) == 1:
+        cell_size = (cell_size[0], cell_size[0], cell_size[0])
+    
+    # Extract centroids and find bounds
+    centroids = np.array(list(object_centroids.values()))
+    labels = list(object_centroids.keys())
+    
+    # Find the bounding box of all centroids
+    min_coords = np.min(centroids, axis=0)  # [min_z, min_y, min_x]
+    max_coords = np.max(centroids, axis=0)  # [max_z, max_y, max_x]
+    
+    # Calculate number of cells in each dimension
+    dimensions = max_coords - min_coords
+    num_cells = np.ceil(dimensions / np.array(cell_size)).astype(int)
+    
+    # Initialize result dictionary
+    cell_assignments = defaultdict(list)
+    
+    # Assign each object to a cell
+    for i, (label, centroid) in enumerate(object_centroids.items()):
+        # Calculate which cell this centroid belongs to
+        relative_pos = np.array(centroid) - min_coords
+        cell_indices = np.floor(relative_pos / np.array(cell_size)).astype(int)
+        
+        # Ensure indices don't exceed bounds (handles edge cases)
+        cell_indices = np.minimum(cell_indices, num_cells - 1)
+        cell_indices = np.maximum(cell_indices, 0)
+        
+        # Convert 3D cell indices to a single cell number
+        cell_number = (cell_indices[0] * num_cells[1] * num_cells[2] + 
+                      cell_indices[1] * num_cells[2] + 
+                      cell_indices[2])
+        
+        cell_assignments[int(cell_number)].append(int(label))
+    
+    # Convert defaultdict to regular dict and sort keys
+    return dict(sorted(cell_assignments.items()))

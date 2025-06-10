@@ -5,7 +5,7 @@ from PyQt6.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout, QG
                             QFormLayout, QLineEdit, QPushButton, QFileDialog,
                             QLabel, QComboBox, QMessageBox, QTableView, QInputDialog,
                             QMenu, QTabWidget, QGroupBox)
-from PyQt6.QtCore import (QPoint, Qt, QAbstractTableModel, QTimer,  QThread, pyqtSignal)
+from PyQt6.QtCore import (QPoint, Qt, QAbstractTableModel, QTimer,  QThread, pyqtSignal, QObject, QCoreApplication)
 import numpy as np
 import time
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
@@ -26,6 +26,7 @@ from concurrent.futures import ThreadPoolExecutor
 from functools import partial
 from nettracer3d import segmenter
 from nettracer3d import segmenter_GPU
+from nettracer3d import excelotron
 
 
 
@@ -204,6 +205,7 @@ class ImageViewerWindow(QMainWindow):
         self.high_button.setChecked(True)
         buttons_layout.addWidget(self.high_button)
         self.highlight = True
+        self.needs_mini = False
 
         self.pen_button = QPushButton("🖊️")
         self.pen_button.setCheckable(True)
@@ -393,11 +395,14 @@ class ImageViewerWindow(QMainWindow):
 
         #self.canvas.mpl_connect('button_press_event', self.on_mouse_click)
 
-        # Initialize measurement points tracking
+        # Initialize measurement tracking
         self.measurement_points = []  # List to store point pairs
-        self.current_point = None  # Store first point of current pair
+        self.angle_measurements = []  # NEW: List to store angle trios
+        self.current_point = None  # Store first point of current pair/trio
+        self.current_second_point = None  # Store second point when building trio
         self.current_pair_index = 0  # Track pair numbering
-        
+        self.current_trio_index = 0  # Track trio numbering
+        self.measurement_mode = "distance"  # "distance" or "angle" mode
 
         # Add these new methods for handling neighbors and components (FOR RIGHT CLICKIGN)
         self.show_neighbors_clicked = None
@@ -409,6 +414,11 @@ class ImageViewerWindow(QMainWindow):
         self.mini_overlay = False # If the program is currently drawing the overlay by frame this will be true
         self.mini_overlay_data = None #Actual data for mini overlay
         self.mini_thresh = (500*500*500) # Array volume to start using mini overlays for
+        self.shape = None
+
+        self.excel_manager = ExcelotronManager(self)
+        self.excel_manager.data_received.connect(self.handle_excel_data)
+        self.prev_coms = None
 
     def start_left_scroll(self):
         """Start scrolling left when left arrow is pressed."""
@@ -658,6 +668,18 @@ class ImageViewerWindow(QMainWindow):
             edge_indices (list): List of edge indices to highlight
         """
 
+        if not self.high_button.isChecked():
+
+            if len(self.clicked_values['edges']) > 0:
+                self.format_for_upperright_table(self.clicked_values['edges'], title = 'Selected Edges')
+                self.needs_mini = True
+            if len(self.clicked_values['nodes']) > 0:
+                self.format_for_upperright_table(self.clicked_values['nodes'], title = 'Selected Nodes')
+                self.needs_mini = True
+
+            return
+
+
         def process_chunk(chunk_data, indices_to_check):
             """Process a single chunk of the array to create highlight mask"""
             mask = np.isin(chunk_data, indices_to_check)
@@ -822,21 +844,38 @@ class ImageViewerWindow(QMainWindow):
                     override_obj.triggered.connect(self.handle_override)
                     context_menu.addMenu(highlight_menu)
 
-                # Create measure menu
-                measure_menu = QMenu("Measure", self)
-
+                # Create measurement submenu
+                measure_menu = context_menu.addMenu("Measurements")
+                
+                # Distance measurement options
+                distance_menu = measure_menu.addMenu("Distance")
                 if self.current_point is None:
-                    # If no point is placed, show option to place first point
-                    show_point_menu = measure_menu.addAction("Place Measurement Point")
+                    show_point_menu = distance_menu.addAction("Place First Point")
                     show_point_menu.triggered.connect(
-                        lambda: self.place_point(x_idx, y_idx, self.current_slice))
+                        lambda: self.place_distance_point(x_idx, y_idx, self.current_slice))
                 else:
-                    # If first point is placed, show option to place second point
-                    show_point_menu = measure_menu.addAction("Place Second Point")
+                    show_point_menu = distance_menu.addAction("Place Second Point")
                     show_point_menu.triggered.connect(
-                        lambda: self.place_point(x_idx, y_idx, self.current_slice))
-
-                show_remove_menu = measure_menu.addAction("Remove Measurement Points")
+                        lambda: self.place_distance_point(x_idx, y_idx, self.current_slice))
+                
+                # Angle measurement options
+                angle_menu = measure_menu.addMenu("Angle")
+                if self.current_point is None:
+                    angle_first = angle_menu.addAction("Place First Point (A)")
+                    angle_first.triggered.connect(
+                        lambda: self.place_angle_point(x_idx, y_idx, self.current_slice))
+                elif self.current_second_point is None:
+                    angle_second = angle_menu.addAction("Place Second Point (B - Vertex)")
+                    angle_second.triggered.connect(
+                        lambda: self.place_angle_point(x_idx, y_idx, self.current_slice))
+                else:
+                    angle_third = angle_menu.addAction("Place Third Point (C)")
+                    angle_third.triggered.connect(
+                        lambda: self.place_angle_point(x_idx, y_idx, self.current_slice))
+                
+                show_remove_menu = measure_menu.addAction("Remove All Measurements")
+                show_remove_menu.triggered.connect(self.handle_remove_all_measurements)
+                
                 context_menu.addMenu(measure_menu)
                 
                 # Connect actions to callbacks
@@ -854,7 +893,6 @@ class ImageViewerWindow(QMainWindow):
                 if self.highlight_overlay is not None or self.mini_overlay_data is not None:
                     highlight_select = context_menu.addAction("Add highlight in network selection")
                     highlight_select.triggered.connect(self.handle_highlight_select)
-                show_remove_menu.triggered.connect(self.handle_remove_points)
                 
                 cursor_pos = QCursor.pos()
                 context_menu.exec(cursor_pos)
@@ -863,24 +901,25 @@ class ImageViewerWindow(QMainWindow):
                 pass
 
 
-    def place_point(self, x, y, z):
-        """Place a measurement point at the specified coordinates."""
+    def place_distance_point(self, x, y, z):
+        """Place a measurement point for distance measurement."""
         if self.current_point is None:
             # This is the first point
             self.current_point = (x, y, z)
             self.ax.plot(x, y, 'yo', markersize=8)
-            # Add pair index label above the point
-            self.ax.text(x, y+5, str(self.current_pair_index), 
-                        color='white', ha='center', va='bottom')
+            self.ax.text(x, y+5, f"D{self.current_pair_index}", 
+                        color='yellow', ha='center', va='bottom')
             self.canvas.draw()
-
+            self.measurement_mode = "distance"
         else:
             # This is the second point
             x1, y1, z1 = self.current_point
             x2, y2, z2 = x, y, z
             
             # Calculate distance
-            distance = np.sqrt(((x2-x1)*my_network.xy_scale)**2 + ((y2-y1)*my_network.xy_scale)**2 + ((z2-z1)*my_network.z_scale)**2)
+            distance = np.sqrt(((x2-x1)*my_network.xy_scale)**2 + 
+                              ((y2-y1)*my_network.xy_scale)**2 + 
+                              ((z2-z1)*my_network.z_scale)**2)
             distance2 = np.sqrt(((x2-x1))**2 + ((y2-y1))**2 + ((z2-z1))**2)
             
             # Store the point pair
@@ -894,9 +933,8 @@ class ImageViewerWindow(QMainWindow):
             
             # Draw second point and line
             self.ax.plot(x2, y2, 'yo', markersize=8)
-            # Add pair index label above the second point
-            self.ax.text(x2, y2+5, str(self.current_pair_index), 
-                        color='white', ha='center', va='bottom')
+            self.ax.text(x2, y2+5, f"D{self.current_pair_index}", 
+                        color='yellow', ha='center', va='bottom')
             if z1 == z2:  # Only draw line if points are on same slice
                 self.ax.plot([x1, x2], [y1, y2], 'r--', alpha=0.5)
             self.canvas.draw()
@@ -907,46 +945,194 @@ class ImageViewerWindow(QMainWindow):
             # Reset for next pair
             self.current_point = None
             self.current_pair_index += 1
+            self.measurement_mode = "distance"
 
-    def handle_remove_points(self):
-        """Remove all measurement points."""
+    def place_angle_point(self, x, y, z):
+        """Place a measurement point for angle measurement."""
+        if self.current_point is None:
+            # First point (A)
+            self.current_point = (x, y, z)
+            self.ax.plot(x, y, 'go', markersize=8)
+            self.ax.text(x, y+5, f"A{self.current_trio_index}", 
+                        color='green', ha='center', va='bottom')
+            self.canvas.draw()
+            self.measurement_mode = "angle"
+            
+        elif self.current_second_point is None:
+            # Second point (B - vertex)
+            self.current_second_point = (x, y, z)
+            x1, y1, z1 = self.current_point
+            
+            self.ax.plot(x, y, 'go', markersize=8)
+            self.ax.text(x, y+5, f"B{self.current_trio_index}", 
+                        color='green', ha='center', va='bottom')
+            
+            # Draw line from A to B
+            if z1 == z:
+                self.ax.plot([x1, x], [y1, y], 'g--', alpha=0.7)
+            self.canvas.draw()
+            
+        else:
+            # Third point (C)
+            x1, y1, z1 = self.current_point  # Point A
+            x2, y2, z2 = self.current_second_point  # Point B (vertex)
+            x3, y3, z3 = x, y, z  # Point C
+            
+            # Calculate angles and distances
+            angle_data = self.calculate_3d_angle(
+                (x1, y1, z1), (x2, y2, z2), (x3, y3, z3)
+            )
+            
+            # Store the trio
+            self.angle_measurements.append({
+                'trio_index': self.current_trio_index,
+                'point_a': (x1, y1, z1),
+                'point_b': (x2, y2, z2),  # vertex
+                'point_c': (x3, y3, z3),
+                **angle_data
+            })
+            
+            # Also add the two distances as separate pairs
+            dist_ab = np.sqrt(((x2-x1)*my_network.xy_scale)**2 + 
+                             ((y2-y1)*my_network.xy_scale)**2 + 
+                             ((z2-z1)*my_network.z_scale)**2)
+            dist_bc = np.sqrt(((x3-x2)*my_network.xy_scale)**2 + 
+                             ((y3-y2)*my_network.xy_scale)**2 + 
+                             ((z3-z2)*my_network.z_scale)**2)
+            
+            dist_ab_voxel = np.sqrt((x2-x1)**2 + (y2-y1)**2 + (z2-z1)**2)
+            dist_bc_voxel = np.sqrt((x3-x2)**2 + (y3-y2)**2 + (z3-z2)**2)
+            
+            self.measurement_points.extend([
+                {
+                    'pair_index': f"A{self.current_trio_index}-B{self.current_trio_index}",
+                    'point1': (x1, y1, z1),
+                    'point2': (x2, y2, z2),
+                    'distance': dist_ab,
+                    'distance2': dist_ab_voxel
+                },
+                {
+                    'pair_index': f"B{self.current_trio_index}-C{self.current_trio_index}",
+                    'point1': (x2, y2, z2),
+                    'point2': (x3, y3, z3),
+                    'distance': dist_bc,
+                    'distance2': dist_bc_voxel
+                }
+            ])
+            
+            # Draw third point and line
+            self.ax.plot(x3, y3, 'go', markersize=8)
+            self.ax.text(x3, y3+5, f"C{self.current_trio_index}", 
+                        color='green', ha='center', va='bottom')
+            
+            if z2 == z3:  # Draw line from B to C if on same slice
+                self.ax.plot([x2, x3], [y2, y3], 'g--', alpha=0.7)
+            self.canvas.draw()
+            
+            # Update measurement display
+            self.update_measurement_display()
+            
+            # Reset for next trio
+            self.current_point = None
+            self.current_second_point = None
+            self.current_trio_index += 1
+            self.measurement_mode = "angle"
+
+    def calculate_3d_angle(self, point_a, point_b, point_c):
+        """Calculate 3D angle at vertex B between points A-B-C."""
+        x1, y1, z1 = point_a
+        x2, y2, z2 = point_b  # vertex
+        x3, y3, z3 = point_c
+        
+        # Apply scaling
+        scaled_a = np.array([x1 * my_network.xy_scale, y1 * my_network.xy_scale, z1 * my_network.z_scale])
+        scaled_b = np.array([x2 * my_network.xy_scale, y2 * my_network.xy_scale, z2 * my_network.z_scale])
+        scaled_c = np.array([x3 * my_network.xy_scale, y3 * my_network.xy_scale, z3 * my_network.z_scale])
+        
+        # Create vectors from vertex B
+        vec_ba = scaled_a - scaled_b
+        vec_bc = scaled_c - scaled_b
+        
+        # Calculate angle using dot product
+        dot_product = np.dot(vec_ba, vec_bc)
+        magnitude_ba = np.linalg.norm(vec_ba)
+        magnitude_bc = np.linalg.norm(vec_bc)
+        
+        # Avoid division by zero
+        if magnitude_ba == 0 or magnitude_bc == 0:
+            return {'angle_degrees': 0}
+        
+        cos_angle = dot_product / (magnitude_ba * magnitude_bc)
+        cos_angle = np.clip(cos_angle, -1.0, 1.0)  # Handle numerical errors
+        
+        angle_radians = np.arccos(cos_angle)
+        angle_degrees = np.degrees(angle_radians)
+        
+        return {'angle_degrees': angle_degrees}
+
+    def handle_remove_all_measurements(self):
+        """Remove all measurement points and angles."""
         self.measurement_points = []
+        self.angle_measurements = []
         self.current_point = None
+        self.current_second_point = None
         self.current_pair_index = 0
+        self.current_trio_index = 0
+        self.measurement_mode = "distance"
         self.update_display()
         self.update_measurement_display()
 
-    # Modify the update_measurement_display method:
     def update_measurement_display(self):
         """Update the measurement information display in the top right widget."""
+        # Distance measurements
         if not self.measurement_points:
-            # Create empty DataFrame with no specific headers
-            df = pd.DataFrame()
+            distance_df = pd.DataFrame()
         else:
-            # Create data for DataFrame with measurement-specific headers
-            data = []
+            distance_data = []
             for point in self.measurement_points:
                 x1, y1, z1 = point['point1']
                 x2, y2, z2 = point['point2']
-                data.append({
+                distance_data.append({
                     'Pair ID': point['pair_index'],
                     'Point 1 (X,Y,Z)': f"({x1:.1f}, {y1:.1f}, {z1})",
                     'Point 2 (X,Y,Z)': f"({x2:.1f}, {y2:.1f}, {z2})",
                     'Scaled Distance': f"{point['distance']:.2f}",
                     'Voxel Distance': f"{point['distance2']:.2f}"
                 })
-            df = pd.DataFrame(data)
+            distance_df = pd.DataFrame(distance_data)
         
-        # Create new table for measurements
-        table = CustomTableView(self)
-        table.setModel(PandasModel(df))
+        # Angle measurements
+        if not self.angle_measurements:
+            angle_df = pd.DataFrame()
+        else:
+            angle_data = []
+            for angle in self.angle_measurements:
+                xa, ya, za = angle['point_a']
+                xb, yb, zb = angle['point_b']
+                xc, yc, zc = angle['point_c']
+                angle_data.append({
+                    'Trio ID': f"A{angle['trio_index']}-B{angle['trio_index']}-C{angle['trio_index']}",
+                    'Point A (X,Y,Z)': f"({xa:.1f}, {ya:.1f}, {za})",
+                    'Point B (X,Y,Z)': f"({xb:.1f}, {yb:.1f}, {zb})",
+                    'Point C (X,Y,Z)': f"({xc:.1f}, {yc:.1f}, {zc})",
+                    'Angle (°)': f"{angle['angle_degrees']:.1f}"
+                })
+            angle_df = pd.DataFrame(angle_data)
         
-        # Add to tabbed widget
-        self.tabbed_data.add_table("Measurements", table)
+        # Create tables
+        if not distance_df.empty:
+            distance_table = CustomTableView(self)
+            distance_table.setModel(PandasModel(distance_df))
+            self.tabbed_data.add_table("Distance Measurements", distance_table)
+            for column in range(distance_table.model().columnCount(None)):
+                distance_table.resizeColumnToContents(column)
         
-        # Adjust column widths to content
-        for column in range(table.model().columnCount(None)):
-            table.resizeColumnToContents(column)
+        if not angle_df.empty:
+            angle_table = CustomTableView(self)
+            angle_table.setModel(PandasModel(angle_df))
+            self.tabbed_data.add_table("Angle Measurements", angle_table)
+            for column in range(angle_table.model().columnCount(None)):
+                angle_table.resizeColumnToContents(column)
 
 
     def show_network_table(self):
@@ -1726,6 +1912,12 @@ class ImageViewerWindow(QMainWindow):
         self.highlight = self.high_button.isChecked()
         current_xlim = self.ax.get_xlim() if hasattr(self, 'ax') and self.ax.get_xlim() != (0, 1) else None
         current_ylim = self.ax.get_ylim() if hasattr(self, 'ax') and self.ax.get_ylim() != (0, 1) else None
+
+        if self.high_button.isChecked():
+            if self.highlight_overlay is None and ((len(self.clicked_values['nodes']) + len(self.clicked_values['edges'])) > 0):
+                if self.needs_mini:
+                    self.create_mini_overlay(node_indices = self.clicked_values['nodes'], edge_indices = self.clicked_values['edges'])
+                    self.needs_mini = False
         
         self.update_display(preserve_zoom=(current_xlim, current_ylim))
 
@@ -2680,6 +2872,8 @@ class ImageViewerWindow(QMainWindow):
             load_action.triggered.connect(lambda checked, ch=i: self.load_channel(ch))
         load_action = load_menu.addAction("Load Network")
         load_action.triggered.connect(self.load_network)
+        load_action = load_menu.addAction("Load From Excel Helper")
+        load_action.triggered.connect(self.launch_excelotron)
         misc_menu = load_menu.addMenu("Load Misc Properties")
         load_action = misc_menu.addAction("Load Node IDs")
         load_action.triggered.connect(lambda: self.load_misc('Node Identities'))
@@ -2696,10 +2890,16 @@ class ImageViewerWindow(QMainWindow):
         network_menu = analysis_menu.addMenu("Network")
         netshow_action = network_menu.addAction("Show Network")
         netshow_action.triggered.connect(self.show_netshow_dialog)
-        partition_action = network_menu.addAction("Community Partition +Generic Community Stats")
+        report_action = network_menu.addAction("Generic Network Report")
+        report_action.triggered.connect(self.handle_report)
+        partition_action = network_menu.addAction("Community Partition + Generic Community Stats")
         partition_action.triggered.connect(self.show_partition_dialog)
-        com_identity_action = network_menu.addAction("Identity Makeup of Network Communities (Weighted avg by community size)")
+        com_identity_action = network_menu.addAction("Identity Makeup of Network Communities (and UMAP)")
         com_identity_action.triggered.connect(self.handle_com_id)
+        com_neighbor_action = network_menu.addAction("Convert Network Communities into Neighborhoods?")
+        com_neighbor_action.triggered.connect(self.handle_com_neighbor)
+        com_cell_action = network_menu.addAction("Create Communities Based on Cuboidal Proximity Cells?")
+        com_cell_action.triggered.connect(self.handle_com_cell)
         stats_menu = analysis_menu.addMenu("Stats")
         allstats_action = stats_menu.addAction("Calculate Generic Network Stats")
         allstats_action.triggered.connect(self.stats)
@@ -2711,8 +2911,10 @@ class ImageViewerWindow(QMainWindow):
         degree_dist_action.triggered.connect(self.show_degree_dist_dialog)
         neighbor_id_action = stats_menu.addAction("Identity Distribution of Neighbors")
         neighbor_id_action.triggered.connect(self.show_neighbor_id_dialog)
-        ripley_action = stats_menu.addAction("Clustering Analysis")
+        ripley_action = stats_menu.addAction("Ripley Clustering Analysis")
         ripley_action.triggered.connect(self.show_ripley_dialog)
+        heatmap_action = stats_menu.addAction("Community Cluster Heatmap")
+        heatmap_action.triggered.connect(self.show_heatmap_dialog)
         vol_action = stats_menu.addAction("Calculate Volumes")
         vol_action.triggered.connect(self.volumes)
         rad_action = stats_menu.addAction("Calculate Radii")
@@ -2768,6 +2970,8 @@ class ImageViewerWindow(QMainWindow):
         thresh_action.triggered.connect(self.show_thresh_dialog)
         mask_action = image_menu.addAction("Mask Channel")
         mask_action.triggered.connect(self.show_mask_dialog)
+        crop_action = image_menu.addAction("Crop Channels")
+        crop_action.triggered.connect(self.show_crop_dialog)
         type_action = image_menu.addAction("Channel dtype")
         type_action.triggered.connect(self.show_type_dialog)
         skeletonize_action = image_menu.addAction("Skeletonize")
@@ -3133,6 +3337,11 @@ class ImageViewerWindow(QMainWindow):
     def show_mask_dialog(self):
         """Show the mask dialog"""
         dialog = MaskDialog(self)
+        dialog.exec()
+
+    def show_crop_dialog(self):
+        """Show the crop dialog"""
+        dialog = CropDialog(self)
         dialog.exec()
 
     def show_type_dialog(self):
@@ -3553,6 +3762,103 @@ class ImageViewerWindow(QMainWindow):
                 f"Failed to load network: {str(e)}"
             )
 
+    def launch_excelotron(self):
+        """Method to launch Excelotron - call this from a button or menu"""
+        self.excel_manager.launch()
+    
+    def close_excelotron(self):
+        """Method to close Excelotron"""
+        self.excel_manager.close()
+    
+    def handle_excel_data(self, data_dict, property_name):
+        """Handle data received from Excelotron"""
+        print(f"Received data for property: {property_name}")
+        print(f"Data keys: {list(data_dict.keys())}")
+
+        if property_name == 'Node Centroids':
+
+            try:
+
+                ys = data_dict['Y']
+                xs = data_dict['X']
+                if 'Numerical IDs' in data_dict:
+                    nodes = data_dict['Numerical IDs']
+                else:
+                    nodes = np.arange(1, len(ys) + 1)
+
+
+                if 'Z' in data_dict:
+                    zs = data_dict['Z']
+                else:
+                    zs = np.zeros(len(ys))
+
+                centroids = {}
+
+                for i in range(len(nodes)):
+
+                    centroids[nodes[i]] = [int(zs[i]), int(ys[i]), int(xs[i])]
+
+                my_network.node_centroids = centroids
+
+                self.format_for_upperright_table(my_network.node_centroids, 'NodeID', ['Z', 'Y', 'X'], 'Node Centroids')
+
+                print("Centroids succesfully set")
+
+            except Exception as e:
+                print(f"Error: {e}")
+
+        elif property_name == 'Node Identities':
+
+            try:
+
+                idens = data_dict['Identity Column']
+
+                if 'Numerical IDs' in data_dict:
+                    nodes = data_dict['Numerical IDs']
+                else:
+                    nodes = np.arange(1, len(idens) + 1)
+
+                identities = {}
+
+
+                for i in range(len(nodes)):
+
+                    identities[nodes[i]] = str(idens[i])
+
+                my_network.node_identities = identities
+
+                self.format_for_upperright_table(my_network.node_identities, 'NodeID', 'Identity', title = 'Node Identities')
+
+                print("Identities succesfully set")
+
+            except Exception as e:
+                print(f"Error: {e}")
+
+        elif property_name == 'Node Communities':
+
+            try:
+
+                coms = data_dict['Community Identifier']
+
+                if 'Numerical IDs' in data_dict:
+                    nodes = data_dict['Numerical IDs']
+                else:
+                    nodes = np.arange(1, len(coms) + 1)
+
+                communities = {}
+
+                for i in range(len(nodes)):
+
+                    communities[nodes[i]] = [str(coms[i])]
+
+                my_network.communities = communities
+
+                self.format_for_upperright_table(my_network.communities, 'NodeID', 'CommunityID', title = 'Community Partition')
+
+                print("Communities succesfully set")
+
+            except Exception as e:
+                print(f"Error: {e}")
 
 
     def set_active_channel(self, index):
@@ -3782,6 +4088,8 @@ class ImageViewerWindow(QMainWindow):
                         self.original_shape = (self.original_shape[0], self.original_shape[1], self.original_shape[2])
             except:
                 pass
+
+            self.shape = self.channel_data[channel_index].shape
 
             self.update_display(reset_resize = reset_resize)
 
@@ -4278,24 +4586,62 @@ class ImageViewerWindow(QMainWindow):
         dialog = NetShowDialog(self)
         dialog.exec()
 
+    def handle_report(self):
+
+        def invert_dict(d):
+            inverted = {}
+            for key, value in d.items():
+                inverted.setdefault(value, []).append(key)
+            return inverted
+
+        stats = {}
+        
+        try:
+            # Basic graph properties
+            stats['num_nodes'] = my_network.network.number_of_nodes()
+            stats['num_edges'] = my_network.network.number_of_edges()
+        except:
+            pass
+
+        try:
+            idens = invert_dict(my_network.node_identities)
+
+            for iden, nodes in idens.items():
+                stats[f'num_nodes_{iden}'] = len(nodes)
+        except:
+            pass
+
+        try:
+
+            coms = invert_dict(my_network.communities)
+
+            for com, nodes in coms.items():
+                stats[f'num_nodes_community_{com}'] = len(nodes)
+        except:
+            pass
+
+        self.format_for_upperright_table(stats, title = 'Network Report')
+
+
+
     def show_partition_dialog(self):
         dialog = PartitionDialog(self)
         dialog.exec()
 
     def handle_com_id(self):
-        if my_network.node_identities is None:
-            print("Node identities must be set")
 
-        if my_network.communities is None:
-            self.show_partition_dialog()
+        dialog = ComIdDialog(self)
+        dialog.exec()
 
-            if my_network.communities is None:
-                return
+    def handle_com_neighbor(self):
 
-        info = my_network.community_id_info()
+        dialog = ComNeighborDialog(self)
+        dialog.exec()
 
-        self.format_for_upperright_table(info, 'Node Identity Type', 'Weighted Proportion in Communities', 'Weighted Average of Community Makeup')
+    def handle_com_cell(self):
 
+        dialog = ComCellDialog(self)
+        dialog.exec()
 
     def show_radial_dialog(self):
         dialog = RadialDialog(self)
@@ -4311,6 +4657,10 @@ class ImageViewerWindow(QMainWindow):
 
     def show_ripley_dialog(self):
         dialog = RipleyDialog(self)
+        dialog.exec()
+
+    def show_heatmap_dialog(self):
+        dialog = HeatmapDialog(self)
         dialog.exec()
 
     def show_random_dialog(self):
@@ -4345,6 +4695,21 @@ class ImageViewerWindow(QMainWindow):
     def show_code_dialog(self, sort = 'Community'):
         dialog = CodeDialog(self, sort = sort)
         dialog.exec()
+
+    def closeEvent(self, event):
+        """Override closeEvent to close all windows when main window closes"""
+        
+        # Close all Qt windows
+        QApplication.closeAllWindows()
+        
+        # Close all matplotlib figures
+        plt.close('all')
+        
+        # Accept the close event
+        event.accept()
+        
+        # Force quit the application
+        QCoreApplication.quit()
 
 
 
@@ -5527,8 +5892,7 @@ class ArbitraryDialog(QDialog):
             
         except Exception as e:
             QMessageBox.critical(self, "Error", f"Error processing selections: {str(e)}")
-            import traceback
-            print(traceback.format_exc())
+
 
 class Show3dDialog(QDialog):
     def __init__(self, parent=None):
@@ -5542,10 +5906,15 @@ class Show3dDialog(QDialog):
         layout.addRow("Downsample Factor (Optional to speed up display):", self.downsample)
 
         # Network Overlay checkbox (default True)
-        self.cubic = QPushButton("cubic")
+        self.cubic = QPushButton("Cubic")
         self.cubic.setCheckable(True)
         self.cubic.setChecked(False)
         layout.addRow("Use cubic downsample (Slower but preserves shape better potentially)?", self.cubic)
+
+        self.box = QPushButton("Box")
+        self.box.setCheckable(True)
+        self.box.setChecked(False)
+        layout.addRow("Include bounding box?", self.box)
         
         # Add Run button
         run_button = QPushButton("Show 3D")
@@ -5564,6 +5933,7 @@ class Show3dDialog(QDialog):
                 downsample = None
 
             cubic = self.cubic.isChecked()
+            box = self.box.isChecked()
 
             if cubic:
                 order = 3
@@ -5596,7 +5966,7 @@ class Show3dDialog(QDialog):
                 arrays_3d.append(self.parent().highlight_overlay)
                 colors.append(color_template[4])
         
-            n3d.show_3d(arrays_3d, arrays_4d, down_factor = downsample, order = order, xy_scale = my_network.xy_scale, z_scale = my_network.z_scale, colors = colors)
+            n3d.show_3d(arrays_3d, arrays_4d, down_factor = downsample, order = order, xy_scale = my_network.xy_scale, z_scale = my_network.z_scale, colors = colors, box = box)
             
             self.accept()
 
@@ -5972,7 +6342,7 @@ class PartitionDialog(QDialog):
         dostats = self.stats.isChecked()
 
         try:
-            seed = int(self.seed.text()) if self.seed.text() else None
+            seed = int(self.seed.text()) if self.seed.text() else 42
         except:
             seed = None
 
@@ -5992,6 +6362,192 @@ class PartitionDialog(QDialog):
 
         except Exception as e:
             print(f"Error creating communities: {e}")
+
+class ComIdDialog(QDialog):
+
+    def __init__(self, parent=None):
+
+        super().__init__(parent)
+        self.setWindowTitle("Select Mode")
+        self.setModal(True)
+
+        layout = QFormLayout(self)
+
+        self.mode = QComboBox()
+        self.mode.addItems(["Average Identities Per Community", "Weighted Average Identity of All Communities", ])
+        self.mode.setCurrentIndex(0)
+        layout.addRow("Mode", self.mode)
+
+        # umap checkbox (default True)
+        self.umap = QPushButton("UMAP")
+        self.umap.setCheckable(True)
+        self.umap.setChecked(True)
+        layout.addRow("Generate UMAP?:", self.umap)
+
+        # weighted checkbox (default True)
+        self.label = QPushButton("Label")
+        self.label.setCheckable(True)
+        self.label.setChecked(False)
+        layout.addRow("If using above - label UMAP points?:", self.label)
+
+
+        # Add Run button
+        run_button = QPushButton("Get Community ID Info")
+        run_button.clicked.connect(self.run)
+        layout.addWidget(run_button)
+
+    def run(self):
+
+        try:
+
+            if my_network.node_identities is None:
+                print("Node identities must be set")
+
+            if my_network.communities is None:
+                self.parent().show_partition_dialog()
+
+                if my_network.communities is None:
+                    return
+
+            mode = self.mode.currentIndex()
+
+            umap = self.umap.isChecked()
+            label = self.label.isChecked()
+
+            if mode == 1:
+
+                info = my_network.community_id_info()
+
+                self.parent().format_for_upperright_table(info, 'Node Identity Type', 'Weighted Proportion in Communities', 'Weighted Average of Community Makeup')
+
+            else:
+
+                info, names = my_network.community_id_info_per_com(umap = umap, label = label)
+
+                self.parent().format_for_upperright_table(info, 'Community', names, 'Average of Community Makeup')
+
+            self.accept()
+
+        except Exception as e:
+
+            print(f"Error: {e}")
+
+
+
+class ComNeighborDialog(QDialog):
+
+    def __init__(self, parent=None):
+
+        super().__init__(parent)
+        self.setWindowTitle("Reassign Communities Based on Identity Similarity?")
+        self.setModal(True)
+
+        layout = QFormLayout(self)
+
+        self.neighborcount = QLineEdit("5")
+        layout.addRow("Num Neighborhoods:", self.neighborcount)
+
+        self.seed = QLineEdit("")
+        layout.addRow("Clustering Seed:", self.seed)
+
+        self.limit = QLineEdit("")
+        layout.addRow("Min Community Size to be grouped (Smaller communities will be placed in neighborhood 0 - does not apply if empty)", self.limit)
+
+        # Add Run button
+        run_button = QPushButton("Get Communities")
+        run_button.clicked.connect(self.run)
+        layout.addWidget(run_button)
+
+    def run(self):
+
+        try:
+
+            if my_network.node_identities is None:
+                print("Node identities must be set")
+
+            if my_network.communities is None:
+                self.parent().show_partition_dialog()
+
+                if my_network.communities is None:
+                    return
+
+            seed = float(self.seed.text()) if self.seed.text().strip() else 42
+
+            limit = int(self.limit.text()) if self.limit.text().strip() else None
+
+
+            neighborcount = int(self.neighborcount.text()) if self.neighborcount.text().strip() else 5
+
+            if self.parent().prev_coms is None:
+
+                self.parent().prev_coms = copy.deepcopy(my_network.communities)
+                my_network.assign_neighborhoods(seed, neighborcount, limit = limit)
+            else:
+                my_network.assign_neighborhoods(seed, neighborcount, limit = limit, prev_coms = self.parent().prev_coms)
+
+            self.parent().format_for_upperright_table(my_network.communities, 'NodeID', 'NeighborhoodID', title = 'Neighborhood Partition')
+
+            print("Neighborhoods have been assigned to communities based on similarity")
+
+            self.accept()
+
+        except Exception as e:
+
+            print(f"Error assigning neighborhoods: {e}")
+
+class ComCellDialog(QDialog):
+
+    def __init__(self, parent=None):
+
+        super().__init__(parent)
+        self.setWindowTitle("Assign Communities Based on Proximity Within Cuboidal Cells?")
+        self.setModal(True)
+
+        layout = QFormLayout(self)
+
+        self.size = QLineEdit("")
+        layout.addRow("Cell Size:", self.size)
+
+        self.xy_scale = QLineEdit(f"{my_network.xy_scale}")
+        layout.addRow("xy scale:", self.xy_scale)
+
+        self.z_scale = QLineEdit(f"{my_network.z_scale}")
+        layout.addRow("z scale:", self.z_scale)
+
+        # Add Run button
+        run_button = QPushButton("Get Neighborhoods (Note this overwrites current communities - save your coms first)")
+        run_button.clicked.connect(self.run)
+        layout.addWidget(run_button)
+
+    def run(self):
+
+        try:
+
+            size = float(self.size.text()) if self.size.text().strip() else None
+            xy_scale = float(self.xy_scale.text()) if self.xy_scale.text().strip() else 1
+            z_scale = float(self.z_scale.text()) if self.z_scale.text().strip() else 1
+
+            if size is None:
+                return
+
+            if my_network.node_centroids is None:
+                self.parent().show_centroid_dialog()
+            if my_network.node_centroids is None:
+                return
+
+            my_network.community_cells(size = size, xy_scale = xy_scale, z_scale = z_scale)
+
+            self.parent().format_for_upperright_table(my_network.communities, 'NodeID', 'CommunityID')
+
+            self.accept()
+
+        except Exception as e:
+
+            print(f"Error: {e}")
+
+
+
+
 
 
 
@@ -6259,6 +6815,60 @@ class RipleyDialog(QDialog):
             import traceback
             print(traceback.format_exc())
             print(f"Error: {e}")
+
+class HeatmapDialog(QDialog):
+
+    def __init__(self, parent = None):
+
+        super().__init__(parent)
+        self.setWindowTitle("Heatmap Parameters")
+        self.setModal(True)
+
+        layout = QFormLayout(self)
+
+        self.nodecount = QLineEdit("")
+        layout.addRow("(Optional) Total Number of Nodes?:", self.nodecount)
+
+
+        # stats checkbox (default True)
+        self.is3d = QPushButton("3D")
+        self.is3d.setCheckable(True)
+        self.is3d.setChecked(True)
+        layout.addRow("Use 3D Plot (uncheck for 2D)?:", self.is3d)
+
+
+        # Add Run button
+        run_button = QPushButton("Run")
+        run_button.clicked.connect(self.run)
+        layout.addWidget(run_button)
+
+    def run(self):
+
+        nodecount = int(self.nodecount.text()) if self.nodecount.text().strip() else None
+
+        is3d = self.is3d.isChecked()
+
+
+        if my_network.communities is None:
+            if my_network.network is not None:
+                self.parent().show_partition_dialog()
+            else:
+                self.parent().handle_com_cell()
+            if my_network.communities is None:
+                return
+
+        heat_dict = my_network.community_heatmap(num_nodes = nodecount, is3d = is3d)
+
+        self.parent().format_for_upperright_table(heat_dict, metric='Community', value='ln(Predicted Community Nodecount/Actual)', title="Community Heatmap")
+
+        self.accept()
+
+
+
+
+
+
+
 
 class RandomDialog(QDialog):
 
@@ -7316,7 +7926,7 @@ class SLabelDialog(QDialog):
             try:
 
                 # Update both the display data and the network object
-                binary_array = sdl.smart_label(binary_array, label_array, directory = None, GPU = GPU, predownsample = down_factor)
+                binary_array = sdl.smart_label(binary_array, label_array, directory = None, GPU = GPU, predownsample = down_factor, remove_template = True)
 
                 label_array = sdl.invert_array(label_array)
 
@@ -7433,11 +8043,100 @@ class ThresholdDialog(QDialog):
         msg.setStandardButtons(QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No)
         return msg.exec() == QMessageBox.StandardButton.Yes
 
+class ExcelotronManager(QObject):
+    # Signal to emit when data is received from Excelotron
+    data_received = pyqtSignal(dict, str)  # dictionary, property_name
+    
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.excelotron_window = None
+        self.last_data = None
+        self.last_property = None
+    
+    def launch(self):
+        """Launch the Excelotron window"""
+        
+        if self.excelotron_window is None:
+            ExcelGUIClass = excelotron.main(standalone=False)
+            self.excelotron_window = ExcelGUIClass()
+            self.excelotron_window.data_exported.connect(self._on_data_exported)
+            # Connect to both close event and destroyed signal
+            self.excelotron_window.destroyed.connect(self._on_window_destroyed)
+            self.excelotron_window.closeEvent = self._create_close_handler(self.excelotron_window.closeEvent)
+            self.excelotron_window.show()
+        else:
+            self.excelotron_window.raise_()
+            self.excelotron_window.activateWindow()
+    
+    def _create_close_handler(self, original_close_event):
+        """Create a close event handler that cleans up properly"""
+        def close_handler(event):
+            self._cleanup_window()
+            original_close_event(event)
+        return close_handler
+    
+    def close(self):
+        """Close the Excelotron window"""
+        if self.excelotron_window is not None:
+            self.excelotron_window.close()
+            self._cleanup_window()
+    
+    def _cleanup_window(self):
+        """Properly cleanup the window reference"""
+        if self.excelotron_window is not None:
+            try:
+                # Disconnect all signals to prevent issues
+                self.excelotron_window.data_exported.disconnect()
+                self.excelotron_window.destroyed.disconnect()
+            except:
+                pass  # Ignore if already disconnected
+            
+            # Schedule for deletion
+            self.excelotron_window.deleteLater()
+            self.excelotron_window = None
+    
+    def is_open(self):
+        """Check if Excelotron window is open"""
+        is_open = self.excelotron_window is not None
+        return is_open
+    
+    def _on_data_exported(self, data_dict, property_name):
+        """Internal slot to handle data from Excelotron"""
+        self.last_data = data_dict
+        self.last_property = property_name
+        # Re-emit the signal for parent to handle
+        self.data_received.emit(data_dict, property_name)
+    
+    def _on_window_destroyed(self):
+        """Handle when the Excelotron window is destroyed/closed"""
+        self.excelotron_window = None
+    
+    def get_last_data(self):
+        """Get the last exported data"""
+        return self.last_data, self.last_property
 
 class MachineWindow(QMainWindow):
 
     def __init__(self, parent=None, GPU = False):
         super().__init__(parent)
+
+        if self.parent().active_channel == 0:
+            if self.parent().channel_data[0] is not None:
+                try:
+                    active_data = self.parent().channel_data[0]
+                    act_channel = 0
+                except:
+                    active_data = self.parent().channel_data[1]
+                    act_channel = 1
+            else:
+                active_data = self.parent().channel_data[1]
+                act_channel = 1
+
+        try:
+            array1 = np.zeros_like(active_data).astype(np.uint8)
+        except:
+            print("No data in nodes channel")
+            return
 
         self.setWindowTitle("Threshold")
         
@@ -7459,25 +8158,6 @@ class MachineWindow(QMainWindow):
         self.parent().last_change = None
 
         self.parent().pen_button.setEnabled(False)
-
-
-        if self.parent().active_channel == 0:
-            if self.parent().channel_data[0] is not None:
-                try:
-                    active_data = self.parent().channel_data[0]
-                    act_channel = 0
-                except:
-                    active_data = self.parent().channel_data[1]
-                    act_channel = 1
-            else:
-                active_data = self.parent().channel_data[1]
-                act_channel = 1
-
-        try:
-            array1 = np.zeros_like(active_data).astype(np.uint8)
-        except:
-            print("No data in nodes channel")
-            return
 
         array3 = np.zeros_like(active_data).astype(np.uint8)
         self.parent().highlight_overlay = array3 #Clear this out for the segmenter to use
@@ -8863,6 +9543,91 @@ class MaskDialog(QDialog):
         except Exception as e:
             print(f"Error masking: {e}")
 
+class CropDialog(QDialog):
+
+    def __init__(self, parent=None):
+
+        try:
+
+            super().__init__(parent)
+            self.setWindowTitle("Crop Image?")
+            self.setModal(True)
+
+            layout = QFormLayout(self)
+
+            self.xmin = QLineEdit("0")
+            layout.addRow("X Min", self.xmin)
+
+            self.xmax = QLineEdit(f"{self.parent().shape[2]}")
+            layout.addRow("X Max", self.xmax)
+
+            self.ymin = QLineEdit("0")
+            layout.addRow("Y Min", self.ymin)
+
+            self.ymax = QLineEdit(f"{self.parent().shape[1]}")
+            layout.addRow("Y Max", self.ymax)
+
+            self.zmin = QLineEdit("0")
+            layout.addRow("Z Min", self.zmin)
+
+            self.zmax = QLineEdit(f"{self.parent().shape[0]}")
+            layout.addRow("Z Max", self.zmax)
+
+            # Add Run button
+            run_button = QPushButton("Run")
+            run_button.clicked.connect(self.run)
+            layout.addRow(run_button)
+
+        except:
+            pass
+
+    def run(self):
+
+        try:
+
+            xmin = int(self.xmin.text()) if self.xmin.text() else 0
+            ymin = int(self.ymin.text()) if self.ymin.text() else 0
+            zmin = int(self.zmin.text()) if self.zmin.text() else 0
+            xmax = int(self.xmax.text()) if self.xmax.text() else self.parent().shape[2]
+            ymax = int(self.ymax.text()) if self.xmax.text() else self.parent().shape[1]
+            zmax = int(self.zmax.text()) if self.xmax.text() else self.parent().shape[0]
+
+            args = xmin, ymin, zmin, xmax, ymax, zmax
+
+            for i, array in enumerate(self.parent().channel_data):
+
+                if array is None:
+
+                    continue
+
+                else:
+
+                    array = self.reslice_3d_array(array, args)
+
+                    self.parent().load_channel(i, array, data = True)
+
+            self.accept()
+
+        except Exception as e:
+
+            print(f"Error cropping: {e}")
+
+
+
+
+
+
+
+
+    def reslice_3d_array(self, array, args):
+        """Internal method used for the secondary algorithm to reslice subarrays around nodes."""
+
+        x_start, y_start, z_start, x_end, y_end, z_end = args
+        
+        # Reslice the array
+        array = array[z_start:z_end+1, y_start:y_end+1, x_start:x_end+1]
+        
+        return array
 
 
 class TypeDialog(QDialog):
@@ -9226,6 +9991,12 @@ class CentroidNodeDialog(QDialog):
         
         layout = QFormLayout(self)
 
+        # Add mode selection dropdown
+        self.mode_selector = QComboBox()
+        self.mode_selector.addItems(["Starting at 0", "Starting at Min Centroids (will transpose centroids)"])
+        self.mode_selector.setCurrentIndex(0)  # Default to Mode 1
+        layout.addRow("Execution Mode:", self.mode_selector)
+
         # Add Run button
         run_button = QPushButton("Run Node Generation? (Will override current nodes). Note it is presumed your nodes begin at 1, not 0.")
         run_button.clicked.connect(self.run_nodes)
@@ -9255,7 +10026,18 @@ class CentroidNodeDialog(QDialog):
                 )
                 return
 
-            my_network.nodes = my_network.centroid_array()
+            mode = self.mode_selector.currentIndex()
+
+            if mode == 0:
+
+                my_network.nodes = my_network.centroid_array()
+
+            else:
+
+                my_network.nodes, my_network.centroids = my_network.centroid_array(clip = True)
+
+                self.parent().format_for_upperright_table(my_network.node_centroids, 'NodeID', ['Z', 'Y', 'X'], 'Node Centroids')
+
 
             self.parent().load_channel(0, channel_data = my_network.nodes, data = True)
 
@@ -9338,7 +10120,13 @@ class GenNodesDialog(QDialog):
         # Auto checkbox
         self.auto = QPushButton("Auto")
         self.auto.setCheckable(True)
-        self.auto.setChecked(True)
+        try:
+            if my_network.edges.shape[0] == 1:
+                self.auto.setChecked(False)
+            else:
+                self.auto.setChecked(True)
+        except:
+            self.auto.setChecked(True)
         rec_layout.addWidget(QLabel("Attempt to Auto Correct Skeleton Looping:"), 1, 0)
         rec_layout.addWidget(self.auto, 1, 1)
         
@@ -9503,10 +10291,10 @@ class BranchDialog(QDialog):
         correction_layout = QGridLayout()
         
         # Branch Fix checkbox
-        self.fix = QPushButton("Auto-Correct Branches")
+        self.fix = QPushButton("Auto-Correct 1")
         self.fix.setCheckable(True)
         self.fix.setChecked(False)
-        correction_layout.addWidget(QLabel("Attempt to auto-correct branch labels:"), 0, 0)
+        correction_layout.addWidget(QLabel("Auto-Correct Branches by Collapsing Busy Neighbors: "), 0, 0)
         correction_layout.addWidget(self.fix, 0, 1)
         
         # Fix value
@@ -9518,6 +10306,12 @@ class BranchDialog(QDialog):
         self.seed = QLineEdit('')
         correction_layout.addWidget(QLabel("Random seed for auto correction (int - optional):"), 2, 0)
         correction_layout.addWidget(self.seed, 2, 1)
+
+        self.fix2 = QPushButton("Auto-Correct 2")
+        self.fix2.setCheckable(True)
+        self.fix2.setChecked(True)
+        correction_layout.addWidget(QLabel("Auto-Correct Branches by Collapsing Internal Labels: "), 3, 0)
+        correction_layout.addWidget(self.fix2, 3, 1)
         
         correction_group.setLayout(correction_layout)
         main_layout.addWidget(correction_group)
@@ -9587,6 +10381,7 @@ class BranchDialog(QDialog):
             GPU = self.GPU.isChecked()
             cubic = self.cubic.isChecked()
             fix = self.fix.isChecked()
+            fix2 = self.fix2.isChecked()
             fix_val = float(self.fix_val.text()) if self.fix_val.text() else None
             seed = int(self.seed.text()) if self.seed.text() else None
 
@@ -9603,6 +10398,25 @@ class BranchDialog(QDialog):
 
                 output = n3d.label_branches(my_network.edges, nodes = my_network.nodes, bonus_array = original_array, GPU = GPU, down_factor = down_factor, arrayshape = original_shape)
 
+                if fix2:
+
+                    temp_network = n3d.Network_3D(nodes = output)
+
+                    max_val = np.max(temp_network.nodes)
+
+                    background = temp_network.nodes == 0
+
+                    background = background * max_val
+
+                    temp_network.nodes = temp_network.nodes + background
+
+                    del background
+
+                    temp_network.morph_proximity(search = [3,3], fastdil = True) #Detect network of nearby branches
+
+                    output = n3d.fix_branches(output, temp_network.network, max_val)
+
+
                 if fix:
 
                     temp_network = n3d.Network_3D(nodes = output)
@@ -9611,7 +10425,7 @@ class BranchDialog(QDialog):
 
                     temp_network.community_partition(weighted = False, style = 1, dostats = False, seed = seed) #Find communities with louvain, unweighted params
 
-                    targs = n3d.fix_branches(temp_network.nodes, temp_network.network, temp_network.communities, fix_val)
+                    targs = n3d.fix_branches_network(temp_network.nodes, temp_network.network, temp_network.communities, fix_val)
 
                     temp_network.com_to_node(targs)
 
@@ -9798,6 +10612,11 @@ class ModifyDialog(QDialog):
         self.revid.setCheckable(True)
         self.revid.setChecked(False)
         layout.addRow("Remove Unassigned IDs from Centroid List?:", self.revid)
+
+        self.remove = QPushButton("Remove Missing")
+        self.remove.setCheckable(True)
+        self.remove.setChecked(False)
+        layout.addRow("Remove Any Nodes Not in Nodes Channel From Properties?:", self.remove)
         
         # trunk checkbox (default false)
         self.trunk = QPushButton("Remove Trunk")
@@ -9834,6 +10653,12 @@ class ModifyDialog(QDialog):
         self.isolate.setCheckable(True)
         self.isolate.setChecked(False)
         layout.addRow("Isolate connections between two specific node types (if assigned)?:", self.isolate)
+
+        # isolate checkbox (default false)
+        self.com_sizes = QPushButton("Communities By Size")
+        self.com_sizes.setCheckable(True)
+        self.com_sizes.setChecked(False)
+        layout.addRow("Rearrange Community IDs by size?:", self.com_sizes)
 
         # Community collapse checkbox (default False)
         self.comcollapse = QPushButton("Communities -> nodes")
@@ -9876,6 +10701,8 @@ class ModifyDialog(QDialog):
             prune = self.prune.isChecked()
             isolate = self.isolate.isChecked()
             comcollapse = self.comcollapse.isChecked()
+            remove = self.remove.isChecked()
+            com_size = self.com_sizes.isChecked()
 
 
             if isolate and my_network.node_identities is not None:
@@ -9888,6 +10715,21 @@ class ModifyDialog(QDialog):
                 except:
                     pass
 
+
+            if remove:
+                my_network.purge_properties()
+                try:
+                    self.parent().format_for_upperright_table(my_network.node_centroids, 'NodeID', ['Z', 'Y', 'X'], 'Node Centroids')
+                except:
+                    pass
+                try:
+                    self.parent().format_for_upperright_table(my_network.node_identities, 'NodeID', 'Identity', 'Node Identities')
+                except:
+                    pass
+                try:
+                    self.parent().format_for_upperright_table(my_network.communities, 'NodeID', 'Community', 'Node Communities')
+                except:
+                    pass
 
 
             if edgeweight:
@@ -9911,6 +10753,14 @@ class ModifyDialog(QDialog):
                     self.parent().format_for_upperright_table(my_network.node_centroids, 'NodeID', ['Z', 'Y', 'X'], 'Node Centroids')
                 except:
                     pass
+            if com_size:
+                if my_network.communities is None:
+                    self.parent().show_partition_dialog()
+                    if my_network.communities is None:
+                        return
+                my_network.com_by_size()
+                self.parent().format_for_upperright_table(my_network.communities, 'NodeID', 'Community', 'Node Communities')
+
             if comcollapse:
                 if my_network.communities is None:
                     self.parent().show_partition_dialog()
@@ -9940,6 +10790,8 @@ class ModifyDialog(QDialog):
             self.accept()
 
         except Exception as e:
+            import traceback
+            print(traceback.format_exc())
             print(f"An error occurred: {e}")
 
 
@@ -10070,85 +10922,107 @@ class CalcAllDialog(QDialog):
     prev_fastdil = False
     prev_overlays = False
     prev_updates = True
-
+    
     def __init__(self, parent=None):
         super().__init__(parent)
-        self.setWindowTitle("Calculate All Parameters")
+        self.setWindowTitle("Calculate Connectivity Network Parameters")
         self.setModal(True)
         
-        layout = QFormLayout(self)
+        # Main layout
+        main_layout = QVBoxLayout(self)
         
-        # Directory (empty by default)
-        self.directory = QLineEdit(self.prev_directory)
-        self.directory.setPlaceholderText("Leave empty for 'my_network'")
-        layout.addRow("Output Directory:", self.directory)
+        # Important Parameters Group
+        important_group = QGroupBox("Important Parameters")
+        important_layout = QFormLayout(important_group)
         
-        # Load previous values for all inputs
         self.xy_scale = QLineEdit(f'{my_network.xy_scale}')
-        layout.addRow("xy_scale:", self.xy_scale)
+        important_layout.addRow("xy_scale:", self.xy_scale)
         
         self.z_scale = QLineEdit(f'{my_network.z_scale}')
-        layout.addRow("z_scale:", self.z_scale)
-
+        important_layout.addRow("z_scale:", self.z_scale)
+        
         self.search = QLineEdit(self.prev_search)
         self.search.setPlaceholderText("Leave empty for None")
-        layout.addRow("Node Search (float):", self.search)
-
+        important_layout.addRow("Node Search (float):", self.search)
+        
         self.diledge = QLineEdit(self.prev_diledge)
         self.diledge.setPlaceholderText("Leave empty for None")
-        layout.addRow("Edge Reconnection Distance (float):", self.diledge)
-
-        self.down_factor = QLineEdit(self.prev_down_factor)
-        self.down_factor.setPlaceholderText("Leave empty for None")
-        layout.addRow("Downsample for Centroids (int):", self.down_factor)
-
-        self.GPU_downsample = QLineEdit(self.prev_GPU_downsample)
-        self.GPU_downsample.setPlaceholderText("Leave empty for None")
-        layout.addRow("Downsample for Distance Transform (GPU) (int):", self.GPU_downsample)
-
-        self.other_nodes = QLineEdit(self.prev_other_nodes)
-        self.other_nodes.setPlaceholderText("Leave empty for None")
-        layout.addRow("Filepath or directory containing additional node images:", self.other_nodes)
-
-        self.remove_trunk = QLineEdit(self.prev_remove_trunk)
-        self.remove_trunk.setPlaceholderText("Leave empty for 0")
-        layout.addRow("Times to remove edge trunks (int): ", self.remove_trunk)
-
-        # Load previous button states
-        self.gpu = QPushButton("GPU")
-        self.gpu.setCheckable(True)
-        self.gpu.setChecked(self.prev_gpu)
-        layout.addRow("Use GPU:", self.gpu)
-
+        important_layout.addRow("Edge Reconnection Distance (float):", self.diledge)
+        
         self.label_nodes = QPushButton("Label")
         self.label_nodes.setCheckable(True)
         self.label_nodes.setChecked(self.prev_label_nodes)
-        layout.addRow("Re-Label Nodes (WARNING - OVERRIDES ANY CURRENT LABELS):", self.label_nodes)
-
+        important_layout.addRow("Re-Label Nodes (WARNING - OVERRIDES ANY CURRENT LABELS):", self.label_nodes)
+        
+        main_layout.addWidget(important_group)
+        
+        # Optional Parameters Group
+        optional_group = QGroupBox("Optional Parameters")
+        optional_layout = QFormLayout(optional_group)
+        
+        self.other_nodes = QLineEdit(self.prev_other_nodes)
+        self.other_nodes.setPlaceholderText("Leave empty for None")
+        optional_layout.addRow("Filepath or directory containing additional node images:", self.other_nodes)
+        
+        self.remove_trunk = QLineEdit(self.prev_remove_trunk)
+        self.remove_trunk.setPlaceholderText("Leave empty for 0")
+        optional_layout.addRow("Times to remove edge trunks (int):", self.remove_trunk)
+        
         self.inners = QPushButton("Inner Edges")
         self.inners.setCheckable(True)
         self.inners.setChecked(self.prev_inners)
-        layout.addRow("Use Inner Edges:", self.inners)
-
+        optional_layout.addRow("Use Inner Edges:", self.inners)
+        
+        main_layout.addWidget(optional_group)
+        
+        # Speed Up Options Group
+        speedup_group = QGroupBox("Speed Up Options")
+        speedup_layout = QFormLayout(speedup_group)
+        
+        self.down_factor = QLineEdit(self.prev_down_factor)
+        self.down_factor.setPlaceholderText("Leave empty for None")
+        speedup_layout.addRow("Downsample for Centroids (int):", self.down_factor)
+        
+        self.GPU_downsample = QLineEdit(self.prev_GPU_downsample)
+        self.GPU_downsample.setPlaceholderText("Leave empty for None")
+        speedup_layout.addRow("Downsample for Distance Transform (GPU) (int):", self.GPU_downsample)
+        
+        self.gpu = QPushButton("GPU")
+        self.gpu.setCheckable(True)
+        self.gpu.setChecked(self.prev_gpu)
+        speedup_layout.addRow("Use GPU:", self.gpu)
+        
         self.fastdil = QPushButton("Fast Dilate")
         self.fastdil.setCheckable(True)
         self.fastdil.setChecked(self.prev_fastdil)
-        layout.addRow("Use Fast Dilation (Higher speed, less accurate with search regions much larger than nodes):", self.fastdil)
-
+        speedup_layout.addRow("Use Fast Dilation (Higher speed, less accurate with search regions much larger than nodes):", self.fastdil)
+        
+        main_layout.addWidget(speedup_group)
+        
+        # Output Options Group
+        output_group = QGroupBox("Output Options")
+        output_layout = QFormLayout(output_group)
+        
+        self.directory = QLineEdit(self.prev_directory)
+        self.directory.setPlaceholderText("Will Have to Save Manually If Empty")
+        output_layout.addRow("Output Directory:", self.directory)
+        
         self.overlays = QPushButton("Overlays")
         self.overlays.setCheckable(True)
         self.overlays.setChecked(self.prev_overlays)
-        layout.addRow("Generate Overlays:", self.overlays)
-
+        output_layout.addRow("Generate Overlays:", self.overlays)
+        
         self.update = QPushButton("Update")
         self.update.setCheckable(True)
         self.update.setChecked(self.prev_updates)
-        layout.addRow("Update Node/Edge in NetTracer3D:", self.update)
+        output_layout.addRow("Update Node/Edge in NetTracer3D:", self.update)
+        
+        main_layout.addWidget(output_group)
         
         # Add Run button
         run_button = QPushButton("Run Calculate All")
         run_button.clicked.connect(self.run_calc_all)
-        layout.addRow(run_button)
+        main_layout.addWidget(run_button)
 
     def run_calc_all(self):
 
@@ -10325,65 +11199,87 @@ class CalcAllDialog(QDialog):
                 f"Error running calculate all: {str(e)}"
             )
 
-class ProxDialog(QDialog):
 
+class ProxDialog(QDialog):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setWindowTitle("Calculate Proximity Network")
         self.setModal(True)
-
-        layout = QFormLayout(self)
-
-        # Directory (empty by default)
-        self.directory = QLineEdit('')
-        self.directory.setPlaceholderText("Leave empty for 'my_network'")
-        layout.addRow("Output Directory:", self.directory)
-
+        
+        # Main layout
+        main_layout = QVBoxLayout(self)
+        
+        # Important Parameters Group
+        important_group = QGroupBox("Important Parameters")
+        important_layout = QFormLayout(important_group)
+        
         self.search = QLineEdit()
         self.search.setPlaceholderText("search")
-        layout.addRow("Search Region Distance? (enter true value corresponding to scaling, ie in microns):", self.search)
-
-        # Load previous values for all inputs
+        important_layout.addRow("Search Region Distance? (enter true value corresponding to scaling, ie in microns):", self.search)
+        
         self.xy_scale = QLineEdit(f"{my_network.xy_scale}")
-        layout.addRow("xy_scale:", self.xy_scale)
+        important_layout.addRow("xy_scale:", self.xy_scale)
         
         self.z_scale = QLineEdit(f"{my_network.z_scale}")
-        layout.addRow("z_scale:", self.z_scale)
-
-        # Add mode selection dropdown
+        important_layout.addRow("z_scale:", self.z_scale)
+        
+        main_layout.addWidget(important_group)
+        
+        # Mode Group
+        mode_group = QGroupBox("Mode")
+        mode_layout = QFormLayout(mode_group)
+        
         self.mode_selector = QComboBox()
         self.mode_selector.addItems(["From Centroids (fast but ignores shape - use for small or spherical objects - search STARTS at centroid)", "From Morphological Shape (slower but preserves shape - use for oddly shaped objects - search STARTS at object border)"])
         self.mode_selector.setCurrentIndex(0)  # Default to Mode 1
-        layout.addRow("Execution Mode:", self.mode_selector)
-
-        self.fastdil = QPushButton("Fast Dilate")
-        self.fastdil.setCheckable(True)
-        self.fastdil.setChecked(False)
-        layout.addRow("(If using morphological) Use Fast Dilation (Higher speed, less accurate with search regions much larger than nodes):", self.fastdil)
-
+        mode_layout.addRow("Execution Mode:", self.mode_selector)
+        
         if my_network.node_identities is not None:
             self.id_selector = QComboBox()
             # Add all options from id dictionary
             self.id_selector.addItems(['None'] + list(set(my_network.node_identities.values())))
             self.id_selector.setCurrentIndex(0)  # Default to Mode 1
-            layout.addRow("Create Networks only from a specific node identity?:", self.id_selector)
+            mode_layout.addRow("Create Networks only from a specific node identity?:", self.id_selector)
         else:
             self.id_selector = None
-
+        
+        main_layout.addWidget(mode_group)
+        
+        # Output Options Group
+        output_group = QGroupBox("Output Options")
+        output_layout = QFormLayout(output_group)
+        
+        self.directory = QLineEdit('')
+        self.directory.setPlaceholderText("Leave empty for 'my_network'")
+        output_layout.addRow("Output Directory:", self.directory)
+        
         self.overlays = QPushButton("Overlays")
         self.overlays.setCheckable(True)
         self.overlays.setChecked(True)
-        layout.addRow("Generate Overlays:", self.overlays)
-
+        output_layout.addRow("Generate Overlays:", self.overlays)
+        
         self.populate = QPushButton("Populate Nodes from Centroids?")
         self.populate.setCheckable(True)
         self.populate.setChecked(False)
-        layout.addRow("If using centroid search:", self.populate)
-
+        output_layout.addRow("If using centroid search:", self.populate)
+        
+        main_layout.addWidget(output_group)
+        
+        # Speed Up Options Group
+        speedup_group = QGroupBox("Speed Up Options")
+        speedup_layout = QFormLayout(speedup_group)
+        
+        self.fastdil = QPushButton("Fast Dilate")
+        self.fastdil.setCheckable(True)
+        self.fastdil.setChecked(False)
+        speedup_layout.addRow("(If using morphological) Use Fast Dilation (Higher speed, less accurate with search regions much larger than nodes):", self.fastdil)
+        
+        main_layout.addWidget(speedup_group)
+        
         # Add Run button
         run_button = QPushButton("Run Proximity Network")
         run_button.clicked.connect(self.prox)
-        layout.addRow(run_button)
+        main_layout.addWidget(run_button)
 
     def prox(self):
 
@@ -10483,14 +11379,9 @@ class ProxDialog(QDialog):
                     my_network.id_overlay = my_network.draw_node_indices(directory=directory)
                     
                     # Update channel data
-                    self.parent().channel_data[2] = my_network.network_overlay
-                    self.parent().channel_data[3] = my_network.id_overlay
+                    self.parent().load_channel(2, channel_data = my_network.network_overlay, data = True)
+                    self.parent().load_channel(3, channel_data = my_network.id_overlay, data = True)
                     
-                    # Enable the overlay channel buttons
-                    self.parent().channel_buttons[2].setEnabled(True)
-                    self.parent().channel_buttons[3].setEnabled(True)
-
-
             self.parent().update_display()
             self.accept()
 

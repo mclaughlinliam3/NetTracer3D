@@ -46,7 +46,7 @@ Necessary Structures to Properties stored in CSVs
 | 16         | 20         | 176       |
 +------------+------------+-----------+
 
-* It may be worth mentioning that for very large networks that exceed the .csv column length limit, the rows begin to populate besides each other like this:
+* It may be worth mentioning that for very large networks that exceed the .xlsx column length limit, the rows begin to populate besides each other like this:
 
 +------------+------------+-----------+------------+------------+-----------+
 | Node 1A    | Node 1B    | Edge 1C   | Node 2A    | Node 2B    | Edge 2C   |
@@ -56,11 +56,11 @@ Necessary Structures to Properties stored in CSVs
 | 16         | 20         | 176       | 19         | 23         | 178       |
 +------------+------------+-----------+------------+------------+-----------+
 
-* These new columns should be thought of their own rows, as in node 21 is paired to node 22, connected by edge 177. Note that that once these additional columns hit the column length limit, another set of rows will populate to the right, but this time with the number '3' instead of the number '2'. This can continue as long as it needs to.
+* These new columns should be thought of their own rows, as in node 21 is paired to node 22, connected by edge 177. Note that that once these additional columns hit the column length limit, another set of rows will populate to the right, but this time with the number '3' instead of the number '2'. This can continue as long as it needs to. This behavior accomodates microsoft excel length limits. Other properties will not account for the .xlsx length limit, so it is recommended to save as .csv if they are too long.
 
 2. node_identities:
 
-* Node identities are organized with a simple Node:Identity structure. Note that as of yet, these tables do not handle overflow in the .csv column length.
+* Node identities are organized with a simple Node:Identity structure. Note that as of yet, these tables do not handle overflow in the .xlsx column length (as of now you must save larger files as .csv).
 
 +--------+----------+
 | NodeID | Identity |
@@ -74,7 +74,7 @@ Necessary Structures to Properties stored in CSVs
 
 3. node_communities:
 
-* This property has the same structure as node_identities, and similarly does not handle column overflow.
+* This property has the same structure as node_identities, and similarly does not handle column overflow for .xlsx.
 
 +--------+-----------+
 | NodeID | Community |
@@ -88,7 +88,7 @@ Necessary Structures to Properties stored in CSVs
 
 4. node_centroids:
 
-* Node centroids organize using Node:Zval:Yval:Xval. Again, they do not handle column overflow.
+* Node centroids organize using Node:Zval:Yval:Xval. Again, they do not handle column overflow for .xlsx.
 * Make sure to use Z, Y, X. This is because of the way numpy organizes dimensions.
 * Coordinates should generally be ints greater than 0.
 
@@ -129,4 +129,4 @@ Temp Properties
 
 Next Steps
 ---------
-This concludes the tutorial section about using NetTracer3D. Although I covered many network-generating options in some detail, there are a plethora of other features and functions to learn about. The rest of this guide will go over all the algorithms and associated parameters within NetTracer3D in detail, in a more informative and less tutorial-oriented style. For questions about any particular function, please locate the section in the corresponding section guide to read more about it.
+Next, you can read the doc :doc:`excel_helper` for help using the excel loader GUI (this is a tool to help load data from excel files).

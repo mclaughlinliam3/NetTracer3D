@@ -1,6 +1,6 @@
 [project]
 name = "nettracer3d"
-version = "0.7.6"
+version = "0.7.8"
 authors = [
   { name="Liam McLaughlin", email="liamm@wustl.edu" },
 ]
@@ -22,7 +22,8 @@ dependencies = [
     "PyQt6",
     "scikit-learn",
     "nibabel",
-    "setuptools"
+    "setuptools",
+    "umap-learn"
 ]
 
 readme = "README.md"

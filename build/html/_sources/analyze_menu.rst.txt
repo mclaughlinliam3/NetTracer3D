@@ -38,6 +38,13 @@ Parameter Explanations
     * Note these graphs can be saved in the matplotlib window anyway.
 * Press Show Network to open a new matplotlib window displaying the graph.
 
+'Analyze -> Network -> Generic Network Report'
+-------------------------------
+
+* This option will have the program report some basic things about the current Network 3D Objects.
+* This includes the number of nodes, the number of edges, the number of nodes per 'node identity' property category, and the number of nodes per 'community' (if assigned).
+* The report will go in the upperright table.
+
 'Analyze -> Network -> Community Partition + Generic Network Stats'
 -------------------------------
 * Use this function to partition the nodes into communities.
@@ -85,27 +92,100 @@ Parameter Explanations
 4. Seed (int): Sets the random seed for the community partition to use (since the starting point effects the outcome). You should use the same seed each time for reproducibility, or vary the seed to see how it effects partitioning. Leaving the seed empty will just use the seed of the rand (and numpy random) modules, which is initialized at program start.
 * Press partition to seperate the nodes into communities based on the selected parameters. In addition to setting the node_communities property, tables showing the community for each node and the stats will be generated in the tabulated data widget.
 
-'Analyze -> Network -> Identity Makeup of Network...'
+'Analyze -> Network -> Identity Makeup of Network Communities (And UMAP)'
 -------------------------------
-* This method is designed to be run on groups of nodes that have been community partitioned.
-* When selected, it will give a weighted average out of one that represents what proportion of nodes of some ID (as defined in the node_identities property) exist in any random community.
-* The communities are weighted by size, so larger communities contribute to this value more.
-* When selected, this method will create a table with the results that looks like this:
-.. image:: _static/analyze3.png
-   :width: 800px
-   :alt: Com Comp Menu
+* This method is designed to be run on groups of nodes that have been community partitioned and have associated 'node_identities' property, to evaluate their general compositions.
+* It can yield compositional proportions of node identities per community or a weighted average of the compositions of all communities.
+    * For the latter option, the communities are weighted by size, so larger communities contribute to this value more.
+* It can also generate a UMAP for the communities. Within the UMAP, communities that are in close proximity have more similar identity compositions.
 * This method can be a good way to characterize what communities in the network consist of. For example, if I have grouped neighborhoods of different cell types and am wondering what a generic community looks like.
+
+
+
+Parameter Explanations
+~~~~~~~~~~~~~~~
+
+#. Mode
+    * The dropdown menu has two options:
+        1. Average Identities per community - This option provides compositional info on all communities.
+        2. Weighted Average Identity of All Communities - This option provides compositional info of all communities, weighted by community size. (Does not support UMAP)
+#. Generate UMAP
+    * Select this option to generate a UMAP comparing the community compositions.
+#. If Using Above - Label UMAP points?
+    * This option labels the communities within the UMAP by their numerical label. Deselect this option to avoid these labels showing up on the graph.
+
+* Press 'Get Community ID Info' to populate the data to the upper right tabulated data widget, and to show the UMAP if selected.
 
 Algorithm Explanation
 ~~~~~~~~~~~~~~~~~~~~
-This algorithm:
 
+* If not using the weighted average of all communities:
+1. Simply finds the proportion of each identity per community.
+
+* If generating the UMAP (with the umap module):
+1. Extract community data by getting community IDs and stacking their community composition arrays (from above) into a matrix
+2. Initialize UMAP reducer and random seed (42) for reproducible dimensionality reduction
+3. Transform compositions using UMAP to reduce high-dimensional cluster vectors to 2D coordinates
+4. Create scatter plot with points colored by cluster ID.
+5. Print composition analysis showing the raw data and identifying the two most dominant classes per community
+
+
+* If using the weighted average for all communities (does not support UMAP):
 1. Groups nodes by their community ID
 2. For each community, counts the number of nodes with each identity type
 3. Weights these counts by the size of the community
 4. Sums these weighted counts across all communities
 5. Normalizes the results twice: first by the total number of nodes, then to ensure all proportions sum to 1
 6. Returns a dictionary mapping each identity type to its weighted proportion in the network
+
+'Analyze -> Network -> Convert Network Communities Into Neighborhoods'
+-------------------------------
+
+* This method finds the average of compositions of all communities (assuming 'node_identities' exist - then uses the above function), then groups similar communities into 'neighborhoods'.
+* The purpose of this is to let the user crunch communities into a smaller set of neighborhoods for analysis of similar domains across the image.
+* The number of neighborhoods assigned is up to the user.
+* Running this method will also show a heatmap graph of what 'node_identity' is prominant in what neighborhood.
+* Running this method will reassign the 'communities' property to these neighborhoods instead, so be sure to save the former first.
+    * This is so the user can use all community-associated functions on the new neighborhoods instead.
+    * However during an active session, this method will always run on the original communities and not the neighborhoods (it stores it in another temp property only for that purpose). This lets the user run this method with different params to evaluate different neighborhoods, but note that these temp communities are not used for anything else.
+
+Parameter Explanations
+~~~~~~~~~~~~~~~
+
+#. Num Neighborhoods
+    * The number of neighborhoods the user wants to group communities into. Presumably, you would want the number of communities to be larger by a logical amount than the number of new neighborhoods.
+#. Clustering Seed
+    * The random seed (int) used for neighborhood assignment. By default this is 42.
+#. Min Community Size to be grouped...
+    * If empty, this param does nothing.
+    * If an int is entered, any communities with nodes fewer than this val will be assigned to 'Neighborhood 0' — since we might not care about small, insignificant communities.
+
+Algorithm Explanation
+~~~~~~~~~~~~~~~~~~~~
+
+* This method primarily uses the sklearn.cluster KMeans algorithm: https://scikit-learn.org/stable/modules/generated/sklearn.cluster.KMeans.html
+1. Finds the composition of all communities using 'Analyze -> Network -> Identity Makeup of Communities' logic.
+2. Converts compositions to numpy array to prepare data for scikit-learn clustering algorithm
+3. Applies K-means clustering with specified number of neighborhoods and random seed
+
+'Analyze -> Network -> Create Communities Based on Cuboidal Proximity Cells?'
+-------------------------------
+
+* This method splits the image into cells (of user-defined size) and assigns nodes to be in communities based on whether they share a cell.
+* It doesn't have anything to do with the network but is an alternate way to group the nodes into communities, with a greater spatial focus.
+
+Parameter Explanations
+~~~~~~~~~~~~~~~
+
+#. Cell Size
+    * The volume of a cell (Can be 2D or 3D). The cells will always be cubes (or squares).
+#. xy scale
+    * The 2D plane scaling of the image.
+#. z scale
+    * The 3D voxel depth scaling of the image.
+
+* The latter two params will scale the cell to be cuboidal based on provided scaling (ie its side lengths will be the same in true units).
+* Press 'Get Communities' to assign the communities based on cells.
 
 * The second submenu is 'Stats', and is primarily used to create tables and graphs about the network or image morphology.
 
@@ -218,7 +298,7 @@ Algorithm Explanation
 2. Mode 2 searches using either a distance transform or psuedo-3D binary dilation. It searches outward from nodes of the desired ID type, and hence does not actually include them. This is why this option never evaluates its own clustering.
 
 
-'Analyze -> Stats -> Cluster Analysis'
+'Analyze -> Stats -> Ripley Clustering Analysis'
 -----------------------------------------
 * This method generates a Ripley's K curve, which is a function that compares relative object clustering to distance r from some random node.
 * It is a good way to identify if objects are clustering or dispersed, and how that varies through an image.
@@ -288,6 +368,34 @@ Algorithm Explanations
 #. Return the array of K values for each radius value
 #. K values can then be normalized to H values by 'h_values = np.sqrt(k_values / np.pi) - r_values' (in 2D), or 'h_values = np.cbrt(k_values / (4/3 * np.pi)) - r_values' (in 3D)
 #. These are plotted versus the theoretical functions 'theo_k = np.pi * r_values**2' (2D) or 'theo_k = (4/3) * np.pi * r_values**3' (3D), while theoretical H values are just 0.
+
+'Analyze -> Stats -> Community Cluster Heatmap'
+-----------------------------------------
+
+* This method plots the nodes into a 2D or 3D graph, with a color corresponding to community density.
+* Red nodes are higher density than expected in a community, blue ones are lower density than expected.
+
+Parameter Explanations
+~~~~~~~~~~~~~~~
+
+#. (Optional) - Total Number of Nodes
+    * The total number of nodes is used to decide how many nodes belong in a community on average.
+    * If unassigned, the program will just get the number of nodes that exist in the current properties.
+    * This is here in case the nodes in the active session are a subset (ie some number of nodes have been filtered out with the excel helper). In that case, the user can still enter the number of nodes that belong in the dataset if the filtering had not occurred.
+#. Use 3D Plot...
+    * By default, the program will graph the heatmap in 3D.
+    * Disable this if your data is 2D. Do not disable if it is 3D as the program will get confused.
+
+* Press 'Run' to show the heatmap graph, and yield a table showing community id vs density intensity.
+* It will require you to get 'node_centroids' and 'communities' properties if unassigned.
+
+Algorithm Explanations:
+~~~~~~~~~~~~~~~
+
+1. Determine total nodes by trying multiple fallback sources: network nodes, centroids, identities, or unique node array values.
+2. Calculate baseline density as the expected nodes per community if randomly distributed (total nodes / num communities).
+3. Compute heat values using natural log ratio of actual community size to expected random size.
+4. Generate heatmap visualization with matplotlib.
 
 
 'Analyze -> Stats -> Calculate Volumes'
@@ -447,11 +555,6 @@ Parameter Explanations
 
 * Press 'Identity Code' to run the method with the desired parameters. The overlay will go into the Overlay 2 channel. Additionally, a legend displaying what label belongs to which identity will be placed into the tabulated data widget.
 
-Next Steps
----------
-This concludes the explanations of the analyze functions. Next, proceed to :doc:`process_menu` for information on the process menu functions.
-
-
 * The last submenu is 'Randomize', and is used to generate random variants of data.
 
 
@@ -481,3 +584,7 @@ This concludes the explanations of the analyze functions. Next, proceed to :doc:
 * If a nodes channel image does not exist, no new image will be loaded and only the centroids will be randomized.
     * These centroids will be randomized within the bounds of any other available image channel. If there are none, they will use the min/max bounds of the current centroids.
 * The purpose of params 3-5 is to allow creation of arbitrary boundary regions, for example by dilating data of interest, to allow the nodes to populate.
+
+Next Steps
+---------
+This concludes the explanations of the analyze functions. Next, proceed to :doc:`process_menu` for information on the process menu functions.

@@ -108,6 +108,8 @@ def dilate_3D(tiff_array, dilated_x, dilated_y, dilated_z):
 
     num_cores = mp.cpu_count()
 
+
+
     with ThreadPoolExecutor(max_workers=num_cores) as executor:
         futures = {executor.submit(process_slice, z): z for z in range(tiff_array.shape[0])}
 
@@ -246,14 +248,14 @@ def invert_array(array):
     return np.logical_not(array).astype(np.uint8)
 
 def process_chunk(start_idx, end_idx, nodes, ring_mask, nearest_label_indices):
-    nodes_chunk = nodes[start_idx:end_idx]
-    ring_mask_chunk = ring_mask[start_idx:end_idx]
+    nodes_chunk = nodes[:, start_idx:end_idx, :]
+    ring_mask_chunk = ring_mask[:, start_idx:end_idx, :]
     dilated_nodes_with_labels_chunk = np.copy(nodes_chunk)
     ring_indices = np.argwhere(ring_mask_chunk)
 
     for index in ring_indices:
         z, y, x = index
-        nearest_z, nearest_y, nearest_x = nearest_label_indices[:, z + start_idx, y, x]
+        nearest_z, nearest_y, nearest_x = nearest_label_indices[:, z, y + start_idx, x]
         try: #There was an index error here once on the highest val of the second axis. I could not understand why because it usually doesnt hence the try block.
             dilated_nodes_with_labels_chunk[z, y, x] = nodes[nearest_z, nearest_y, nearest_x]
         except:
@@ -332,10 +334,10 @@ def smart_dilate(nodes, dilate_xy, dilate_z, directory = None, GPU = True, fast_
 
     # Step 5: Process in parallel chunks using ThreadPoolExecutor
     num_cores = mp.cpu_count()  # Use all available CPU cores
-    chunk_size = nodes.shape[0] // num_cores  # Divide the array into chunks along the z-axis
+    chunk_size = nodes.shape[1] // num_cores  # Divide the array into chunks along the y-axis
 
     with ThreadPoolExecutor(max_workers=num_cores) as executor:
-        args_list = [(i * chunk_size, (i + 1) * chunk_size if i != num_cores - 1 else nodes.shape[0], nodes, ring_mask, nearest_label_indices) for i in range(num_cores)]
+        args_list = [(i * chunk_size, (i + 1) * chunk_size if i != num_cores - 1 else nodes.shape[1], nodes, ring_mask, nearest_label_indices) for i in range(num_cores)]
         results = list(executor.map(lambda args: process_chunk(*args), args_list))
 
     del ring_mask
@@ -343,7 +345,7 @@ def smart_dilate(nodes, dilate_xy, dilate_z, directory = None, GPU = True, fast_
     del nearest_label_indices
 
     # Combine results from chunks
-    dilated_nodes_with_labels = np.concatenate(results, axis=0)
+    dilated_nodes_with_labels = np.concatenate(results, axis=1)
 
 
     if (dilated_nodes_with_labels.shape[1] < original_shape[1]) and fast_dil: #If downsample was used, upsample output
@@ -368,7 +370,7 @@ def round_to_odd(number):
             rounded -= 1
     return rounded
 
-def smart_label(binary_array, label_array, directory = None, GPU = True, predownsample = None):
+def smart_label(binary_array, label_array, directory = None, GPU = True, predownsample = None, remove_template = False):
 
     original_shape = binary_array.shape
 
@@ -419,12 +421,11 @@ def smart_label(binary_array, label_array, directory = None, GPU = True, predown
                         break
                     except cp.cuda.memory.OutOfMemoryError:
                         down_factor += 1
-                binary_mask = binary_array #Need this for later to stamp out the correct output
                 binary_core = binarize(small_array)
                 label_array = small_array
-                binary_array = nettracer.downsample(binary_array, downsample_needed)
-                binary_array = nettracer.dilate_3D_old(binary_array)
-                ring_mask = binary_array & invert_array(binary_core)
+                binary_small = nettracer.downsample(binary_array, downsample_needed)
+                binary_small = nettracer.dilate_3D_old(binary_small)
+                ring_mask = binary_small & invert_array(binary_core)
 
         else:
             goto_except = 1/0
@@ -440,18 +441,21 @@ def smart_label(binary_array, label_array, directory = None, GPU = True, predown
 
     # Step 5: Process in parallel chunks using ThreadPoolExecutor
     num_cores = mp.cpu_count()  # Use all available CPU cores
-    chunk_size = label_array.shape[0] // num_cores  # Divide the array into chunks along the z-axis
+    chunk_size = label_array.shape[1] // num_cores  # Divide the array into chunks along the z-axis
+
 
     with ThreadPoolExecutor(max_workers=num_cores) as executor:
-        args_list = [(i * chunk_size, (i + 1) * chunk_size if i != num_cores - 1 else label_array.shape[0], label_array, ring_mask, nearest_label_indices) for i in range(num_cores)]
+        args_list = [(i * chunk_size, (i + 1) * chunk_size if i != num_cores - 1 else label_array.shape[1], label_array, ring_mask, nearest_label_indices) for i in range(num_cores)]
         results = list(executor.map(lambda args: process_chunk(*args), args_list))
 
     # Combine results from chunks
-    dilated_nodes_with_labels = np.concatenate(results, axis=0)
+    dilated_nodes_with_labels = np.concatenate(results, axis=1)
 
     if label_array.shape[1] < original_shape[1]: #If downsample was used, upsample output
         dilated_nodes_with_labels = nettracer.upsample_with_padding(dilated_nodes_with_labels, downsample_needed, original_shape)
-        dilated_nodes_with_labels = dilated_nodes_with_labels * binary_mask
+        dilated_nodes_with_labels = dilated_nodes_with_labels * binary_array
+    elif remove_template:
+        dilated_nodes_with_labels = dilated_nodes_with_labels * binary_array
 
     if string_bool:
         if directory is not None:
@@ -464,6 +468,7 @@ def smart_label(binary_array, label_array, directory = None, GPU = True, predown
                 tifffile.imwrite("smart_labelled_array.tif", dilated_nodes_with_labels)
             except Exception as e:
                 print(f"Could not save search region file to active directory")
+
 
     return dilated_nodes_with_labels
 

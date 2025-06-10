@@ -97,13 +97,17 @@ Clicking 'Selection' reveals the following options. (Note this option only appea
     * The second carrot is the channel we want the highlight overlay to superimpose its extracted data onto.
     * The last carrot is the channel where we want the new output to be placed.
 
-'Measure'
+'Measurements'
 ~~~~~~~~~~~~~
-This feature can be used to extract linear measurements anywhere in your dataset, both voxel-based and scaled. Clicking 'Measure' reveals the following options:
+This feature can be used to extract linear or angular measurements anywhere in your dataset, both voxel-based and scaled based on the xy and z scales set by user. Clicking 'Measurements' reveals the following options:
 
-1. 'Place Measurement Point' (OR; 'Place Second Point')
+1. Distance - Use this menu to measure distances, revealing these options:
+    * 'Place First Point' (OR; 'Place Second Point')
     * This option places a measurement point at the current mouse location. If one has been placed, 'Place Second Point' can then be used to create a measurement.
-2. 'Remove Measurement Points*
+2. Angle - Use this menu to measure angles from three points, revealing these options
+    * 'Place First Point (A)' (OR; 'Place Second Point (B)' OR; 'PLACE Third Point (C)')
+    * This option places points at the current mouse location. All three must be placed to measure an angle. Point 'B' will always be the vertex and the measured angle will always prefer the acute output. 
+3. 'Remove All Measurements*
     * This option removes all measurement points in the active session.
 Data from the measurement points will be displayed in the tabulated data widget on the top right.
 

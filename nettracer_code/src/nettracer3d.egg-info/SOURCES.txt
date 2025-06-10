@@ -3,8 +3,10 @@ README.md
 pyproject.toml
 src/nettracer3d/__init__.py
 src/nettracer3d/community_extractor.py
+src/nettracer3d/excelotron.py
 src/nettracer3d/modularity.py
 src/nettracer3d/morphology.py
+src/nettracer3d/neighborhoods.py
 src/nettracer3d/nettracer.py
 src/nettracer3d/nettracer_gui.py
 src/nettracer3d/network_analysis.py

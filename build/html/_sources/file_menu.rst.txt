@@ -57,6 +57,9 @@ The save as menu will prompt the user to find files to load. Note that when it c
     * Prompts the user to find a .tif/.tiff/.nii/.jpg/.jpeg/.png image to load into the Overlay 2 channel. Supports color images.
 6. 'Load Network'
     * Prompts the user to find a .csv/.xlsx file containing network data in the structure NetTracer3D expects (that is, the same structure it saves .csv/.xlsx networks as).
+7. 'Load From Excel Helper'
+    * Opens the excel helper, which is a seperate GUI to open less-structured .csv or .xlsx spreadsheets that the user may have obtained elsewhere, and more easily convert them into NetTracer3D properties. (See :doc:`excel_helper`)
+    * As of now, this can be used to load in 'Node Centroids', 'Node Identities', or 'Node Communities'. 
 7. 'Load Misc Properties -> Load Node IDs'
     * Prompts the user to find a .csv/.xlsx file containing Node IDs in the structure NetTracer3D expects (that is, the same structure it saves node IDs as).
 7. 'Load Misc Properties -> Load Node Centroids'

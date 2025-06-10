@@ -525,6 +525,19 @@ Parameter Explanations
 
 * Press 'Mask' to run the method with the desired parameters.
 
+'Process -> Image -> Crop Channels'
+-------------------------------------------------------
+* This method can be used to crop all the avialable channels.
+
+Parameter Explanations
+~~~~~~~~~~~~~~~~~~~~~~~
+
+* The parameters are just the min and max values in Z, Y, and X to include in the cropped output.
+
+* Press run to crop the channel. This will crop all four channels but will do nothing to the current properties.
+* To purge nodes that no longer exist from the centroids, identities, etc properties, centroids can be recalculated or any absent nodes can be removed from their properties more efficiently with 'Process -> Modify Network -> Remove Any Nodes not in Nodes Channel from Properties'
+
+
 
 'Process -> Image -> Channel dtype'
 -------------------------------------------
@@ -756,6 +769,9 @@ Parameter Explanations
     * This method specifically removes all centroids of nodes that are not associated with an id.
     * Then we can use the centroids to make proximity networks without having to worry about unassigned ids.
     * That's all it does. This function is somewhat niche because I needed it for something I was doing.
+#. Remove Any Nodes Not in Nodes Channel From Properties?
+    * This method will remove any nodes from the node_centroids and node_identities properties if their label is not present in the image in the nodes channel.
+    * This method is essentially here to support cropping datasets. If you crop an image and would like to eliminate any additional labels from the other properties that are no longer in the image, this is the way to do it.
 #. Remove Trunk...?
     * Sometimes networks will have regions that are widely connected by a central trunk structure.
     * If we are interested in evaluating more downstream connections, it may be a good idea to remove the trunk, or otherwise it will dominate the network.
@@ -779,6 +795,10 @@ Parameter Explanations
     * If the node_identities property is set, the user will be prompted with another window that will ask them to select two of the node identities present in the image.
     * The network will then remove any connections belonging to nodes not of those two identities.
     * Identities between the selected node types (including within their own identity) will be kept.
+#. Rearrange Community IDs by size?:
+    * Assigns community IDs to be by the number of nodes they contain, starting with 1 for the largest community and so forth.
+    * Equally sized communities will just be placed in arbitrary sequential order.
+    * This can be used with the UMAP, for example, to assign more significance to the community IDs.
 #. Convert communities to nodes?
     * If the nodes have been partitioned into communities, this method will replace the network between the nodes with a network between its communities instead.
     * Additionally, any labeled nodes in the nodes channel will take on a label belonging to their community, rather than their original ID.
