@@ -40,6 +40,7 @@ To get started with NetTracer3D, check out the :doc:`installation` guide and the
    branches
    properties
    excel_helper
+   keyboard_shortcuts
 
 .. toctree::
    :maxdepth: 2

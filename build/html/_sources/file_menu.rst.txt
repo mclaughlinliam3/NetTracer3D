@@ -73,6 +73,17 @@ The save as menu will prompt the user to find files to load. Note that when it c
     * Generally one would segment the images and label them individually before trying to merge them.
     * Merging nodes auto-assigns the nodes IDs based on the name of the .tif/.tiff that is being merged, while the original nodes aquire the name 'root_nodes'.
     * These IDs cannot be changed in NetTracer3D. To change them, please save the Node IDs as described above, edit the names directly in a spreadsheet-editing software like Microsoft Excel, then reload the Node IDs with 'Load -> Load Misc Properties -> Load Node IDs'
+9. 'Load Misc Properties -> Merge Node IDs From Images'
+    * Prompts the user to find a directory containing .tif/.tiff channels corresponding to additional channels from the image that yielded the nodes image.
+    * The nodes from the nodes image will be compared to auto-binarized versions of the images in the directory to assess what 'identities' each node has.
+    * The point of this is compatibility with something like CODEX. The nodes can be created by segmenting, then watershedding/labeling a nuclei marker such as DAPI. 
+    * The node markers can search outwards for overlap (estimating a cell radius) based on a user defined distance (or this can be precomputed in 'Process -> Image -> Dilate').
+    * The images in the directory must all be seperated into their own channels of equal dimensions to the nodes channel - no hyperstacks or multi-channel images. They can be pre-binarized, but if not, they will be auto binarized with Otsu's method (which predicts the foreground vs bacgkround).
+    * Node markers with positive overlap to each image will aquire the title of that image with a + symbol in its node identities property. Those without it will aquire the title with a - symbol.
+    * These identity markers will add to a growing string for each node.
+    * At the end, the resultant complete node identities will be shown in the upper right tabulated data widget.
+    * For specific phenotype classification, please save the node identities as .csv, then load them with classifiers from the Excel Helper, see: :doc:`excel_helper`
+    * Note this functionality exists to enable end-to-end pipelines, but it is also something more focused on in a tool like QuPath, whose .csv outputs can be modularly brought to NetTracer3D with the excel helper.
 
 Next Steps
 ---------

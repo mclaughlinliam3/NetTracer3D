@@ -361,7 +361,7 @@ def convert_centroids_to_array(centroids_list, xy_scale = 1, z_scale = 1):
     """
     # Determine how many centroids we have
     n_points = len(centroids_list)
-    
+
     # Get dimensionality from the first centroid
     dim = len(list(centroids_list)[0])
     
@@ -404,7 +404,12 @@ def generate_r_values(points_array, step_size, bounds = None, dim = 2, max_propo
 
     
     # Calculate the longest dimension
-    dimensions = max_coords - min_coords
+    try:
+        dimensions = max_coords - min_coords
+    except: # Presume dimension mismatch
+        min_coords = np.array([0,0,0])
+        dimensions = max_coords - min_coords
+
     max_dimension = np.max(dimensions)
     
     # Calculate maximum r value (typically half the shortest side for 2D,
@@ -459,7 +464,10 @@ def optimized_ripleys_k(reference_points, subset_points, r_values, bounds=None, 
     # Calculate volume of study area
     min_bounds, max_bounds = bounds
     sides = max_bounds - min_bounds
-    volume = np.prod(sides)
+    if dim == 2:
+        volume = sides[0] * sides[1]
+    else:
+        volume = np.prod(sides)
     
     # Point intensity (points per unit volume)
     intensity = n_ref / volume
@@ -618,7 +626,7 @@ def compute_ripleys_h(k_values, r_values, dimension=2):
     else:
         raise ValueError("Dimension must be 2 or 3")
 
-def plot_ripley_functions(r_values, k_values, h_values, dimension=2, figsize=(12, 5)):
+def plot_ripley_functions(r_values, k_values, h_values, dimension=2, rootiden = None, compiden = None, figsize=(12, 5)):
     """
     Plot Ripley's K and H functions with theoretical Poisson distribution references
     adjusted for edge effects.
@@ -651,7 +659,10 @@ def plot_ripley_functions(r_values, k_values, h_values, dimension=2, figsize=(12
     ax1.plot(r_values, theo_k, 'r--', label='Theoretical K(r) for CSR')
     ax1.set_xlabel('Distance (r)')
     ax1.set_ylabel('L(r)')
-    ax1.set_title("Ripley's K Function")
+    if rootiden is None or compiden is None:
+        ax1.set_title("Ripley's K Function")
+    else:
+        ax1.set_title(f"Ripley's K Function for {compiden} Clustering Around {rootiden}")
     ax1.legend()
     ax1.grid(True, alpha=0.3)
     
@@ -660,7 +671,10 @@ def plot_ripley_functions(r_values, k_values, h_values, dimension=2, figsize=(12
     ax2.plot(r_values, theo_h, 'r--', label='Theoretical H(r) for CSR')
     ax2.set_xlabel('Distance (r)')
     ax2.set_ylabel('L(r) Normalized')
-    ax2.set_title("Ripley's H Function")
+    if rootiden is None or compiden is None:
+        ax2.set_title("Ripley's H Function")
+    else:
+        ax2.set_title(f"Ripley's H Function for {compiden} Clustering Around {rootiden}")
     ax2.axhline(y=0, color='k', linestyle='-', alpha=0.3)
     ax2.legend()
     ax2.grid(True, alpha=0.3)

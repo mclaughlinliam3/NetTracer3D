@@ -45,3 +45,12 @@ Version 0.7.5 Updates
 
 Version 0.7.6 Updates
     * Bug Fixes
+
+Version 0.8.0 Updates
+
+	* Added ability to threshold nodes by degree.
+	* Improved image viewer window performance.
+	* Bug fixes and a few optimizations.
+	* Added ability to 'merge node identities' which just uses the nodes image as a reference for collecting 'identity' information from a group of other images - ie can use with cell nuclei (DAPI) to see what markers from the same imaging session overlap.
+	* Added ability to search for specific nodes directly in the nodes image with 'shift + f' or right click.
+	

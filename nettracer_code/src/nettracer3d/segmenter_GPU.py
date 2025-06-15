@@ -1221,7 +1221,7 @@ class InteractiveSegmenter:
                  use_two=self.use_two,
                  mem_lock=self.mem_lock)
 
-        print(f"Model data saved to {file_name}")
+        print(f"Model data saved to {file_name}. Please retrain current model prior to segmentation.")
 
 
     def load_model(self, file_name):

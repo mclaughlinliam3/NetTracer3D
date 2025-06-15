@@ -6,14 +6,14 @@
   <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
 
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>All File Menu Options &mdash; NetTracer3D 0.7.8 documentation</title>
+  <title>All File Menu Options &mdash; NetTracer3D 0.8.0 documentation</title>
       <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=b86133f3" />
       <link rel="stylesheet" type="text/css" href="_static/css/theme.css?v=e59714d7" />
 
   
       <script src="_static/jquery.js?v=5d32c60e"></script>
       <script src="_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
-      <script src="_static/documentation_options.js?v=ddeecabf"></script>
+      <script src="_static/documentation_options.js?v=486e5634"></script>
       <script src="_static/doctools.js?v=9bcbadda"></script>
       <script src="_static/sphinx_highlight.js?v=dc90522c"></script>
     <script src="_static/js/theme.js"></script>
@@ -50,6 +50,7 @@
 <li class="toctree-l1"><a class="reference internal" href="branches.html">Labeling Branches and Branch Networks</a></li>
 <li class="toctree-l1"><a class="reference internal" href="properties.html">Properties of a Network3D Object</a></li>
 <li class="toctree-l1"><a class="reference internal" href="excel_helper.html">Using the Spreadsheet Loader</a></li>
+<li class="toctree-l1"><a class="reference internal" href="keyboard_shortcuts.html">Available Keyboard Shortcuts</a></li>
 </ul>
 <p class="caption" role="heading"><span class="caption-text">Detailed Function Guide:</span></p>
 <ul class="current">
@@ -286,6 +287,22 @@
 <li><p>Generally one would segment the images and label them individually before trying to merge them.</p></li>
 <li><p>Merging nodes auto-assigns the nodes IDs based on the name of the .tif/.tiff that is being merged, while the original nodes aquire the name ‘root_nodes’.</p></li>
 <li><p>These IDs cannot be changed in NetTracer3D. To change them, please save the Node IDs as described above, edit the names directly in a spreadsheet-editing software like Microsoft Excel, then reload the Node IDs with ‘Load -&gt; Load Misc Properties -&gt; Load Node IDs’</p></li>
+</ul>
+</dd>
+</dl>
+</li>
+<li><dl class="simple">
+<dt>‘Load Misc Properties -&gt; Merge Node IDs From Images’</dt><dd><ul class="simple">
+<li><p>Prompts the user to find a directory containing .tif/.tiff channels corresponding to additional channels from the image that yielded the nodes image.</p></li>
+<li><p>The nodes from the nodes image will be compared to auto-binarized versions of the images in the directory to assess what ‘identities’ each node has.</p></li>
+<li><p>The point of this is compatibility with something like CODEX. The nodes can be created by segmenting, then watershedding/labeling a nuclei marker such as DAPI.</p></li>
+<li><p>The node markers can search outwards for overlap (estimating a cell radius) based on a user defined distance (or this can be precomputed in ‘Process -&gt; Image -&gt; Dilate’).</p></li>
+<li><p>The images in the directory must all be seperated into their own channels of equal dimensions to the nodes channel - no hyperstacks or multi-channel images. They can be pre-binarized, but if not, they will be auto binarized with Otsu’s method (which predicts the foreground vs bacgkround).</p></li>
+<li><p>Node markers with positive overlap to each image will aquire the title of that image with a + symbol in its node identities property. Those without it will aquire the title with a - symbol.</p></li>
+<li><p>These identity markers will add to a growing string for each node.</p></li>
+<li><p>At the end, the resultant complete node identities will be shown in the upper right tabulated data widget.</p></li>
+<li><p>For specific phenotype classification, please save the node identities as .csv, then load them with classifiers from the Excel Helper, see: <a class="reference internal" href="excel_helper.html"><span class="doc">Using the Spreadsheet Loader</span></a></p></li>
+<li><p>Note this functionality exists to enable end-to-end pipelines, but it is also something more focused on in a tool like QuPath, whose .csv outputs can be modularly brought to NetTracer3D with the excel helper.</p></li>
 </ul>
 </dd>
 </dl>

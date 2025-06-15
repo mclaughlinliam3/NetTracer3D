@@ -492,48 +492,39 @@ def generate_distinct_colors(n_colors: int) -> List[Tuple[int, int, int]]:
     return colors
 
 def assign_node_colors(node_list: List[int], labeled_array: np.ndarray) -> Tuple[np.ndarray, Dict[int, str]]:
-    """
-    Assign distinct colors to nodes and create an RGBA image.
+    """fast version using lookup table approach."""
     
-    Args:
-        node_list: List of node IDs
-        labeled_array: 3D numpy array with labels corresponding to node IDs
-    
-    Returns:
-        Tuple of (RGBA-coded numpy array (H, W, D, 4), dictionary mapping nodes to color names)
-    """
-    
-    # Sort communities by size (descending)
-    sorted_nodes= sorted(node_list, reverse=True)
+    # Sort nodes by size (descending)
+    sorted_nodes = sorted(node_list, reverse=True)
     
     # Generate distinct colors
     colors = generate_distinct_colors(len(node_list))
-    random.shuffle(colors) #Randomly sorted to make adjacent structures likely stand out
+    random.shuffle(colors)  # Randomly sorted to make adjacent structures likely stand out
     
     # Convert RGB colors to RGBA by adding alpha channel
-    colors_rgba = [(r, g, b, 255) for r, g, b in colors]  # Full opacity for colored regions
+    colors_rgba = np.array([(r, g, b, 255) for r, g, b in colors], dtype=np.uint8)
     
-    # Create mapping from community to color
+    # Create mapping from node to color
     node_to_color = {node: colors_rgba[i] for i, node in enumerate(sorted_nodes)}
     
-    # Create RGBA array (initialize with transparent background)
-    rgba_array = np.zeros((*labeled_array.shape, 4), dtype=np.uint8)
+    # Create lookup table
+    max_label = max(max(labeled_array.flat), max(node_list) if node_list else 0)
+    color_lut = np.zeros((max_label + 1, 4), dtype=np.uint8)  # Transparent by default
     
-    # Assign colors to each voxel based on its label
-    for label in np.unique(labeled_array):
-        if label in node_to_color:  # Skip background (usually label 0)
-            mask = labeled_array == label
-            for i in range(4):  # RGBA channels
-                rgba_array[mask, i] = node_to_color[label][i]
-
-    # Convert the RGB portion of community_to_color back to RGB for color naming
+    for node_id, color in node_to_color.items():
+        color_lut[node_id] = color
+    
+    # Single vectorized operation - eliminates all loops!
+    rgba_array = color_lut[labeled_array]
+    
+    # Convert colors for naming
     node_to_color_rgb = {k: tuple(v[:3]) for k, v in node_to_color.items()}
     node_to_color_names = convert_node_colors_to_names(node_to_color_rgb)
     
     return rgba_array, node_to_color_names
 
 def assign_community_colors(community_dict: Dict[int, int], labeled_array: np.ndarray) -> Tuple[np.ndarray, Dict[int, str]]:
-    """Ultra-fast version using lookup table approach."""
+    """fast version using lookup table approach."""
     
     # Same setup as before
     communities = set(community_dict.values())

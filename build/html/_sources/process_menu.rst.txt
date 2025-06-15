@@ -458,6 +458,8 @@ Parameter Explanations
     * This dropdown window contains two options:
         1. Using Label/Brightness - Opens the threshold window for intensity-based thresholding
         2. Using Volumes - Opens the threshold window for volume-based thresholding
+        3. Using Radii - Opens the threshold window for radius-based thresholding.
+        4. Using Node Degree - Opens the threshold window for degree-based thresholding (ie number of network connections. Correspondingly, only applies to the nodes image and requires the network to be computed).
 2. Select
     * Clicking this just starts the threshold window with whatever option was selected in param 1. The image in 'Active Image' will be the threshold target.
 3. Machine Learning

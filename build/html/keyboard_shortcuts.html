@@ -6,7 +6,7 @@
   <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
 
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Usage &mdash; NetTracer3D 0.8.0 documentation</title>
+  <title>Available Keyboard Shortcuts &mdash; NetTracer3D 0.8.0 documentation</title>
       <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=b86133f3" />
       <link rel="stylesheet" type="text/css" href="_static/css/theme.css?v=e59714d7" />
 
@@ -20,7 +20,8 @@
     <link rel="author" title="About these documents" href="about.html" />
     <link rel="index" title="Index" href="genindex.html" />
     <link rel="search" title="Search" href="search.html" />
-    <link rel="prev" title="About" href="about.html" /> 
+    <link rel="next" title="Right Clicking - All Options Available by Right Clicking in the GUI" href="right_clicking.html" />
+    <link rel="prev" title="Using the Spreadsheet Loader" href="excel_helper.html" /> 
 </head>
 
 <body class="wy-body-for-nav"> 
@@ -43,13 +44,20 @@
 </div>
         </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
               <p class="caption" role="heading"><span class="caption-text">User Guide:</span></p>
-<ul>
+<ul class="current">
 <li class="toctree-l1"><a class="reference internal" href="installation.html">Installation</a></li>
 <li class="toctree-l1"><a class="reference internal" href="quickstart.html">Quickstart - Segmenting Data and Generating Networks</a></li>
 <li class="toctree-l1"><a class="reference internal" href="branches.html">Labeling Branches and Branch Networks</a></li>
 <li class="toctree-l1"><a class="reference internal" href="properties.html">Properties of a Network3D Object</a></li>
 <li class="toctree-l1"><a class="reference internal" href="excel_helper.html">Using the Spreadsheet Loader</a></li>
-<li class="toctree-l1"><a class="reference internal" href="keyboard_shortcuts.html">Available Keyboard Shortcuts</a></li>
+<li class="toctree-l1 current"><a class="current reference internal" href="#">Available Keyboard Shortcuts</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="#in-the-default-viewer-mode">In the default viewer mode:</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#if-in-the-upper-right-or-lower-right-network-tabulated-data-widgets">If in the upper right or lower right network/tabulated data widgets:</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#if-in-paint-mode">If in paint mode:</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#if-using-the-machine-learning-segmenter">If using the machine-learning segmenter:</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#next-steps">Next Steps</a></li>
+</ul>
+</li>
 </ul>
 <p class="caption" role="heading"><span class="caption-text">Detailed Function Guide:</span></p>
 <ul>
@@ -60,12 +68,12 @@
 <li class="toctree-l1"><a class="reference internal" href="image_menu.html">All Image Menu Options</a></li>
 </ul>
 <p class="caption" role="heading"><span class="caption-text">Development:</span></p>
-<ul class="current">
+<ul>
 <li class="toctree-l1"><a class="reference internal" href="contact.html">Contact</a></li>
 <li class="toctree-l1"><a class="reference internal" href="changelog.html">Changelog</a></li>
 <li class="toctree-l1"><a class="reference internal" href="roadmap.html">Road Map</a></li>
 <li class="toctree-l1"><a class="reference internal" href="about.html">About</a></li>
-<li class="toctree-l1 current"><a class="current reference internal" href="#">Usage</a></li>
+<li class="toctree-l1"><a class="reference internal" href="usage.html">Usage</a></li>
 </ul>
 
         </div>
@@ -82,9 +90,9 @@
           <div role="navigation" aria-label="Page navigation">
   <ul class="wy-breadcrumbs">
       <li><a href="index.html" class="icon icon-home" aria-label="Home"></a></li>
-      <li class="breadcrumb-item active">Usage</li>
+      <li class="breadcrumb-item active">Available Keyboard Shortcuts</li>
       <li class="wy-breadcrumbs-aside">
-            <a href="_sources/usage.rst.txt" rel="nofollow"> View page source</a>
+            <a href="_sources/keyboard_shortcuts.rst.txt" rel="nofollow"> View page source</a>
       </li>
   </ul>
   <hr/>
@@ -92,21 +100,59 @@
           <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
            <div itemprop="articleBody">
              
-  <section id="usage">
-<span id="id1"></span><h1>Usage<a class="headerlink" href="#usage" title="Link to this heading"></a></h1>
-<p>NetTracer3D is freely available for academic and nonprofit use and can be obtained from pip or github, provided that the following citation is included in any abstract, paper, or presentation utilizing NetTracer3D.</p>
-<p>McLaughlin, L., Zhang, B., Sharma, S. et al. Three dimensional multiscalar neurovascular nephron connectivity map of the human kidney across the lifespan. Nat Commun 16, 5161 (2025). <a class="reference external" href="https://doi.org/10.1038/s41467-025-60435-8">https://doi.org/10.1038/s41467-025-60435-8</a></p>
+  <section id="available-keyboard-shortcuts">
+<span id="keyboard-shortcuts"></span><h1>Available Keyboard Shortcuts<a class="headerlink" href="#available-keyboard-shortcuts" title="Link to this heading"></a></h1>
+<section id="in-the-default-viewer-mode">
+<h2>In the default viewer mode:<a class="headerlink" href="#in-the-default-viewer-mode" title="Link to this heading"></a></h2>
 <ul class="simple">
-<li><p>Note: This citation will be updated for a NetTracer3D specific publication in the future.</p></li>
+<li><p>Z = toggle zoom mode.</p></li>
+<li><p>X = toggle highlight overlay visibility.</p></li>
+<li><p>Middle Mouse = Toggle Pan Mode.</p></li>
+<li><p>Shift + Scroll Wheel = Move Through Image Stack.</p></li>
+<li><p>Ctrl + Shift + Scroll Wheel = Rapidly move through image stack.</p></li>
+<li><p>Shift + F = Search for a node or an edge in the image channels.</p></li>
+<li><p>Ctrl + Left Click in the image viewer window = Select/deselect object without deselecting others that are selected.</p></li>
+<li><p>Left Click + Drag in the image viewer window = Group select objects. (Add ctrl to not deselect current selection)</p></li>
 </ul>
-<p>Commercial use is available for a fee. Copyright © is held by Washington University. Please direct all commercial requests for licensing, information, and limited evaluation copies to Washington University’s Office of Technology Management at <a class="reference external" href="mailto:OTM&#37;&#52;&#48;wustl&#46;edu">OTM<span>&#64;</span>wustl<span>&#46;</span>edu</a>.</p>
+</section>
+<section id="if-in-the-upper-right-or-lower-right-network-tabulated-data-widgets">
+<h2>If in the upper right or lower right network/tabulated data widgets:<a class="headerlink" href="#if-in-the-upper-right-or-lower-right-network-tabulated-data-widgets" title="Link to this heading"></a></h2>
+<ul class="simple">
+<li><p>Ctrl + F = Find specific table entry.</p></li>
+</ul>
+</section>
+<section id="if-in-paint-mode">
+<h2>If in paint mode:<a class="headerlink" href="#if-in-paint-mode" title="Link to this heading"></a></h2>
+<ul class="simple">
+<li><p>Ctrl + Scroll Wheel = Resize the Brush.</p></li>
+<li><dl class="simple">
+<dt>D = Toggle 3D Mode for both the paintbrush and the fill-can, which makes operations occur on multiple planes at once.</dt><dd><ul>
+<li><p>While using the 3D brush, Scroll wheel = Resize the amount of planes the 3D brush applies to.</p></li>
+</ul>
+</dd>
+</dl>
+</li>
+<li><p>F = Toggle fill can mode</p></li>
+</ul>
+</section>
+<section id="if-using-the-machine-learning-segmenter">
+<h2>If using the machine-learning segmenter:<a class="headerlink" href="#if-using-the-machine-learning-segmenter" title="Link to this heading"></a></h2>
+<ul class="simple">
+<li><p>A = Toggle whether segmenting foreground/background.</p></li>
+</ul>
+</section>
+<section id="next-steps">
+<h2>Next Steps<a class="headerlink" href="#next-steps" title="Link to this heading"></a></h2>
+<p>This concludes the tutorial section about using NetTracer3D. Although I covered many network-generating options in some detail, there are a plethora of other features and functions to learn about. The rest of this guide will go over all the algorithms and associated parameters within NetTracer3D in detail, in a more informative and less tutorial-oriented style. For questions about any particular function, please locate the section in the corresponding section guide to read more about it.</p>
+</section>
 </section>
 
 
            </div>
           </div>
           <footer><div class="rst-footer-buttons" role="navigation" aria-label="Footer">
-        <a href="about.html" class="btn btn-neutral float-left" title="About" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left" aria-hidden="true"></span> Previous</a>
+        <a href="excel_helper.html" class="btn btn-neutral float-left" title="Using the Spreadsheet Loader" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left" aria-hidden="true"></span> Previous</a>
+        <a href="right_clicking.html" class="btn btn-neutral float-right" title="Right Clicking - All Options Available by Right Clicking in the GUI" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right" aria-hidden="true"></span></a>
     </div>
 
   <hr/>

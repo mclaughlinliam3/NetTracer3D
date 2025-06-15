@@ -548,6 +548,7 @@ def remove_branches(skeleton, length):
     return image_copy
 
 
+
 def estimate_object_radii(labeled_array, gpu=False, n_jobs=None, xy_scale = 1, z_scale = 1):
     """
     Estimate the radii of labeled objects in a 3D numpy array.
@@ -1485,21 +1486,21 @@ def remove_zeros(input_list):
 
 
 def combine_edges(edge_labels_1, edge_labels_2):
-    """Internal method to combine the edges and 'inner edges' into a single array while preserving their IDs. Prioritizes 'edge_labels_1' when overlapped"""
-
-    edge_labels_1 = edge_labels_1.astype(np.uint32)
-    edge_labels_2 = edge_labels_2.astype(np.uint32)
-
-    max_val = np.max(edge_labels_1) 
-    edge_bools_1 = edge_labels_1 == 0 #Get boolean mask where edges do not exist.
-    edge_bools_2 = edge_labels_2 > 0 #Get boolean mask where inner edges exist.
-    edge_labels_2 = edge_labels_2 + max_val #Add the maximum edge ID to all inner edges so the two can be merged without overriding eachother
-    edge_labels_2 = edge_labels_2 * edge_bools_2 #Eliminate any indices that should be 0 from inner edges.
-    edge_labels_2 = edge_labels_2 * edge_bools_1 #Eliminate any indices where outer edges overlap inner edges (Outer edges are giving overlap priority)
-    edge_labels = edge_labels_1 + edge_labels_2 #Combine the outer edges with the inner edges modified via the above steps
-
-    return edge_labels
-
+    """
+    let NumPy handle promotion automatically
+    """
+    # Early exit if no combination needed
+    mask = (edge_labels_1 == 0) & (edge_labels_2 > 0)
+    if not np.any(mask):
+        return edge_labels_1.copy()
+    
+    max_val = np.max(edge_labels_1)
+    
+    # Let NumPy handle dtype promotion automatically
+    # This will promote to the smallest type that can handle the operation
+    offset_labels = edge_labels_2 + max_val
+    
+    return np.where(mask, offset_labels, edge_labels_1)
 
 def combine_nodes(root_nodes, other_nodes, other_ID, identity_dict, root_ID = None):
 
@@ -1507,15 +1508,10 @@ def combine_nodes(root_nodes, other_nodes, other_ID, identity_dict, root_ID = No
 
     print("Combining node arrays")
 
-    root_nodes = root_nodes.astype(np.uint32)
-    other_nodes = other_nodes.astype(np.uint32)
-
-    max_val = np.max(root_nodes) 
-    root_bools = root_nodes == 0 #Get boolean mask where root nodes do not exist.
-    other_bools = other_nodes > 0 #Get boolean mask where other nodes exist.
-    other_nodes = other_nodes + max_val #Add the maximum root node labels to other nodes so the two can be merged without overriding eachother
-    other_nodes = other_nodes * other_bools #Eliminate any indices that should be 0 from other_nodes.
-    other_nodes = other_nodes * root_bools #Eliminate any indices where other nodes overlap root nodes (root node are giving overlap priority)
+    mask = (root_nodes == 0) & (other_nodes > 0)
+    if np.any(mask):
+        max_val = np.max(root_nodes)
+        other_nodes[:] = np.where(mask, other_nodes + max_val, 0)
 
     if root_ID is not None:
         rootIDs = list(np.unique(root_nodes)) #Sets up adding these vals to the identitiy dictionary. Gets skipped if this has already been done.
@@ -1530,6 +1526,11 @@ def combine_nodes(root_nodes, other_nodes, other_ID, identity_dict, root_ID = No
 
     if root_ID is not None: #Adds the root vals to the dictionary if it hasn't already
 
+        if other_ID.endswith('.tiff'):
+            other_ID = other_ID[:-5]
+        elif other_ID.endswith('.tif'):
+            other_ID = other_ID[:-4]
+
         for item in rootIDs:
             identity_dict[item] = root_ID
 
@@ -1538,6 +1539,11 @@ def combine_nodes(root_nodes, other_nodes, other_ID, identity_dict, root_ID = No
             other_ID = os.path.basename(other_ID)
         except:
             pass
+        if other_ID.endswith('.tiff'):
+            other_ID = other_ID[:-5]
+        elif other_ID.endswith('.tif'):
+            other_ID = other_ID[:-4]
+
         identity_dict[item] = other_ID
 
     nodes = root_nodes + other_nodes #Combine the outer edges with the inner edges modified via the above steps
@@ -1608,6 +1614,17 @@ def downsample(data, factor, directory=None, order=0):
         tifffile.imwrite(filename, data)
     
     return data
+
+
+def otsu_binarize(image_array):
+
+    """Automated binarize method for seperating the foreground"""
+
+    from skimage.filters import threshold_otsu
+
+    threshold = threshold_otsu(image_array)
+    binary_mask = image_array > threshold
+    return binary_mask
 
 def binarize(arrayimage, directory = None):
     """
@@ -3428,7 +3445,7 @@ class Network_3D:
         """
         self._nodes, num_nodes = label_objects(nodes, structure_3d)
 
-    def merge_nodes(self, addn_nodes_name, label_nodes = True):
+    def merge_nodes(self, addn_nodes_name, label_nodes = True, root_id = "Root_Nodes"):
         """
         Merges the self._nodes attribute with alternate labelled node images. The alternate nodes can be inputted as a string for a filepath to a tif,
         or as a directory address containing only tif images, which will merge the _nodes attribute with all tifs in the folder. The _node_identities attribute
@@ -3439,8 +3456,13 @@ class Network_3D:
         :param label_nodes: (Optional - Val = True; Boolean). Will label all discrete objects in each node file being merged if True. If False, will not label.
         """
 
-        nodes_name = 'Root_Nodes'
+        nodes_name = root_id
 
+        try:
+            nodes_name = os.path.splitext(os.path.basename(nodes_name))[0]
+        except:
+            pass
+            
         identity_dict = {} #A dictionary to deliniate the node identities
 
         try: #Try presumes the input is a tif
@@ -3462,7 +3484,10 @@ class Network_3D:
             for i, addn_nodes in enumerate(addn_nodes_list):
                 try:
                     addn_nodes_ID = addn_nodes
-                    addn_nodes = tifffile.imread(f'{addn_nodes_name}/{addn_nodes}')
+                    try:
+                        addn_nodes = tifffile.imread(f'{addn_nodes_name}/{addn_nodes}')
+                    except:
+                        continue
 
                     if label_nodes is True:
                         addn_nodes, num_nodes2 = label_objects(addn_nodes)  # Label the node objects. Note this presumes no overlap between node masks.
@@ -4649,10 +4674,14 @@ class Network_3D:
             else:
                 min_coords, max_coords = bounds
 
-            dim_list = max_coords - min_coords
+            try:
+                dim_list = max_coords - min_coords
+            except:
+                min_coords = np.array([0,0,0])
+                bounds = (min_coords, max_coords)
+                dim_list = max_coords - min_coords
 
             new_list = []
-
 
             if dim == 3:
                 for centroid in roots:
@@ -4688,7 +4717,7 @@ class Network_3D:
 
         h_vals = proximity.compute_ripleys_h(k_vals, r_vals, dim)
 
-        proximity.plot_ripley_functions(r_vals, k_vals, h_vals, dim)
+        proximity.plot_ripley_functions(r_vals, k_vals, h_vals, dim, root, targ)
 
         return r_vals, k_vals, h_vals
 
@@ -5081,6 +5110,58 @@ class Network_3D:
         neighborhoods.create_community_heatmap(heat_dict, self.communities, self.node_centroids, is_3d=is3d)
 
         return heat_dict
+
+    def merge_node_ids(self, path, data):
+
+        if self.node_identities is None: # Prepare modular dict
+
+            self.node_identities = {}
+
+            nodes = list(np.unique(data))
+            if 0 in nodes:
+                del nodes[0]
+
+            for node in nodes:
+                self.node_identities[node] = ''
+
+        img_list = directory_info(path)
+
+        for i, img in enumerate(img_list):
+            mask = tifffile.imread(f'{path}/{img}')
+
+            if len(np.unique(mask)) != 2:
+
+                mask = otsu_binarize(mask)
+
+            nodes = data * mask
+            nodes = list(np.unique(nodes))
+            if 0 in nodes:
+                del nodes[0]
+
+            if img.endswith('.tiff'):
+                base_name = img[:-5]
+            elif img.endswith('.tif'):
+                base_name = img[:-4]
+            else:
+                base_name = img
+
+            for node in self.node_identities.keys():
+
+                try:
+
+                    if node in nodes:
+
+                        self.node_identities[node] += f" {base_name}+"
+
+                    else:
+
+                        self.node_identities[node] += f" {base_name}-"
+
+                except:
+                    pass
+
+
+
 
 
 

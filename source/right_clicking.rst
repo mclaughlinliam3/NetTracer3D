@@ -8,6 +8,13 @@ Right Clicking in the Image Viewer Window
 ------------------------------------
 Right clicking in the main Image Viewer Window will prompt you with the following options:
 
+'Find Node/Edge'
+~~~~~~~~~~~~~~~
+
+* Opens a text box to type the ID of a node or edge.
+* Entering the ID of a node/edge that is in your image will select it, highlight it, and move the image stack to its location (which requires calculating centroids in the current implementation).
+* Edge IDs will only be searched for if the edges channel is 'Active'. Otherwise, Nodes will be used.
+
 'Show Neighbors'
 ~~~~~~~~~~~~~~~
 A neighbor is a node in a network that is one degree away from another node. Clicking 'Show Neighbors' reveals the following options:

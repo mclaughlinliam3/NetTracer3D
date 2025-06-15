@@ -174,32 +174,50 @@ def show_identity_network(excel_file_path, node_identities, geometric=False, geo
     G = nx.Graph()
     G.add_edges_from(edges)
 
-    # Create a more sophisticated color palette using a combination of colormap sequences
+    # ENHANCED COLOR LOGIC - Generate bright, contrasting colors
     unique_categories = list(set(identity_dict.values()))
     num_categories = len(unique_categories)
     
-    # Create a color palette that combines multiple colormaps for more distinct colors
-    if num_categories <= 10:
-        colors = plt.cm.tab10(np.linspace(0, 1, num_categories))
-    elif num_categories <= 20:
-        colors1 = plt.cm.tab20(np.linspace(0, 1, min(num_categories, 20)))
-        colors = colors1[:num_categories]
-    else:
-        # For large number of categories, combine multiple distinct colormaps
-        colors1 = plt.cm.tab20(np.linspace(0, 1, 20))
-        colors2 = plt.cm.Set3(np.linspace(0, 1, 12))
-        colors3 = plt.cm.Pastel1(np.linspace(0, 1, 9))
-        colors4 = plt.cm.Paired(np.linspace(0, 1, 12))
-        
-        # Combine and take needed number of colors
-        all_colors = np.vstack([colors1, colors2, colors3, colors4])
-        # Shuffle the colors to ensure adjacent categories have distinct colors
-        np.random.seed(42)  # For consistency
-        np.random.shuffle(all_colors)
-        colors = all_colors[:num_categories]
-
-    color_map = {category: mcolors.to_hex(color[:3]) 
-                 for category, color in zip(unique_categories, colors)}
+    def generate_distinct_colors(n):
+        """Generate visually distinct, bright colors with maximum contrast"""
+        if n <= 12:
+            # Use carefully selected high-contrast colors for small sets
+            base_colors = [
+                '#FF0000',  # Bright Red
+                '#0066FF',  # Bright Blue
+                '#00CC00',  # Bright Green
+                '#FF8800',  # Bright Orange
+                '#8800FF',  # Bright Purple
+                '#FFFF00',  # Bright Yellow
+                '#FF0088',  # Bright Pink
+                '#00FFFF',  # Bright Cyan
+                '#88FF00',  # Bright Lime
+                '#FF4400',  # Red-Orange
+                '#0088FF',  # Sky Blue
+                '#CC00FF'   # Magenta
+            ]
+            return base_colors[:n]
+        else:
+            # For larger sets, use HSV color space for maximum separation
+            colors = []
+            import colorsys
+            for i in range(n):
+                hue = (i * 360 / n) % 360
+                # Alternate saturation and value to create more distinction
+                sat = 0.85 if i % 2 == 0 else 0.95
+                val = 0.95 if i % 3 != 0 else 0.85
+                
+                # Convert HSV to RGB
+                rgb = colorsys.hsv_to_rgb(hue/360, sat, val)
+                hex_color = '#{:02x}{:02x}{:02x}'.format(
+                    int(rgb[0]*255), int(rgb[1]*255), int(rgb[2]*255)
+                )
+                colors.append(hex_color)
+            return colors
+    
+    # Generate the enhanced color palette
+    colors = generate_distinct_colors(num_categories)
+    color_map = dict(zip(unique_categories, colors))
 
     # Node size handling
     node_dict = {node: 30 if identity_dict[node] == 'Edge' else 100 
@@ -225,11 +243,11 @@ def show_identity_network(excel_file_path, node_identities, geometric=False, geo
     # Create separate axes for the graph and legend
     graph_ax = plt.gca()
     
-    # Draw the network
+    # Draw the network with enhanced font styling
     node_colors = [color_map[identity_dict[node]] for node in G.nodes()]
     nx.draw(G, pos, ax=graph_ax, with_labels=True, font_color='black', 
             font_weight='bold', node_size=node_sizes_list, 
-            node_color=node_colors, alpha=0.8, font_size=12)
+            node_color=node_colors, alpha=0.8, font_size=11, font_family='sans-serif')
 
     # Create custom legend with multiple columns if needed
     legend_handles = [Patch(color=color, label=category) 

@@ -71,4 +71,4 @@ Opening the Excel Helper
 
 Next Steps
 ---------
-This concludes the tutorial section about using NetTracer3D. Although I covered many network-generating options in some detail, there are a plethora of other features and functions to learn about. The rest of this guide will go over all the algorithms and associated parameters within NetTracer3D in detail, in a more informative and less tutorial-oriented style. For questions about any particular function, please locate the section in the corresponding section guide to read more about it.
+Next, you may want to read :doc:`keyboard_shortcuts` to learn about the avaible keyboard shortcuts.
