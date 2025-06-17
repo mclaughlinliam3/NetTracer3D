@@ -6,14 +6,14 @@
   <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
 
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>All Analyze Menu Options &mdash; NetTracer3D 0.8.0 documentation</title>
+  <title>All Analyze Menu Options &mdash; NetTracer3D 0.8.1 documentation</title>
       <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=b86133f3" />
       <link rel="stylesheet" type="text/css" href="_static/css/theme.css?v=e59714d7" />
 
   
       <script src="_static/jquery.js?v=5d32c60e"></script>
       <script src="_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
-      <script src="_static/documentation_options.js?v=486e5634"></script>
+      <script src="_static/documentation_options.js?v=ec16d22d"></script>
       <script src="_static/doctools.js?v=9bcbadda"></script>
       <script src="_static/sphinx_highlight.js?v=dc90522c"></script>
     <script src="_static/js/theme.js"></script>
@@ -102,35 +102,40 @@
 <li class="toctree-l3"><a class="reference internal" href="#id11">Algorithm Explanations:</a></li>
 </ul>
 </li>
+<li class="toctree-l2"><a class="reference internal" href="#analyze-stats-average-nearest-neighbors">‘Analyze -&gt; Stats -&gt; Average Nearest Neighbors’</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#id12">Parameter Explanations</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#id13">Algorithm Explanations:</a></li>
+</ul>
+</li>
 <li class="toctree-l2"><a class="reference internal" href="#analyze-stats-calculate-volumes">‘Analyze -&gt; Stats -&gt; Calculate Volumes’</a></li>
 <li class="toctree-l2"><a class="reference internal" href="#analyze-stats-calculate-radii">‘Analyze -&gt; Stats -&gt; Calculate Radii’</a><ul>
 <li class="toctree-l3"><a class="reference internal" href="#parameter-explanation">Parameter Explanation</a></li>
-<li class="toctree-l3"><a class="reference internal" href="#id12">Algorithm Explanation</a></li>
-</ul>
-</li>
-<li class="toctree-l2"><a class="reference internal" href="#analyze-stats-calculate-node-edge-interactions">‘Analyze -&gt; Stats -&gt; Calculate Node &lt; &gt; Edge Interactions’</a><ul>
-<li class="toctree-l3"><a class="reference internal" href="#id13">Parameter Explanations</a></li>
 <li class="toctree-l3"><a class="reference internal" href="#id14">Algorithm Explanation</a></li>
 </ul>
 </li>
-<li class="toctree-l2"><a class="reference internal" href="#analyze-data-overlays-get-degree-information">‘Analyze -&gt; Data/Overlays -&gt; Get Degree Information’</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="#analyze-stats-calculate-node-edge-interactions">‘Analyze -&gt; Stats -&gt; Calculate Node &lt; &gt; Edge Interactions’</a><ul>
 <li class="toctree-l3"><a class="reference internal" href="#id15">Parameter Explanations</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#id16">Algorithm Explanation</a></li>
 </ul>
 </li>
-<li class="toctree-l2"><a class="reference internal" href="#analyze-data-overlays-get-hub-information">‘Analyze -&gt; Data/Overlays -&gt; Get Hub Information’</a><ul>
-<li class="toctree-l3"><a class="reference internal" href="#id16">Parameter Explanations</a></li>
-</ul>
-</li>
-<li class="toctree-l2"><a class="reference internal" href="#analyze-data-overlays-get-mother-nodes">‘Analyze -&gt; Data/Overlays -&gt; Get Mother Nodes’</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="#analyze-data-overlays-get-degree-information">‘Analyze -&gt; Data/Overlays -&gt; Get Degree Information’</a><ul>
 <li class="toctree-l3"><a class="reference internal" href="#id17">Parameter Explanations</a></li>
 </ul>
 </li>
-<li class="toctree-l2"><a class="reference internal" href="#analyze-data-overlays-code-communities">‘Analyze -&gt; Data/Overlays -&gt; Code Communities’</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="#analyze-data-overlays-get-hub-information">‘Analyze -&gt; Data/Overlays -&gt; Get Hub Information’</a><ul>
 <li class="toctree-l3"><a class="reference internal" href="#id18">Parameter Explanations</a></li>
 </ul>
 </li>
-<li class="toctree-l2"><a class="reference internal" href="#analyze-data-overlays-code-identities">‘Analyze -&gt; Data/Overlays -&gt; Code Identities’</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="#analyze-data-overlays-get-mother-nodes">‘Analyze -&gt; Data/Overlays -&gt; Get Mother Nodes’</a><ul>
 <li class="toctree-l3"><a class="reference internal" href="#id19">Parameter Explanations</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="#analyze-data-overlays-code-communities">‘Analyze -&gt; Data/Overlays -&gt; Code Communities’</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#id20">Parameter Explanations</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="#analyze-data-overlays-code-identities">‘Analyze -&gt; Data/Overlays -&gt; Code Identities’</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#id21">Parameter Explanations</a></li>
 </ul>
 </li>
 <li class="toctree-l2"><a class="reference internal" href="#analyze-randomize-generate-equivalent-random-network">‘Analyze -&gt; Randomize -&gt; Generate Equivalent Random Network’</a></li>
@@ -866,6 +871,13 @@
 </dd>
 </dl>
 </li>
+<li><dl class="simple">
+<dt>Overlay</dt><dd><ul class="simple">
+<li><p>If enabled, the heatmapped will be returned as an RGB image overlay that goes into Overlay2, rather than a matplotlib graph.</p></li>
+</ul>
+</dd>
+</dl>
+</li>
 </ol>
 <ul class="simple">
 <li><p>Press ‘Run’ to show the heatmap graph, and yield a table showing community id vs density intensity.</p></li>
@@ -879,6 +891,40 @@
 <li><p>Calculate baseline density as the expected nodes per community if randomly distributed (total nodes / num communities).</p></li>
 <li><p>Compute heat values using natural log ratio of actual community size to expected random size.</p></li>
 <li><p>Generate heatmap visualization with matplotlib.</p></li>
+</ol>
+</section>
+</section>
+<section id="analyze-stats-average-nearest-neighbors">
+<h2>‘Analyze -&gt; Stats -&gt; Average Nearest Neighbors’<a class="headerlink" href="#analyze-stats-average-nearest-neighbors" title="Link to this heading"></a></h2>
+<ul class="simple">
+<li><p>This method will provide information about the nearest neighbors of your nodes.</p></li>
+<li><p>If node identities are assigned, the nearest neighbor information can be specific about the relationship between two identity types. Otherwise, it will just look at all the nodes together.</p></li>
+<li><p>The output can be the distribution of nearest neighbor values (+ their average), or it can be the average of all identity combinations (for bulk processing).</p></li>
+<li><p>This method can also yield heatmaps for nearest neighbor relationships as either graphs or image overlays.</p></li>
+</ul>
+<section id="id12">
+<h3>Parameter Explanations<a class="headerlink" href="#id12" title="Link to this heading"></a></h3>
+<ol class="arabic simple">
+<li><p>Root Identity… (If node identities property exists) - Identities of this node type will be evaluated for nearest neighbors of some other node type.</p></li>
+<li><p>Neighbor identities… (If node identities property exists) - Identities of this node type will be searched for. Can be the same as param 1, or can include all nodes except param 1.</p></li>
+<li><p>Number of Nearest Neighbors… - Default set to 1. This is the number of nearest neighbors each node will find. If 1, it just looks for its closest neighbor distance. Increasing this value will have each node instead get the average distance to that many nearest neighbors. (This value will cause the program to return if it is greater than the number of possible neighbors).</p></li>
+<li><p>Heatmap - Enabling this will cause a heatmap to be generated. Red nodes will be closer on average to their nearest neighbor, while blue nodes will be further.</p></li>
+<li><p>3D - If generating a matplotlib heatmap, enabling this will make the graph 3D. Disabling it will make it 2D.</p></li>
+<li><p>Overlay - If enabled, the heatmap will be created as an image overlay in Overlay2 channel instead of a graph.</p></li>
+</ol>
+<ul class="simple">
+<li><p>Pressing ‘Get Distribution’ will yield a table of every ‘root’ node paired to its average distance to the desired number of nearest neighbors. It will also create a heatmap if selected.</p></li>
+<li><p>(If node identities property exists) - Pressing ‘Get All Averages’ will yield a table of the average nearest neighbor distance (for the desired number of nearest neighbor) across all nodes for every identity vs identity combination available. This can be a fast way to query the dataset, but it does not yield distributions and heatmaps, which need to be individually obtained.</p></li>
+<li><p>Note that this method automatically applies the xy_scale and z_scale set in the current properties. To ensure property distances, please make sure those are correct in Image -&gt; Properties. By default, they are 1.</p></li>
+</ul>
+</section>
+<section id="id13">
+<h3>Algorithm Explanations:<a class="headerlink" href="#id13" title="Link to this heading"></a></h3>
+<ol class="arabic simple">
+<li><p>Depending on the desired identities, the nodes are broken into a root set and a neighbor set.</p></li>
+<li><p>The centroids of the neighbor set are used to build a KDTree, which is a points-based data structure good for querying distance relationships. <a class="reference external" href="https://docs.scipy.org/doc/scipy/reference/generated/scipy.spatial.KDTree.html">https://docs.scipy.org/doc/scipy/reference/generated/scipy.spatial.KDTree.html</a></p></li>
+<li><p>For each point in the root set, the desired number of nearest neighbors are obtained by querying the KDTree. These values are averaged per point and returned. The total average for the set is also returned.</p></li>
+<li><p>When generating the heatmap, color intensity is centered around the average distance to neighbors in the set, with ln(average dist / dist of point) being used to create the color scale.</p></li>
 </ol>
 </section>
 </section>
@@ -903,8 +949,8 @@
 <li><p>If you enable it, the system will attempt to attempt to use the GPU to calculate. Note that this is only possible with a working CUDA toolkit.</p></li>
 </ul>
 </section>
-<section id="id12">
-<h3>Algorithm Explanation<a class="headerlink" href="#id12" title="Link to this heading"></a></h3>
+<section id="id14">
+<h3>Algorithm Explanation<a class="headerlink" href="#id14" title="Link to this heading"></a></h3>
 <ol class="arabic simple">
 <li><p>The scipy.ndimage.find_objects() method is used to get bounding boxes around all the labeled objects.</p></li>
 <li><p>For each object, a subarray is cut out around it using its bounding box, with padding on all sides.</p></li>
@@ -924,8 +970,8 @@
 </ul>
 <a class="reference internal image-reference" href="_images/analyze5.png"><img alt="edgenode Menu" src="_images/analyze5.png" style="width: 800px;" />
 </a>
-<section id="id13">
-<h3>Parameter Explanations<a class="headerlink" href="#id13" title="Link to this heading"></a></h3>
+<section id="id15">
+<h3>Parameter Explanations<a class="headerlink" href="#id15" title="Link to this heading"></a></h3>
 <ol class="arabic simple">
 <li><dl class="simple">
 <dt>node_search:</dt><dd><ul class="simple">
@@ -962,8 +1008,8 @@
 <li><p>Press Calculate to run the method with the desired parameters. The output data will be used to create a new table in the tabulated data widget.</p></li>
 </ul>
 </section>
-<section id="id14">
-<h3>Algorithm Explanation<a class="headerlink" href="#id14" title="Link to this heading"></a></h3>
+<section id="id16">
+<h3>Algorithm Explanation<a class="headerlink" href="#id16" title="Link to this heading"></a></h3>
 <ol class="arabic simple">
 <li><p>The scipy.ndimage.find_objects() method is used to get bounding boxes around all the labeled objects in the nodes channel.</p></li>
 <li><p>For each object, a subarray is cut out around it using its bounding box, that includes the object plus any additional space that it will need to perform a search/dilation.</p></li>
@@ -988,8 +1034,8 @@
 </ul>
 <a class="reference internal image-reference" href="_images/analyze6.png"><img alt="edgenode Menu" src="_images/analyze6.png" style="width: 800px;" />
 </a>
-<section id="id15">
-<h3>Parameter Explanations<a class="headerlink" href="#id15" title="Link to this heading"></a></h3>
+<section id="id17">
+<h3>Parameter Explanations<a class="headerlink" href="#id17" title="Link to this heading"></a></h3>
 <ol class="arabic simple">
 <li><dl class="simple">
 <dt>Execution Mode</dt><dd><ul class="simple">
@@ -1004,6 +1050,7 @@
 </dd>
 </dl>
 </li>
+<li><p>Create Heatmap of Degrees - Places in Overlay 2 an RGB heatmap of degrees. Degrees higher than average are more red while those lower than average are more blue.</p></li>
 </ol>
 </dd>
 </dl>
@@ -1037,8 +1084,8 @@
 <ul class="simple">
 <li><p>This method can be used to extract information about hub nodes, which are the nodes that are the fewest degrees of seperation from any other node.</p></li>
 </ul>
-<section id="id16">
-<h3>Parameter Explanations<a class="headerlink" href="#id16" title="Link to this heading"></a></h3>
+<section id="id18">
+<h3>Parameter Explanations<a class="headerlink" href="#id18" title="Link to this heading"></a></h3>
 <ul class="simple">
 <li><p>This method only has two parameters.</p></li>
 </ul>
@@ -1070,8 +1117,8 @@
 <li><p>This method can be used to extract information about ‘mother nodes’, which are we define as those nodes that contain connections between one community and another.</p></li>
 <li><p>This method would be used to identify what nodes enable interaction between seperate communities.</p></li>
 </ul>
-<section id="id17">
-<h3>Parameter Explanations<a class="headerlink" href="#id17" title="Link to this heading"></a></h3>
+<section id="id19">
+<h3>Parameter Explanations<a class="headerlink" href="#id19" title="Link to this heading"></a></h3>
 <ul class="simple">
 <li><p>This method only has one parameter.</p></li>
 </ul>
@@ -1094,8 +1141,8 @@
 <ul class="simple">
 <li><p>This method can be used to generate an overlay that shows what nodes belong to which community.</p></li>
 </ul>
-<section id="id18">
-<h3>Parameter Explanations<a class="headerlink" href="#id18" title="Link to this heading"></a></h3>
+<section id="id20">
+<h3>Parameter Explanations<a class="headerlink" href="#id20" title="Link to this heading"></a></h3>
 <ul class="simple">
 <li><p>This method only has two parameters.</p></li>
 </ul>
@@ -1132,8 +1179,8 @@
 <ul class="simple">
 <li><p>This method can be used to generate an overlay that shows what nodes belong to which identity.</p></li>
 </ul>
-<section id="id19">
-<h3>Parameter Explanations<a class="headerlink" href="#id19" title="Link to this heading"></a></h3>
+<section id="id21">
+<h3>Parameter Explanations<a class="headerlink" href="#id21" title="Link to this heading"></a></h3>
 <ul class="simple">
 <li><p>This method only has two parameters.</p></li>
 </ul>

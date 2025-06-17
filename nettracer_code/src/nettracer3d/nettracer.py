@@ -4291,7 +4291,7 @@ class Network_3D:
 
 
 
-    def get_degrees(self, down_factor = 1, directory = None, called = False, no_img = 0):
+    def get_degrees(self, down_factor = 1, directory = None, called = False, no_img = 0, heatmap = False):
         """
         Method to obtain information on the degrees of nodes in the network, also generating overlays that relate this information to the 3D structure.
         Overlays include a grayscale image where nodes are assigned a grayscale value corresponding to their degree, and a numerical index where numbers are drawn at nodes corresponding to their degree.
@@ -4300,6 +4300,27 @@ class Network_3D:
         :param directory: (Optional - Val = None; string). A path to a directory to save outputs.
         :returns: A dictionary of degree values for each node.
         """
+
+        if heatmap:
+            import statistics
+            degrees_dict = {node: val for (node, val) in self.network.degree()}
+            pred = statistics.mean(list(degrees_dict.values()))
+
+            node_intensity = {}
+            import math
+            node_centroids = {}
+
+            for node in list(self.network.nodes()):
+                node_intensity[node] = math.log(self.network.degree(node)/pred)
+                node_centroids[node] = self.node_centroids[node]
+
+            from . import neighborhoods
+
+            overlay = neighborhoods.create_node_heatmap(node_intensity, node_centroids, shape = self.nodes.shape, is_3d=True, labeled_array = self.nodes)
+
+            return degrees_dict, overlay
+
+
 
         if down_factor > 1:
             centroids = self._node_centroids.copy()
@@ -4657,18 +4678,16 @@ class Network_3D:
                     dim = 3
                     break
 
-
         if ignore_dims:
 
             factor = 0.25
 
+            big_array = proximity.convert_centroids_to_array(list(self.node_centroids.values()))
 
             if bounds is None:
-                if dim == 2:
-                    min_coords = np.array([0,0])
-                else:
-                    min_coords = np.array([0,0,0])
-                max_coords = np.max(points_array, axis=0)
+                min_coords = np.array([0,0,0])
+                max_coords = [np.max(big_array[:, 0]), np.max(big_array[:, 1]), np.max(big_array[:, 2])]
+                del big_array
                 max_coords = np.flip(max_coords)
                 bounds = (min_coords, max_coords)
             else:
@@ -4683,11 +4702,16 @@ class Network_3D:
 
             new_list = []
 
+
             if dim == 3:
                 for centroid in roots:
 
                     if ((centroid[2] - min_coords[0]) > dim_list[0] * factor) and ((max_coords[0] - centroid[2]) > dim_list[0]  * factor) and ((centroid[1] - min_coords[1]) > dim_list[1] * factor) and ((max_coords[1] - centroid[1]) > dim_list[1] * factor) and ((centroid[0] - min_coords[2]) > dim_list[2] * factor) and ((max_coords[2] - centroid[0]) > dim_list[2] * factor):
                         new_list.append(centroid)
+
+
+                    #if ((centroid[2] - min_coords[0]) > dim_list[0] * factor) and ((max_coords[0] - centroid[2]) > dim_list[0]  * factor) and ((centroid[1] - min_coords[1]) > dim_list[1] * factor) and ((max_coords[1] - centroid[1]) > dim_list[1] * factor) and ((centroid[0] - min_coords[2]) > dim_list[2] * factor) and ((max_coords[2] - centroid[0]) > dim_list[2] * factor):
+                        #new_list.append(centroid)
                         #print(f"dim_list: {dim_list}, centroid: {centroid}, min_coords: {min_coords}, max_coords: {max_coords}")
             else:
                 for centroid in roots:
@@ -5068,7 +5092,7 @@ class Network_3D:
 
         self.communities = invert_dict(com_dict)
 
-    def community_heatmap(self, num_nodes = None, is3d = True):
+    def community_heatmap(self, num_nodes = None, is3d = True, numpy = False):
 
         import math
 
@@ -5106,10 +5130,21 @@ class Network_3D:
         for com, nodes in coms.items():
             heat_dict[com] = math.log(len(nodes)/rand_dens)
 
-        from . import neighborhoods
-        neighborhoods.create_community_heatmap(heat_dict, self.communities, self.node_centroids, is_3d=is3d)
+        try:
+            shape = self.nodes.shape
+        except:
+            big_array = proximity.convert_centroids_to_array(list(self.node_centroids.values()))
+            shape = [np.max(big_array[0, :]) + 1, np.max(big_array[1, :]) + 1, np.max(big_array[2, :]) + 1]
 
-        return heat_dict
+        from . import neighborhoods
+        if not numpy:
+            neighborhoods.create_community_heatmap(heat_dict, self.communities, self.node_centroids, shape = shape, is_3d=is3d)
+
+            return heat_dict
+        else:
+            overlay = neighborhoods.create_community_heatmap(heat_dict, self.communities, self.node_centroids, shape = shape, is_3d=is3d, labeled_array = self.nodes)
+            return heat_dict, overlay
+
 
     def merge_node_ids(self, path, data):
 
@@ -5159,6 +5194,81 @@ class Network_3D:
 
                 except:
                     pass
+
+
+    def nearest_neighbors_avg(self, root, targ, xy_scale = 1, z_scale = 1, num = 1, heatmap = False, threed = True, numpy = False):
+
+        root_set = []
+
+        compare_set = []
+
+        if root is None:
+
+            root_set = list(self.node_centroids.keys())
+            compare_set = root_set
+            title = "Nearest Neighbors Between Nodes Heatmap"
+
+        else:
+
+            title = f"Nearest Neighbors of ID {targ} from ID {root} Heatmap"
+
+            for node, iden in self.node_identities.items():
+
+                if iden == root:
+
+                    root_set.append(node)
+
+                elif (iden == targ) or (targ == 'All Others (Excluding Self)'):
+
+                    compare_set.append(node)
+
+        if root == targ:
+
+            compare_set = root_set
+            if len(compare_set) - 1 < num:
+
+                print("Error: Not enough neighbor nodes for requested number of neighbors")
+                return
+
+        if len(compare_set) < num:
+
+            print("Error: Not enough neighbor nodes for requested number of neighbors")
+            return
+
+        avg, output = proximity.average_nearest_neighbor_distances(self.node_centroids, root_set, compare_set, xy_scale=self.xy_scale, z_scale=self.z_scale, num = num)
+
+        if heatmap:
+
+
+            from . import neighborhoods
+            try:
+                shape = self.nodes.shape
+            except:
+                big_array = proximity.convert_centroids_to_array(list(self.node_centroids.values()))
+                shape = [np.max(big_array[0, :]) + 1, np.max(big_array[1, :]) + 1, np.max(big_array[2, :]) + 1]
+
+            pred = avg
+
+            node_intensity = {}
+            import math
+            node_centroids = {}
+
+            for node in root_set:
+                node_intensity[node] = math.log(pred/output[node])
+                node_centroids[node] = self.node_centroids[node]
+
+            if numpy:
+
+                overlay = neighborhoods.create_node_heatmap(node_intensity, node_centroids, shape = shape, is_3d=threed, labeled_array = self.nodes, colorbar_label="Clustering Intensity", title = title)
+
+                return avg, output, overlay
+
+            else:
+                neighborhoods.create_node_heatmap(node_intensity, node_centroids, shape = shape, is_3d=threed, labeled_array = None, colorbar_label="Clustering Intensity", title = title)
+
+        return avg, output
+
+
 
 
 

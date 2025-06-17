@@ -34,11 +34,8 @@ NetTracer3D is free to use/fork for academic/nonprofit use so long as citation i
 
 NetTracer3D was developed by Liam McLaughlin while working under Dr. Sanjay Jain at Washington University School of Medicine.
 
--- Version 0.8.0 Updates -- 
+-- Version 0.8.1 Updates -- 
 
-	* Added ability to threshold nodes by degree.
-	* Improved image viewer window performance.
-	* Bug fixes and a few optimizations.
-	* Added ability to 'merge node identities' which just uses the nodes image as a reference for collecting 'identity' information from a group of other images - ie can use with cell nuclei (DAPI) to see what markers from the same imaging session overlap.
-	* Added ability to search for specific nodes directly in the nodes image with 'shift + f' or right click.
-	
+	* Added nearest neighbor evaluation function (Analysis -> Stats -> Avg Nearest Neighbor)
+	* Added heatmap outputs for node degrees (Analysis -> Data/Overlays -> Get Degree Information).
+	* Bug fixes and misc improvements.

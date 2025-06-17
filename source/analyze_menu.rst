@@ -385,6 +385,8 @@ Parameter Explanations
 #. Use 3D Plot...
     * By default, the program will graph the heatmap in 3D.
     * Disable this if your data is 2D. Do not disable if it is 3D as the program will get confused.
+#. Overlay
+    * If enabled, the heatmapped will be returned as an RGB image overlay that goes into Overlay2, rather than a matplotlib graph.
 
 * Press 'Run' to show the heatmap graph, and yield a table showing community id vs density intensity.
 * It will require you to get 'node_centroids' and 'communities' properties if unassigned.
@@ -397,6 +399,35 @@ Algorithm Explanations:
 3. Compute heat values using natural log ratio of actual community size to expected random size.
 4. Generate heatmap visualization with matplotlib.
 
+'Analyze -> Stats -> Average Nearest Neighbors'
+-----------------------------------------
+
+* This method will provide information about the nearest neighbors of your nodes.
+* If node identities are assigned, the nearest neighbor information can be specific about the relationship between two identity types. Otherwise, it will just look at all the nodes together.
+* The output can be the distribution of nearest neighbor values (+ their average), or it can be the average of all identity combinations (for bulk processing).
+* This method can also yield heatmaps for nearest neighbor relationships as either graphs or image overlays.
+
+Parameter Explanations
+~~~~~~~~~~~~~~~
+
+#. Root Identity... (If node identities property exists) - Identities of this node type will be evaluated for nearest neighbors of some other node type.
+#. Neighbor identities... (If node identities property exists) - Identities of this node type will be searched for. Can be the same as param 1, or can include all nodes except param 1.
+#. Number of Nearest Neighbors... - Default set to 1. This is the number of nearest neighbors each node will find. If 1, it just looks for its closest neighbor distance. Increasing this value will have each node instead get the average distance to that many nearest neighbors. (This value will cause the program to return if it is greater than the number of possible neighbors).
+#. Heatmap - Enabling this will cause a heatmap to be generated. Red nodes will be closer on average to their nearest neighbor, while blue nodes will be further.
+#. 3D - If generating a matplotlib heatmap, enabling this will make the graph 3D. Disabling it will make it 2D.
+#. Overlay - If enabled, the heatmap will be created as an image overlay in Overlay2 channel instead of a graph.
+
+* Pressing 'Get Distribution' will yield a table of every 'root' node paired to its average distance to the desired number of nearest neighbors. It will also create a heatmap if selected.
+* (If node identities property exists) - Pressing 'Get All Averages' will yield a table of the average nearest neighbor distance (for the desired number of nearest neighbor) across all nodes for every identity vs identity combination available. This can be a fast way to query the dataset, but it does not yield distributions and heatmaps, which need to be individually obtained.
+* Note that this method automatically applies the xy_scale and z_scale set in the current properties. To ensure property distances, please make sure those are correct in Image -> Properties. By default, they are 1. 
+
+Algorithm Explanations:
+~~~~~~~~~~~~~~~
+
+1. Depending on the desired identities, the nodes are broken into a root set and a neighbor set.
+2. The centroids of the neighbor set are used to build a KDTree, which is a points-based data structure good for querying distance relationships. https://docs.scipy.org/doc/scipy/reference/generated/scipy.spatial.KDTree.html
+3. For each point in the root set, the desired number of nearest neighbors are obtained by querying the KDTree. These values are averaged per point and returned. The total average for the set is also returned.
+4. When generating the heatmap, color intensity is centered around the average distance to neighbors in the set, with ln(average dist / dist of point) being used to create the color scale.
 
 'Analyze -> Stats -> Calculate Volumes'
 -----------------------------------------
@@ -484,6 +515,7 @@ Parameter Explanations
         2. 'Draw Degree of Node as Overlay...' - This method creates an overlay where the degree value of each node is literally drawn onto its centroid as an overlay (ie, a node of degree 5 has a 5 drawn at its centroid). This can be used to quickly eyeball node connectivity.
         3. 'Label Nodes by Degree...' - This method takes each node label and reassigns its label to its degree. The idea would be to export the image and do downstream analysis elsewhere while thresholding for specific degree values.
             * Note this thresholding can be done in NetTracer3D by using the intensity thresholder.
+        4. Create Heatmap of Degrees - Places in Overlay 2 an RGB heatmap of degrees. Degrees higher than average are more red while those lower than average are more blue.
 2. Proportion of high degree nodes to keep...
     * By default this is set to 1 (meaning all nodes). Set this to a smaller float val between 0-1 to return that sub-proportion of nodes, prioritizing, high-degree ones. For example, a value of 0.1 would return the top 10% highest degree nodes in the output overlay only.
 3. down_factor... 

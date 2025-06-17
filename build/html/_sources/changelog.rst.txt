@@ -53,4 +53,9 @@ Version 0.8.0 Updates
 	* Bug fixes and a few optimizations.
 	* Added ability to 'merge node identities' which just uses the nodes image as a reference for collecting 'identity' information from a group of other images - ie can use with cell nuclei (DAPI) to see what markers from the same imaging session overlap.
 	* Added ability to search for specific nodes directly in the nodes image with 'shift + f' or right click.
-	
+
+Version 0.8.1 Updates
+
+	* Added nearest neighbor evaluation function (Analysis -> Stats -> Avg Nearest Neighbor)
+	* Added heatmap outputs for node degrees (Analysis -> Data/Overlays -> Get Degree Information).
+	* Bug fixes and misc improvements.

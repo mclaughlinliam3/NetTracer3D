@@ -388,6 +388,9 @@ Parameter Explanations
 2. Fill Small Holes Along Borders
     * If enabled, 'Hole' like things on the image border will be filled as long as the border they share with the image is less than 8% of the length of that border.
     * If disabled, no holes on the image border will be filled.
+3. Place Hole Mask in Overlay 2...
+    * This just puts the hole mask in overlay2 instead of directly filling. The idea is that this mask can then be thresholded or arbitrarily selected for more specific holes, then relayed back to the image by selecting the result (right click -> select all) and imposing it back onto the original image (right click with selection -> selection -> override channel with selection).
+
 
 * Press 'Run Fill Holes' to run the method with the desired parameters. Note the channel refered to in 'Active Image' is the one that will be 'Filled', with the output also being returned there.
 

@@ -3432,6 +3432,8 @@ class ImageViewerWindow(QMainWindow):
         ripley_action.triggered.connect(self.show_ripley_dialog)
         heatmap_action = stats_menu.addAction("Community Cluster Heatmap")
         heatmap_action.triggered.connect(self.show_heatmap_dialog)
+        nearneigh_action = stats_menu.addAction("Average Nearest Neighbors")
+        nearneigh_action.triggered.connect(self.show_nearneigh_dialog)
         vol_action = stats_menu.addAction("Calculate Volumes")
         vol_action.triggered.connect(self.volumes)
         rad_action = stats_menu.addAction("Calculate Radii")
@@ -5210,6 +5212,10 @@ class ImageViewerWindow(QMainWindow):
 
     def show_heatmap_dialog(self):
         dialog = HeatmapDialog(self)
+        dialog.exec()
+
+    def show_nearneigh_dialog(self):
+        dialog = NearNeighDialog(self)
         dialog.exec()
 
     def show_random_dialog(self):
@@ -7269,6 +7275,174 @@ class DegreeDistDialog(QDialog):
         except Exception as e:
             print(f"An error occurred: {e}")
 
+class NearNeighDialog(QDialog):
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle(f"Nearest Neighborhood Averages (Using Centroids)")
+        self.setModal(True)
+        
+        # Main layout
+        main_layout = QVBoxLayout(self)
+        
+        # Identities group box (only if node_identities exists)
+        identities_group = QGroupBox("Identities")
+        identities_layout = QFormLayout(identities_group)
+        
+        if my_network.node_identities is not None:
+
+            self.root = QComboBox()
+            self.root.addItems(list(set(my_network.node_identities.values())))  
+            self.root.setCurrentIndex(0)
+            identities_layout.addRow("Root Identity to Search for Neighbor's IDs?", self.root)
+            
+            self.targ = QComboBox()
+            neighs = list(set(my_network.node_identities.values()))
+            neighs.append("All Others (Excluding Self)")
+            self.targ.addItems(neighs)  
+            self.targ.setCurrentIndex(0)
+            identities_layout.addRow("Neighbor Identities to Search For?", self.targ)
+        else:
+            self.root = None
+            self.targ = None
+
+        self.num = QLineEdit("1")
+        identities_layout.addRow("Number of Nearest Neighbors to Evaluate Per Node?:", self.num)
+
+        
+        main_layout.addWidget(identities_group)
+
+        
+        # Optional Heatmap group box
+        heatmap_group = QGroupBox("Optional Heatmap")
+        heatmap_layout = QFormLayout(heatmap_group)
+        
+        self.map = QPushButton("(If getting distribution): Generate Heatmap?")
+        self.map.setCheckable(True)
+        self.map.setChecked(False)
+        heatmap_layout.addRow("Heatmap:", self.map)
+        
+        self.threed = QPushButton("(For above): Return 3D map? (uncheck for 2D): ")
+        self.threed.setCheckable(True)
+        self.threed.setChecked(True)
+        heatmap_layout.addRow("3D:", self.threed)
+        
+        self.numpy = QPushButton("(For heatmap): Return image overlay instead of graph? (Goes in Overlay 2): ")
+        self.numpy.setCheckable(True)
+        self.numpy.setChecked(False)
+        self.numpy.clicked.connect(self.toggle_map)
+        heatmap_layout.addRow("Overlay:", self.numpy)
+        
+        main_layout.addWidget(heatmap_group)
+        
+        # Get Distribution group box
+        distribution_group = QGroupBox("Get Distribution")
+        distribution_layout = QVBoxLayout(distribution_group)
+        
+        run_button = QPushButton("Get Average Nearest Neighbor (Plus Distribution)")
+        run_button.clicked.connect(self.run)
+        distribution_layout.addWidget(run_button)
+        
+        main_layout.addWidget(distribution_group)
+        
+        # Get All Averages group box (only if node_identities exists)
+        if my_network.node_identities is not None:
+            averages_group = QGroupBox("Get All Averages")
+            averages_layout = QVBoxLayout(averages_group)
+            
+            run_button2 = QPushButton("Get Average Nearest All ID Combinations (No Distribution, No Heatmap)")
+            run_button2.clicked.connect(self.run2)
+            averages_layout.addWidget(run_button2)
+            
+            main_layout.addWidget(averages_group)
+
+    def toggle_map(self):
+
+        if self.numpy.isChecked():
+
+            if not self.map.isChecked():
+
+                self.map.click()
+
+    def run(self):
+
+        try:
+
+            try:
+                root = self.root.currentText()
+            except:
+                root = None
+            try:
+                targ = self.targ.currentText()
+            except:
+                targ = None
+
+            heatmap = self.map.isChecked()
+            threed = self.threed.isChecked()
+            numpy = self.numpy.isChecked()
+            num = int(self.num.text()) if self.num.text().strip() else 1
+
+            if root is not None and targ is not None:
+                title = f"Nearest {num} Neighbor(s) Distance of {targ} from {root}"
+                header = f"Shortest Distance to Closest {num} {targ}(s)"
+                header2 = f"{root} Node ID"
+            else:
+                title = f"Nearest {num} Neighbor(s) Distance Between Nodes"
+                header = f"Shortest Distance to Closest {num} Nodes"
+                header2 = "Root Node ID"
+
+            if my_network.node_centroids is None:
+                self.parent().show_centroid_dialog()
+                if my_network.node_centroids is None:
+                    return
+
+            if not numpy:
+                avg, output = my_network.nearest_neighbors_avg(root, targ, my_network.xy_scale, my_network.z_scale, num = num, heatmap = heatmap, threed = threed)
+            else:
+                avg, output, overlay = my_network.nearest_neighbors_avg(root, targ, my_network.xy_scale, my_network.z_scale, num = num, heatmap = heatmap, threed = threed, numpy = True)
+                self.parent().load_channel(3, overlay, data = True)
+
+            self.parent().format_for_upperright_table([avg], metric = f'Avg {title}', title = f'Avg {title}')
+            self.parent().format_for_upperright_table(output, header2, header, title = title)
+
+            self.accept()
+
+        except Exception as e:
+            import traceback
+            print(traceback.format_exc())
+
+            print(f"Error: {e}")
+
+    def run2(self):
+
+        try:
+
+            available = list(set(my_network.node_identities.values()))
+
+            num = int(self.num.text()) if self.num.text().strip() else 1
+
+            output_dict = {}
+
+            while len(available) > 1:
+
+                root = available[0]
+
+                for targ in available:
+
+                    avg, _ = my_network.nearest_neighbors_avg(root, targ, my_network.xy_scale, my_network.z_scale, num = num)
+
+                    output_dict[f"{root} vs {targ}"] = avg
+
+                del available[0]
+
+            self.parent().format_for_upperright_table(output_dict, "ID Combo", "Avg Distance to Nearest", title = "Average Distance to Nearest Neighbors for All ID Combos")
+
+            self.accept()
+
+        except Exception as e:
+
+            print(f"Error: {e}")
+
+
 class NeighborIdentityDialog(QDialog):
 
     def __init__(self, parent=None):
@@ -7455,8 +7629,7 @@ class RipleyDialog(QDialog):
                 "Error:",
                 f"Failed to preform cluster analysis: {str(e)}"
             )
-            import traceback
-            print(traceback.format_exc())
+
             print(f"Error: {e}")
 
 class HeatmapDialog(QDialog):
@@ -7479,6 +7652,11 @@ class HeatmapDialog(QDialog):
         self.is3d.setChecked(True)
         layout.addRow("Use 3D Plot (uncheck for 2D)?:", self.is3d)
 
+        self.numpy = QPushButton("(For heatmap): Return image overlay instead of graph? (Goes in Overlay 2): ")
+        self.numpy.setCheckable(True)
+        self.numpy.setChecked(False)
+        layout.addRow("Overlay:", self.numpy)
+
 
         # Add Run button
         run_button = QPushButton("Run")
@@ -7487,25 +7665,40 @@ class HeatmapDialog(QDialog):
 
     def run(self):
 
-        nodecount = int(self.nodecount.text()) if self.nodecount.text().strip() else None
+        try:
 
-        is3d = self.is3d.isChecked()
+            nodecount = int(self.nodecount.text()) if self.nodecount.text().strip() else None
+
+            is3d = self.is3d.isChecked()
 
 
-        if my_network.communities is None:
-            if my_network.network is not None:
-                self.parent().show_partition_dialog()
-            else:
-                self.parent().handle_com_cell()
             if my_network.communities is None:
-                return
+                if my_network.network is not None:
+                    self.parent().show_partition_dialog()
+                else:
+                    self.parent().handle_com_cell()
+                if my_network.communities is None:
+                    return
 
-        heat_dict = my_network.community_heatmap(num_nodes = nodecount, is3d = is3d)
+            numpy = self.numpy.isChecked()
 
-        self.parent().format_for_upperright_table(heat_dict, metric='Community', value='ln(Predicted Community Nodecount/Actual)', title="Community Heatmap")
+            if not numpy:
 
-        self.accept()
+                heat_dict = my_network.community_heatmap(num_nodes = nodecount, is3d = is3d)
 
+            else:
+
+                heat_dict, overlay = my_network.community_heatmap(num_nodes = nodecount, is3d = is3d, numpy = True)
+                self.parent().load_channel(3, overlay, data = True)
+
+
+            self.parent().format_for_upperright_table(heat_dict, metric='Community', value='ln(Predicted Community Nodecount/Actual)', title="Community Heatmap")
+
+            self.accept()
+
+        except Exception as e:
+
+            print(f"Error: {e}")
 
 
 
@@ -7749,7 +7942,7 @@ class DegreeDialog(QDialog):
 
         # Add mode selection dropdown
         self.mode_selector = QComboBox()
-        self.mode_selector.addItems(["Just make table", "Draw degree of node as overlay (literally draws 1, 2, 3, etc... faster)", "Label nodes by degree (nodes will take on the value 1, 2, 3, etc, based on their degree, to export for array based analysis... slower)"])
+        self.mode_selector.addItems(["Just make table", "Draw degree of node as overlay (literally draws 1, 2, 3, etc... faster)", "Label nodes by degree (nodes will take on the value 1, 2, 3, etc, based on their degree, to export for array based analysis)", "Create Heatmap of Degrees"])
         self.mode_selector.setCurrentIndex(0)  # Default to Mode 1
         layout.addRow("Execution Mode:", self.mode_selector)
 
@@ -7769,6 +7962,14 @@ class DegreeDialog(QDialog):
         try:
 
             accepted_mode = self.mode_selector.currentIndex()
+
+            if accepted_mode == 3:
+                degree_dict, overlay = my_network.get_degrees(heatmap = True)
+                self.parent().format_for_upperright_table(degree_dict, 'Node ID', 'Degree', title = 'Degrees of nodes')
+                self.parent().load_channel(3, channel_data = overlay, data = True)
+                self.accept()
+                return
+
 
             try:
                 down_factor = float(self.down_factor.text()) if self.down_factor.text() else 1
@@ -10274,7 +10475,7 @@ class CropDialog(QDialog):
         try:
 
             super().__init__(parent)
-            self.setWindowTitle("Crop Image?")
+            self.setWindowTitle("Crop Image (Will transpose any centroids)?")
             self.setModal(True)
 
             layout = QFormLayout(self)
@@ -10330,9 +10531,69 @@ class CropDialog(QDialog):
 
                     self.parent().load_channel(i, array, data = True)
 
+            print("Transposing centroids...")
+
+            try:
+
+                if my_network.node_centroids is not None:
+                    nodes = list(my_network.node_centroids.keys())
+                    centroids = np.array(list(my_network.node_centroids.values()))
+                    
+                    # Transform all at once
+                    transformed = centroids - np.array([zmin, ymin, xmin])
+                    transformed = transformed.astype(int)
+                    
+                    # Boolean mask for valid coordinates
+                    valid_mask = ((transformed >= 0) & 
+                                  (transformed <= np.array([zmax, ymax, xmax]))).all(axis=1)
+                    
+                    # Rebuild dictionary with only valid entries
+                    my_network.node_centroids = {
+                        nodes[int(i)]: [int(transformed[i, 0]), int(transformed[i, 1]), int(transformed[i, 2])]
+                        for i in range(len(nodes)) if valid_mask[i]
+                    }
+                    
+                    self.parent().format_for_upperright_table(my_network.node_centroids, 'NodeID', ['Z', 'Y', 'X'], 'Node Centroids')
+
+            except Exception as e:
+
+                print(f"Error transposing node centroids: {e}")
+
+            try:
+
+                if my_network.edge_centroids is not None:
+
+                    if my_network.edge_centroids is not None:
+                        nodes = list(my_network.edge_centroids.keys())
+                        centroids = np.array(list(my_network.edge_centroids.values()))
+                        
+                        # Transform all at once
+                        transformed = centroids - np.array([zmin, ymin, xmin])
+                        transformed = transformed.astype(int)
+                        
+                        # Boolean mask for valid coordinates
+                        valid_mask = ((transformed >= 0) & 
+                                      (transformed <= np.array([zmax, ymax, xmax]))).all(axis=1)
+                        
+                        # Rebuild dictionary with only valid entries
+                        my_network.edge_centroids = {
+                            nodes[int(i)]: [int(transformed[i, 0]), int(transformed[i, 1]), int(transformed[i, 2])]
+                            for i in range(len(nodes)) if valid_mask[i]
+                        }
+                        
+                        self.parent().format_for_upperright_table(my_network.edge_centroids, 'EdgeID', ['Z', 'Y', 'X'], 'Edge Centroids')
+
+            except Exception as e:
+
+                print(f"Error transposing edge centroids: {e}")
+
+
             self.accept()
 
         except Exception as e:
+
+            import traceback
+            print(traceback.format_exc())
 
             print(f"Error cropping: {e}")
 

@@ -296,6 +296,69 @@ def extract_pairwise_connections(connections):
     return output
 
 
+def average_nearest_neighbor_distances(point_centroids, root_set, compare_set, xy_scale=1.0, z_scale=1.0, num = 1):
+    """
+    Calculate the average distance between each point in root_set and its nearest neighbor in compare_set.
+    
+    Args:
+        point_centroids (dict): Dictionary mapping point IDs to [Z, Y, X] coordinates
+        root_set (set): Set of point IDs to find nearest neighbors for
+        compare_set (set): Set of point IDs to search for nearest neighbors in
+        xy_scale (float): Scaling factor for X and Y coordinates
+        z_scale (float): Scaling factor for Z coordinate
+    
+    Returns:
+        float: Average distance to nearest neighbors
+    """
+    
+    # Extract and scale coordinates for compare_set
+    compare_coords = []
+    compare_ids = list(compare_set)
+    
+    for point_id in compare_ids:
+        z, y, x = point_centroids[point_id]
+        compare_coords.append([z * z_scale, y * xy_scale, x * xy_scale])
+    
+    compare_coords = np.array(compare_coords)
+    
+    # Build KDTree for efficient nearest neighbor search
+    tree = KDTree(compare_coords)
+    
+    distances = {}
+    same_sets = root_set == compare_set
+    
+    for root_id in root_set:
+        # Get scaled coordinates for root point
+        z, y, x = point_centroids[root_id]
+        root_coord = np.array([z * z_scale, y * xy_scale, x * xy_scale])
+        
+        if same_sets:
+            # When sets are the same, find 2 nearest neighbors and take the second one
+            # (first one would be the point itself)
+            distances_to_all, indices = tree.query(root_coord, k= (num + 1))
+
+            temp_dist = 0
+            for i in range(1, len(distances_to_all)):
+                temp_dist += distances_to_all[i]
+
+            distances[root_id] = temp_dist/(len(distances_to_all) - 1)
+
+        else:
+            # Different sets, find nearest neighbors
+            distances_to_all, _ = tree.query(root_coord, k=num)
+            temp_dist = 0
+            for val in distances_to_all:
+                temp_dist += val
+
+            distances[root_id] = temp_dist/(len(distances_to_all))
+
+    avg = np.mean(list(distances.values())) if list(distances.values()) else 0.0
+
+    
+    # Return average distance
+    return avg, distances
+
+
 
 #voronois:
 def create_voronoi_3d_kdtree(centroids: Dict[Union[int, str], Union[Tuple[int, int, int], List[int]]], 

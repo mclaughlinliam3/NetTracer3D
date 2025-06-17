@@ -201,18 +201,28 @@ def degree_draw(degree_dict, centroid_dict, nodes):
     return draw_array
 
 def degree_infect(degree_dict, nodes):
-
-    num_nodes = int(np.max(nodes))
-    return_nodes = nodes.copy()
-
-    for node in range(1, num_nodes + 1):
-        if node not in degree_dict:
-            continue
-        else:
-            idxs = np.argwhere(nodes == node)
-            for idx in idxs:
-                return_nodes[tuple(idx)] = degree_dict[node]
-
+    return_nodes = np.zeros_like(nodes)  # Start with all zeros
+    
+    if not degree_dict:  # Handle empty dict
+        return return_nodes
+    
+    # Create arrays for old and new values
+    old_vals = np.array(list(degree_dict.keys()))
+    new_vals = np.array(list(degree_dict.values()))
+    
+    # Sort for searchsorted to work correctly
+    sort_idx = np.argsort(old_vals)
+    old_vals_sorted = old_vals[sort_idx]
+    new_vals_sorted = new_vals[sort_idx]
+    
+    # Find which nodes exist in the dictionary
+    mask = np.isin(nodes, old_vals_sorted)
+    
+    # Only process nodes that exist in the dictionary
+    if np.any(mask):
+        indices = np.searchsorted(old_vals_sorted, nodes[mask])
+        return_nodes[mask] = new_vals_sorted[indices]
+    
     return return_nodes
 
 
