@@ -8,27 +8,56 @@ Please see: https://nettracer3d.readthedocs.io/en/latest/
 
 To install nettracer3d, simply install Python and use this command in your command terminal:
 
-pip install nettracer3d
+    pip install nettracer3d
 
 I recommend installing the program as an Anaconda package to ensure its modules are work together on your specific system:
 (Install anaconda at the link below, set up a new python env for nettracer3d, then use the same pip command).
 
 https://www.anaconda.com/download?utm_source=anacondadocs&utm_medium=documentation&utm_campaign=download&utm_content=installwindows
 
-nettracer3d mostly utilizes the CPU for processing and visualization, although it does have a few GPU-aided options. If you would like to use the GPU for these, you will need an NVIDIA GPU and a corresponding CUDA toolkit which can be installed here:
-https://developer.nvidia.com/cuda-toolkit
+Optional Packages
+~~~~~~~~~~~~~~~~~~
+I recommend including Napari (Chi-Li Chiu, Nathan Clack, the napari community, napari: a Python Multi-Dimensional Image Viewer Platform for the Research Community, Microscopy and Microanalysis, Volume 28, Issue S1, 1 August 2022, Pages 1576–1577, https://doi.org/10.1017/S1431927622006328) in the download as well, which allows NetTracer3D to use 3D displays. The standard package only comes with its native 2D slice display window. 
+If Napari is present, all 3D images and overlays from NetTracer3D can be easily displayed in 3D with a click of a button. To package with Napari, use this install command instead: 
 
-To install nettracer3d with associated GPU-supporting packages, please use:
+    pip install nettracer3d[viz]
 
-If your CUDA toolkit is version 11: pip install nettracer3d[CUDA11]
-If your CUDA toolkit is version 12: pip install nettracer3d[CUDA12]
-If you just want the entire cupy library: pip install nettracer3d[cupy]
+Additionally, for easy access to high-quality cell segmentation, as of version 0.8.2, NetTracer3D can be optionally packaged with Cellpose3. (Stringer, C., Pachitariu, M. Cellpose3: one-click image restoration for improved cellular segmentation. Nat Methods 22, 592–599 (2025). https://doi.org/10.1038/s41592-025-02595-5)
+Cellpose3 is not involved with the rest of the program in any way, although its GUI can be opened from NetTracer3D's GUI, provided both are installed in the same environment. It is a top-tier cell segmenter which can assist in the production of cell networks.
+To include Cellpose3 in the install, use this command:
+
+
+    pip install nettracer3d[cellpose]
+
+Alternatively, both Napari and Cellpose can be included in the package with this command: (Or they can be independently installed with pip from the base package env)
+
+
+    pip install nettracer3d[all]
+
+GPU
+~~~~~~~~~~~~~~~~~~
+NetTracer3D is mostly CPU-bound, but a few functions can optionally use the GPU. To install optional GPU functionalities, first set up a CUDA toolkit that runs with the GPU on your machine. This requires an NVIDIA GPU. Then, find your GPUs compatible CUDA toolkit and install it with the auto-installer from the NVIDIA website: https://developer.nvidia.com/cuda-toolkit
+
+With a CUDA toolkit installed, use:
+
+    pip install nettracer3d[CUDA11] #If your CUDA toolkit is version 11
+    pip install nettracer3d[CUDA12] #If your CUDA toolkit is version 12
+    pip install nettracer3d[cupy] #For the generic cupy library (The above two are usually the ones you want)
+
+Or if you've already installed the NetTracer3D base package and want to get just the GPU associated packages:
+
+    pip install cupy-cuda11x #If your CUDA toolkit is version 11
+    pip install cupy-cuda12x #If your CUDA toolkit is version 12
+    pip install cupy #For the generic cupy library (The above two are usually the ones you want)
+
+While not related to NetTracer3D, if you want to use Cellpose3 (for which GPU-usage is somewhat obligatory) to help segment cells for any networks, you will also want to install pytorch here: https://pytorch.org/. Use the pytorch build menu on this webpage to find a pip install command that is compatible with Python and your CUDA version.
+
 
 
 This gui is built from the PyQt6 package and therefore may not function on dockers or virtual envs that are unable to support PyQt6 displays.
 
 
-For a (slightly outdated) video tutorial on using the GUI: https://www.youtube.com/watch?v=cRatn5VTWDY
+For a (somewhat outdated) video tutorial on using the GUI: https://www.youtube.com/watch?v=cRatn5VTWDY
 
 NetTracer3D is free to use/fork for academic/nonprofit use so long as citation is provided, and is available for commercial use at a fee (see license file for information).
 

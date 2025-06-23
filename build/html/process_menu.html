@@ -6,14 +6,14 @@
   <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
 
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>All Process Menu Options &mdash; NetTracer3D 0.8.1 documentation</title>
+  <title>All Process Menu Options &mdash; NetTracer3D 0.8.2 documentation</title>
       <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=b86133f3" />
       <link rel="stylesheet" type="text/css" href="_static/css/theme.css?v=e59714d7" />
 
   
       <script src="_static/jquery.js?v=5d32c60e"></script>
       <script src="_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
-      <script src="_static/documentation_options.js?v=ec16d22d"></script>
+      <script src="_static/documentation_options.js?v=dbee5847"></script>
       <script src="_static/doctools.js?v=9bcbadda"></script>
       <script src="_static/sphinx_highlight.js?v=dc90522c"></script>
     <script src="_static/js/theme.js"></script>
@@ -93,59 +93,62 @@
 <li class="toctree-l3"><a class="reference internal" href="#id12">Algorithm Explanations</a></li>
 </ul>
 </li>
-<li class="toctree-l2"><a class="reference internal" href="#process-image-binarize">‘Process -&gt; Image -&gt; Binarize’</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#process-image-binarize">‘Process -&gt; Image -&gt; Binarize’</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#id13">Parameter Explanations</a></li>
+</ul>
+</li>
 <li class="toctree-l2"><a class="reference internal" href="#process-image-label-objects">‘Process -&gt; Image -&gt; Label Objects’</a></li>
 <li class="toctree-l2"><a class="reference internal" href="#process-image-neighborhood-labels">‘Process -&gt; Image -&gt; Neighborhood Labels’</a><ul>
-<li class="toctree-l3"><a class="reference internal" href="#id13">Parameter Explanations</a></li>
-<li class="toctree-l3"><a class="reference internal" href="#id14">Algorithm Explanations</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#id14">Parameter Explanations</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#id15">Algorithm Explanations</a></li>
 </ul>
 </li>
 <li class="toctree-l2"><a class="reference internal" href="#process-image-threshold-segment">‘Process -&gt; Image -&gt; Threshold/Segment’</a><ul>
-<li class="toctree-l3"><a class="reference internal" href="#id15">Parameter Explanations</a></li>
-<li class="toctree-l3"><a class="reference internal" href="#id16">Algorithm Explanations</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#id16">Parameter Explanations</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#id17">Algorithm Explanations</a></li>
 </ul>
 </li>
 <li class="toctree-l2"><a class="reference internal" href="#process-image-mask-channel">‘Process -&gt; Image -&gt; Mask Channel’</a><ul>
-<li class="toctree-l3"><a class="reference internal" href="#id17">Parameter Explanations</a></li>
-</ul>
-</li>
-<li class="toctree-l2"><a class="reference internal" href="#process-image-crop-channels">‘Process -&gt; Image -&gt; Crop Channels’</a><ul>
 <li class="toctree-l3"><a class="reference internal" href="#id18">Parameter Explanations</a></li>
 </ul>
 </li>
-<li class="toctree-l2"><a class="reference internal" href="#process-image-channel-dtype">‘Process -&gt; Image -&gt; Channel dtype’</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="#process-image-crop-channels">‘Process -&gt; Image -&gt; Crop Channels’</a><ul>
 <li class="toctree-l3"><a class="reference internal" href="#id19">Parameter Explanations</a></li>
 </ul>
 </li>
-<li class="toctree-l2"><a class="reference internal" href="#process-image-skeletonize">‘Process -&gt; Image -&gt; Skeletonize’</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="#process-image-channel-dtype">‘Process -&gt; Image -&gt; Channel dtype’</a><ul>
 <li class="toctree-l3"><a class="reference internal" href="#id20">Parameter Explanations</a></li>
-<li class="toctree-l3"><a class="reference internal" href="#id21">Algorithm Explanations</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="#process-image-skeletonize">‘Process -&gt; Image -&gt; Skeletonize’</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#id21">Parameter Explanations</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#id22">Algorithm Explanations</a></li>
 </ul>
 </li>
 <li class="toctree-l2"><a class="reference internal" href="#process-image-watershed">‘Process -&gt; Image -&gt; Watershed’</a><ul>
-<li class="toctree-l3"><a class="reference internal" href="#id22">Parameter Explanations</a></li>
-<li class="toctree-l3"><a class="reference internal" href="#id23">Algorithm Explanations</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#id23">Parameter Explanations</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#id24">Algorithm Explanations</a></li>
 </ul>
 </li>
 <li class="toctree-l2"><a class="reference internal" href="#process-image-invert">‘Process -&gt; Image -&gt; Invert’</a></li>
 <li class="toctree-l2"><a class="reference internal" href="#process-image-z-project">‘Process -&gt; Image -&gt; Z-Project’</a></li>
 <li class="toctree-l2"><a class="reference internal" href="#process-generate-generate-nodes-from-node-centroids">‘Process -&gt; Generate -&gt; Generate Nodes (From Node Centroids)’</a></li>
 <li class="toctree-l2"><a class="reference internal" href="#process-generate-generate-nodes-from-edge-vertices">‘Process -&gt; Generate -&gt; Generate Nodes (From ‘Edge’ Vertices)’</a><ul>
-<li class="toctree-l3"><a class="reference internal" href="#id24">Parameter Explanations</a></li>
-<li class="toctree-l3"><a class="reference internal" href="#id25">Algorithm Explanations</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#id25">Parameter Explanations</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#id26">Algorithm Explanations</a></li>
 </ul>
 </li>
 <li class="toctree-l2"><a class="reference internal" href="#process-generate-label-branches">‘Process -&gt; Generate -&gt; Label Branches’</a><ul>
-<li class="toctree-l3"><a class="reference internal" href="#id26">Parameter Explanations</a></li>
-<li class="toctree-l3"><a class="reference internal" href="#id27">Algorithm Explanations</a></li>
-</ul>
-</li>
-<li class="toctree-l2"><a class="reference internal" href="#process-generate-generate-voronoi-diagram">‘Process -&gt; Generate -&gt; Generate Voronoi Diagram’</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#id27">Parameter Explanations</a></li>
 <li class="toctree-l3"><a class="reference internal" href="#id28">Algorithm Explanations</a></li>
 </ul>
 </li>
+<li class="toctree-l2"><a class="reference internal" href="#process-generate-generate-voronoi-diagram">‘Process -&gt; Generate -&gt; Generate Voronoi Diagram’</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#id29">Algorithm Explanations</a></li>
+</ul>
+</li>
 <li class="toctree-l2"><a class="reference internal" href="#process-modify-network">‘Process -&gt; Modify Network’</a><ul>
-<li class="toctree-l3"><a class="reference internal" href="#id29">Parameter Explanations</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#id30">Parameter Explanations</a></li>
 </ul>
 </li>
 <li class="toctree-l2"><a class="reference internal" href="#next-steps">Next Steps</a></li>
@@ -907,10 +910,22 @@
 <section id="process-image-binarize">
 <h2>‘Process -&gt; Image -&gt; Binarize’<a class="headerlink" href="#process-image-binarize" title="Link to this heading"></a></h2>
 <ul class="simple">
-<li><p>This method is used to binarize an image, which sets all foreground (nonzero) regions to 255 (8bit max val).</p></li>
-<li><p>One typically would not binarize raw data, but it can be applied on labeled images to reset them.</p></li>
-<li><p>This method has no parameters. Simply press ‘Run Binarize’ to run the method. Note the channel refered to in ‘Active Image’ is the one that will be binarized, with the output also being returned there.</p></li>
+<li><p>This method is used to binarize an image, which sets all foreground regions to 255 (8bit max val), and background regions to 0.</p></li>
 </ul>
+<section id="id13">
+<h3>Parameter Explanations<a class="headerlink" href="#id13" title="Link to this heading"></a></h3>
+<ul class="simple">
+<li><dl class="simple">
+<dt>‘Method’ - Dropdown menu to select binarization method.</dt><dd><ol class="arabic simple">
+<li><p>Total Binarize - sets all nonzero regions to 255. This method is not really intended for raw data, but can be applied to labeled segmentations to reset them.</p></li>
+<li><p>Predict foreground - Uses Otsu’s method to predict the foreground, setting it to 255, while predicted background regions are set to 0. This can be a quick option to segment data if the signal-to-noise is good enough.</p></li>
+</ol>
+</dd>
+</dl>
+</li>
+</ul>
+<p>Press ‘Run Binarize’ to run the method. Note the channel refered to in ‘Active Image’ is the one that will be binarized, with the output also being returned there.</p>
+</section>
 </section>
 <section id="process-image-label-objects">
 <h2>‘Process -&gt; Image -&gt; Label Objects’<a class="headerlink" href="#process-image-label-objects" title="Link to this heading"></a></h2>
@@ -926,8 +941,8 @@
 <li><p>This method is used to label objects in one image based on their proximity to labeled objects in a second image. Essentially, all non-zero objects in the first image will take on the label of the closest labeled object in the second region.</p></li>
 <li><p>This is a useful way to define the relationship of objects in one image to another.</p></li>
 </ul>
-<section id="id13">
-<h3>Parameter Explanations<a class="headerlink" href="#id13" title="Link to this heading"></a></h3>
+<section id="id14">
+<h3>Parameter Explanations<a class="headerlink" href="#id14" title="Link to this heading"></a></h3>
 <ol class="arabic simple">
 <li><dl class="simple">
 <dt>Prelabeled Array</dt><dd><ul class="simple">
@@ -965,8 +980,8 @@
 <li><p>Press ‘Run Smart Label’ to run the method with the desired parameters. Note the channel refered to in param 2 is the one that will be labeled, with the output also being returned there.</p></li>
 </ul>
 </section>
-<section id="id14">
-<h3>Algorithm Explanations<a class="headerlink" href="#id14" title="Link to this heading"></a></h3>
+<section id="id15">
+<h3>Algorithm Explanations<a class="headerlink" href="#id15" title="Link to this heading"></a></h3>
 <ul class="simple">
 <li><p>This method is ostensibly the same one used in smart dilate but applied in a different context.</p></li>
 </ul>
@@ -991,8 +1006,8 @@
 <li><p>This method calls the threshold/segmenter, which can be used for volumetric, intensity-based, or ML thresholding.</p></li>
 <li><p>This window is the same one that will be pulled up when the pencil widget is clicked. Previously I went over using these windows in <a class="reference internal" href="quickstart.html"><span class="doc">Quickstart - Segmenting Data and Generating Networks</span></a>, so see <a class="reference internal" href="quickstart.html#segmenting"><span class="std std-ref">Segmenting Data</span></a> for a tutorial, however I will talk about more of their specifics here.</p></li>
 </ul>
-<section id="id15">
-<h3>Parameter Explanations<a class="headerlink" href="#id15" title="Link to this heading"></a></h3>
+<section id="id16">
+<h3>Parameter Explanations<a class="headerlink" href="#id16" title="Link to this heading"></a></h3>
 <ol class="arabic simple">
 <li><dl class="simple">
 <dt>Excecution Mode:</dt><dd><ul class="simple">
@@ -1028,8 +1043,8 @@
 </li>
 </ol>
 </section>
-<section id="id16">
-<h3>Algorithm Explanations<a class="headerlink" href="#id16" title="Link to this heading"></a></h3>
+<section id="id17">
+<h3>Algorithm Explanations<a class="headerlink" href="#id17" title="Link to this heading"></a></h3>
 <p><strong>If Using the Intensity-Based Segmenter</strong></p>
 <ul class="simple">
 <li><p>The intensity based segmenter simply takes the min and max values designated by the user and thresholds the array for values that fall in between.</p></li>
@@ -1083,8 +1098,8 @@
 <ul class="simple">
 <li><p>This method can be used for masking, or in otherwords, using the binarized version of one channel to mask another.</p></li>
 </ul>
-<section id="id17">
-<h3>Parameter Explanations<a class="headerlink" href="#id17" title="Link to this heading"></a></h3>
+<section id="id18">
+<h3>Parameter Explanations<a class="headerlink" href="#id18" title="Link to this heading"></a></h3>
 <ol class="arabic simple">
 <li><dl class="simple">
 <dt>Masker</dt><dd><ul class="simple">
@@ -1118,8 +1133,8 @@
 <ul class="simple">
 <li><p>This method can be used to crop all the avialable channels.</p></li>
 </ul>
-<section id="id18">
-<h3>Parameter Explanations<a class="headerlink" href="#id18" title="Link to this heading"></a></h3>
+<section id="id19">
+<h3>Parameter Explanations<a class="headerlink" href="#id19" title="Link to this heading"></a></h3>
 <ul class="simple">
 <li><p>The parameters are just the min and max values in Z, Y, and X to include in the cropped output.</p></li>
 <li><p>Press run to crop the channel. This will crop all four channels but will do nothing to the current properties.</p></li>
@@ -1133,8 +1148,8 @@
 <li><p>This method can be used to change the data type of a channel.</p></li>
 <li><p>It can be useful to preserve memory, when larger data types are not needed.</p></li>
 </ul>
-<section id="id19">
-<h3>Parameter Explanations<a class="headerlink" href="#id19" title="Link to this heading"></a></h3>
+<section id="id20">
+<h3>Parameter Explanations<a class="headerlink" href="#id20" title="Link to this heading"></a></h3>
 <ul class="simple">
 <li><p>This method has a single param.</p></li>
 </ul>
@@ -1158,8 +1173,8 @@
 <li><p>This method can be used to skeletonize an image, which reduces it to its most medial axis.</p></li>
 <li><p>Image skeletons are a good way to extract a simplified version the locations/shapes of image objects.</p></li>
 </ul>
-<section id="id20">
-<h3>Parameter Explanations<a class="headerlink" href="#id20" title="Link to this heading"></a></h3>
+<section id="id21">
+<h3>Parameter Explanations<a class="headerlink" href="#id21" title="Link to this heading"></a></h3>
 <ol class="arabic simple">
 <li><dl class="simple">
 <dt>Remove Branches Pixel Length…?</dt><dd><ul class="simple">
@@ -1179,8 +1194,8 @@
 </li>
 </ol>
 </section>
-<section id="id21">
-<h3>Algorithm Explanations<a class="headerlink" href="#id21" title="Link to this heading"></a></h3>
+<section id="id22">
+<h3>Algorithm Explanations<a class="headerlink" href="#id22" title="Link to this heading"></a></h3>
 <ol class="arabic simple">
 <li><p>3D skeletonization is achieved via the sklearn.morphology.skeletonize() algorithm: <a class="reference external" href="https://scikit-image.org/docs/stable/auto_examples/edges/plot_skeleton.html">https://scikit-image.org/docs/stable/auto_examples/edges/plot_skeleton.html</a></p></li>
 <li><p>If param 2 is enabled, NetTracer3D will run its ‘Process -&gt; Image -&gt; Fill Holes’ method, which will for the most part succesfully fill loop artifacts, returning them into 3D blobs. It will then just run the skeletonization again, which is often able to accurately skeletonize the blobs.</p></li>
@@ -1197,8 +1212,8 @@
 </ul>
 <a class="reference internal image-reference" href="_images/process4.png"><img alt="Watershed Menu" src="_images/process4.png" style="width: 800px;" />
 </a>
-<section id="id22">
-<h3>Parameter Explanations<a class="headerlink" href="#id22" title="Link to this heading"></a></h3>
+<section id="id23">
+<h3>Parameter Explanations<a class="headerlink" href="#id23" title="Link to this heading"></a></h3>
 <p>Running Watershed</p>
 <ol class="arabic simple">
 <li><dl class="simple">
@@ -1247,8 +1262,8 @@
 </li>
 </ol>
 </section>
-<section id="id23">
-<h3>Algorithm Explanations<a class="headerlink" href="#id23" title="Link to this heading"></a></h3>
+<section id="id24">
+<h3>Algorithm Explanations<a class="headerlink" href="#id24" title="Link to this heading"></a></h3>
 <ol class="arabic simple">
 <li><p>This algorithm computes a distance transform on the binary image, telling the computer what regions lie close to the background.</p></li>
 <li><p>Like the other distance transforms in NetTracer3D, if the system runs out of VRAM computing the distance transform on GPU, it will reattempt with serial downsampling. This will ostensibly give the same output unless labeled objects have a dimension smaller than the downsample factor, after which they might be removed from the image. Do not use GPU if that may occur on this image.</p></li>
@@ -1307,8 +1322,8 @@
 </ul>
 <a class="reference internal image-reference" href="_images/process5.png"><img alt="GenNodes Menu" src="_images/process5.png" style="width: 800px;" />
 </a>
-<section id="id24">
-<h3>Parameter Explanations<a class="headerlink" href="#id24" title="Link to this heading"></a></h3>
+<section id="id25">
+<h3>Parameter Explanations<a class="headerlink" href="#id25" title="Link to this heading"></a></h3>
 <ol class="arabic simple">
 <li><dl class="simple">
 <dt>Downsample Factor:</dt><dd><ul class="simple">
@@ -1371,8 +1386,8 @@
 <li><p>Select ‘Run Node Generation’ to run this method with the desired parameters. The edges will be skeletonized, while the new nodes will load into the nodes channel.</p></li>
 </ul>
 </section>
-<section id="id25">
-<h3>Algorithm Explanations<a class="headerlink" href="#id25" title="Link to this heading"></a></h3>
+<section id="id26">
+<h3>Algorithm Explanations<a class="headerlink" href="#id26" title="Link to this heading"></a></h3>
 <ol class="arabic simple">
 <li><p>3D skeletonization is achieved via the sklearn.morphology.skeletonize() algorithm: <a class="reference external" href="https://scikit-image.org/docs/stable/auto_examples/edges/plot_skeleton.html">https://scikit-image.org/docs/stable/auto_examples/edges/plot_skeleton.html</a></p></li>
 <li><p>If param 7 is enabled, NetTracer3D will run its ‘Process -&gt; Image -&gt; Fill Holes’ method, which will for the most part succesfully fill loop artifacts, returning them into 3D blobs. It will then just run the skeletonization again, which is often able to accurately skeletonize the blobs.</p></li>
@@ -1393,8 +1408,8 @@
 </ul>
 <a class="reference internal image-reference" href="_images/process6.png"><img alt="Branch Menu" src="_images/process6.png" style="width: 800px;" />
 </a>
-<section id="id26">
-<h3>Parameter Explanations<a class="headerlink" href="#id26" title="Link to this heading"></a></h3>
+<section id="id27">
+<h3>Parameter Explanations<a class="headerlink" href="#id27" title="Link to this heading"></a></h3>
 <ol class="arabic simple">
 <li><dl class="simple">
 <dt>Generate Nodes from edges?</dt><dd><ul class="simple">
@@ -1456,8 +1471,8 @@
 <li><p>Select ‘Run Node Generation’ to run this method with the desired parameters. The edges will be branch-labeled, while the new nodes (branchpoints) will load into the nodes channel.</p></li>
 </ul>
 </section>
-<section id="id27">
-<h3>Algorithm Explanations<a class="headerlink" href="#id27" title="Link to this heading"></a></h3>
+<section id="id28">
+<h3>Algorithm Explanations<a class="headerlink" href="#id28" title="Link to this heading"></a></h3>
 <ol class="arabic simple">
 <li><p>The branch labeler starts with the same set of steps as ‘Process -&gt; Generate -&gt; Generate Nodes (From ‘Edge’ Vertices)’, so please see its section above for an outline of those steps.</p></li>
 <li><p>Once branchpoint nodes are generated, however, they are used as a mask to break up the skeleton.</p></li>
@@ -1477,8 +1492,8 @@
 <li><p>Voronoi diagrams have other uses in spatial mathematics but NetTracer3D only offers the option to generate one - it does not use it directly for anything.</p></li>
 <li><p>To run this method, simply select it from the menu bar. If node_centroids exist, their Voronoi diagram will be generated and loaded into Overlay2.</p></li>
 </ul>
-<section id="id28">
-<h3>Algorithm Explanations<a class="headerlink" href="#id28" title="Link to this heading"></a></h3>
+<section id="id29">
+<h3>Algorithm Explanations<a class="headerlink" href="#id29" title="Link to this heading"></a></h3>
 <ul class="simple">
 <li><dl class="simple">
 <dt>This method uses the scipy.spatial KDTree Class to query for the centroid that is closest to each given point in the image, being assigned a label corresponding to their closest centroid.</dt><dd><ul>
@@ -1499,8 +1514,8 @@
 </ul>
 <a class="reference internal image-reference" href="_images/process7.png"><img alt="Modify Menu" src="_images/process7.png" style="width: 800px;" />
 </a>
-<section id="id29">
-<h3>Parameter Explanations<a class="headerlink" href="#id29" title="Link to this heading"></a></h3>
+<section id="id30">
+<h3>Parameter Explanations<a class="headerlink" href="#id30" title="Link to this heading"></a></h3>
 <ol class="arabic simple">
 <li><dl class="simple">
 <dt>Remove Unsassigned IDs from Centroid List?</dt><dd><ul class="simple">

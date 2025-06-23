@@ -6,14 +6,14 @@
   <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
 
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Available Keyboard Shortcuts &mdash; NetTracer3D 0.8.1 documentation</title>
+  <title>Available Keyboard Shortcuts &mdash; NetTracer3D 0.8.2 documentation</title>
       <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=b86133f3" />
       <link rel="stylesheet" type="text/css" href="_static/css/theme.css?v=e59714d7" />
 
   
       <script src="_static/jquery.js?v=5d32c60e"></script>
       <script src="_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
-      <script src="_static/documentation_options.js?v=ec16d22d"></script>
+      <script src="_static/documentation_options.js?v=dbee5847"></script>
       <script src="_static/doctools.js?v=9bcbadda"></script>
       <script src="_static/sphinx_highlight.js?v=dc90522c"></script>
     <script src="_static/js/theme.js"></script>
@@ -105,14 +105,23 @@
 <section id="in-the-default-viewer-mode">
 <h2>In the default viewer mode:<a class="headerlink" href="#in-the-default-viewer-mode" title="Link to this heading"></a></h2>
 <ul class="simple">
-<li><p>Z = toggle zoom mode.</p></li>
-<li><p>X = toggle highlight overlay visibility.</p></li>
-<li><p>Middle Mouse = Toggle Pan Mode.</p></li>
-<li><p>Shift + Scroll Wheel = Move Through Image Stack.</p></li>
-<li><p>Ctrl + Shift + Scroll Wheel = Rapidly move through image stack.</p></li>
-<li><p>Shift + F = Search for a node or an edge in the image channels.</p></li>
-<li><p>Ctrl + Left Click in the image viewer window = Select/deselect object without deselecting others that are selected.</p></li>
-<li><p>Left Click + Drag in the image viewer window = Group select objects. (Add ctrl to not deselect current selection)</p></li>
+<li><p>‘Z’ = toggle zoom mode.</p></li>
+<li><p>‘X’ = toggle highlight overlay visibility.</p></li>
+<li><p>‘Middle Mouse’ = Toggle Pan Mode.</p></li>
+<li><p>‘Shift + Scroll Wheel’ = Move Through Image Stack.</p></li>
+<li><p>‘Ctrl + Shift + Scroll Wheel’ = Rapidly move through image stack.</p></li>
+<li><p>‘Shift + F’ = Search for a node or an edge in the image channels.</p></li>
+<li><p>‘Ctrl + Left Click in the image viewer window’ = Select/deselect object without deselecting others that are selected.</p></li>
+<li><dl class="simple">
+<dt>‘Left Click + Drag in the image viewer window’ = Group select objects. (Add ctrl to not deselect current selection)</dt><dd><ul>
+<li><p>And hold shift while dragging to instead zoom in on a specific region.</p></li>
+<li><p>Likewise, left clicking and dragging while in zoom-mode will zoom in on specific regions without requiring shift being held.</p></li>
+</ul>
+</dd>
+</dl>
+</li>
+<li><p>‘Ctrl + S’ = If no Network3D object has been saved this session, the user will be prompted to create a new folder to save one. If one has been created, then the current state of the data will be saved to the last-saved location of the Network3D object. (Avoids having to go through the save menu).</p></li>
+<li><p>‘Ctrl + L’ = If no Network3D object has been loaded this session, the user will be prompted to find a folder to load one from. If one has been loaded, then the same directory will be used to load a Network3D Object. (In case the user has messed around with the current data and wants to reload it from baseline easily).</p></li>
 </ul>
 </section>
 <section id="if-in-the-upper-right-or-lower-right-network-tabulated-data-widgets">
@@ -132,7 +141,13 @@
 </dd>
 </dl>
 </li>
-<li><p>F = Toggle fill can mode</p></li>
+<li><dl class="simple">
+<dt>F = Toggle fill can mode</dt><dd><ul>
+<li><p>While using the fill-can only, ‘Ctrl + z’ will undo the last fill-can action. Note this is the only function in the entire program to feature an undo option.</p></li>
+</ul>
+</dd>
+</dl>
+</li>
 </ul>
 </section>
 <section id="if-using-the-machine-learning-segmenter">

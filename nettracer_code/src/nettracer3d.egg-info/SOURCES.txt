@@ -2,6 +2,7 @@ LICENSE
 README.md
 pyproject.toml
 src/nettracer3d/__init__.py
+src/nettracer3d/cellpose_manager.py
 src/nettracer3d/community_extractor.py
 src/nettracer3d/excelotron.py
 src/nettracer3d/modularity.py

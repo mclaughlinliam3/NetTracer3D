@@ -404,9 +404,15 @@ Algorithm Explanations
 
 'Process -> Image -> Binarize'
 -------------------------------------------------------
-* This method is used to binarize an image, which sets all foreground (nonzero) regions to 255 (8bit max val). 
-* One typically would not binarize raw data, but it can be applied on labeled images to reset them.
-* This method has no parameters. Simply press 'Run Binarize' to run the method. Note the channel refered to in 'Active Image' is the one that will be binarized, with the output also being returned there.
+* This method is used to binarize an image, which sets all foreground regions to 255 (8bit max val), and background regions to 0.
+
+Parameter Explanations
+~~~~~~~~~~~~~~~~~~~~~~~
+* 'Method' - Dropdown menu to select binarization method.
+    1. Total Binarize - sets all nonzero regions to 255. This method is not really intended for raw data, but can be applied to labeled segmentations to reset them.
+    2. Predict foreground - Uses Otsu's method to predict the foreground, setting it to 255, while predicted background regions are set to 0. This can be a quick option to segment data if the signal-to-noise is good enough.
+
+Press 'Run Binarize' to run the method. Note the channel refered to in 'Active Image' is the one that will be binarized, with the output also being returned there.
 
 'Process -> Image -> Label Objects'
 -------------------------------------------------------

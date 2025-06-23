@@ -6,14 +6,14 @@
   <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
 
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Right Clicking - All Options Available by Right Clicking in the GUI &mdash; NetTracer3D 0.8.1 documentation</title>
+  <title>Right Clicking - All Options Available by Right Clicking in the GUI &mdash; NetTracer3D 0.8.2 documentation</title>
       <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=b86133f3" />
       <link rel="stylesheet" type="text/css" href="_static/css/theme.css?v=e59714d7" />
 
   
       <script src="_static/jquery.js?v=5d32c60e"></script>
       <script src="_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
-      <script src="_static/documentation_options.js?v=ec16d22d"></script>
+      <script src="_static/documentation_options.js?v=dbee5847"></script>
       <script src="_static/doctools.js?v=9bcbadda"></script>
       <script src="_static/sphinx_highlight.js?v=dc90522c"></script>
     <script src="_static/js/theme.js"></script>
@@ -79,6 +79,7 @@
 <li class="toctree-l3"><a class="reference internal" href="#id1">‘Ctrl + F’ keyboard shortcut</a></li>
 <li class="toctree-l3"><a class="reference internal" href="#id2">‘Sort’</a></li>
 <li class="toctree-l3"><a class="reference internal" href="#id3">‘Save As’</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#close-all">‘Close All’</a></li>
 </ul>
 </li>
 <li class="toctree-l2"><a class="reference internal" href="#next-steps">Next Steps</a></li>
@@ -130,9 +131,9 @@
 <section id="find-node-edge">
 <h3>‘Find Node/Edge’<a class="headerlink" href="#find-node-edge" title="Link to this heading"></a></h3>
 <ul class="simple">
-<li><p>Opens a text box to type the ID of a node or edge.</p></li>
+<li><p>Opens a text box to type the ID of a node, edge, or node community.</p></li>
 <li><p>Entering the ID of a node/edge that is in your image will select it, highlight it, and move the image stack to its location (which requires calculating centroids in the current implementation).</p></li>
-<li><p>Edge IDs will only be searched for if the edges channel is ‘Active’. Otherwise, Nodes will be used.</p></li>
+<li><p>In the text window, the ‘Type to Select’ dropdown menu will set whether you are searching for a node, edge, or community. (With communities being able to select multiple nodes).</p></li>
 </ul>
 </section>
 <section id="show-neighbors">
@@ -479,6 +480,10 @@ The only exception is the following option:</p>
 </dl>
 </li>
 </ol>
+</section>
+<section id="close-all">
+<h3>‘Close All’<a class="headerlink" href="#close-all" title="Link to this heading"></a></h3>
+<p>Shuts all active tables (Sometimes a bunch can get populated here from doing random things, so it’s nice to clear out sometimes).</p>
 </section>
 </section>
 <section id="next-steps">

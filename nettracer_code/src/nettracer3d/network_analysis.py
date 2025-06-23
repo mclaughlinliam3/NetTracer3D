@@ -724,32 +724,29 @@ def get_degrees(nodes, network, down_factor = None, directory = None, centroids 
 
 
 def remove_dupes(network):
-    """Removes duplicate node connections from network"""
+    """Remove Duplicates using numpy arrays"""    
     if type(network) == str:
         network = read_excel_to_lists
-
-    compare_list = []
-
-    nodesA = network[0]
-    nodesB = network[1]
-    edgesC = network[2]
-
-    # Iterate in reverse order to safely delete elements
-    for i in range(len(nodesA) - 1, -1, -1):
-        item = [nodesA[i], nodesB[i]]
-        reverse = [nodesB[i], nodesA[i]]
-        if item in compare_list or reverse in compare_list:
-            del nodesA[i]
-            del nodesB[i]
-            del edgesC[i]
-            continue
-        else:
-            compare_list.append(item)
-
-    master_list = [nodesA, nodesB, edgesC]
-
-    return master_list
-
+    
+    nodesA = np.array(network[0])
+    nodesB = np.array(network[1])
+    edgesC = np.array(network[2])
+    
+    # Create normalized edges (smaller node first)
+    edges = np.column_stack([np.minimum(nodesA, nodesB), np.maximum(nodesA, nodesB)])
+    
+    # Find unique edges and their indices
+    _, unique_indices = np.unique(edges, axis=0, return_index=True)
+    
+    # Sort indices to maintain original order
+    unique_indices = np.sort(unique_indices)
+    
+    # Extract unique connections
+    filtered_nodesA = nodesA[unique_indices].tolist()
+    filtered_nodesB = nodesB[unique_indices].tolist()
+    filtered_edgesC = edgesC[unique_indices].tolist()
+    
+    return [filtered_nodesA, filtered_nodesB, filtered_edgesC]
 
 
 
@@ -878,208 +875,191 @@ def get_distance_list(centroids, network, xy_scale, z_scale):
 
 
 def prune_samenode_connections(networkfile, nodeIDs):
-    """Remove all connections between nodes of the same ID, to evaluate solely connections to other objects"""
-
-    if type(nodeIDs) == str:
-        # Read the Excel file into a DataFrame
-        df = pd.read_excel(nodeIDs)
+    """Even faster numpy-based version for very large datasets"""
+    import numpy as np
     
-        # Convert the DataFrame to a dictionary
+    # Handle nodeIDs input
+    if type(nodeIDs) == str:
+        df = pd.read_excel(nodeIDs)
         data_dict = pd.Series(df.iloc[:, 1].values, index=df.iloc[:, 0]).to_dict()
     else:
         data_dict = nodeIDs
-
+    
+    # Handle networkfile input
     if type(networkfile) == str:
-        # Read the network file into lists
         master_list = read_excel_to_lists(networkfile)
     else:
         master_list = networkfile
-
-    nodesA = master_list[0]
-    nodesB = master_list[1]
-    edgesC = master_list[2]
-
-    # Iterate in reverse order to safely delete elements
-    for i in range(len(nodesA) - 1, -1, -1):
-        nodeA = nodesA[i]
-        nodeB = nodesB[i]
-
-        if data_dict.get(nodeA) == data_dict.get(nodeB):
-            # Remove the item from all lists
-            del nodesA[i]
-            del nodesB[i]
-            try:
-                del edgesC[i]
-            except:
-                pass
-
-    save_list = []
-
-    for i in range(len(nodesA)):
-        try:
-            item = [nodesA[i], nodesB[i], edgesC[i]]
-        except:
-            item = [nodesA[i], nodesB[i], None]
-        save_list.append(item)
-        
+    
+    nodesA = np.array(master_list[0])
+    nodesB = np.array(master_list[1])
+    
+    # Handle edgesC safely
+    if len(master_list) > 2 and master_list[2]:
+        edgesC = np.array(master_list[2], dtype=object)
+    else:
+        edgesC = np.array([None] * len(nodesA), dtype=object)
+    
+    # Vectorized lookup of node IDs
+    idsA = np.array([data_dict.get(node) for node in nodesA])
+    idsB = np.array([data_dict.get(node) for node in nodesB])
+    
+    # Create boolean mask - keep where IDs are different
+    keep_mask = idsA != idsB
+    
+    # Apply filter
+    filtered_nodesA = nodesA[keep_mask].tolist()
+    filtered_nodesB = nodesB[keep_mask].tolist()
+    filtered_edgesC = edgesC[keep_mask].tolist()
+    
+    # Create save_list
+    save_list = [[filtered_nodesA[i], filtered_nodesB[i], filtered_edgesC[i]] 
+                 for i in range(len(filtered_nodesA))]
+    
+    # Handle file saving
     if type(networkfile) == str:
-
         filename = 'network_pruned_away_samenode_connections.xlsx'
-
         nettracer.create_and_save_dataframe(save_list, filename)
-
         print(f"Pruned network saved to {filename}")
-
-    output_dict = data_dict.copy()
-    for item in data_dict:
-        if item not in nodesA and item not in nodesB:
-            del output_dict[item]
-
-    filename = 'Node_identities_pruned_away_samenode_connections.xlsx'
-
+    
+    # Create output_dict
+    nodes_in_filtered = set(filtered_nodesA + filtered_nodesB)
+    output_dict = {node: data_dict[node] for node in nodes_in_filtered 
+                   if node in data_dict}
+    
+    # Handle identity file saving
     if type(networkfile) == str:
-
+        filename = 'Node_identities_pruned_away_samenode_connections.xlsx'
         save_singval_dict(output_dict, 'NodeID', 'Identity', filename)
-
         print(f"Pruned network identities saved to {filename}")
-
-    master_list = [nodesA, nodesB, edgesC]
-
-
-    # Optional: Return the updated lists if needed
+    
+    master_list = [filtered_nodesA, filtered_nodesB, filtered_edgesC]
     return master_list, output_dict
 
 
 def isolate_internode_connections(networkfile, nodeIDs, ID1, ID2):
-    """Isolate only connections between two specific node identified elements of a network"""
-
+    """Even faster numpy-based version for very large datasets"""
+    import numpy as np
+    
+    # Handle nodeIDs input
     if type(nodeIDs) == str:
-        """Remove all connections between nodes of the same ID, to evaluate solely connections to other objects"""
-        # Read the Excel file into a DataFrame
         df = pd.read_excel(nodeIDs)
-        
-        # Convert the DataFrame to a dictionary
         data_dict = pd.Series(df.iloc[:, 1].values, index=df.iloc[:, 0]).to_dict()
     else:
         data_dict = nodeIDs
-
+    
+    # Handle networkfile input
     if type(networkfile) == str:
-        # Read the network file into lists
         master_list = read_excel_to_lists(networkfile)
     else:
         master_list = networkfile
-
-    nodesA = master_list[0]
-    nodesB = master_list[1]
-    edgesC = master_list[2]
-
-    legalIDs = [ID1, ID2]
-
-    for i in range(len(nodesA) - 1, -1, -1):
-        nodeA = nodesA[i]
-        nodeB = nodesB[i]
-        
-        valueA = str(data_dict.get(nodeA))
-        valueB = str(data_dict.get(nodeB))
-
-        # Check if both values are not in legalIDs
-        if valueA not in legalIDs or valueB not in legalIDs:
-            # Remove the item from all lists
-            del nodesA[i]
-            del nodesB[i]
-            del edgesC[i]
-
-    save_list = []
-
-    for i in range(len(nodesA)):
-        item = [nodesA[i], nodesB[i], edgesC[i]]
-        save_list.append(item)
-
-
+    
+    nodesA = np.array(master_list[0])
+    nodesB = np.array(master_list[1])
+    edgesC = np.array(master_list[2])
+    
+    # Vectorized lookup of node values
+    valuesA = np.array([str(data_dict.get(node, '')) for node in nodesA])
+    valuesB = np.array([str(data_dict.get(node, '')) for node in nodesB])
+    
+    # Create boolean mask for filtering
+    legalIDs_set = {str(ID1), str(ID2)}
+    maskA = np.array([val in legalIDs_set for val in valuesA])
+    maskB = np.array([val in legalIDs_set for val in valuesB])
+    keep_mask = maskA & maskB
+    
+    # Apply filter
+    filtered_nodesA = nodesA[keep_mask].tolist()
+    filtered_nodesB = nodesB[keep_mask].tolist()
+    filtered_edgesC = edgesC[keep_mask].tolist()
+    
+    # Create save_list
+    save_list = [[filtered_nodesA[i], filtered_nodesB[i], filtered_edgesC[i]] 
+                 for i in range(len(filtered_nodesA))]
+    
+    # Handle file saving
     if type(networkfile) == str:
         filename = f'network_isolated_{ID1}_{ID2}_connections.xlsx'
-
         nettracer.create_and_save_dataframe(save_list, filename)
-
         print(f"Isolated internode network saved to {filename}")
-
-    output_dict = data_dict.copy()
-    for item in data_dict:
-        if item not in nodesA and item not in nodesB:
-            del output_dict[item]
-
+    
+    # Create output_dict
+    nodes_in_filtered = set(filtered_nodesA + filtered_nodesB)
+    output_dict = {node: data_dict[node] for node in nodes_in_filtered 
+                   if node in data_dict}
+    
+    # Handle identity file saving
     if type(networkfile) == str:
-
         filename = f'Node_identities_for_isolated_{ID1}_{ID2}_network.xlsx'
-
         save_singval_dict(output_dict, 'NodeID', 'Identity', filename)
-
         print(f"Isolated network identities saved to {filename}")
-
-    master_list = [nodesA, nodesB, edgesC]
-
-    # Optional: Return the updated lists if needed
+    
+    master_list = [filtered_nodesA, filtered_nodesB, filtered_edgesC]
     return master_list, output_dict
 
-def edge_to_node(network, node_identities = None, maxnode = None):
-    """Converts edge IDs into nodes, so that the node-edge relationships can be more easily visualized"""
-
+def edge_to_node(network, node_identities=None, maxnode=None):
+    """Even faster numpy-based version for very large datasets"""
+    import numpy as np
+    
+    # Handle node_identities input
     if node_identities is not None and type(node_identities) == str:
-        # Read the Excel file into a DataFrame
         df = pd.read_excel(node_identities)
-        
-        # Convert the DataFrame to a dictionary
         identity_dict = pd.Series(df.iloc[:, 1].values, index=df.iloc[:, 0]).to_dict()
     elif node_identities is not None and type(node_identities) != str:
-        identity_dict = node_identities
+        identity_dict = node_identities.copy()
     else:
         identity_dict = {}
-
-    new_network = []
-
-    # Read the network file into lists
+    
+    # Handle network input
     if type(network) == str:
         master_list = read_excel_to_lists(network)
     else:
         master_list = network
-
-    nodesA = master_list[0]
-    nodesB = master_list[1]
-    edgesC = master_list[2]
-    allnodes = set(nodesA + nodesB)
+    
+    # Convert to numpy arrays for vectorized operations
+    nodesA = np.array(master_list[0])
+    nodesB = np.array(master_list[1])
+    edgesC = np.array(master_list[2])
+    
+    # Get all unique nodes efficiently
+    allnodes = set(np.concatenate([nodesA, nodesB]).tolist())
+    
+    # Calculate maxnode if not provided
     if maxnode is None:
-        maxnode = max(allnodes)
+        maxnode = int(np.max(np.concatenate([nodesA, nodesB])))
+    
     print(f"Transposing all edge vals by {maxnode} to prevent ID overlap with preexisting nodes")
-
-
-    for i in range(len(edgesC)):
-        edgesC[i] = edgesC[i] + maxnode
-
-    alledges = set(edgesC)
-
-    for i in range(len(edgesC)):
-        newpair1 = [nodesA[i], edgesC[i], 0]
-        newpair2 = [edgesC[i], nodesB[i], 0]
-        new_network.append(newpair1)
-        new_network.append(newpair2)
-
-    for item in allnodes:
-        if item not in identity_dict:
-            identity_dict[item] = 'Node'
-
-    for item in alledges:
-        identity_dict[item] = 'Edge'
-
+    
+    # Vectorized edge transposition
+    transposed_edges = edgesC + maxnode
+    
+    # Create new_network using vectorized operations
+    # Create arrays for the two types of connections
+    connections1 = np.column_stack([nodesA, transposed_edges, np.zeros(len(nodesA))])
+    connections2 = np.column_stack([transposed_edges, nodesB, np.zeros(len(nodesB))])
+    
+    # Combine and convert to list format
+    new_network_array = np.vstack([connections1, connections2])
+    new_network = new_network_array.astype(int).tolist()
+    
+    # Update identity_dict efficiently
+    # Add missing nodes
+    for node in allnodes:
+        if node not in identity_dict:
+            identity_dict[node] = 'Node'
+    
+    # Add all edges at once
+    for edge in transposed_edges.tolist():
+        identity_dict[edge] = 'Edge'
+    
+    # Handle output
     if type(network) == str:
-
         save_singval_dict(identity_dict, 'NodeID', 'Identity', 'edge_to_node_identities.xlsx')
-
         nettracer.create_and_save_dataframe(new_network, 'edge-node_network.xlsx')
-
     else:
-
         df = nettracer.create_and_save_dataframe(new_network)
         return df, identity_dict, maxnode
+
 
 
 def save_singval_dict(dict, index_name, valname, filename):
@@ -1111,86 +1091,98 @@ def save_singval_dict(dict, index_name, valname, filename):
 
 
 def rand_net_weighted(num_rows, num_nodes, nodes):
-
-    random_network = []
-    k = 0
-
-    while k < num_rows:
-
-        for i in range(0, num_nodes):
-            random_partner = random.randint(0, len(nodes)-1)
-            random_partner = nodes[random_partner]
-            if random_partner == nodes[i]:
-                while random_partner == nodes[i]:
-                    random_partner = random.randint(0, len(nodes)-1)
-                    random_partner = nodes[random_partner]
-            random_pair = [nodes[i], random_partner, 0]
-            random_network.append(random_pair)
-            k+= 1
-            if k == num_rows:
-                break
-        random.shuffle(nodes)
-
-
+    """Optimized weighted random network generation - allows duplicate edges"""
+    nodes_array = np.array(nodes)
+    n_nodes = len(nodes)
+    
+    # Pre-generate all random indices at once
+    node_indices = np.random.randint(0, n_nodes, num_rows)
+    partner_indices = np.random.randint(0, n_nodes, num_rows)
+    
+    # Fix self-connections by regenerating only where needed
+    self_connection_mask = node_indices == partner_indices
+    while np.any(self_connection_mask):
+        partner_indices[self_connection_mask] = np.random.randint(0, n_nodes, np.sum(self_connection_mask))
+        self_connection_mask = node_indices == partner_indices
+    
+    # Create network efficiently using vectorized operations
+    random_network = np.column_stack([
+        nodes_array[node_indices],
+        nodes_array[partner_indices], 
+        np.zeros(num_rows, dtype=int)
+    ]).tolist()
+    
     df = nettracer.create_and_save_dataframe(random_network)
-
     G, edge_weights = weighted_network(df)
-
     return G, df
+
 
 def rand_net(num_rows, num_nodes, nodes):
+    """Optimized unweighted random network generation - prevents duplicate edges"""
     random_network = []
-    k=0
-
-    while k < num_rows:
-        for i in range(num_nodes):
-            # Generate a new random partner until it's valid
-            while True:
-                random_partner_index = random.randint(0, len(nodes) - 1)
-                random_partner = nodes[random_partner_index]
+    seen_edges = set()
+    nodes_set = set(nodes)
+    n_nodes = len(nodes)
+    
+    # Pre-calculate maximum possible unique edges
+    max_possible_edges = n_nodes * (n_nodes - 1)  # No self-connections, but allows both directions
+    
+    if num_rows > max_possible_edges:
+        raise ValueError(f"Cannot generate {num_rows} unique edges with {n_nodes} nodes. Maximum possible: {max_possible_edges}")
+    
+    attempts = 0
+    max_attempts = num_rows * 10  # Prevent infinite loops
+    
+    while len(random_network) < num_rows and attempts < max_attempts:
+        # Generate batch of random pairs
+        batch_size = min(1000, num_rows - len(random_network))
+        
+        node_indices = np.random.randint(0, n_nodes, batch_size)
+        partner_indices = np.random.randint(0, n_nodes, batch_size)
+        
+        for i in range(batch_size):
+            node_idx = node_indices[i]
+            partner_idx = partner_indices[i]
+            
+            # Skip self-connections
+            if node_idx == partner_idx:
+                attempts += 1
+                continue
                 
-                # Check if the random partner is different from the current node
-                # and if the pair is not already in the network
-                if random_partner != nodes[i] and [nodes[i], random_partner, 0] not in random_network and [random_partner, nodes[i], 0] not in random_network:
-                    break
-
-            random_pair = [nodes[i], random_partner, 0]
-            random_network.append(random_pair)
-            k += 1
-
-            if k == num_rows:
+            node = nodes[node_idx]
+            partner = nodes[partner_idx]
+            
+            # Create normalized edge tuple to check for duplicates (both directions)
+            edge_tuple = tuple(sorted([node, partner]))
+            
+            if edge_tuple not in seen_edges:
+                seen_edges.add(edge_tuple)
+                random_network.append([node, partner, 0])
+                
+            attempts += 1
+            
+            if len(random_network) >= num_rows:
                 break
-
-
-        # Shuffle nodes for the next iteration
-        random.shuffle(nodes)
-
-
-
+    
+    if len(random_network) < num_rows:
+        print(f"Warning: Only generated {len(random_network)} edges out of requested {num_rows}")
+    
     df = nettracer.create_and_save_dataframe(random_network)
-
     G, edge_weights = weighted_network(df)
-
     return G, df
 
-def generate_random(G, net_lists, weighted = True):
 
+def generate_random(G, net_lists, weighted=True):
+    """Optimized random network generation dispatcher"""
     nodes = list(G.nodes)
-
     num_nodes = len(nodes)
-
     num_rows = len(net_lists[0])
-
-
+    
     if weighted:
-
-        G = rand_net_weighted(num_rows, num_nodes, nodes)
-
+        return rand_net_weighted(num_rows, num_nodes, nodes)
     else:
+        return rand_net(num_rows, num_nodes, nodes)
 
-        G = rand_net(num_rows, num_nodes, nodes)
-
-    return G
 
 def list_trim(list1, list2, component):
 

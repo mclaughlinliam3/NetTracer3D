@@ -11,9 +11,9 @@ Right clicking in the main Image Viewer Window will prompt you with the followin
 'Find Node/Edge'
 ~~~~~~~~~~~~~~~
 
-* Opens a text box to type the ID of a node or edge.
+* Opens a text box to type the ID of a node, edge, or node community.
 * Entering the ID of a node/edge that is in your image will select it, highlight it, and move the image stack to its location (which requires calculating centroids in the current implementation).
-* Edge IDs will only be searched for if the edges channel is 'Active'. Otherwise, Nodes will be used.
+* In the text window, the 'Type to Select' dropdown menu will set whether you are searching for a node, edge, or community. (With communities being able to select multiple nodes).
 
 'Show Neighbors'
 ~~~~~~~~~~~~~~~
@@ -196,6 +196,10 @@ Selecting 'Save As provides the following options':
     * Saves the table as a .csv for analysis in generic spreadsheet software.
 2. Excel
     * Saves the table as a .xlsx for analysis in Microsoft Excel.
+
+'Close All'
+~~~~~~~~~~~~~~~~~~~~~~~
+Shuts all active tables (Sometimes a bunch can get populated here from doing random things, so it's nice to clear out sometimes).
 
 Next Steps
 ---------

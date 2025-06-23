@@ -348,6 +348,11 @@ def create_and_save_dataframe(pairwise_connections, excel_filename = None):
 
 #General supporting methods below:
 
+def invert_dict(d):
+    inverted = {}
+    for key, value in d.items():
+        inverted.setdefault(value, []).append(key)
+    return inverted
 
 def invert_array(array):
     """Internal method used to flip node array indices. 0 becomes 255 and vice versa."""
@@ -1484,6 +1489,13 @@ def remove_zeros(input_list):
     return result_array
 
 
+def overlay_arrays_simple(edge_labels_1, edge_labels_2):
+    """
+    Superimpose edge_labels_2 on top of edge_labels_1 without any offset.
+    Where edge_labels_2 > 0, use those values directly.
+    """
+    mask = edge_labels_1 > 0
+    return np.where(mask, edge_labels_1, edge_labels_2)
 
 def combine_edges(edge_labels_1, edge_labels_2):
     """
@@ -1616,7 +1628,7 @@ def downsample(data, factor, directory=None, order=0):
     return data
 
 
-def otsu_binarize(image_array):
+def otsu_binarize(image_array, non_bool = False):
 
     """Automated binarize method for seperating the foreground"""
 
@@ -1624,6 +1636,10 @@ def otsu_binarize(image_array):
 
     threshold = threshold_otsu(image_array)
     binary_mask = image_array > threshold
+
+    if non_bool:
+        binary_mask = binary_mask * 255
+        
     return binary_mask
 
 def binarize(arrayimage, directory = None):
@@ -1813,12 +1829,6 @@ def label_branches(array, peaks = 0, branch_removal = 0, comp_dil = 0, max_vol =
     return array
 
 def fix_branches_network(array, G, communities, fix_val = None):
-
-    def invert_dict(d):
-        inverted = {}
-        for key, value in d.items():
-            inverted.setdefault(value, []).append(key)
-        return inverted
 
     def get_degree_threshold(community_degrees):
         degrees = np.array(community_degrees, dtype=float)
@@ -3893,11 +3903,6 @@ class Network_3D:
 
     def com_to_node(self, targets = None):
 
-        def invert_dict(d):
-            inverted = {}
-            for key, value in d.items():
-                inverted.setdefault(value, []).append(key)
-            return inverted
 
         def update_array(array_3d, value_dict, targets = None):
             ref_array = copy.deepcopy(array_3d)
@@ -4831,9 +4836,9 @@ class Network_3D:
                 (z1, y1, x1), (z2, y2, x2) = bounds
                 z1, y1, x1 = int(z1), int(y1), int(x1)
                 z2, y2, x2 = int(z2), int(y2), int(x2)
-                z_range = np.arange(z1, z2 + 1)
-                y_range = np.arange(y1, y2 + 1)
-                x_range = np.arange(x1, x2 + 1)
+                z_range = np.arange(z1, z2 + 1 )
+                y_range = np.arange(y1, y2 + 1 )
+                x_range = np.arange(x1, x2 + 1 )
                 z_grid, y_grid, x_grid = np.meshgrid(z_range, y_range, x_range, indexing='ij')
                 del z_range
                 del y_range
@@ -4896,11 +4901,6 @@ class Network_3D:
 
     def community_id_info(self):
 
-        def invert_dict(d):
-            inverted = {}
-            for key, value in d.items():
-                inverted.setdefault(value, []).append(key)
-            return inverted
 
         community_dict = invert_dict(self.communities)
         summation = 0
@@ -4938,13 +4938,7 @@ class Network_3D:
 
         return output
 
-    def community_id_info_per_com(self, umap = False, label = False):
-
-        def invert_dict(d):
-            inverted = {}
-            for key, value in d.items():
-                inverted.setdefault(value, []).append(key)
-            return inverted
+    def community_id_info_per_com(self, umap = False, label = False, limit = 0, proportional = False):
 
         community_dict = invert_dict(self.communities)
         summation = 0
@@ -4954,62 +4948,122 @@ class Network_3D:
             id_dict[iden] = i
 
         output = {}
+        umap_dict = {}
 
-        for community in community_dict:
+        if not proportional:
 
-            counter = np.zeros(len(id_set))
+            for community in community_dict:
 
-            nodes = community_dict[community]
-            size = len(nodes)
+                counter = np.zeros(len(id_set))
 
-            # Count identities in this community
-            for node in nodes:
-                counter[id_dict[self.node_identities[node]]] += 1 # Keep them as arrays
+                nodes = community_dict[community]
+                size = len(nodes)
 
-            for i in range(len(counter)): # Translate them into proportions out of 1
+                # Count identities in this community
+                for node in nodes:
+                    counter[id_dict[self.node_identities[node]]] += 1 # Keep them as arrays
 
-                counter[i] = counter[i]/size
+                for i in range(len(counter)): # Translate them into proportions out of 1
 
-            output[community] = counter #Assign the finding here
+                    counter[i] = counter[i]/size
+
+                output[community] = counter #Assign the finding here
+
+                if size >= limit:
+                    umap_dict[community] = counter
+
+        else:
+            idens = invert_dict(self.node_identities)
+            iden_count = {}
+            template = {}
+            node_count = len(list(self.communities.keys()))
+
+
+            for iden in id_set:
+                template[iden] = 0
+
+            for iden, nodes in idens.items():
+                iden_count[iden] = len(nodes)
+
+            for community in community_dict:
+
+                iden_tracker = copy.deepcopy(template)
+
+                nodes = community_dict[community]
+                size = len(nodes)
+                counter = np.zeros(len(id_set))
+
+                for node in nodes:
+                    iden_tracker[self.node_identities[node]] += 1 
+
+                i = 0
+
+                if not umap: # External calls just get the proportion for now
+
+                    for iden, val in iden_tracker.items(): # Translate them into proportions of total number of that node of all nodes of that ID
+
+                        counter[i] = (val/iden_count[iden])
+                        i += 1
+
+                    output[community] = counter #Assign the finding here
+
+                    if size >= limit:
+                        umap_dict[community] = counter
+
+                else: # Internal calls for the umap get the relative proportion, demonstrating overrepresentation per community
+
+
+                    for iden, val in iden_tracker.items(): # Translate them into proportions of total number of that node of all nodes of that ID
+
+                        counter[i] = (val/iden_count[iden])/(size/node_count) # The proportion of that ID in the community vs all of that ID divided by the proportion of that community size vs all the nodes
+                        i += 1
+
+                    output[community] = counter #Assign the finding here
+
+                    if size >= limit:
+                        umap_dict[community] = counter
+
 
         if umap:
             from . import neighborhoods
-            neighborhoods.visualize_cluster_composition_umap(output, id_set, label = label) 
+
+            neighborhoods.visualize_cluster_composition_umap(umap_dict, id_set, label = label) 
 
         return output, id_set
 
 
-    def assign_neighborhoods(self, seed, count, limit = None, prev_coms = None):
+    def assign_neighborhoods(self, seed, count, limit = None, prev_coms = None, proportional = False, mode = 0):
 
         from . import neighborhoods
-
-        def invert_dict(d):
-            inverted = {}
-            for key, value in d.items():
-                inverted.setdefault(value, []).append(key)
-            return inverted
 
         if prev_coms is not None:
             self.communities = copy.deepcopy(prev_coms)
 
         identities, _ = self.community_id_info_per_com()
 
+        zero_group = {}
+
+
         if limit is not None:
 
             coms = invert_dict(self.communities)
 
-            zero_group = {}
 
             for com, nodes in coms.items():
 
                 if len(nodes) < limit:
 
-                    zero_group[com] = 0
-
                     del identities[com]
 
+        if count > len(identities):
+            print(f"Requested neighborhoods too large for available communities. Using {len(identities)} neighborhoods (max for these coms)")
+            count = len(identities)
 
-        clusters = neighborhoods.cluster_arrays(identities, count, seed = seed) # dict: {cluster_id: {'keys': [keys], 'arrays': [arrays]}}
+
+        if mode == 0:
+            clusters = neighborhoods.cluster_arrays(identities, count, seed = seed)
+        elif mode == 1:
+            clusters = neighborhoods.cluster_arrays_dbscan(identities, seed = seed)
 
         coms = {}
 
@@ -5021,19 +5075,60 @@ class Network_3D:
 
                 coms[com] = i + 1
 
-        if limit is not None:
-            coms.update(zero_group)
+        copy_dict = copy.deepcopy(self.communities)
 
-        for node, com in self.communities.items():
+        for node, com in copy_dict.items():
 
-            self.communities[node] = coms[com]
+            try:
+
+                self.communities[node] = coms[com]
+
+            except:
+                del self.communities[node]
+                zero_group[node] = 0
+
+        self.com_by_size()
+
+
+        if len(zero_group) > 0:
+            self.communities.update(zero_group)
+
 
         identities, id_set = self.community_id_info_per_com()
 
-        neighborhoods.plot_dict_heatmap(identities, id_set)
+        len_dict = {}
+
+        coms = invert_dict(self.communities)
+        node_count = len(list(self.communities.keys()))
+
+        for com, nodes in coms.items():
+
+            len_dict[com] = len(nodes)/node_count
+
+        matrixes = []
+
+        output = neighborhoods.plot_dict_heatmap(identities, id_set, title = "Neighborhood Heatmap by Proportional Composition Per Neighborhood")
+
+        matrixes.append(output)
+
+        if proportional:
+
+            identities2, id_set2 = self.community_id_info_per_com(proportional = True)
+            output = neighborhoods.plot_dict_heatmap(identities2, id_set2, title = "Neighborhood Heatmap by Proportional Composition of Nodes in Neighborhood vs All Nodes")
+            matrixes.append(output)
+
+            identities3 = {}
+            for iden in identities2:
+                identities3[iden] = identities2[iden]/len_dict[iden]
+
+            output = neighborhoods.plot_dict_heatmap(identities3, id_set2, title = "Neighborhood Heatmap by Proportional Composition of Nodes in Neighborhood vs All Nodes Divided by Neighborhood Total Proportion of All Nodes (val < 1 = underrepresented, val > 1 = overrepresented)", center_at_one = True)
+            matrixes.append(output)
+
+        return len_dict, matrixes, id_set
 
 
-    def kd_network(self, distance = 100, targets = None, make_array = False):
+
+    def kd_network(self, distance = 100, targets = None, make_array = False, max_neighbors = None):
 
         centroids = copy.deepcopy(self._node_centroids)
 
@@ -5054,13 +5149,19 @@ class Network_3D:
                     centroids[node] = [centroid[0], centroid[1] * refactor, centroid[2] * refactor]
 
 
-        neighbors = proximity.find_neighbors_kdtree(distance, targets = targets, centroids = centroids)
+        neighbors = proximity.find_neighbors_kdtree(distance, targets = targets, centroids = centroids, max_neighbors = max_neighbors)
+
+        print("Creating Dataframe")
 
         network = create_and_save_dataframe(neighbors)
+
+        print("Converting df to network")
 
         self._network_lists = network_analysis.read_excel_to_lists(network)
 
         #self._network is a networkx graph that stores the connections
+
+        print("Removing Edge Weights")
 
         self.remove_edge_weights()
 
@@ -5072,7 +5173,7 @@ class Network_3D:
 
     def community_cells(self, size = 32, xy_scale = 1, z_scale = 1):
 
-        def invert_dict(d):
+        def revert_dict(d):
             inverted = {}
             for key, value_list in d.items():
                 for value in value_list:
@@ -5090,17 +5191,11 @@ class Network_3D:
 
             com_dict = proximity.partition_objects_into_cells(self.node_centroids, (size_z, size_x, size_x))
 
-        self.communities = invert_dict(com_dict)
+        self.communities = revert_dict(com_dict)
 
     def community_heatmap(self, num_nodes = None, is3d = True, numpy = False):
 
         import math
-
-        def invert_dict(d):
-            inverted = {}
-            for key, value in d.items():
-                inverted.setdefault(value, []).append(key)
-            return inverted
 
         if num_nodes == None:
 
@@ -5227,14 +5322,17 @@ class Network_3D:
             compare_set = root_set
             if len(compare_set) - 1 < num:
 
-                print("Error: Not enough neighbor nodes for requested number of neighbors")
-                return
+                num = len(compare_set) - 1
+
+                print(f"Error: Not enough neighbor nodes for requested number of neighbors. Using max available neighbors: {num}")
+                
 
         if len(compare_set) < num:
 
-            print("Error: Not enough neighbor nodes for requested number of neighbors")
-            return
+            num = len(compare_set)
 
+            print(f"Error: Not enough neighbor nodes for requested number of neighbors. Using max available neighbors: {num}")
+            
         avg, output = proximity.average_nearest_neighbor_distances(self.node_centroids, root_set, compare_set, xy_scale=self.xy_scale, z_scale=self.z_scale, num = num)
 
         if heatmap:

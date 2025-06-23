@@ -1,6 +1,6 @@
 [project]
 name = "nettracer3d"
-version = "0.8.1"
+version = "0.8.2"
 authors = [
   { name="Liam McLaughlin", email="liamm@wustl.edu" },
 ]
@@ -16,7 +16,6 @@ dependencies = [
     "opencv-python-headless",
     "openpyxl",
     "pandas",
-    "napari",
     "tifffile",
     "qtrangeslider",
     "PyQt6",
@@ -35,15 +34,17 @@ classifiers = [
 ]
 
 [project.optional-dependencies]
-CUDA11 = [
-"cupy-cuda11x"
-]
-CUDA12 = [
-"cupy-cuda12x"
-]
-cupy = [
-"cupy"
-]
+# GPU options (choose one)
+CUDA11 = ["cupy-cuda11x"]
+CUDA12 = ["cupy-cuda12x"]
+cupy = ["cupy"]
+
+# Features
+cellpose = ["cellpose[GUI]"]
+viz = ["napari"]
+
+# All non-GPU features
+all = ["cellpose[GUI]", "napari"]
 
 [project.scripts]
 nettracer3d = "nettracer3d.run:main"

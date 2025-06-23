@@ -60,20 +60,22 @@ The save as menu will prompt the user to find files to load. Note that when it c
 7. 'Load From Excel Helper'
     * Opens the excel helper, which is a seperate GUI to open less-structured .csv or .xlsx spreadsheets that the user may have obtained elsewhere, and more easily convert them into NetTracer3D properties. (See :doc:`excel_helper`)
     * As of now, this can be used to load in 'Node Centroids', 'Node Identities', or 'Node Communities'. 
-7. 'Load Misc Properties -> Load Node IDs'
+8. 'Load Misc Properties -> Load Node IDs'
     * Prompts the user to find a .csv/.xlsx file containing Node IDs in the structure NetTracer3D expects (that is, the same structure it saves node IDs as).
-7. 'Load Misc Properties -> Load Node Centroids'
+9. 'Load Misc Properties -> Load Node Centroids'
     * Prompts the user to find a .csv/.xlsx file containing Node Centroids in the structure NetTracer3D expects (that is, the same structure it saves Node Centroids as).
-7. 'Load Misc Properties -> Load Edge Centroids'
+10. 'Load Misc Properties -> Load Edge Centroids'
     * Prompts the user to find a .csv/.xlsx file containing Edge Centroids in the structure NetTracer3D expects (that is, the same structure it saves Edge Centroids as).
-8. 'Load Misc Properties -> Merge Nodes'
+11. 'Load Misc Properties -> Load Node Communities
+    * Prompts the user to find a .csv/.xlsx file containing network communities in the structure NetTracer3D expects (that is, the same structure it saves communities as).
+12. 'Load Misc Properties -> Merge Nodes'
     * Prompts the user to find a .tif/.tiff file corresponding to an additional labeled nodes image they would like to merge with the current nodes channel (Alternatively, the user can select a directory containing a set of .tif/.tiff images if they would like to merge many nodes images at once).
     * The point of this function is to allow nodes from several types of images to be compared, for example, heterogenous structures or cell types.
     * Note that at this point in time, these labels cannot overlap as they are being combined into one image. 
     * Generally one would segment the images and label them individually before trying to merge them.
     * Merging nodes auto-assigns the nodes IDs based on the name of the .tif/.tiff that is being merged, while the original nodes aquire the name 'root_nodes'.
     * These IDs cannot be changed in NetTracer3D. To change them, please save the Node IDs as described above, edit the names directly in a spreadsheet-editing software like Microsoft Excel, then reload the Node IDs with 'Load -> Load Misc Properties -> Load Node IDs'
-9. 'Load Misc Properties -> Merge Node IDs From Images'
+13. 'Load Misc Properties -> Merge Node IDs From Images'
     * Prompts the user to find a directory containing .tif/.tiff channels corresponding to additional channels from the image that yielded the nodes image.
     * The nodes from the nodes image will be compared to auto-binarized versions of the images in the directory to assess what 'identities' each node has.
     * The point of this is compatibility with something like CODEX. The nodes can be created by segmenting, then watershedding/labeling a nuclei marker such as DAPI. 

@@ -6,14 +6,14 @@
   <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
 
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Installation &mdash; NetTracer3D 0.8.1 documentation</title>
+  <title>Installation &mdash; NetTracer3D 0.8.2 documentation</title>
       <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=b86133f3" />
       <link rel="stylesheet" type="text/css" href="_static/css/theme.css?v=e59714d7" />
 
   
       <script src="_static/jquery.js?v=5d32c60e"></script>
       <script src="_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
-      <script src="_static/documentation_options.js?v=ec16d22d"></script>
+      <script src="_static/documentation_options.js?v=dbee5847"></script>
       <script src="_static/doctools.js?v=9bcbadda"></script>
       <script src="_static/sphinx_highlight.js?v=dc90522c"></script>
     <script src="_static/js/theme.js"></script>
@@ -49,6 +49,8 @@
 <li class="toctree-l2"><a class="reference internal" href="#system-requirements">System Requirements</a></li>
 <li class="toctree-l2"><a class="reference internal" href="#installing-nettracer3d">Installing NetTracer3D</a><ul>
 <li class="toctree-l3"><a class="reference internal" href="#using-pip">Using pip</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#optional-packages">Optional Packages</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#gpu">GPU</a></li>
 </ul>
 </li>
 <li class="toctree-l2"><a class="reference internal" href="#verifying-installation">Verifying Installation</a></li>
@@ -129,8 +131,42 @@
 <div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>pip<span class="w"> </span>install<span class="w"> </span>nettracer3d
 </pre></div>
 </div>
-<p>This will install NetTracer3D and all its dependencies.</p>
-<p>To install optional GPU functionalities, first set up a CUDA toolkit that runs with the GPU on your machine and use:</p>
+<p>This will install NetTracer3D and all its core dependencies.</p>
+</section>
+<section id="optional-packages">
+<h3>Optional Packages<a class="headerlink" href="#optional-packages" title="Link to this heading"></a></h3>
+<p>I recommend including Napari (Chi-Li Chiu, Nathan Clack, the napari community, napari: a Python Multi-Dimensional Image Viewer Platform for the Research Community, Microscopy and Microanalysis, Volume 28, Issue S1, 1 August 2022, Pages 1576–1577, <a class="reference external" href="https://doi.org/10.1017/S1431927622006328">https://doi.org/10.1017/S1431927622006328</a>) in the download as well, which allows NetTracer3D to use 3D displays. The standard package only comes with its native 2D slice display window.
+If Napari is present, all 3D images and overlays from NetTracer3D can be easily displayed in 3D with a click of a button. To package with Napari, use this install command instead:</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>pip<span class="w"> </span>install<span class="w"> </span>nettracer3d<span class="o">[</span>viz<span class="o">]</span>
+</pre></div>
+</div>
+<p>Additionally, for easy access to high-quality cell segmentation, as of version 0.8.2, NetTracer3D can be optionally packaged with Cellpose3. (Stringer, C., Pachitariu, M. Cellpose3: one-click image restoration for improved cellular segmentation. Nat Methods 22, 592–599 (2025). <a class="reference external" href="https://doi.org/10.1038/s41592-025-02595-5">https://doi.org/10.1038/s41592-025-02595-5</a>)
+Cellpose3 is not involved with the rest of the program in any way, although its GUI can be opened from NetTracer3D’s GUI, provided both are installed in the same environment. It is a top-tier cell segmenter which can assist in the production of cell networks.
+To include Cellpose3 in the install, use this command:</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>pip<span class="w"> </span>install<span class="w"> </span>nettracer3d<span class="o">[</span>cellpose<span class="o">]</span>
+</pre></div>
+</div>
+<p>Alternatively, both Napari and Cellpose can be included in the package with this command: (Or they can be independently installed with pip from the base package env)</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>pip<span class="w"> </span>install<span class="w"> </span>nettracer3d<span class="o">[</span>all<span class="o">]</span>
+</pre></div>
+</div>
+</section>
+<section id="gpu">
+<h3>GPU<a class="headerlink" href="#gpu" title="Link to this heading"></a></h3>
+<p>NetTracer3D is mostly CPU-bound, but a few functions can optionally use the GPU. To install optional GPU functionalities, first set up a CUDA toolkit that runs with the GPU on your machine. This requires an NVIDIA GPU. Then, find your GPUs compatible CUDA toolkit and install it with the auto-installer from the NVIDIA website: <a class="reference external" href="https://developer.nvidia.com/cuda-toolkit">https://developer.nvidia.com/cuda-toolkit</a></p>
+<p>With a CUDA toolkit installed, use:</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>pip<span class="w"> </span>install<span class="w"> </span>nettracer3d<span class="o">[</span>CUDA11<span class="o">]</span><span class="w"> </span><span class="c1">#If your CUDA toolkit is version 11</span>
+pip<span class="w"> </span>install<span class="w"> </span>nettracer3d<span class="o">[</span>CUDA12<span class="o">]</span><span class="w"> </span><span class="c1">#If your CUDA toolkit is version 12</span>
+pip<span class="w"> </span>install<span class="w"> </span>nettracer3d<span class="o">[</span>cupy<span class="o">]</span><span class="w"> </span><span class="c1">#For the generic cupy library (The above two are usually the ones you want)</span>
+</pre></div>
+</div>
+<p>Or if you’ve already installed the NetTracer3D base package and want to get just the GPU associated packages:</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>pip<span class="w"> </span>install<span class="w"> </span>cupy-cuda11x<span class="w"> </span><span class="c1">#If your CUDA toolkit is version 11</span>
+pip<span class="w"> </span>install<span class="w"> </span>cupy-cuda12x<span class="w"> </span><span class="c1">#If your CUDA toolkit is version 12</span>
+pip<span class="w"> </span>install<span class="w"> </span>cupy<span class="w"> </span><span class="c1">#For the generic cupy library (The above two are usually the ones you want)</span>
+</pre></div>
+</div>
+<p>While not related to NetTracer3D, if you want to use Cellpose3 (for which GPU-usage is somewhat obligatory) to help segment cells for any networks, you will also want to install pytorch here: <a class="reference external" href="https://pytorch.org/">https://pytorch.org/</a>. Use the pytorch build menu on this webpage to find a pip install command that is compatible with Python and your CUDA version.</p>
 </section>
 </section>
 <section id="verifying-installation">
@@ -154,7 +190,11 @@ conda<span class="w"> </span>activate<span class="w"> </span>nettracer3d
 pip<span class="w"> </span>install<span class="w"> </span>nettracer3d
 </pre></div>
 </div>
-<p>The highest probability is that a version of a package you are running is not compatible with numpy version 2 and above. Please try updating the incompatible package in that case, or downgrading numpy to a version 1 distribution.</p>
+<p>The highest probability is that a version of a package you are running is not compatible with numpy version 2 and above. Please try upgrading/downgrading the incompatible packages as needed.
+This is generally done along the lines of:</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>pip<span class="w"> </span>install<span class="w"> </span><span class="s1">&#39;numpy&lt;=2.2&#39;</span><span class="w"> </span><span class="c1"># If a version of numpy beyond 2.2 was causing a conflict, for example.</span>
+</pre></div>
+</div>
 </section>
 <section id="getting-help">
 <h3>Getting Help<a class="headerlink" href="#getting-help" title="Link to this heading"></a></h3>

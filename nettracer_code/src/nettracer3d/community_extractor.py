@@ -393,28 +393,105 @@ def find_hub_nodes(G: nx.Graph, proportion: float = 0.1) -> List:
     return output
 
 def get_color_name_mapping():
-    """Return a dictionary of common colors and their RGB values."""
+    """Return a dictionary of descriptive color names and their RGB values."""
     return {
-        'red': (255, 0, 0),
-        'green': (0, 255, 0),
-        'blue': (0, 0, 255),
-        'yellow': (255, 255, 0),
-        'cyan': (0, 255, 255),
+        # Reds
+        'crimson_red': (220, 20, 60),
+        'bright_red': (255, 0, 0),
+        'dark_red': (139, 0, 0),
+        'coral_red': (255, 127, 80),
+        'rose_red': (255, 102, 102),
+        'burgundy': (128, 0, 32),
+        'cherry_red': (222, 49, 99),
+        
+        # Greens
+        'forest_green': (34, 139, 34),
+        'lime_green': (50, 205, 50),
+        'bright_green': (0, 255, 0),
+        'dark_green': (0, 100, 0),
+        'mint_green': (152, 255, 152),
+        'sage_green': (159, 183, 121),
+        'emerald_green': (80, 200, 120),
+        'olive_green': (128, 128, 0),
+        
+        # Blues
+        'royal_blue': (65, 105, 225),
+        'bright_blue': (0, 0, 255),
+        'navy_blue': (0, 0, 128),
+        'sky_blue': (135, 206, 235),
+        'steel_blue': (70, 130, 180),
+        'powder_blue': (176, 224, 230),
+        'midnight_blue': (25, 25, 112),
+        'cobalt_blue': (0, 71, 171),
+        
+        # Purples
+        'deep_purple': (75, 0, 130),
+        'royal_purple': (120, 81, 169),
+        'lavender': (230, 230, 250),
+        'plum_purple': (221, 160, 221),
+        'violet_purple': (238, 130, 238),
         'magenta': (255, 0, 255),
-        'purple': (128, 0, 128),
-        'orange': (255, 165, 0),
-        'brown': (165, 42, 42),
-        'pink': (255, 192, 203),
-        'navy': (0, 0, 128),
-        'teal': (0, 128, 128),
-        'olive': (128, 128, 0),
-        'maroon': (128, 0, 0),
-        'lime': (50, 205, 50),
-        'indigo': (75, 0, 130),
-        'violet': (238, 130, 238),
-        'coral': (255, 127, 80),
+        'orchid': (218, 112, 214),
+        
+        # Yellows & Golds
+        'bright_yellow': (255, 255, 0),
+        'golden_yellow': (255, 215, 0),
+        'lemon_yellow': (255, 247, 0),
+        'amber': (255, 191, 0),
+        'mustard_yellow': (255, 219, 88),
+        'cream': (255, 253, 208),
+        'wheat': (245, 222, 179),
+        
+        # Oranges
+        'bright_orange': (255, 165, 0),
+        'burnt_orange': (204, 85, 0),
+        'peach': (255, 218, 185),
+        'tangerine': (255, 163, 67),
+        'pumpkin_orange': (255, 117, 24),
+        'apricot': (251, 206, 177),
+        
+        # Pinks
+        'hot_pink': (255, 105, 180),
+        'light_pink': (255, 192, 203),
+        'deep_pink': (255, 20, 147),
+        'salmon_pink': (250, 128, 114),
+        'blush_pink': (255, 182, 193),
+        'fuchsia': (255, 0, 255),
+        
+        # Cyans & Teals
+        'bright_cyan': (0, 255, 255),
+        'dark_teal': (0, 128, 128),
         'turquoise': (64, 224, 208),
-        'gold': (255, 215, 0)
+        'aqua': (0, 255, 255),
+        'seafoam': (159, 226, 191),
+        'teal_blue': (54, 117, 136),
+        
+        # Browns & Earth Tones
+        'chocolate_brown': (210, 105, 30),
+        'saddle_brown': (139, 69, 19),
+        'light_brown': (205, 133, 63),
+        'tan': (210, 180, 140),
+        'beige': (245, 245, 220),
+        'coffee_brown': (111, 78, 55),
+        'rust_brown': (183, 65, 14),
+        
+        # Grays & Neutrals
+        'charcoal_gray': (54, 69, 79),
+        'light_gray': (211, 211, 211),
+        'silver': (192, 192, 192),
+        'slate_gray': (112, 128, 144),
+        'ash_gray': (178, 190, 181),
+        'smoke_gray': (152, 152, 152),
+        
+        # Additional Distinctive Colors
+        'lime_yellow': (191, 255, 0),
+        'electric_blue': (125, 249, 255),
+        'neon_green': (57, 255, 20),
+        'wine_red': (114, 47, 55),
+        'copper': (184, 115, 51),
+        'ivory': (255, 255, 240),
+        'periwinkle': (204, 204, 255),
+        'mint': (189, 252, 201)
     }
 
 def rgb_to_color_name(rgb: Tuple[int, int, int]) -> str:
@@ -440,7 +517,7 @@ def rgb_to_color_name(rgb: Tuple[int, int, int]) -> str:
         distance = np.sqrt(np.sum((rgb_array - np.array(color_rgb)) ** 2))
         if distance < min_distance:
             min_distance = distance
-            closest_color = color_name
+            closest_color = color_name + f" {str(rgb_array)}"
             
     return closest_color
 

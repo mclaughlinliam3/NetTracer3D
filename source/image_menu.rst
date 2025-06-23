@@ -91,11 +91,12 @@ Parameter Explanations
 'Image -> Show 3D (Napari)'
 --------------------------
 * At last, 3D visualization!
-* Select this option to have NetTracer3D use Napari (the premiere open-source pythonic 3D image viewer) to show a 3D render of all visible images. https://napari.org/stable/
+* Select this option to have NetTracer3D use Napari (the premiere open-source pythonic 3D image viewer) to show a 3D render of all visible images. Chi-Li Chiu, Nathan Clack, the napari community, napari: a Python Multi-Dimensional Image Viewer Platform for the Research Community, Microscopy and Microanalysis, Volume 28, Issue S1, 1 August 2022, Pages 1576–1577, https://doi.org/10.1017/S1431927622006328
 * Napari will show any channels that are currently visible in the bottom control panel, so disable the visibility of any channels you do not wish to show. It will also show the highlight overlay if it is present.
 * If your computer monitor is currently hooked up to your GPU, Napari will use your GPU for rendering by default. As long as the sum of your images' sizes are less than your total VRAM, Napari visual displays are quite smooth. 
     * However this visualization does not utilize image pyramids in this case. If your images' sizes exceed the VRAM of your card, please downsample it or it will lag. (This is a feature that I may implement in the future).
     * If your monitor is not currently using the GPU, this visualization will be limited to small images.
+* This requires Napari to be installed in NetTracer3D's package environment.
 
 Parameter Explanations
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -107,3 +108,9 @@ Parameter Explanations
     * Enable this to draw in a bounding box around your channels in the visualization. Note the bounding box is an equivalently sized array as the other channels so it will demand the necesarry RAM.
 
 * Press 'Show 3D' to create the 3D display with the desired params. A new Napari window will open and show your desired channels. Note that any RGB images will be split into three seperate red, green, and blue channels.
+
+'Image -> Cellpose'
+--------------------------
+* Selecting this just opens the Cellpose3 GUI (Stringer, C., Pachitariu, M. Cellpose3: one-click image restoration for improved cellular segmentation. Nat Methods 22, 592–599 (2025). https://doi.org/10.1038/s41592-025-02595-5), provided it has been installed in NetTracer3D's package environment.
+* Cellpose3 is my favorite open-source tool to segment cells with, so I added this option as a suggestion to use it together with NetTracer3d.
+* This requires Cellpose3 to be installed in NetTracer3D's package environment.

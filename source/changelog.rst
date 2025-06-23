@@ -59,3 +59,12 @@ Version 0.8.1 Updates
 	* Added nearest neighbor evaluation function (Analysis -> Stats -> Avg Nearest Neighbor)
 	* Added heatmap outputs for node degrees (Analysis -> Data/Overlays -> Get Degree Information).
 	* Bug fixes and misc improvements.
+
+Version 0.8.2 Updates
+
+	* Bug Fixes.
+	* Improved some of the image viewer window features.
+	* New option to zoom in on specific windows by clicking + dragging while in zoom mode.
+	* Added more features to UMAP/community neighborhood clustering (optional DBSCAN clustering, results more robust to node distribution)
+	* Made Napari and optional rather than core dependency.
+	* Added Cellpose as an optional dependency.

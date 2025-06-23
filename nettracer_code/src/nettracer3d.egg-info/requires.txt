@@ -7,7 +7,6 @@ networkx
 opencv-python-headless
 openpyxl
 pandas
-napari
 tifffile
 qtrangeslider
 PyQt6
@@ -22,5 +21,15 @@ cupy-cuda11x
 [CUDA12]
 cupy-cuda12x
 
+[all]
+cellpose[GUI]
+napari
+
+[cellpose]
+cellpose[GUI]
+
 [cupy]
 cupy
+
+[viz]
+napari

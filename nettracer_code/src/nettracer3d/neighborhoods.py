@@ -1,52 +1,176 @@
 import numpy as np
 from sklearn.cluster import KMeans
+from sklearn.metrics import calinski_harabasz_score
 import matplotlib.pyplot as plt
 from typing import Dict, Set
 import umap
-
+from matplotlib.colors import LinearSegmentedColormap
+from sklearn.cluster import DBSCAN
+from sklearn.neighbors import NearestNeighbors
 
 
 import os
 os.environ['LOKY_MAX_CPU_COUNT'] = '4'
 
-def cluster_arrays(data_input, n_clusters, seed = 42):
+def cluster_arrays_dbscan(data_input, seed=42):
     """
-    Simple clustering of 1D arrays with key tracking.
+    Simple DBSCAN clustering of 1D arrays with sensible defaults.
     
     Parameters:
     -----------
     data_input : dict or List[List[float]]
         Dictionary {key: array} or list of arrays to cluster
-    n_clusters : int  
-        How many groups you want
+    seed : int
+        Random seed for reproducibility (used for parameter estimation)
         
     Returns:
     --------
-    dict: {cluster_id: {'keys': [keys], 'arrays': [arrays]}}
+    list: [[key1, key2], [key3, key4, key5]] - List of clusters, each containing keys/indices
+          Note: Outliers are excluded from the output
     """
     
     # Handle both dict and list inputs
     if isinstance(data_input, dict):
         keys = list(data_input.keys())
-        array_values = list(data_input.values())  # Use .values() to get the arrays
+        array_values = list(data_input.values())
     else:
-        keys = list(range(len(data_input)))  # Use indices as keys for lists
+        keys = list(range(len(data_input)))
         array_values = data_input
     
-    # Convert to numpy and cluster
+    # Convert to numpy
     data = np.array(array_values)
-    kmeans = KMeans(n_clusters=n_clusters, random_state=seed)
+    n_samples = len(data)
+    
+    # Simple heuristics for DBSCAN parameters
+    min_samples = max(3, int(np.sqrt(n_samples) * 0.2))  # Roughly sqrt(n)/5, minimum 3
+    
+    # Estimate eps using 4th nearest neighbor distance (common heuristic)
+    k = min(4, n_samples - 1)
+    if k > 0:
+        nbrs = NearestNeighbors(n_neighbors=k + 1)
+        nbrs.fit(data)
+        distances, _ = nbrs.kneighbors(data)
+        # Use 80th percentile of k-nearest distances as eps
+        eps = np.percentile(distances[:, k], 80)
+    else:
+        eps = 0.1  # fallback
+    
+    print(f"Using DBSCAN with eps={eps:.4f}, min_samples={min_samples}")
+    
+    # Perform DBSCAN clustering
+    dbscan = DBSCAN(eps=eps, min_samples=min_samples)
+    labels = dbscan.fit_predict(data)
+    
+    # Organize results into clusters (excluding outliers)
+    clusters = []
+    
+    # Add only the main clusters (non-noise points)
+    unique_labels = np.unique(labels)
+    main_clusters = [label for label in unique_labels if label != -1]
+    
+    for label in main_clusters:
+        cluster_indices = np.where(labels == label)[0]
+        cluster_keys = [keys[i] for i in cluster_indices]
+        clusters.append(cluster_keys)
+    
+    n_main_clusters = len(main_clusters)
+    n_outliers = np.sum(labels == -1)
+    
+    print(f"Found {n_main_clusters} main clusters and {n_outliers} outliers (go in neighborhood 0)")
+    
+    return clusters
+
+def cluster_arrays(data_input, n_clusters=None, seed=42):
+    """
+    Simple clustering of 1D arrays with key tracking and automatic cluster count detection.
+    
+    Parameters:
+    -----------
+    data_input : dict or List[List[float]]
+        Dictionary {key: array} or list of arrays to cluster
+    n_clusters : int or None
+        How many groups you want. If None, will automatically determine optimal k
+    seed : int
+        Random seed for reproducibility
+    max_k : int
+        Maximum number of clusters to consider when auto-detecting (default: 10)
+        
+    Returns:
+    --------
+    list: [[key1, key2], [key3, key4, key5]] - List of clusters, each containing keys/indices
+    """
+    
+    # Handle both dict and list inputs
+    if isinstance(data_input, dict):
+        keys = list(data_input.keys())
+        array_values = list(data_input.values())
+    else:
+        keys = list(range(len(data_input)))
+        array_values = data_input
+    
+    # Convert to numpy
+    data = np.array(array_values)
+    
+    # Auto-detect optimal number of clusters if not specified
+    if n_clusters is None:
+        n_clusters = _find_optimal_clusters(data, seed, max_k = (len(keys) // 3))
+        print(f"Auto-detected optimal number of clusters: {n_clusters}")
+    
+    # Perform clustering
+    kmeans = KMeans(n_clusters=n_clusters, random_state=seed, n_init=10)
     labels = kmeans.fit_predict(data)
     
-
+    # Organize results into clusters - simple list of lists with keys only
     clusters = [[] for _ in range(n_clusters)]
-
     for i, label in enumerate(labels):
         clusters[label].append(keys[i])
-
-    return clusters
     
-def plot_dict_heatmap(unsorted_data_dict, id_set, figsize=(12, 8), title="Neighborhood Heatmap"):
+    return clusters
+
+def _find_optimal_clusters(data, seed, max_k):
+    """
+    Find optimal number of clusters using Calinski-Harabasz index.
+    """
+    n_samples = len(data)
+    
+    # Need at least 2 samples to cluster
+    if n_samples < 2:
+        return 1
+    
+    # Limit max_k to reasonable bounds
+    max_k = min(max_k, n_samples - 1, 20)
+    print(f"Max_k: {max_k}, n_samples: {n_samples}")
+    
+    if max_k < 2:
+        return 1
+    
+    # Use Calinski-Harabasz index to find optimal k
+    ch_scores = []
+    k_range = range(2, max_k + 1)
+    
+    for k in k_range:
+        try:
+            kmeans = KMeans(n_clusters=k, random_state=seed, n_init=10)
+            labels = kmeans.fit_predict(data)
+            
+            # Check if we got the expected number of clusters
+            if len(np.unique(labels)) == k:
+                score = calinski_harabasz_score(data, labels)
+                ch_scores.append(score)
+            else:
+                ch_scores.append(0)  # Penalize solutions that didn't achieve k clusters
+                
+        except Exception:
+            ch_scores.append(0)
+    
+    # Find k with highest Calinski-Harabasz score
+    if ch_scores and max(ch_scores) > 0:
+        optimal_k = k_range[np.argmax(ch_scores)]
+        print(f"Using {optimal_k} neighborhoods")
+        return optimal_k
+    
+def plot_dict_heatmap(unsorted_data_dict, id_set, figsize=(12, 8), title="Neighborhood Heatmap", 
+                     center_at_one=False):
     """
     Create a heatmap from a dictionary of numpy arrays.
     
@@ -60,6 +184,11 @@ def plot_dict_heatmap(unsorted_data_dict, id_set, figsize=(12, 8), title="Neighb
         Figure size (width, height)
     title : str, optional
         Title for the heatmap
+    center_at_one : bool, optional
+        If True, uses a diverging colormap centered at 1 with nonlinear scaling:
+        - 0 to 1: blue to white (underrepresentation to normal)
+        - 1+: white to red (overrepresentation)
+        If False (default), uses standard white-to-red scaling from 0 to 1
     
     Returns:
     --------
@@ -67,7 +196,6 @@ def plot_dict_heatmap(unsorted_data_dict, id_set, figsize=(12, 8), title="Neighb
     """
     
     data_dict = {k: unsorted_data_dict[k] for k in sorted(unsorted_data_dict.keys())}
-
     # Convert dict to 2D array for heatmap
     # Each row represents one key from the dict
     keys = list(data_dict.keys())
@@ -76,8 +204,70 @@ def plot_dict_heatmap(unsorted_data_dict, id_set, figsize=(12, 8), title="Neighb
     # Create the plot
     fig, ax = plt.subplots(figsize=figsize)
     
-    # Create heatmap with white-to-red colormap
-    im = ax.imshow(data_matrix, cmap='Reds', aspect='auto', vmin=0, vmax=1)
+    if center_at_one:
+        # Custom colormap and scaling for center_at_one mode
+        # Find the actual data range
+        data_min = np.min(data_matrix)
+        data_max = np.max(data_matrix)
+        
+        # Create a custom colormap: blue -> white -> red
+        colors = ['#2166ac', '#4393c3', '#92c5de', '#d1e5f0', '#f7f7f7', 
+                 '#fddbc7', '#f4a582', '#d6604d', '#b2182b']
+        n_bins = 256
+        cmap = LinearSegmentedColormap.from_list('custom_diverging', colors, N=n_bins)
+        
+        # Create nonlinear transformation
+        # Map 0->1 with more resolution, 1+ with less resolution
+        def transform_data(data):
+            transformed = np.zeros_like(data)
+            
+            # For values 0 to 1: use square root for faster approach to middle
+            mask_low = data <= 1
+            transformed[mask_low] = 0.5 * np.sqrt(data[mask_low])
+            
+            # For values > 1: use slower logarithmic scaling
+            mask_high = data > 1
+            if np.any(mask_high):
+                # Scale from 0.5 to 1.0 based on log of excess above 1
+                max_excess = np.max(data[mask_high] - 1) if np.any(mask_high) else 0
+                if max_excess > 0:
+                    excess_normalized = np.log1p(data[mask_high] - 1) / np.log1p(max_excess)
+                    transformed[mask_high] = 0.5 + 0.5 * excess_normalized
+                else:
+                    transformed[mask_high] = 0.5
+            
+            return transformed
+        
+        # Transform the data for visualization
+        transformed_matrix = transform_data(data_matrix)
+        
+        # Create heatmap with custom colormap
+        im = ax.imshow(transformed_matrix, cmap=cmap, aspect='auto', vmin=0, vmax=1)
+        
+        # Create custom colorbar with original values
+        cbar = ax.figure.colorbar(im, ax=ax)
+        
+        # Set colorbar ticks to show meaningful values
+        if data_max > 1:
+            tick_values = [0, 0.25, 0.5, 0.75, 1.0, 1.25, 1.5, 2.0]
+            tick_values = [v for v in tick_values if data_min <= v <= data_max]
+        else:
+            tick_values = [0, 0.25, 0.5, 0.75, 1.0]
+            tick_values = [v for v in tick_values if data_min <= v <= data_max]
+        
+        # Transform tick values for colorbar positioning
+        transformed_ticks = transform_data(np.array(tick_values))
+        cbar.set_ticks(transformed_ticks)
+        cbar.set_ticklabels([f'{v:.2f}' for v in tick_values])
+        cbar.ax.set_ylabel('Representation Ratio', rotation=-90, va="bottom")
+        
+    else:
+        # Default behavior: white-to-red colormap
+        im = ax.imshow(data_matrix, cmap='Reds', aspect='auto', vmin=0, vmax=1)
+        
+        # Add standard colorbar
+        cbar = ax.figure.colorbar(im, ax=ax)
+        cbar.ax.set_ylabel('Intensity', rotation=-90, va="bottom")
     
     # Set ticks and labels
     ax.set_xticks(np.arange(len(id_set)))
@@ -91,22 +281,31 @@ def plot_dict_heatmap(unsorted_data_dict, id_set, figsize=(12, 8), title="Neighb
     # Add text annotations showing the actual values
     for i in range(len(keys)):
         for j in range(len(id_set)):
+            # Use original data values for annotations
             text = ax.text(j, i, f'{data_matrix[i, j]:.3f}',
                           ha="center", va="center", color="black", fontsize=8)
-    
-    # Add colorbar
-    cbar = ax.figure.colorbar(im, ax=ax)
-    cbar.ax.set_ylabel('Intensity', rotation=-90, va="bottom")
+
+
+    ret_dict = {}
+
+    for i, row in enumerate(data_matrix):
+        ret_dict[keys[i]] = row
     
     # Set labels and title
-    ax.set_xlabel('Proportion of Node Type')
+    if center_at_one:
+        ax.set_xlabel('Representation Factor of Node Type')
+    else:
+        ax.set_xlabel('Proportion of Node Type')
+
     ax.set_ylabel('Neighborhood')
     ax.set_title(title)
     
     # Adjust layout to prevent label cutoff
     plt.tight_layout()
-
     plt.show()
+
+    return ret_dict
+    
 
 
 def visualize_cluster_composition_umap(cluster_data: Dict[int, np.ndarray], 

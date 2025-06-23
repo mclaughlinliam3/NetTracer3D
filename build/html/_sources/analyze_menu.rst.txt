@@ -113,6 +113,12 @@ Parameter Explanations
     * Select this option to generate a UMAP comparing the community compositions.
 #. If Using Above - Label UMAP points?
     * This option labels the communities within the UMAP by their numerical label. Deselect this option to avoid these labels showing up on the graph.
+#. Min Community Size to be grouped...
+    * If empty, this param does nothing.
+    * If an int is entered, any communities with nodes fewer than this val will not be included in the UMAP — since we might not care about small, insignificant communities.
+#. Return Node Type Distribution Robust UMAP
+    * Normally, communities are grouped in the UMAP by their proportional compositions of node types.
+    * If this option is selected, they will instead be grouped based on how much they 'overrepresent' specific node types. Overrepresenting = the proportion of nodes of that type in the community (vs all nodes of that type) is greater than the proportion of all nodes within that community (vs all nodes in the image).
 
 * Press 'Get Community ID Info' to populate the data to the upper right tabulated data widget, and to show the UMAP if selected.
 
@@ -138,13 +144,14 @@ Algorithm Explanation
 5. Normalizes the results twice: first by the total number of nodes, then to ensure all proportions sum to 1
 6. Returns a dictionary mapping each identity type to its weighted proportion in the network
 
-'Analyze -> Network -> Convert Network Communities Into Neighborhoods'
+'Analyze -> Network -> Convert Network Communities Into Neighborhoods (Also Returns Compositional Heatmaps)'
 -------------------------------
 
 * This method finds the average of compositions of all communities (assuming 'node_identities' exist - then uses the above function), then groups similar communities into 'neighborhoods'.
 * The purpose of this is to let the user crunch communities into a smaller set of neighborhoods for analysis of similar domains across the image.
 * The number of neighborhoods assigned is up to the user.
 * Running this method will also show a heatmap graph of what 'node_identity' is prominant in what neighborhood.
+* Neighborhoods by default get assigned by size as well, with 1 being the largest group, and n (the highest neighborhood ID) being the smallest, allowing their relative sizes to be easily compared.
 * Running this method will reassign the 'communities' property to these neighborhoods instead, so be sure to save the former first.
     * This is so the user can use all community-associated functions on the new neighborhoods instead.
     * However during an active session, this method will always run on the original communities and not the neighborhoods (it stores it in another temp property only for that purpose). This lets the user run this method with different params to evaluate different neighborhoods, but note that these temp communities are not used for anything else.
@@ -154,11 +161,26 @@ Parameter Explanations
 
 #. Num Neighborhoods
     * The number of neighborhoods the user wants to group communities into. Presumably, you would want the number of communities to be larger by a logical amount than the number of new neighborhoods.
+    * Arbitrary neighborhood numbers can only be used for K-means clustering. DBSCAN clustering will always decide on its own how many to use. K-means will also try to guess a good neighborhood count if nothing is entered.
 #. Clustering Seed
     * The random seed (int) used for neighborhood assignment. By default this is 42.
 #. Min Community Size to be grouped...
     * If empty, this param does nothing.
     * If an int is entered, any communities with nodes fewer than this val will be assigned to 'Neighborhood 0' — since we might not care about small, insignificant communities.
+#. Return Node Type Distribution Robust Heatmaps
+    * This method always returns a heatmap showing the proportional composition of each neighborhood for each ID type.
+    * However, by pressing this option, two more heatmaps will be returned as well:
+    * The second heatmap shows in each cell the proportion of that node type in that neighborhood as compared to the total available nodes of that type.
+    * The third heatmap (which I like to use) takes the results from the second and divides them by the proportion of total nodes (of any type) that comprise that neighborhood. This gives us a result showing what node types are 'overrepresented' in this neighborhood (since we would expect each node type within a neighborhood to have the same proportional representation vs all nodes of that type as the total representation of all nodes of that neighborhood itself)
+        * In short though, cells with values above 1 overrepresent that node type, while values below 1 underrepresent it. This is a pretty great way to eyeball compositional anomolies.
+#. Mode - A dropdown menu to select the clustering algorithm.
+    * KMeans - Uses K-means clustering. (Generally recommended)
+    * DBSCAN - Uses DBSCAN clustering. (Somewhat experimental). Note that DBSCAN likes to assign low-appearing groups as 'outliers', which in the current implementation get assigned to 'Neighborhood 0' (Along with any communities the user decided to threshold out by size).
+
+* Press 'Get Neighborhoods' to group the nodes into neighborhoods and to get the heatmaps. This also returns a number of tables to the tabulated data widget (top right), including:
+    * Tabulated versions of all heatmaps.
+    * Proportion of total nodes in network for each neighborhood.
+    * Nodes to neighborhood ID table.
 
 Algorithm Explanation
 ~~~~~~~~~~~~~~~~~~~~
@@ -167,6 +189,17 @@ Algorithm Explanation
 1. Finds the composition of all communities using 'Analyze -> Network -> Identity Makeup of Communities' logic.
 2. Converts compositions to numpy array to prepare data for scikit-learn clustering algorithm
 3. Applies K-means clustering with specified number of neighborhoods and random seed
+
+* Alternatively, the sklearn DBSCAN algorithm can be used: https://scikit-learn.org/stable/modules/generated/sklearn.cluster.DBSCAN.html
+1. Calculate min_samples - minimum neighbors a point needs to be a 'core point': max(3, sqrt(n_samples) * 0.2)
+2. Estimate eps (neighborhood radius): Use 80th percentile of 4th nearest neighbor distances. Non-core points within eps of core points become border points of that cluster.
+3. Run DBSCAN with calculated parameters
+4. Points that are neither core points nor within eps of core points become outliers
+
+* If using KMeans, and no neighborhood count is provided:
+1. Neighborhood counts from sizes 1 to 20 will be temporarily generated.
+2. They will be graded on quality based on their calinksi harabasz score: https://scikit-learn.org/stable/modules/generated/sklearn.metrics.calinski_harabasz_score.html
+3. The neighborhood count with the highest score will be used.
 
 'Analyze -> Network -> Create Communities Based on Cuboidal Proximity Cells?'
 -------------------------------

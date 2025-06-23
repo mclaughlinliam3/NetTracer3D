@@ -10,7 +10,8 @@ import pandas as pd
 import matplotlib.pyplot as plt
 from typing import Dict, Union, Tuple, List, Optional
 from collections import defaultdict
-
+from multiprocessing import Pool, cpu_count
+import functools
 
 # Related to morphological border searching:
 
@@ -200,7 +201,103 @@ def populate_array(centroids, clip=False):
     else:
         return array
 
-def find_neighbors_kdtree(radius, centroids=None, array=None, targets=None):
+def _process_chunk_centroids(args):
+    """Process a chunk of neighbor indices for centroids mode"""
+    chunk_data, idx_to_node, query_indices, tree, points, max_neighbors = args
+    output = []
+    
+    for i, neighbors in chunk_data:
+        query_idx = query_indices[i]
+        query_value = idx_to_node[query_idx]
+        query_point = points[query_idx]
+        
+        # Filter out self-reference
+        filtered_neighbors = [n for n in neighbors if n != query_idx]
+        
+        # If max_neighbors is specified and we have more neighbors than allowed
+        if max_neighbors is not None and len(filtered_neighbors) > max_neighbors:
+            # Use KDTree to get distances efficiently - query for more than we need
+            # to ensure we get the exact closest ones
+            k = min(len(filtered_neighbors), max_neighbors + 1)  # +1 in case query point is included
+            distances, indices = tree.query(query_point, k=k)
+            
+            # Filter out self and limit to max_neighbors
+            selected_neighbors = []
+            for dist, idx in zip(distances, indices):
+                if idx != query_idx and idx in filtered_neighbors:
+                    selected_neighbors.append(idx)
+                    if len(selected_neighbors) >= max_neighbors:
+                        break
+            
+            filtered_neighbors = selected_neighbors
+        
+        # Add all selected neighbors to output
+        for neighbor_idx in filtered_neighbors:
+            neighbor_value = idx_to_node[neighbor_idx]
+            output.append([query_value, neighbor_value, 0])
+    
+    return output
+
+def _process_chunk_array(args):
+    """Process a chunk of neighbor indices for array mode"""
+    chunk_data, array, point_tuples, query_indices, tree, points, max_neighbors = args
+    output = []
+    
+    for i, neighbors in chunk_data:
+        query_idx = query_indices[i]
+        query_value = array[point_tuples[query_idx]]
+        query_point = points[query_idx]
+        
+        # Filter out self-reference
+        filtered_neighbors = [n for n in neighbors if n != query_idx]
+        
+        # If max_neighbors is specified and we have more neighbors than allowed
+        if max_neighbors is not None and len(filtered_neighbors) > max_neighbors:
+            # Use KDTree to get distances efficiently - query for more than we need
+            # to ensure we get the exact closest ones
+            k = min(len(filtered_neighbors), max_neighbors + 1)  # +1 in case query point is included
+            distances, indices = tree.query(query_point, k=k)
+            
+            # Filter out self and limit to max_neighbors
+            selected_neighbors = []
+            for dist, idx in zip(distances, indices):
+                if idx != query_idx and idx in filtered_neighbors:
+                    selected_neighbors.append(idx)
+                    if len(selected_neighbors) >= max_neighbors:
+                        break
+            
+            filtered_neighbors = selected_neighbors
+        
+        # Add all selected neighbors to output
+        for neighbor_idx in filtered_neighbors:
+            neighbor_value = array[point_tuples[neighbor_idx]]
+            output.append([query_value, neighbor_value, 0])
+    
+    return output
+
+def find_neighbors_kdtree(radius, centroids=None, array=None, targets=None, n_jobs=None, chunk_size=None, max_neighbors=None):
+    """
+    Find neighbors using KDTree with optional parallelization.
+    
+    Parameters:
+    -----------
+    radius : float
+        Search radius for finding neighbors
+    centroids : dict or list, optional
+        Dictionary mapping node IDs to coordinates or list of points
+    array : numpy.ndarray, optional
+        Array to search for nonzero points
+    targets : list, optional
+        Specific targets to query for neighbors
+    n_jobs : int, optional
+        Number of parallel jobs. If None, uses cpu_count(). Set to 1 to disable parallelization.
+    chunk_size : int, optional
+        Size of chunks for parallel processing. If None, auto-calculated based on data size.
+    max_neighbors : int, optional
+        Maximum number of nearest neighbors to return per query point within the radius.
+        If None, returns all neighbors within radius (original behavior).
+    """
+    
     # Get coordinates of nonzero points
     if centroids:
         # If centroids is a dictionary mapping node IDs to coordinates
@@ -214,72 +311,136 @@ def find_neighbors_kdtree(radius, centroids=None, array=None, targets=None):
             points = np.array(centroids, dtype=np.int32)
             node_ids = list(range(1, len(points) + 1))  # Default sequential IDs
         
-        # Create a temporary array only if we need it for lookups
-        if array is None:
-            max_coords = np.max(points, axis=0) + 1
-            array = np.zeros(tuple(max_coords), dtype=np.int32)
-            for i, point in enumerate(points):
-                array[tuple(point)] = node_ids[i]  # Use the actual node ID
+        # Create direct index-to-node mapping instead of sparse array
+        idx_to_node = {i: node_ids[i] for i in range(len(points))}
+        
     elif array is not None:
         points = np.transpose(np.nonzero(array))
         node_ids = None  # Not used in array-based mode
+        # Pre-convert points to tuples once to avoid repeated conversions
+        point_tuples = [tuple(point) for point in points]
     else:
         return []
     
+    print("Building KDTree...")
     # Create KD-tree from all nonzero points
     tree = KDTree(points)
     
     if targets is None:
         # Original behavior: find neighbors for all points
         query_points = points
-        query_indices = range(len(points))
+        query_indices = list(range(len(points)))
     else:
+        # Convert targets to set for O(1) lookup
+        targets_set = set(targets)
+        
         # Find coordinates of target values
         target_points = []
         target_indices = []
         
         if array is not None:
             # Standard array-based filtering
-            for idx, point in enumerate(points):
-                point_tuple = tuple(point)
-                if array[point_tuple] in targets:
-                    target_points.append(point)
+            for idx, point_tuple in enumerate(point_tuples):
+                if array[point_tuple] in targets_set:
+                    target_points.append(points[idx])
                     target_indices.append(idx)
         else:
             # Filter based on node IDs directly
             for idx, node_id in enumerate(node_ids):
-                if node_id in targets:
+                if node_id in targets_set:
                     target_points.append(points[idx])
                     target_indices.append(idx)
         
         # Convert to numpy array for querying
         query_points = np.array(target_points)
         query_indices = target_indices
+
         
         # Handle case where no target values were found
         if len(query_points) == 0:
             return []
     
+    print("Querying KDTree...")
+
     # Query for all points within radius of each query point
     neighbor_indices = tree.query_ball_point(query_points, radius)
     
-    # Initialize output list
-    output = []
+    print("Sorting Through Output...")
+
+    # Determine parallelization parameters
+    if n_jobs is None:
+        n_jobs = cpu_count()
     
-    # Generate pairs
-    for i, neighbors in enumerate(neighbor_indices):
-        query_idx = query_indices[i]
-        for neighbor_idx in neighbors:
-            # Skip self-pairing
-            if neighbor_idx != query_idx:
-                # Use node IDs from the dictionary if available
-                if array is not None:
-                    query_value = array[tuple(points[query_idx])]
-                    neighbor_value = array[tuple(points[neighbor_idx])]
-                else:
-                    query_value = node_ids[query_idx]
-                    neighbor_value = node_ids[neighbor_idx]
-                output.append([query_value, neighbor_value, 0])
+    # Skip parallelization for small datasets or when n_jobs=1
+    if n_jobs == 1 or len(neighbor_indices) < 100:
+        # Sequential processing (original logic with max_neighbors support)
+        output = []
+        for i, neighbors in enumerate(neighbor_indices):
+            query_idx = query_indices[i]
+            query_point = points[query_idx]
+            
+            # Filter out self-reference
+            filtered_neighbors = [n for n in neighbors if n != query_idx]
+            
+            # If max_neighbors is specified and we have more neighbors than allowed
+            if max_neighbors is not None and len(filtered_neighbors) > max_neighbors:
+                # Use KDTree to get distances efficiently - query for more than we need
+                # to ensure we get the exact closest ones
+                k = min(len(filtered_neighbors), max_neighbors + 1)  # +1 in case query point is included
+                distances, indices = tree.query(query_point, k=k)
+                
+                # Filter out self and limit to max_neighbors
+                selected_neighbors = []
+                for dist, idx in zip(distances, indices):
+                    if idx != query_idx and idx in filtered_neighbors:
+                        selected_neighbors.append(idx)
+                        if len(selected_neighbors) >= max_neighbors:
+                            break
+                
+                filtered_neighbors = selected_neighbors
+            
+            # Process the selected neighbors
+            if centroids:
+                query_value = idx_to_node[query_idx]
+                for neighbor_idx in filtered_neighbors:
+                    neighbor_value = idx_to_node[neighbor_idx]
+                    output.append([query_value, neighbor_value, 0])
+            else:
+                query_value = array[point_tuples[query_idx]]
+                for neighbor_idx in filtered_neighbors:
+                    neighbor_value = array[point_tuples[neighbor_idx]]
+                    output.append([query_value, neighbor_value, 0])
+        return output
+    
+    # Parallel processing
+    if chunk_size is None:
+        # Auto-calculate chunk size: aim for ~4x more chunks than processes
+        chunk_size = max(1, len(neighbor_indices) // (n_jobs * 4))
+    
+    # Create chunks of (index, neighbors) pairs
+    chunks = []
+    for i in range(0, len(neighbor_indices), chunk_size):
+        chunk = [(j, neighbor_indices[j]) for j in range(i, min(i + chunk_size, len(neighbor_indices)))]
+        chunks.append(chunk)
+    
+    # Process chunks in parallel
+    with Pool(processes=n_jobs) as pool:
+        if centroids:
+            # Prepare arguments for centroids mode
+            chunk_args = [(chunk, idx_to_node, query_indices, tree, points, max_neighbors) for chunk in chunks]
+            chunk_results = pool.map(_process_chunk_centroids, chunk_args)
+        else:
+            # Prepare arguments for array mode
+            chunk_args = [(chunk, array, point_tuples, query_indices, tree, points, max_neighbors) for chunk in chunks]
+            chunk_results = pool.map(_process_chunk_array, chunk_args)
+    
+    # Flatten results
+    output = []
+    for chunk_result in chunk_results:
+        output.extend(chunk_result)
+
+    print("Organizing Network...")
+
     
     return output
 
