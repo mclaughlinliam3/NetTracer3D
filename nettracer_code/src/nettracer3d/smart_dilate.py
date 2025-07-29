@@ -223,6 +223,7 @@ def dilate_3D_dt(array, search_distance, xy_scaling=1.0, z_scaling=1.0, GPU = Fa
             inv, indices = compute_distance_transform_GPU(inv, return_dists = True, sampling = [z_scaling, xy_scaling, xy_scaling])
         except:
             print("Failed, attempting on CPU...")
+            cleanup()
             #Who would have seen this coming?:
             inv, indices = compute_distance_transform(inv, return_dists = True, sampling = [z_scaling, xy_scaling, xy_scaling])
     else:
@@ -251,15 +252,37 @@ def process_chunk(start_idx, end_idx, nodes, ring_mask, nearest_label_indices):
     nodes_chunk = nodes[:, start_idx:end_idx, :]
     ring_mask_chunk = ring_mask[:, start_idx:end_idx, :]
     dilated_nodes_with_labels_chunk = np.copy(nodes_chunk)
+    
+    # Get all ring indices at once
     ring_indices = np.argwhere(ring_mask_chunk)
-
-    for index in ring_indices:
-        z, y, x = index
-        nearest_z, nearest_y, nearest_x = nearest_label_indices[:, z, y + start_idx, x]
-        try: #There was an index error here once on the highest val of the second axis. I could not understand why because it usually doesnt hence the try block.
-            dilated_nodes_with_labels_chunk[z, y, x] = nodes[nearest_z, nearest_y, nearest_x]
-        except:
-            pass
+    
+    if len(ring_indices) > 0:
+        # Extract coordinates
+        z_coords = ring_indices[:, 0]
+        y_coords = ring_indices[:, 1] 
+        x_coords = ring_indices[:, 2]
+        
+        # Get nearest label coordinates (adjust y for chunk offset)
+        nearest_coords = nearest_label_indices[:, z_coords, y_coords + start_idx, x_coords]
+        nearest_z = nearest_coords[0, :]
+        nearest_y = nearest_coords[1, :]
+        nearest_x = nearest_coords[2, :]
+        
+        # Vectorized assignment
+        try:
+            dilated_nodes_with_labels_chunk[z_coords, y_coords, x_coords] = \
+                nodes[nearest_z, nearest_y, nearest_x]
+        except IndexError:
+            # Fallback for any problematic indices
+            valid_mask = (nearest_z < nodes.shape[0]) & \
+                        (nearest_y < nodes.shape[1]) & \
+                        (nearest_x < nodes.shape[2]) & \
+                        (nearest_z >= 0) & (nearest_y >= 0) & (nearest_x >= 0)
+            
+            valid_indices = valid_mask.nonzero()[0]
+            if len(valid_indices) > 0:
+                dilated_nodes_with_labels_chunk[z_coords[valid_indices], y_coords[valid_indices], x_coords[valid_indices]] = \
+                    nodes[nearest_z[valid_indices], nearest_y[valid_indices], nearest_x[valid_indices]]
     
     return dilated_nodes_with_labels_chunk
 
@@ -506,6 +529,7 @@ def compute_distance_transform_GPU(nodes, return_dists = False, sampling = [1, 1
 
 
 def compute_distance_transform(nodes, return_dists = False, sampling = [1, 1, 1]):
+    #print("(Now doing distance transform...)")
     is_pseudo_3d = nodes.shape[0] == 1
     if is_pseudo_3d:
         nodes = np.squeeze(nodes)  # Convert to 2D for processing
@@ -548,12 +572,14 @@ def compute_distance_transform_distance_GPU(nodes, sampling = [1, 1, 1]):
     distance = cp.asnumpy(distance)
 
     if is_pseudo_3d:
-        np.expand_dims(distance, axis = 0)
+        distance = np.expand_dims(distance, axis = 0)
     
     return distance    
 
 
 def compute_distance_transform_distance(nodes, sampling = [1, 1, 1]):
+
+    #print("(Now doing distance transform...)")
 
     is_pseudo_3d = nodes.shape[0] == 1
     if is_pseudo_3d:
@@ -563,7 +589,7 @@ def compute_distance_transform_distance(nodes, sampling = [1, 1, 1]):
     # Fallback to CPU if there's an issue with GPU computation
     distance = distance_transform_edt(nodes, sampling = sampling)
     if is_pseudo_3d:
-        np.expand_dims(distance, axis = 0)
+        distance = np.expand_dims(distance, axis = 0)
     return distance
 
 
@@ -620,6 +646,14 @@ def catch_memory(e):
 
         downsample_needed = (memory_required/total_memory)
         return (downsample_needed)
+
+def cleanup():
+
+    try:
+        cp.get_default_memory_pool().free_all_blocks()
+    except:
+        pass
+
 
 
 if __name__ == "__main__":

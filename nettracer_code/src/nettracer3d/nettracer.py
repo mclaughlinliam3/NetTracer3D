@@ -31,6 +31,7 @@ from . import community_extractor
 from . import network_analysis
 from . import morphology
 from . import proximity
+from skimage.segmentation import watershed as water
 
 
 #These next several methods relate to searching with 3D objects by dilating each one in a subarray around their neighborhood although I don't explicitly use this anywhere... can call them deprecated although I may want to use them later again so I have them still written out here.
@@ -104,7 +105,7 @@ def process_label(args):
     print(f"Processing node {label}")
     
     # Get the pre-computed bounding box for this label
-    slice_obj = bounding_boxes[label-1]  # -1 because label numbers start at 1
+    slice_obj = bounding_boxes[int(label)-1]  # -1 because label numbers start at 1
     if slice_obj is None:
         return None, None, None
         
@@ -129,7 +130,7 @@ def create_node_dictionary(nodes, edges, num_nodes, dilate_xy, dilate_z):
     with ThreadPoolExecutor(max_workers=mp.cpu_count()) as executor:
         # Create args list with bounding_boxes included
         args_list = [(nodes, edges, i, dilate_xy, dilate_z, array_shape, bounding_boxes) 
-                    for i in range(1, num_nodes + 1)]
+                    for i in range(1, int(num_nodes) + 1)]
 
         # Execute parallel tasks to process labels
         results = executor.map(process_label, args_list)
@@ -214,7 +215,6 @@ def establish_connections_parallel(edge_labels, num_edge, node_labels):
 
             edge_connections.append(node_labels[index])
 
-        #the set() wrapper removes duplicates from the same sublist
         my_connections = list(set(edge_connections))
 
 
@@ -282,8 +282,36 @@ def extract_pairwise_connections(connections):
 
 
 #Saving outputs
+def create_and_save_dataframe(pairwise_connections, excel_filename=None):
+    """Internal method used to convert lists of discrete connections into an excel output"""
+    
+    # Create DataFrame directly from the connections with 3 columns
+    df = pd.DataFrame(pairwise_connections, columns=['Node A', 'Node B', 'Edge C'])
+    
+    if excel_filename is not None:
+        # Remove file extension if present to use as base path
+        base_path = excel_filename.rsplit('.', 1)[0]
+        
+        # First try to save as CSV
+        try:
+            csv_path = f"{base_path}.csv"
+            df.to_csv(csv_path, index=False)
+            print(f"Network file saved to {csv_path}")
+            return
+        except Exception as e:
+            print(f"Could not save as CSV: {str(e)}")
+            
+            # If CSV fails, try to save as Excel
+            try:
+                xlsx_path = f"{base_path}.xlsx"
+                df.to_excel(xlsx_path, index=False)
+                print(f"Network file saved to {xlsx_path}")
+            except Exception as e:
+                print(f"Unable to write network file to disk... please make sure that {base_path}.xlsx is being saved to a valid directory and try again")
+    else:
+        return df
 
-def create_and_save_dataframe(pairwise_connections, excel_filename = None):
+def create_and_save_dataframe_old(pairwise_connections, excel_filename = None):
     """Internal method used to convert lists of discrete connections into an excel output"""
     # Determine the length of the input list
     length = len(pairwise_connections)
@@ -472,13 +500,108 @@ def _upsample_3d_array(data, factor, original_shape):
     else:
         trimmed_rows = trimmed_planes[:, sub_before[1]:-sub_after[1], :]
     
-    # Remove columns from the beginning and end
+    # Remove    columns from the beginning and end
     if sub_dims[2] == 0:
         trimmed_array = trimmed_rows
     else:
         trimmed_array = trimmed_rows[:, :, sub_before[2]:-sub_after[2]]
     
     return trimmed_array
+
+
+def remove_branches_new(skeleton, length):
+    """Used to compensate for overly-branched skeletons resulting from the scipy 3d skeletonization algorithm"""
+    def find_coordinate_difference(arr):
+        try:
+            arr[1,1,1] = 0
+            # Find the indices of non-zero elements
+            indices = np.array(np.nonzero(arr)).T
+            
+            # Calculate the difference
+            diff = np.array([1,1,1]) - indices[0]
+            
+            return diff
+        except:
+            return None
+    
+    skeleton = np.pad(skeleton, pad_width=1, mode='constant', constant_values=0) #Add black planes over the 3d space to avoid index errors
+    image_copy = np.copy(skeleton)
+    
+    # Find all endpoints ONCE at the beginning
+    nonzero_coords = np.transpose(np.nonzero(image_copy))
+    endpoints = []
+    nubs = []
+    
+    for x, y, z in nonzero_coords:
+        mini = image_copy[x-1:x+2, y-1:y+2, z-1:z+2]
+        nearby_sum = np.sum(mini)
+        threshold = 2 * image_copy[x, y, z]
+        
+        if nearby_sum <= threshold:
+            endpoints.append((x, y, z))
+    
+    x, y, z = endpoints[0]
+    original_val = image_copy[x, y, z]
+
+    # Process each endpoint individually for nub assessment
+    for start_x, start_y, start_z in endpoints:
+            
+        # Trace the branch from this endpoint, removing points as we go
+        branch_coords = []
+        current_coord = (start_x, start_y, start_z)
+        nub_reached = False
+        
+        for step in range(length):
+            x, y, z = current_coord
+            
+            # Store original value and coordinates
+            branch_coords.append((x, y, z))
+            
+            # Remove this point temporarily
+            image_copy[x, y, z] = 0
+            
+            # If we've reached the maximum length without hitting a nub, break
+            if step == length - 1:
+                break
+            
+            # Find next coordinate in the branch
+            mini = image_copy[x-1:x+2, y-1:y+2, z-1:z+2]
+            dif = find_coordinate_difference(mini.copy())
+            if dif is None:
+                break
+                
+            next_coord = (x - dif[0], y - dif[1], z - dif[2])
+            
+            # Check if next coordinate is valid and exists
+            nx, ny, nz = next_coord
+            
+            # Check if next point is a nub (has more neighbors than expected)
+            next_mini = image_copy[nx-1:nx+2, ny-1:ny+2, nz-1:nz+2]
+            next_nearby_sum = np.sum(next_mini)
+            next_threshold = 2 * image_copy[nx, ny, nz]
+            
+            if next_nearby_sum > next_threshold:
+                nub_reached = True
+                nubs.append(next_coord)
+                nubs.append(current_coord) # Note, if we don't add the current coord here (and restore it below), the behavior of this method can be changed to trim branches beneath previous branches, which could be neat but its somewhat unpredictable so I opted out of it.
+                image_copy[x, y, z] = original_val
+                #image_copy[nx, ny, nz] = 0
+                break
+                
+            current_coord = next_coord
+        
+        # If no nub was reached, restore all the points we removed
+        if not nub_reached:
+            for i, (bx, by, bz) in enumerate(branch_coords):
+                image_copy[bx, by, bz] = original_val
+        # If nub was reached, points stay removed (branch is eliminated)
+
+    for item in nubs: #The nubs are endpoints of length = 1. They appear a bit different in the array so we just note when one is created and remove them all at the end in a batch.
+        image_copy[item[0], item[1], item[2]] = 0 # Removing the nub itself leaves a hole in the skeleton but for branchpoint detection that doesn't matter, which is why it behaves this way. To fill the hole, one option is to dilate once then erode/skeletonize again, but we want to avoid making anything that looks like local branching so I didn't bother.
+
+    # Remove padding and return
+    image_copy = (image_copy[1:-1, 1:-1, 1:-1]).astype(np.uint8)
+    return image_copy
 
 def remove_branches(skeleton, length):
     """Used to compensate for overly-branched skeletons resulting from the scipy 3d skeletonization algorithm"""
@@ -504,6 +627,7 @@ def remove_branches(skeleton, length):
     x, y, z = nonzero_coords[0]
     threshold = 2 * skeleton[x, y, z]
     nubs = []
+    
 
     for b in range(length):
 
@@ -600,6 +724,8 @@ def break_and_label_skeleton(skeleton, peaks = 1, branch_removal = 0, comp_dil =
     else:
         broken_skele = None
 
+    #old_skeleton = copy.deepcopy(skeleton) # The skeleton might get modified in label_vertices so we can make a preserved copy of it to use later
+
     if nodes is None:
 
         verts = label_vertices(skeleton, peaks = peaks, branch_removal = branch_removal, comp_dil = comp_dil, max_vol = max_vol, return_skele = return_skele)
@@ -608,6 +734,8 @@ def break_and_label_skeleton(skeleton, peaks = 1, branch_removal = 0, comp_dil =
         verts = nodes
 
     verts = invert_array(verts)
+
+    #skeleton = old_skeleton
 
     image_copy = skeleton * verts
 
@@ -636,28 +764,25 @@ def threshold(arr, proportion, custom_rad = None):
     def find_closest_index(target: float, num_list: list[float]) -> int:
        return min(range(len(num_list)), key=lambda i: abs(num_list[i] - target))
 
-    # Step 1: Flatten the array
-    flattened = arr.flatten()
 
-    # Step 2: Filter out the zero values
-    non_zero_values = list(set(flattened[flattened > 0]))
+    if custom_rad is not None:
 
-    # Step 3: Sort the remaining values
-    sorted_values = np.sort(non_zero_values)
+        threshold_value = custom_rad
 
-    # Step 4: Determine the threshold for the top proportion%
+    else:
+        # Step 1: Flatten the array
+        flattened = arr.flatten()
 
-    if custom_rad is None:
+        # Step 2: Filter out the zero values
+        non_zero_values = list(set(flattened[flattened > 0]))
+
+        # Step 3: Sort the remaining values
+        sorted_values = np.sort(non_zero_values)
 
         threshold_index = int(len(sorted_values) * proportion)
         threshold_value = sorted_values[threshold_index]
+        print(f"Thresholding as if smallest_radius as assigned {threshold_value}")
 
-    else:
-
-        targ = int(find_closest_index(custom_rad, sorted_values) - (0.02 * len(sorted_values)))
-
-        threshold_value = sorted_values[targ]
-        print(f"Suggested proportion for rad {custom_rad} -> {targ/len(sorted_values)}")
 
     mask = arr > threshold_value
 
@@ -1006,9 +1131,92 @@ def remove_trunk(edges, num_iterations=1):
     
     return edges
 
-def hash_inners(search_region, inner_edges, GPU = True):
+def get_all_label_coords(labeled_array, background=0):
+    """
+    Get coordinates for all labels using single pass method.
+    
+    Parameters:
+    -----------
+    labeled_array : numpy.ndarray
+        Labeled array with integer labels
+    background : int, optional
+        Background label to exclude (default: 0)
+    
+    Returns:
+    --------
+    dict : {label: coordinates_array}
+        Dictionary mapping each label to its coordinate array
+    """
+    coords_dict = {}
+    
+    # Get all non-background coordinates at once
+    all_coords = np.argwhere(labeled_array != background)
+    
+    if len(all_coords) == 0:
+        return coords_dict
+    
+    # Get the label values at those coordinates
+    labels_at_coords = labeled_array[tuple(all_coords.T)]
+    
+    # Group by label
+    unique_labels = np.unique(labels_at_coords)
+    for label in unique_labels:
+        mask = labels_at_coords == label
+        coords_dict[label] = all_coords[mask]
+    
+    return coords_dict
+
+def approx_boundaries(array, iden_set = None, node_identities = None, keep_labels = False):
+
+    """Hollows out an array, can do it for only a set number of identities. Returns coords as dict if labeled or as 1d numpy array if binary is desired"""
+
+    if node_identities is not None:
+
+        nodes = []
+
+        for node in node_identities:
+
+            if node_identities[node] in iden_set: #Filter out only idens we need
+                nodes.append(node)
+
+        mask = np.isin(array, nodes)
+
+        if keep_labels:
+
+            array = array * mask
+        else:
+            array = mask
+        del mask
+
+    from skimage.segmentation import find_boundaries
+
+    borders = find_boundaries(array, mode='thick')
+    array = array * borders
+    del borders
+    if not keep_labels:
+        return np.argwhere(array != 0)
+    else:
+        return get_all_label_coords(array)
+
+
+
+def hash_inners(search_region, inner_edges, GPU = False):
     """Internal method used to help sort out inner edge connections. The inner edges of the array will not differentiate between what nodes they contact if those nodes themselves directly touch each other.
     This method allows these elements to be efficiently seperated from each other"""
+
+    from skimage.segmentation import find_boundaries
+
+    borders = find_boundaries(search_region, mode='thick')
+
+    inner_edges = inner_edges * borders #And as a result, we can mask out only 'inner edges' that themselves exist within borders
+
+    inner_edges = dilate_3D_old(inner_edges, 3, 3, 3) #Not sure if dilating is necessary. Want to ensure that the inner edge pieces still overlap with the proper nodes after the masking.
+
+    return inner_edges
+
+def hash_inners_old(search_region, inner_edges, GPU = True):
+    """Internal method used to help sort out inner edge connections. The inner edges of the array will not differentiate between what nodes they contact if those nodes themselves directly touch each other.
+    This method allows these elements to be efficiently seperated from each other. Originally this was implemented using the gaussian blur because i didn't yet realize skimage could do the same more efficiently."""
 
     print("Performing gaussian blur to hash inner edges.")
 
@@ -1574,6 +1782,187 @@ def directory_info(directory = None):
     return items
 
 
+# Ripley's K Helpers:
+
+def mirror_points_for_edge_correction(points_array, bounds, max_r, dim=3):
+    """
+    Mirror points near boundaries to handle edge effects in Ripley's K analysis.
+    Works with actual coordinate positions, not spatial grid placement.
+    
+    Parameters:
+    points_array: numpy array of shape (n, 3) with [z, y, x] coordinates (already scaled)
+    bounds: tuple of (min_coords, max_coords) where each is array - can be 2D or 3D
+    max_r: maximum search radius (determines mirroring distance)
+    dim: dimension (2 or 3) - affects which coordinates are used
+    
+    Returns:
+    numpy array with original points plus mirrored points
+    """
+    min_coords, max_coords = bounds
+    
+    # Ensure bounds are numpy arrays and handle dimension mismatch
+    min_coords = np.array(min_coords)
+    max_coords = np.array(max_coords)
+    
+    # Handle case where bounds might be 2D but points are 3D
+    if len(min_coords) == 2 and points_array.shape[1] == 3:
+        # Extend 2D bounds to 3D by adding z=0 dimension at the front
+        min_coords = np.array([0, min_coords[0], min_coords[1]])  # [0, min_x, min_y] -> [min_z, min_y, min_x]
+        max_coords = np.array([0, max_coords[0], max_coords[1]])  # [0, max_x, max_y] -> [max_z, max_y, max_x]
+    elif len(min_coords) == 3 and points_array.shape[1] == 3:
+        # Already 3D, but ensure it's in [z,y,x] format (your bounds are [x,y,z] and get flipped)
+        pass  # Should already be handled by the flip in your bounds calculation
+    
+    # Start with original points
+    all_points = points_array.copy()
+    
+    if dim == 2:
+        # For 2D: work with y, x coordinates (indices 1, 2), z should be 0
+        active_dims = [1, 2]  # y, x
+        # 8 potential mirror regions for 2D (excluding center)
+        mirror_combinations = [
+            [0, -1], [0, 1],   # left, right (y direction)
+            [-1, 0], [1, 0],   # bottom, top (x direction)
+            [-1, -1], [-1, 1], # corners
+            [1, -1], [1, 1]
+        ]
+    else:
+        # For 3D: work with z, y, x coordinates (indices 0, 1, 2)
+        active_dims = [0, 1, 2]  # z, y, x
+        # 26 potential mirror regions for 3D (3^3 - 1, excluding center)
+        mirror_combinations = []
+        for dz in [-1, 0, 1]:
+            for dy in [-1, 0, 1]:
+                for dx in [-1, 0, 1]:
+                    if not (dz == 0 and dy == 0 and dx == 0):  # exclude center
+                        mirror_combinations.append([dz, dy, dx])
+    
+    # Process each potential mirror region
+    for mirror_dir in mirror_combinations:
+        # Find points that need this specific mirroring
+        needs_mirror = np.ones(len(points_array), dtype=bool)
+        
+        # Check each active dimension
+        for i, dim_idx in enumerate(active_dims):
+            direction = mirror_dir[i] if dim == 3 else mirror_dir[i]
+            
+            # Safety check: make sure we have bounds for this dimension
+            if dim_idx >= len(min_coords) or dim_idx >= len(max_coords):
+                needs_mirror = np.zeros(len(points_array), dtype=bool)  # Skip this mirror if bounds insufficient
+                break
+            
+            if direction == -1:  # Points near minimum boundary
+                # Distance from point to min boundary < max_r
+                needs_mirror &= (points_array[:, dim_idx] - min_coords[dim_idx]) < max_r
+            elif direction == 1:  # Points near maximum boundary  
+                # Distance from point to max boundary < max_r
+                needs_mirror &= (max_coords[dim_idx] - points_array[:, dim_idx]) < max_r
+            # direction == 0 means no constraint for this dimension
+        
+        # Create mirrored points if any qualify
+        if np.any(needs_mirror):
+            mirrored_points = points_array[needs_mirror].copy()
+            
+            # Apply mirroring transformation for each active dimension
+            for i, dim_idx in enumerate(active_dims):
+                direction = mirror_dir[i] if dim == 3 else mirror_dir[i]
+                
+                # Safety check again
+                if dim_idx >= len(min_coords) or dim_idx >= len(max_coords):
+                    continue
+                
+                if direction == -1:  # Mirror across minimum boundary
+                    # Reflection formula: new_coord = 2 * boundary - old_coord
+                    mirrored_points[:, dim_idx] = 2 * min_coords[dim_idx] - mirrored_points[:, dim_idx]
+                elif direction == 1:  # Mirror across maximum boundary
+                    # Reflection formula: new_coord = 2 * boundary - old_coord
+                    mirrored_points[:, dim_idx] = 2 * max_coords[dim_idx] - mirrored_points[:, dim_idx]
+            
+            # Add mirrored points to collection
+            all_points = np.vstack([all_points, mirrored_points])
+    
+    return all_points
+def get_max_r_from_proportion(bounds, proportion):
+    """
+    Calculate max_r based on bounds and proportion, matching your generate_r_values logic.
+    
+    Parameters:
+    bounds: tuple of (min_coords, max_coords)
+    proportion: maximum proportion of study area extent
+    
+    Returns:
+    max_r value
+    """
+    min_coords, max_coords = bounds
+    min_coords = np.array(min_coords)
+    max_coords = np.array(max_coords)
+    
+    # Calculate dimensions
+    dimensions = max_coords - min_coords
+    
+    # Remove placeholder dimensions (where dimension = 1, typically for 2D z-dimension)
+    # But ensure we don't end up with an empty array
+    filtered_dimensions = dimensions[dimensions != 1]
+    if len(filtered_dimensions) == 0:
+        # If all dimensions were 1 (shouldn't happen), use original dimensions
+        filtered_dimensions = dimensions
+    
+    # Use minimum dimension for safety (matches your existing logic)
+    min_dimension = np.min(filtered_dimensions)
+    max_r = min_dimension * proportion
+    
+    return max_r
+
+def apply_edge_correction_to_ripley(roots, targs, proportion, bounds, dim, node_centroids=None):
+    """
+    Apply edge correction through mirroring to target points.
+    
+    This should be called AFTER convert_centroids_to_array but BEFORE 
+    convert_augmented_array_to_points (for 2D case).
+    
+    Parameters:
+    roots: array of root points (search centers) - already scaled
+    targs: array of target points (points being searched for) - already scaled  
+    proportion: the proportion parameter from your workflow
+    bounds: boundary tuple (min_coords, max_coords) or None
+    dim: dimension (2 or 3)
+    node_centroids: dict of node centroids (needed if bounds is None)
+    
+    Returns:
+    tuple: (roots, mirrored_targs) where mirrored_targs includes edge corrections
+    """
+    # Handle bounds calculation if not provided (matching your existing logic)
+    if bounds is None:
+        if node_centroids is None:
+            # Fallback: calculate from the points we have
+            all_points = np.vstack([roots, targs])
+        else:
+            # Use your existing method
+            import proximity  # Assuming this is available
+            big_array = proximity.convert_centroids_to_array(list(node_centroids.values()))
+            all_points = big_array
+        
+        min_coords = np.array([0, 0, 0])
+        max_coords = [np.max(all_points[:, 0]), np.max(all_points[:, 1]), np.max(all_points[:, 2])]
+        max_coords = np.flip(max_coords)  # Convert [x,y,z] to [z,y,x] format
+        bounds = (min_coords, max_coords)
+        
+        if 'big_array' in locals():
+            del big_array
+    
+    # Calculate max_r using your existing logic
+    max_r = get_max_r_from_proportion(bounds, proportion)
+    
+    # Mirror target points for edge correction
+    mirrored_targs = mirror_points_for_edge_correction(targs, bounds, max_r, dim)
+    
+    print(f"Original target points: {len(targs)}, After mirroring: {len(mirrored_targs)}")
+    print(f"Added {len(mirrored_targs) - len(targs)} mirrored points for edge correction")
+    print(f"Using max_r = {max_r} for mirroring threshold")
+    print(f"Bounds used: min={bounds[0]}, max={bounds[1]}")
+    
+    return roots, mirrored_targs
+
 
 #CLASSLESS FUNCTIONS THAT MAY BE USEFUL TO USERS TO RUN DIRECTLY THAT SUPPORT ANALYSIS IN SOME WAY. NOTE THESE METHODS SOMETIMES ARE USED INTERNALLY AS WELL:
 
@@ -1803,13 +2192,21 @@ def label_branches(array, peaks = 0, branch_removal = 0, comp_dil = 0, max_vol =
     if nodes is None:
 
         array = smart_dilate.smart_label(array, other_array, GPU = GPU, remove_template = True)
+        #distance = smart_dilate.compute_distance_transform_distance(array)
+        print("Watershedding result...")
+        #array = water(-distance, other_array, mask=array) #Tried out skimage watershed as shown and found it did not label branches as well as smart_label (esp combined combined with post-processing label splitting if needed)
 
     else:
         if down_factor is not None:
             array = smart_dilate.smart_label(bonus_array, array, GPU = GPU, predownsample = down_factor, remove_template = True)
+            #distance = smart_dilate.compute_distance_transform_distance(bonus_array)
+            #array = water(-distance, array, mask=bonus_array)
         else:
 
             array = smart_dilate.smart_label(bonus_array, array, GPU = GPU, remove_template = True)
+            #distance = smart_dilate.compute_distance_transform_distance(bonus_array)
+            #array = water(-distance, array, mask=bonus_array)
+
 
     if down_factor is not None and nodes is None:
         array = upsample_with_padding(array, down_factor, arrayshape)
@@ -1956,6 +2353,9 @@ def label_vertices(array, peaks = 0, branch_removal = 0, comp_dil = 0, max_vol =
 
     array = skeletonize(array)
 
+    if return_skele:
+        old_skeleton = copy.deepcopy(array) # The skeleton might get modified in label_vertices so we can make a preserved copy of it to use later
+
     if branch_removal > 0:
         array = remove_branches(array, branch_removal)
 
@@ -2021,7 +2421,7 @@ def label_vertices(array, peaks = 0, branch_removal = 0, comp_dil = 0, max_vol =
 
     if return_skele:
 
-        return labeled_image, (array[1:-1, 1:-1, 1:-1]).astype(np.uint8)
+        return labeled_image, old_skeleton
 
     else:
 
@@ -2088,6 +2488,56 @@ def filter_size_by_vol(binary_array, volume_threshold):
     result[mask] = 0
     
     return result
+
+def gray_watershed(image, min_distance = 1, threshold_abs = None):
+
+
+    from skimage.feature import peak_local_max
+
+    if len(np.unique(image)) == 2:
+        image = smart_dilate.compute_distance_transform_distance(image)
+
+
+    is_pseudo_3d = image.shape[0] == 1
+    if is_pseudo_3d:
+        image = np.squeeze(image)  # Convert to 2D for processing
+
+    #smoothed = ndimage.gaussian_filter(image.astype(float), sigma=2)
+
+    peaks = peak_local_max(image, min_distance = min_distance, threshold_abs = threshold_abs)
+    if len(peaks) < 256:
+        dtype = np.uint8
+    elif len(peaks) < 65535:
+        dtype = np.uint16
+    else:
+        dytpe = np.uint32
+
+    clone = np.zeros_like(image).astype(dtype)
+
+    if not is_pseudo_3d:
+        for i, peak in enumerate(peaks):
+            z, y, x = peak
+            clone[z,y,x] = i + 1
+    else:
+        for i, peak in enumerate(peaks):
+            y, x = peak
+            clone[y,x] = i + 1
+
+
+    if is_pseudo_3d:
+        image = np.expand_dims(image, axis = 0)
+        clone = np.expand_dims(clone, axis = 0)
+
+
+    binary_image = binarize(image)
+    #image = smart_dilate.smart_label(image, clone, GPU = False)
+
+    image = water(-image, clone, mask=binary_image)
+
+
+
+    return image
+
 
 def watershed(image, directory = None, proportion = 0.1, GPU = True, smallest_rad = None, predownsample = None, predownsample2 = None):
     """
@@ -2162,15 +2612,17 @@ def watershed(image, directory = None, proportion = 0.1, GPU = True, smallest_ra
     if len(labels.shape) ==2:
         labels = np.expand_dims(labels, axis = 0)
 
-    del distance
+    #del distance
 
 
     if labels.shape[1] < original_shape[1]: #If downsample was used, upsample output
         labels = upsample_with_padding(labels, downsample_needed, original_shape)
         labels = labels * old_mask
-        labels = smart_dilate.smart_label(old_mask, labels, GPU = GPU, predownsample = predownsample2)
+        labels = water(-distance, labels, mask=old_mask) # Here i like skimage watershed over smart_label, mainly because skimage just kicks out too-small nodes from the image, while smart label just labels them sort of wrongly.
+        #labels = smart_dilate.smart_label(old_mask, labels, GPU = GPU, predownsample = predownsample2)
     else:
-        labels = smart_dilate.smart_label(image, labels, GPU = GPU, predownsample = predownsample2)
+        labels = water(-distance, labels, mask=image)
+        #labels = smart_dilate.smart_label(image, labels, GPU = GPU, predownsample = predownsample2)
 
     if directory is None:
         pass
@@ -3389,8 +3841,6 @@ class Network_3D:
         if skeletonized:
             binary_edges = skeletonize(binary_edges)
 
-
-
         if search is not None and hasattr(self, '_nodes') and self._nodes is not None and self._search_region is None:
             search_region = binarize(self._nodes)
             dilate_xy, dilate_z = dilation_length_to_pixels(self._xy_scale, self._z_scale, search, search)
@@ -3550,11 +4000,12 @@ class Network_3D:
             self._network_lists = network_analysis.read_excel_to_lists(df)
             self._network, net_weights = network_analysis.weighted_network(df)
 
-        if ignore_search_region and hasattr(self, '_edges') and self._edges is not None and hasattr(self, '_nodes') and self._nodes is not None and search is not None:
-            dilate_xy, dilate_z = dilation_length_to_pixels(self._xy_scale, self._z_scale, search, search)
-            print(f"{dilate_xy}, {dilate_z}")
+        if ignore_search_region and hasattr(self, '_edges') and self._edges is not None and hasattr(self, '_nodes') and self._nodes is not None:
+            #dilate_xy, dilate_z = dilation_length_to_pixels(self._xy_scale, self._z_scale, search, search)
+            #print(f"{dilate_xy}, {dilate_z}")
             num_nodes = np.max(self._nodes)
-            connections_parallel = create_node_dictionary(self._nodes, self._edges, num_nodes, dilate_xy, dilate_z) #Find which edges connect which nodes and put them in a dictionary.
+            #connections_parallel = create_node_dictionary(self._nodes, self._edges, num_nodes, dilate_xy, dilate_z) #Find which edges connect which nodes and put them in a dictionary.
+            connections_parallel = create_node_dictionary(self._nodes, self._edges, num_nodes, 3, 3) #For now I only implement this for immediate neighbor search so we'll just use 3 and 3 here.
             connections_parallel = find_shared_value_pairs(connections_parallel) #Sort through the dictionary to find connected node pairs.
             df = create_and_save_dataframe(connections_parallel)
             self._network_lists = network_analysis.read_excel_to_lists(df)
@@ -3635,7 +4086,10 @@ class Network_3D:
                 except:
                     pass
 
-        self.calculate_edges(edges, diledge = diledge, inners = inners, hash_inner_edges = hash_inners, search = search, remove_edgetrunk = remove_trunk, GPU = GPU, fast_dil = fast_dil, skeletonized = skeletonize)
+            self.calculate_edges(edges, diledge = diledge, inners = inners, hash_inner_edges = hash_inners, search = search, remove_edgetrunk = remove_trunk, GPU = GPU, fast_dil = fast_dil, skeletonized = skeletonize) #Will have to be moved out if the second method becomes more directly implemented
+        else:
+            self._edges, _ = label_objects(edges)
+
         del edges
         if directory is not None:
             try:
@@ -4650,27 +5104,50 @@ class Network_3D:
         return neighborhood_dict, proportion_dict, title1, title2, densities
 
 
-    def get_ripley(self, root = None, targ = None, distance = 1, edgecorrect = True, bounds = None, ignore_dims = False, proportion = 0.5):
+
+    def get_ripley(self, root = None, targ = None, distance = 1, edgecorrect = True, bounds = None, ignore_dims = False, proportion = 0.5, mode = 0, safe = False, factor = 0.25):
+
+        is_subset = False
+
+        if bounds is None:
+            big_array = proximity.convert_centroids_to_array(list(self.node_centroids.values()))
+            min_coords = np.array([0,0,0])
+            max_coords = [np.max(big_array[:, 0]), np.max(big_array[:, 1]), np.max(big_array[:, 2])]
+            del big_array
+            max_coords = np.flip(max_coords)
+            bounds = (min_coords, max_coords)
+        else:
+            min_coords, max_coords = bounds
+
+        min_bounds, max_bounds = bounds
+        sides = max_bounds - min_bounds
+        # Set max_r to None since we've handled edge effects through mirroring
 
 
         if root is None or targ is None: #Self clustering in this case
             roots = self._node_centroids.values()
+            root_ids = self.node_centroids.keys()
             targs = self._node_centroids.values()
+            is_subset = True
         else:
             roots = []
             targs = []
+            root_ids = []
 
             for node, nodeid in self.node_identities.items(): #Otherwise we need to pull out this info
                 if nodeid == root:
                     roots.append(self._node_centroids[node])
+                    root_ids.append(node)
                 if nodeid == targ:
                     targs.append(self._node_centroids[node])
 
+        if not is_subset:
+            if np.array_equal(roots, targs):
+                is_subset = True
+
         rooties = proximity.convert_centroids_to_array(roots, xy_scale = self.xy_scale, z_scale = self.z_scale)
         targs = proximity.convert_centroids_to_array(targs, xy_scale = self.xy_scale, z_scale = self.z_scale)
-        points_array = np.vstack((rooties, targs))
-        del rooties
-
+        
         try:
             if self.nodes.shape[0] == 1:
                 dim = 2
@@ -4683,66 +5160,135 @@ class Network_3D:
                     dim = 3
                     break
 
+        if dim == 2:
+            volume = sides[0] * sides[1] * self.xy_scale**2
+        else:
+            volume = np.prod(sides) * self.z_scale * self.xy_scale**2
+
+        points_array = np.vstack((rooties, targs))
+        del rooties
+        max_r = None
+        if safe:
+            proportion = factor
+            
+
         if ignore_dims:
-
-            factor = 0.25
-
-            big_array = proximity.convert_centroids_to_array(list(self.node_centroids.values()))
-
-            if bounds is None:
-                min_coords = np.array([0,0,0])
-                max_coords = [np.max(big_array[:, 0]), np.max(big_array[:, 1]), np.max(big_array[:, 2])]
-                del big_array
-                max_coords = np.flip(max_coords)
-                bounds = (min_coords, max_coords)
-            else:
-                min_coords, max_coords = bounds
-
-            try:
-                dim_list = max_coords - min_coords
-            except:
-                min_coords = np.array([0,0,0])
-                bounds = (min_coords, max_coords)
-                dim_list = max_coords - min_coords
 
             new_list = []
 
+            if mode == 0:
 
-            if dim == 3:
-                for centroid in roots:
+                try:
+                    dim_list = max_coords - min_coords
+                except:
+                    min_coords = np.array([0,0,0])
+                    bounds = (min_coords, max_coords)
+                    dim_list = max_coords - min_coords
 
-                    if ((centroid[2] - min_coords[0]) > dim_list[0] * factor) and ((max_coords[0] - centroid[2]) > dim_list[0]  * factor) and ((centroid[1] - min_coords[1]) > dim_list[1] * factor) and ((max_coords[1] - centroid[1]) > dim_list[1] * factor) and ((centroid[0] - min_coords[2]) > dim_list[2] * factor) and ((max_coords[2] - centroid[0]) > dim_list[2] * factor):
-                        new_list.append(centroid)
+
+                if dim == 3:
+
+                    """
+                    if self.xy_scale > self.z_scale: # xy will be 'expanded' more so its components will be arbitrarily further from the border than z ones
+                        factor_xy = (self.z_scale/self.xy_scale) * factor # So 'factor' in the xy dim has to get smaller
+                        factor_z = factor
+                    elif self.z_scale > self.xy_scale: # Same idea
+                        factor_z = (self.xy_scale/self.z_scale) * factor
+                        factor_xy = factor
+                    else:
+                        factor_z = factor
+                        factor_xy = factor
+                    """
+
+                    for centroid in roots:
+
+                        if ((centroid[2] - min_coords[0]) > dim_list[0] * factor) and ((max_coords[0] - centroid[2]) > dim_list[0]  * factor) and ((centroid[1] - min_coords[1]) > dim_list[1] * factor) and ((max_coords[1] - centroid[1]) > dim_list[1] * factor) and ((centroid[0] - min_coords[2]) > dim_list[2] * factor) and ((max_coords[2] - centroid[0]) > dim_list[2] * factor):
+                            new_list.append(centroid)
 
 
-                    #if ((centroid[2] - min_coords[0]) > dim_list[0] * factor) and ((max_coords[0] - centroid[2]) > dim_list[0]  * factor) and ((centroid[1] - min_coords[1]) > dim_list[1] * factor) and ((max_coords[1] - centroid[1]) > dim_list[1] * factor) and ((centroid[0] - min_coords[2]) > dim_list[2] * factor) and ((max_coords[2] - centroid[0]) > dim_list[2] * factor):
-                        #new_list.append(centroid)
-                        #print(f"dim_list: {dim_list}, centroid: {centroid}, min_coords: {min_coords}, max_coords: {max_coords}")
+                        #if ((centroid[2] - min_coords[0]) > dim_list[0] * factor) and ((max_coords[0] - centroid[2]) > dim_list[0]  * factor) and ((centroid[1] - min_coords[1]) > dim_list[1] * factor) and ((max_coords[1] - centroid[1]) > dim_list[1] * factor) and ((centroid[0] - min_coords[2]) > dim_list[2] * factor) and ((max_coords[2] - centroid[0]) > dim_list[2] * factor):
+                            #new_list.append(centroid)
+                            #print(f"dim_list: {dim_list}, centroid: {centroid}, min_coords: {min_coords}, max_coords: {max_coords}")
+                else:
+                    for centroid in roots:
+
+                        if ((centroid[2] - min_coords[0]) > dim_list[0] * factor) and ((max_coords[0] - centroid[2]) > dim_list[0]  * factor) and ((centroid[1] - min_coords[1]) > dim_list[1] * factor) and ((max_coords[1] - centroid[1]) > dim_list[1] * factor):
+                            new_list.append(centroid)
+
             else:
-                for centroid in roots:
 
-                    if ((centroid[2] - min_coords[0]) > dim_list[0] * factor) and ((max_coords[0] - centroid[2]) > dim_list[0]  * factor) and ((centroid[1] - min_coords[1]) > dim_list[1] * factor) and ((max_coords[1] - centroid[1]) > dim_list[1] * factor):
-                        new_list.append(centroid)
+                if mode == 1:
+
+                    legal = self.edges != 0
+
+                elif mode == 2:
+
+                    legal = self.network_overlay != 0
+
+                elif mode == 3:
+
+                    legal = self.id_overlay != 0
+
+                if self.nodes is None:
+
+                    temp_array = proximity.populate_array(self.node_centroids, shape = legal.shape)
+                else:
+                    temp_array = self.nodes
+
+                if dim == 2:
+                    volume = np.count_nonzero(legal) * self.xy_scale**2
+                else:
+                    volume = np.count_nonzero(legal) * self.z_scale * self.xy_scale**2
+                print(f"Using {volume} for the volume measurement (Volume of provided mask as scaled by xy and z scaling)")
+
+                legal = smart_dilate.compute_distance_transform_distance(legal, sampling = [self.z_scale, self.xy_scale, self.xy_scale]) # Get true distances
+                
+                max_avail = np.max(legal) # Most internal point
+                min_legal = factor * max_avail # Values of stuff 25% within the tissue
+
+                legal = legal > min_legal
+
+                if safe:
+                    max_r = min_legal
+
+
+                legal = temp_array * legal
+
+                legal = np.unique(legal)
+                if 0 in legal:
+                    legal = np.delete(legal, 0)
+                for node in legal:
+                    if node in root_ids:
+                        new_list.append(self.node_centroids[node])
 
             roots = new_list
             print(f"Utilizing {len(roots)} root points. Note that low n values are unstable.")
             is_subset = True
-        else:
-            is_subset = False
-
 
 
 
         roots = proximity.convert_centroids_to_array(roots, xy_scale = self.xy_scale, z_scale = self.z_scale)
+
+        n_subset = len(targs)
+
+        # Apply edge correction through mirroring
+        if edgecorrect:
+
+
+            roots, targs = apply_edge_correction_to_ripley(
+                roots, targs, proportion, bounds, dim, 
+                node_centroids=self.node_centroids  # Pass this for bounds calculation if needed
+            )
 
 
         if dim == 2:
             roots = proximity.convert_augmented_array_to_points(roots)
             targs = proximity.convert_augmented_array_to_points(targs)
 
-        r_vals = proximity.generate_r_values(points_array, distance, bounds = bounds, dim = dim, max_proportion=proportion)
+        print(f"Using {len(roots)} root points")
+        r_vals = proximity.generate_r_values(points_array, distance, bounds = bounds, dim = dim, max_proportion=proportion, max_r = max_r)
 
-        k_vals =  proximity.optimized_ripleys_k(roots, targs, r_vals, bounds=bounds, edge_correction=edgecorrect, dim = dim, is_subset = is_subset)
+        k_vals =  proximity.optimized_ripleys_k(roots, targs, r_vals, bounds=bounds, dim = dim, is_subset = is_subset, volume = volume, n_subset = n_subset)
 
         h_vals = proximity.compute_ripleys_h(k_vals, r_vals, dim)
 
@@ -4792,7 +5338,7 @@ class Network_3D:
             search_x, search_z = dilation_length_to_pixels(self._xy_scale, self._z_scale, search, search)
 
 
-        num_nodes = np.max(self._nodes)
+        num_nodes = int(np.max(self._nodes))
 
         my_dict = proximity.create_node_dictionary(self._nodes, num_nodes, search_x, search_z, targets = targets, fastdil = fastdil, xy_scale = self._xy_scale, z_scale = self._z_scale, search = search)
 
@@ -4804,7 +5350,7 @@ class Network_3D:
 
         self.remove_edge_weights()
 
-    def centroid_array(self, clip = False):
+    def centroid_array(self, clip = False, shape = None):
         """Use the centroids to populate a node array"""
 
         if clip:
@@ -4814,9 +5360,10 @@ class Network_3D:
 
         else:
 
-            array = proximity.populate_array(self.node_centroids)
+            array = proximity.populate_array(self.node_centroids, shape = shape)
 
             return array
+
 
 
 
@@ -4938,6 +5485,13 @@ class Network_3D:
 
         return output
 
+    def centroid_umap(self):
+
+        from . import neighborhoods
+
+        neighborhoods.visualize_cluster_composition_umap(self.node_centroids, None, id_dictionary = self.node_identities, graph_label = "Node ID", title = 'UMAP Visualization of Node Centroids') 
+
+
     def community_id_info_per_com(self, umap = False, label = False, limit = 0, proportional = False):
 
         community_dict = invert_dict(self.communities)
@@ -5043,21 +5597,23 @@ class Network_3D:
 
         zero_group = {}
 
+        comus = invert_dict(self.communities)
+
 
         if limit is not None:
 
-            coms = invert_dict(self.communities)
-
-
-            for com, nodes in coms.items():
+            for com, nodes in comus.items():
 
                 if len(nodes) < limit:
 
                     del identities[com]
 
-        if count > len(identities):
-            print(f"Requested neighborhoods too large for available communities. Using {len(identities)} neighborhoods (max for these coms)")
-            count = len(identities)
+        try:
+            if count > len(identities):
+                print(f"Requested neighborhoods too large for available communities. Using {len(identities)} neighborhoods (max for these coms)")
+                count = len(identities)
+        except:
+            pass
 
 
         if mode == 0:
@@ -5068,12 +5624,20 @@ class Network_3D:
         coms = {}
 
         neighbors = {}
+        len_dict = {}
+        inc_count = 0
 
         for i, cluster in enumerate(clusters):
+
+            size = len(cluster)
+            inc_count += size
+
+            len_dict[i + 1] = [size]
 
             for com in cluster: # For community ID per list
 
                 coms[com] = i + 1
+
 
         copy_dict = copy.deepcopy(self.communities)
 
@@ -5092,18 +5656,17 @@ class Network_3D:
 
         if len(zero_group) > 0:
             self.communities.update(zero_group)
+            len_dict[0] = [len(comus) - inc_count]
 
 
         identities, id_set = self.community_id_info_per_com()
-
-        len_dict = {}
 
         coms = invert_dict(self.communities)
         node_count = len(list(self.communities.keys()))
 
         for com, nodes in coms.items():
 
-            len_dict[com] = len(nodes)/node_count
+            len_dict[com].append(len(nodes)/node_count)
 
         matrixes = []
 
@@ -5119,7 +5682,7 @@ class Network_3D:
 
             identities3 = {}
             for iden in identities2:
-                identities3[iden] = identities2[iden]/len_dict[iden]
+                identities3[iden] = identities2[iden]/len_dict[iden][1]
 
             output = neighborhoods.plot_dict_heatmap(identities3, id_set2, title = "Neighborhood Heatmap by Proportional Composition of Nodes in Neighborhood vs All Nodes Divided by Neighborhood Total Proportion of All Nodes (val < 1 = underrepresented, val > 1 = overrepresented)", center_at_one = True)
             matrixes.append(output)
@@ -5291,49 +5854,136 @@ class Network_3D:
                     pass
 
 
-    def nearest_neighbors_avg(self, root, targ, xy_scale = 1, z_scale = 1, num = 1, heatmap = False, threed = True, numpy = False):
+    def nearest_neighbors_avg(self, root, targ, xy_scale = 1, z_scale = 1, num = 1, heatmap = False, threed = True, numpy = False, quant = False, centroids = True):
 
-        root_set = []
 
-        compare_set = []
+        def distribute_points_uniformly(n, shape, z_scale, xy_scale, is_2d=False):
+            if n <= 1:
+                return 0
+            
+            # Calculate total number of positions
+            total_positions = np.prod(shape)
+            
+            # Calculate the flat index spacing
+            flat_spacing = total_positions / n
+            
+            # Get the first two flat indices
+            idx1 = 0
+            idx2 = int(flat_spacing)
+            
+            # Convert to multi-dimensional coordinates theoretically
+            coord1 = np.unravel_index(idx1, shape)
+            coord2 = np.unravel_index(idx2, shape)
+            
+            # Apply scaling
+            if len(shape) == 3:
+                p1 = np.array([coord1[0] * z_scale, coord1[1] * xy_scale, coord1[2] * xy_scale])
+                p2 = np.array([coord2[0] * z_scale, coord2[1] * xy_scale, coord2[2] * xy_scale])
+            elif len(shape) == 2:
+                p1 = np.array([coord1[0] * xy_scale, coord1[1] * xy_scale])
+                p2 = np.array([coord2[0] * xy_scale, coord2[1] * xy_scale])
+            
+            # Calculate neighbor distance
+            neighbor_distance = np.linalg.norm(p2 - p1)
+            
+            # Apply the dimensional factor
+            if is_2d:
+                neighbor_distance = neighbor_distance * 0.38
+            else:
+                neighbor_distance = neighbor_distance * 0.45
+            
+            return neighbor_distance
+            
+        do_borders = not centroids
 
-        if root is None:
+        if centroids:
+            root_set = []
 
-            root_set = list(self.node_centroids.keys())
-            compare_set = root_set
-            title = "Nearest Neighbors Between Nodes Heatmap"
+            compare_set = []
 
-        else:
+            if root is None:
 
-            title = f"Nearest Neighbors of ID {targ} from ID {root} Heatmap"
+                root_set = list(self.node_centroids.keys())
+                compare_set = root_set
+                title = "Nearest Neighbors Between Nodes Heatmap"
 
-            for node, iden in self.node_identities.items():
+            else:
 
-                if iden == root:
+                title = f"Nearest Neighbors of ID {targ} from ID {root} Heatmap"
 
-                    root_set.append(node)
+                for node, iden in self.node_identities.items():
 
-                elif (iden == targ) or (targ == 'All Others (Excluding Self)'):
+                    if iden == root:
 
-                    compare_set.append(node)
+                        root_set.append(node)
 
-        if root == targ:
+                    elif (iden == targ) or (targ == 'All Others (Excluding Self)'):
 
-            compare_set = root_set
-            if len(compare_set) - 1 < num:
+                        compare_set.append(node)
 
-                num = len(compare_set) - 1
+            if root == targ:
+
+                compare_set = root_set
+                if len(compare_set) - 1 < num:
+
+                    num = len(compare_set) - 1
+
+                    print(f"Error: Not enough neighbor nodes for requested number of neighbors. Using max available neighbors: {num}")
+                    
+
+            if len(compare_set) < num:
+
+                num = len(compare_set)
 
                 print(f"Error: Not enough neighbor nodes for requested number of neighbors. Using max available neighbors: {num}")
-                
 
-        if len(compare_set) < num:
+            avg, output = proximity.average_nearest_neighbor_distances(self.node_centroids, root_set, compare_set, xy_scale=self.xy_scale, z_scale=self.z_scale, num = num, do_borders = do_borders)
 
-            num = len(compare_set)
+        else:
+            if heatmap:
+                root_set = []
+                compare_set = []
+                if root is None:
 
-            print(f"Error: Not enough neighbor nodes for requested number of neighbors. Using max available neighbors: {num}")
-            
-        avg, output = proximity.average_nearest_neighbor_distances(self.node_centroids, root_set, compare_set, xy_scale=self.xy_scale, z_scale=self.z_scale, num = num)
+                    root_set = list(self.node_centroids.keys())
+                    compare_set = root_set
+                else:
+                    for node, iden in self.node_identities.items():
+
+                        if iden == root:
+
+                            root_set.append(node)
+
+                        elif (iden == targ) or (targ == 'All Others (Excluding Self)'):
+
+                            compare_set.append(node)
+
+            if root is None:
+                title = "Nearest Neighbors Between Nodes Heatmap"
+                root_set_neigh = approx_boundaries(self.nodes, keep_labels = True)
+                compare_set_neigh = approx_boundaries(self.nodes, keep_labels = False)
+            else:
+                title = f"Nearest Neighbors of ID {targ} from ID {root} Heatmap"
+
+                root_set_neigh = approx_boundaries(self.nodes, [root], self.node_identities, keep_labels = True)
+
+                if targ == 'All Others (Excluding Self)':
+                    compare_set_neigh = set(self.node_identities.values())
+                    compare_set_neigh.remove(root)
+                    targ = compare_set_neigh
+                else:
+                    targ = [targ]
+
+                compare_set_neigh = approx_boundaries(self.nodes, targ, self.node_identities, keep_labels = False)
+                avg, output = proximity.average_nearest_neighbor_distances(self.node_centroids, root_set_neigh, compare_set_neigh, xy_scale=self.xy_scale, z_scale=self.z_scale, num = num, do_borders = do_borders)
+
+        if quant:
+            try:
+                quant_overlay = node_draw.degree_infect(output, self._nodes, make_floats = True)
+            except:
+                quant_overlay = None
+        else:
+            quant_overlay = None
 
         if heatmap:
 
@@ -5345,7 +5995,29 @@ class Network_3D:
                 big_array = proximity.convert_centroids_to_array(list(self.node_centroids.values()))
                 shape = [np.max(big_array[0, :]) + 1, np.max(big_array[1, :]) + 1, np.max(big_array[2, :]) + 1]
 
-            pred = avg
+
+            try:
+                bounds = self.nodes.shape
+            except:
+                try:
+                    bounds = self.edges.shape
+                except:
+                    try:
+                        bounds = self.network_overlay.shape
+                    except:
+                        try:
+                            bounds = self.id_overlay.shape
+                        except:
+                            big_array = proximity.convert_centroids_to_array(list(self.node_centroids.values()))
+                            max_coords = [np.max(big_array[:, 0]), np.max(big_array[:, 1]), np.max(big_array[:, 2])]
+                            del big_array
+            volume = bounds[0] * bounds[1] * bounds[2] * self.z_scale * self.xy_scale**2
+            if 1 in bounds or 0 in bounds:
+                is_2d = True
+            else:
+                is_2d = False
+
+            pred = distribute_points_uniformly(len(compare_set), bounds, self.z_scale, self.xy_scale, is_2d = is_2d)
 
             node_intensity = {}
             import math
@@ -5359,12 +6031,12 @@ class Network_3D:
 
                 overlay = neighborhoods.create_node_heatmap(node_intensity, node_centroids, shape = shape, is_3d=threed, labeled_array = self.nodes, colorbar_label="Clustering Intensity", title = title)
 
-                return avg, output, overlay
+                return avg, output, overlay, quant_overlay
 
             else:
                 neighborhoods.create_node_heatmap(node_intensity, node_centroids, shape = shape, is_3d=threed, labeled_array = None, colorbar_label="Clustering Intensity", title = title)
 
-        return avg, output
+        return avg, output, quant_overlay
 
 
 

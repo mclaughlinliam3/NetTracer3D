@@ -31,6 +31,7 @@ Necessary Structures to Properties stored in CSVs
 ---------------------------------------
 * When NetTracer3D saves its properties, it organizes several into csv spreadsheets, containing specific data organization that it expects to find when loading the same properties back in.
 * Some users may wish to load these properties in from elsewhere (.csv or .xlsx can be used to load). For example, if they want to manually assign nodes to certain centroids or identities by editing microsoft excel, or batch organizing datasets for import this way using something like the pandas module in python.
+* Note that .xlsx files have a row limit, so I generally recommend saving as .CSV if possible, especially for large property lists.
 * These structures are as follows (make sure to use correct headers):
 
 1. network property:
@@ -39,28 +40,19 @@ Necessary Structures to Properties stored in CSVs
 * For example, this table specifically is saying node 18 is paired to node 20, connected via edge 175, etc.
 
 +------------+------------+-----------+
-| Node 1A    | Node 1B    | Edge 1C   |
+| Node A     | Node B     | Edge C    |
 +============+============+===========+
 | 18         | 20         | 175       |
 +------------+------------+-----------+
 | 16         | 20         | 176       |
 +------------+------------+-----------+
 
-* It may be worth mentioning that for very large networks that exceed the .xlsx column length limit, the rows begin to populate besides each other like this:
 
-+------------+------------+-----------+------------+------------+-----------+
-| Node 1A    | Node 1B    | Edge 1C   | Node 2A    | Node 2B    | Edge 2C   |
-+============+============+===========+============+============+===========+
-| 18         | 20         | 175       | 21         | 22         | 177       |
-+------------+------------+-----------+------------+------------+-----------+
-| 16         | 20         | 176       | 19         | 23         | 178       |
-+------------+------------+-----------+------------+------------+-----------+
-
-* These new columns should be thought of their own rows, as in node 21 is paired to node 22, connected by edge 177. Note that that once these additional columns hit the column length limit, another set of rows will populate to the right, but this time with the number '3' instead of the number '2'. This can continue as long as it needs to. This behavior accomodates microsoft excel length limits. Other properties will not account for the .xlsx length limit, so it is recommended to save as .csv if they are too long.
+* These new columns should be thought of their own rows, as in node 21 is paired to node 22, connected by edge 177.
 
 2. node_identities:
 
-* Node identities are organized with a simple Node:Identity structure. Note that as of yet, these tables do not handle overflow in the .xlsx column length (as of now you must save larger files as .csv).
+* Node identities are organized with a simple Node:Identity structure.
 
 +--------+----------+
 | NodeID | Identity |
@@ -74,7 +66,7 @@ Necessary Structures to Properties stored in CSVs
 
 3. node_communities:
 
-* This property has the same structure as node_identities, and similarly does not handle column overflow for .xlsx.
+* This property has the same structure as node_identities.
 
 +--------+-----------+
 | NodeID | Community |
@@ -88,7 +80,7 @@ Necessary Structures to Properties stored in CSVs
 
 4. node_centroids:
 
-* Node centroids organize using Node:Zval:Yval:Xval. Again, they do not handle column overflow for .xlsx.
+* Node centroids organize using Node:Zval:Yval:Xval.
 * Make sure to use Z, Y, X. This is because of the way numpy organizes dimensions.
 * Coordinates should generally be ints greater than 0.
 

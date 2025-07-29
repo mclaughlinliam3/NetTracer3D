@@ -136,8 +136,62 @@ def open_network(excel_file_path):
         G.add_edge(nodes_a[i], nodes_b[i])
 
     return G
-
 def read_excel_to_lists(file_path, sheet_name=0):
+    """Convert a pd dataframe to lists. Handles both .xlsx and .csv files"""
+    def load_json_to_list(filename):
+        with open(filename, 'r') as f:
+            data = json.load(f)
+        
+        # Convert only numeric strings to integers, leave other strings as is
+        converted_data = [[],[],[]]
+        for i in data[0]:
+            try:
+                converted_data[0].append(int(data[0][i]))
+                converted_data[1].append(int(data[1][i]))
+                try:
+                    converted_data[2].append(int(data[2][i]))
+                except IndexError:
+                    converted_data[2].append(0)
+            except ValueError:
+                converted_data[k] = v
+        
+        return converted_data
+        
+    if type(file_path) == str:
+        # Check file extension
+        if file_path.lower().endswith('.xlsx'):
+            # Read the Excel file with headers (since your new save method includes them)
+            df = pd.read_excel(file_path, sheet_name=sheet_name)
+        elif file_path.lower().endswith('.csv'):
+            # Read the CSV file with headers and specify dtype to avoid the warning
+            df = pd.read_csv(file_path, dtype=str, low_memory=False)
+        elif file_path.lower().endswith('.json'):
+            df = load_json_to_list(file_path)
+            return df
+        else:
+            raise ValueError("File must be either .xlsx, .csv, or .json format")
+    else:
+        df = file_path
+        
+    # Initialize an empty list to store the lists of values
+    data_lists = []
+    # Iterate over each column in the DataFrame
+    for column_name, column_data in df.items():
+        # Convert the column values to a list and append to the data_lists
+        data_lists.append(column_data.tolist())
+        
+    master_list = [[], [], []]
+    for i in range(0, len(data_lists), 3):
+        master_list[0].extend([int(x) for x in data_lists[i]])
+        master_list[1].extend([int(x) for x in data_lists[i+1]])
+        try:
+            master_list[2].extend([int(x) for x in data_lists[i+2]])
+        except IndexError:
+            master_list[2].extend([0])  # Note: Changed to list with single int 0
+            
+    return master_list
+
+def read_excel_to_lists_old(file_path, sheet_name=0):
     """Convert a pd dataframe to lists. Handles both .xlsx and .csv files"""
     def load_json_to_list(filename):
         with open(filename, 'r') as f:
@@ -545,42 +599,51 @@ def _find_centroids_old(nodes, node_list = None, down_factor = None):
 
     return centroid_dict
 
+
 def _find_centroids(nodes, node_list=None, down_factor=None):
     """Internal use version to get centroids without saving"""
-    def get_label_indices(binary_stack, label, y_offset):
-        """
-        Finds indices of labelled object in array and adjusts for the Y-offset.
-        """
-        indices = np.argwhere(binary_stack == label)
-        # Adjust the Y coordinate by the y_offset
-        indices[:, 1] += y_offset
-        return indices
+    
     
     def compute_indices_in_chunk(chunk, y_offset):
         """
-        Get indices for all labels in a given chunk of the 3D array.
-        Adjust Y-coordinate based on the y_offset for each chunk.
+        Alternative approach using np.where for even better performance on sparse arrays.
         """
         indices_dict_chunk = {}
-        label_list = np.unique(chunk)
-        try:
-            if label_list[0] == 0:
-                label_list = np.delete(label_list, 0)
-        except:
-            pass
         
-        for label in label_list:
-            indices = get_label_indices(chunk, label, y_offset)
-            indices_dict_chunk[label] = indices
+        # Get all coordinates where chunk is non-zero
+        z_coords, y_coords, x_coords = np.where(chunk != 0)
+        
+        if len(z_coords) == 0:
+            return indices_dict_chunk
+        
+        # Adjust Y coordinates
+        y_coords_adjusted = y_coords + y_offset
+        
+        # Get labels at these coordinates
+        labels = chunk[z_coords, y_coords, x_coords]
+        
+        # Group by unique labels
+        unique_labels = np.unique(labels)
+        
+        for label in unique_labels:
+            if label == 0:  # Skip background
+                continue
+            mask = (labels == label)
+            # Stack coordinates into the expected format [z, y, x]
+            indices_dict_chunk[label] = np.column_stack((
+                z_coords[mask], 
+                y_coords_adjusted[mask], 
+                x_coords[mask]
+            ))
+        
         return indices_dict_chunk
     
     def chunk_3d_array(array, num_chunks):
-        """
-        Split the 3D array into smaller chunks along the y-axis.
-        """
+        """Split the 3D array into smaller chunks along the y-axis."""
         y_slices = np.array_split(array, num_chunks, axis=1)
         return y_slices
     
+    # Handle input processing
     if isinstance(nodes, str):  # Open into numpy array if filepath
         nodes = tifffile.imread(nodes)
         if len(np.unique(nodes)) == 2:  # Label if binary
@@ -595,14 +658,14 @@ def _find_centroids(nodes, node_list=None, down_factor=None):
     indices_dict = {}
     num_cpus = mp.cpu_count()
     
-    # Chunk the 3D array along the y-axis into smaller subarrays
+    # Chunk the 3D array along the y-axis
     node_chunks = chunk_3d_array(nodes, num_cpus)
     
     # Calculate Y offset for each chunk
     chunk_sizes = [chunk.shape[1] for chunk in node_chunks]
     y_offsets = np.cumsum([0] + chunk_sizes[:-1])
     
-    # Parallel computation of indices across chunks
+    # Parallel computation using the optimized single-pass approach
     with ThreadPoolExecutor(max_workers=num_cpus) as executor:
         futures = {executor.submit(compute_indices_in_chunk, chunk, y_offset): chunk_id
                   for chunk_id, (chunk, y_offset) in enumerate(zip(node_chunks, y_offsets))}
@@ -622,10 +685,8 @@ def _find_centroids(nodes, node_list=None, down_factor=None):
         centroid = np.round(np.mean(indices, axis=0)).astype(int)
         centroid_dict[label] = centroid
     
-    try:
-        del centroid_dict[0]
-    except:
-        pass
+    # Remove background label if it exists
+    centroid_dict.pop(0, None)
     
     return centroid_dict
 

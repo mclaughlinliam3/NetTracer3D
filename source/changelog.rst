@@ -68,3 +68,17 @@ Version 0.8.2 Updates
 	* Added more features to UMAP/community neighborhood clustering (optional DBSCAN clustering, results more robust to node distribution)
 	* Made Napari and optional rather than core dependency.
 	* Added Cellpose as an optional dependency.
+
+Version 0.9.0 Updates
+	* Note that this includes updates for 0.8.3 - 0.9.0
+	* Bug Fixes
+	* Updated network histogram statistics menu, and moved degree distribution here
+	* Added gray watershed
+	* Updated binary watershed
+	* Improved branch labelling method
+	* Updated branch removal in skeletonization method to no longer trim branches that do not reach their node.
+	* Added default branchpoint and branch-adjacency calculation options.
+	* Improved speed of painting and panning.
+	* Enabled the nearest neighbor method to handle non-centroid objects, for the first neighbor at least. And updated it to actually predict theoretical clustering when coloring the heatmap.
+	* Improved segmenter.
+	* Added centroids UMAP method.

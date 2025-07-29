@@ -59,14 +59,22 @@ This gui is built from the PyQt6 package and therefore may not function on docke
 For a (slightly outdated) video tutorial on using the GUI: https://www.youtube.com/watch?v=cRatn5VTWDY
 
 NetTracer3D is free to use/fork for academic/nonprofit use so long as citation is provided, and is available for commercial use at a fee (see license file for information).
+The current citation is here: 
+
+McLaughlin, L., Zhang, B., Sharma, S. et al. Three dimensional multiscalar neurovascular nephron connectivity map of the human kidney across the lifespan. Nat Commun 16, 5161 (2025). https://doi.org/10.1038/s41467-025-60435-8
 
 NetTracer3D was developed by Liam McLaughlin while working under Dr. Sanjay Jain at Washington University School of Medicine.
 
--- Version 0.8.2 Updates -- 
-
-	* Bug Fixes.
-	* Improved some of the image viewer window features.
-	* New option to zoom in on specific windows by clicking + dragging while in zoom mode.
-	* Added more features to UMAP/community neighborhood clustering (optional DBSCAN clustering, results more robust to node distribution)
-	* Made Napari and optional rather than core dependency.
-	* Added Cellpose as an optional dependency.
+-- Version 0.9.0 Updates --
+	* Note that this includes updates for 0.8.3 - 0.9.0
+	* Bug Fixes
+	* Updated network histogram statistics menu, and moved degree distribution here
+	* Added gray watershed
+	* Updated binary watershed
+	* Improved branch labelling method
+	* Updated branch removal in skeletonization method to no longer trim branches that do not reach their node.
+	* Added default branchpoint and branch-adjacency calculation options.
+	* Improved speed of painting and panning.
+	* Enabled the nearest neighbor method to handle non-centroid objects, for the first neighbor at least. And updated it to actually predict theoretical clustering when coloring the heatmap.
+	* Improved segmenter.
+	* Added centroids UMAP method.

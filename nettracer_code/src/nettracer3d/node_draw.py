@@ -200,8 +200,12 @@ def degree_draw(degree_dict, centroid_dict, nodes):
 
     return draw_array
 
-def degree_infect(degree_dict, nodes):
-    return_nodes = np.zeros_like(nodes)  # Start with all zeros
+def degree_infect(degree_dict, nodes, make_floats = False):
+
+    if not make_floats:
+        return_nodes = np.zeros_like(nodes)  # Start with all zeros
+    else:
+        return_nodes = np.zeros(nodes.shape, dtype=np.float32)
     
     if not degree_dict:  # Handle empty dict
         return return_nodes

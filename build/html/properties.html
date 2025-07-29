@@ -6,14 +6,14 @@
   <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
 
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Properties of a Network3D Object &mdash; NetTracer3D 0.8.2 documentation</title>
+  <title>Properties of a Network3D Object &mdash; NetTracer3D 0.9.0 documentation</title>
       <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=b86133f3" />
       <link rel="stylesheet" type="text/css" href="_static/css/theme.css?v=e59714d7" />
 
   
       <script src="_static/jquery.js?v=5d32c60e"></script>
       <script src="_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
-      <script src="_static/documentation_options.js?v=dbee5847"></script>
+      <script src="_static/documentation_options.js?v=39bb1c6d"></script>
       <script src="_static/doctools.js?v=9bcbadda"></script>
       <script src="_static/sphinx_highlight.js?v=dc90522c"></script>
     <script src="_static/js/theme.js"></script>
@@ -138,6 +138,7 @@ Many of NetTracer3D’s methods may need to reference one or more of these prope
 <ul class="simple">
 <li><p>When NetTracer3D saves its properties, it organizes several into csv spreadsheets, containing specific data organization that it expects to find when loading the same properties back in.</p></li>
 <li><p>Some users may wish to load these properties in from elsewhere (.csv or .xlsx can be used to load). For example, if they want to manually assign nodes to certain centroids or identities by editing microsoft excel, or batch organizing datasets for import this way using something like the pandas module in python.</p></li>
+<li><p>Note that .xlsx files have a row limit, so I generally recommend saving as .CSV if possible, especially for large property lists.</p></li>
 <li><p>These structures are as follows (make sure to use correct headers):</p></li>
 </ul>
 <ol class="arabic simple">
@@ -149,9 +150,9 @@ Many of NetTracer3D’s methods may need to reference one or more of these prope
 </ul>
 <table class="docutils align-default">
 <thead>
-<tr class="row-odd"><th class="head"><p>Node 1A</p></th>
-<th class="head"><p>Node 1B</p></th>
-<th class="head"><p>Edge 1C</p></th>
+<tr class="row-odd"><th class="head"><p>Node A</p></th>
+<th class="head"><p>Node B</p></th>
+<th class="head"><p>Edge C</p></th>
 </tr>
 </thead>
 <tbody>
@@ -166,43 +167,13 @@ Many of NetTracer3D’s methods may need to reference one or more of these prope
 </tbody>
 </table>
 <ul class="simple">
-<li><p>It may be worth mentioning that for very large networks that exceed the .xlsx column length limit, the rows begin to populate besides each other like this:</p></li>
-</ul>
-<table class="docutils align-default">
-<thead>
-<tr class="row-odd"><th class="head"><p>Node 1A</p></th>
-<th class="head"><p>Node 1B</p></th>
-<th class="head"><p>Edge 1C</p></th>
-<th class="head"><p>Node 2A</p></th>
-<th class="head"><p>Node 2B</p></th>
-<th class="head"><p>Edge 2C</p></th>
-</tr>
-</thead>
-<tbody>
-<tr class="row-even"><td><p>18</p></td>
-<td><p>20</p></td>
-<td><p>175</p></td>
-<td><p>21</p></td>
-<td><p>22</p></td>
-<td><p>177</p></td>
-</tr>
-<tr class="row-odd"><td><p>16</p></td>
-<td><p>20</p></td>
-<td><p>176</p></td>
-<td><p>19</p></td>
-<td><p>23</p></td>
-<td><p>178</p></td>
-</tr>
-</tbody>
-</table>
-<ul class="simple">
-<li><p>These new columns should be thought of their own rows, as in node 21 is paired to node 22, connected by edge 177. Note that that once these additional columns hit the column length limit, another set of rows will populate to the right, but this time with the number ‘3’ instead of the number ‘2’. This can continue as long as it needs to. This behavior accomodates microsoft excel length limits. Other properties will not account for the .xlsx length limit, so it is recommended to save as .csv if they are too long.</p></li>
+<li><p>These new columns should be thought of their own rows, as in node 21 is paired to node 22, connected by edge 177.</p></li>
 </ul>
 <ol class="arabic simple" start="2">
 <li><p>node_identities:</p></li>
 </ol>
 <ul class="simple">
-<li><p>Node identities are organized with a simple Node:Identity structure. Note that as of yet, these tables do not handle overflow in the .xlsx column length (as of now you must save larger files as .csv).</p></li>
+<li><p>Node identities are organized with a simple Node:Identity structure.</p></li>
 </ul>
 <table class="docutils align-default">
 <thead>
@@ -226,7 +197,7 @@ Many of NetTracer3D’s methods may need to reference one or more of these prope
 <li><p>node_communities:</p></li>
 </ol>
 <ul class="simple">
-<li><p>This property has the same structure as node_identities, and similarly does not handle column overflow for .xlsx.</p></li>
+<li><p>This property has the same structure as node_identities.</p></li>
 </ul>
 <table class="docutils align-default">
 <thead>
@@ -250,7 +221,7 @@ Many of NetTracer3D’s methods may need to reference one or more of these prope
 <li><p>node_centroids:</p></li>
 </ol>
 <ul class="simple">
-<li><p>Node centroids organize using Node:Zval:Yval:Xval. Again, they do not handle column overflow for .xlsx.</p></li>
+<li><p>Node centroids organize using Node:Zval:Yval:Xval.</p></li>
 <li><p>Make sure to use Z, Y, X. This is because of the way numpy organizes dimensions.</p></li>
 <li><p>Coordinates should generally be ints greater than 0.</p></li>
 </ul>

@@ -6,14 +6,14 @@
   <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
 
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>All Analyze Menu Options &mdash; NetTracer3D 0.8.2 documentation</title>
+  <title>All Analyze Menu Options &mdash; NetTracer3D 0.9.0 documentation</title>
       <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=b86133f3" />
       <link rel="stylesheet" type="text/css" href="_static/css/theme.css?v=e59714d7" />
 
   
       <script src="_static/jquery.js?v=5d32c60e"></script>
       <script src="_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
-      <script src="_static/documentation_options.js?v=dbee5847"></script>
+      <script src="_static/documentation_options.js?v=39bb1c6d"></script>
       <script src="_static/doctools.js?v=9bcbadda"></script>
       <script src="_static/sphinx_highlight.js?v=dc90522c"></script>
     <script src="_static/js/theme.js"></script>
@@ -81,63 +81,66 @@
 </ul>
 </li>
 <li class="toctree-l2"><a class="reference internal" href="#analyze-stats-calculate-generic-network-stats">‘Analyze -&gt; Stats -&gt; Calculate Generic Network Stats’</a></li>
-<li class="toctree-l2"><a class="reference internal" href="#analyze-stats-calculate-generic-network-histograms">‘Analyze -&gt; Stats -&gt; Calculate Generic Network Histograms’</a></li>
-<li class="toctree-l2"><a class="reference internal" href="#analyze-stats-radial-distribution-analysis">‘Analyze -&gt; Stats -&gt; Radial Distribution Analysis’</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="#analyze-stats-network-statistics-histograms">‘Analyze -&gt; Stats -&gt; Network Statistics Histograms’</a><ul>
 <li class="toctree-l3"><a class="reference internal" href="#id6">Parameter Explanations</a></li>
 </ul>
 </li>
-<li class="toctree-l2"><a class="reference internal" href="#analyze-stats-degree-distribution-analysis">‘Analyze -&gt; Stats -&gt; Degree Distribution Analysis’</a></li>
-<li class="toctree-l2"><a class="reference internal" href="#analyze-stats-identity-distribution-of-neighbors">‘Analyze -&gt; Stats -&gt; Identity Distribution of Neighbors’</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="#analyze-stats-radial-distribution-analysis">‘Analyze -&gt; Stats -&gt; Radial Distribution Analysis’</a><ul>
 <li class="toctree-l3"><a class="reference internal" href="#id7">Parameter Explanations</a></li>
-<li class="toctree-l3"><a class="reference internal" href="#id8">Algorithm Explanation</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="#analyze-stats-identity-distribution-of-neighbors">‘Analyze -&gt; Stats -&gt; Identity Distribution of Neighbors’</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#id8">Parameter Explanations</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#id9">Algorithm Explanation</a></li>
 </ul>
 </li>
 <li class="toctree-l2"><a class="reference internal" href="#analyze-stats-ripley-clustering-analysis">‘Analyze -&gt; Stats -&gt; Ripley Clustering Analysis’</a><ul>
-<li class="toctree-l3"><a class="reference internal" href="#id9">Parameter Explanations</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#id10">Parameter Explanations</a></li>
 <li class="toctree-l3"><a class="reference internal" href="#algorithm-explanations">Algorithm Explanations</a></li>
 </ul>
 </li>
 <li class="toctree-l2"><a class="reference internal" href="#analyze-stats-community-cluster-heatmap">‘Analyze -&gt; Stats -&gt; Community Cluster Heatmap’</a><ul>
-<li class="toctree-l3"><a class="reference internal" href="#id10">Parameter Explanations</a></li>
-<li class="toctree-l3"><a class="reference internal" href="#id11">Algorithm Explanations:</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#id11">Parameter Explanations</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#id12">Algorithm Explanations:</a></li>
 </ul>
 </li>
 <li class="toctree-l2"><a class="reference internal" href="#analyze-stats-average-nearest-neighbors">‘Analyze -&gt; Stats -&gt; Average Nearest Neighbors’</a><ul>
-<li class="toctree-l3"><a class="reference internal" href="#id12">Parameter Explanations</a></li>
-<li class="toctree-l3"><a class="reference internal" href="#id13">Algorithm Explanations:</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#id13">Parameter Explanations</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#id14">Algorithm Explanations:</a></li>
 </ul>
 </li>
 <li class="toctree-l2"><a class="reference internal" href="#analyze-stats-calculate-volumes">‘Analyze -&gt; Stats -&gt; Calculate Volumes’</a></li>
 <li class="toctree-l2"><a class="reference internal" href="#analyze-stats-calculate-radii">‘Analyze -&gt; Stats -&gt; Calculate Radii’</a><ul>
 <li class="toctree-l3"><a class="reference internal" href="#parameter-explanation">Parameter Explanation</a></li>
-<li class="toctree-l3"><a class="reference internal" href="#id14">Algorithm Explanation</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#id15">Algorithm Explanation</a></li>
 </ul>
 </li>
 <li class="toctree-l2"><a class="reference internal" href="#analyze-stats-calculate-node-edge-interactions">‘Analyze -&gt; Stats -&gt; Calculate Node &lt; &gt; Edge Interactions’</a><ul>
-<li class="toctree-l3"><a class="reference internal" href="#id15">Parameter Explanations</a></li>
-<li class="toctree-l3"><a class="reference internal" href="#id16">Algorithm Explanation</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#id16">Parameter Explanations</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#id17">Algorithm Explanation</a></li>
 </ul>
 </li>
 <li class="toctree-l2"><a class="reference internal" href="#analyze-data-overlays-get-degree-information">‘Analyze -&gt; Data/Overlays -&gt; Get Degree Information’</a><ul>
-<li class="toctree-l3"><a class="reference internal" href="#id17">Parameter Explanations</a></li>
-</ul>
-</li>
-<li class="toctree-l2"><a class="reference internal" href="#analyze-data-overlays-get-hub-information">‘Analyze -&gt; Data/Overlays -&gt; Get Hub Information’</a><ul>
 <li class="toctree-l3"><a class="reference internal" href="#id18">Parameter Explanations</a></li>
 </ul>
 </li>
-<li class="toctree-l2"><a class="reference internal" href="#analyze-data-overlays-get-mother-nodes">‘Analyze -&gt; Data/Overlays -&gt; Get Mother Nodes’</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="#analyze-data-overlays-get-hub-information">‘Analyze -&gt; Data/Overlays -&gt; Get Hub Information’</a><ul>
 <li class="toctree-l3"><a class="reference internal" href="#id19">Parameter Explanations</a></li>
 </ul>
 </li>
-<li class="toctree-l2"><a class="reference internal" href="#analyze-data-overlays-code-communities">‘Analyze -&gt; Data/Overlays -&gt; Code Communities’</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="#analyze-data-overlays-get-mother-nodes">‘Analyze -&gt; Data/Overlays -&gt; Get Mother Nodes’</a><ul>
 <li class="toctree-l3"><a class="reference internal" href="#id20">Parameter Explanations</a></li>
 </ul>
 </li>
-<li class="toctree-l2"><a class="reference internal" href="#analyze-data-overlays-code-identities">‘Analyze -&gt; Data/Overlays -&gt; Code Identities’</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="#analyze-data-overlays-code-communities">‘Analyze -&gt; Data/Overlays -&gt; Code Communities’</a><ul>
 <li class="toctree-l3"><a class="reference internal" href="#id21">Parameter Explanations</a></li>
 </ul>
 </li>
+<li class="toctree-l2"><a class="reference internal" href="#analyze-data-overlays-code-identities">‘Analyze -&gt; Data/Overlays -&gt; Code Identities’</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#id22">Parameter Explanations</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="#analyze-data-overlays-centroid-umap">‘Analyze -&gt; Data/Overlays -&gt; Centroid UMAP’</a></li>
 <li class="toctree-l2"><a class="reference internal" href="#analyze-randomize-generate-equivalent-random-network">‘Analyze -&gt; Randomize -&gt; Generate Equivalent Random Network’</a></li>
 <li class="toctree-l2"><a class="reference internal" href="#analyze-randomize-scramble-nodes-centroids">‘Analyze -&gt; Randomize -&gt; Scramble Nodes (Centroids)’</a></li>
 <li class="toctree-l2"><a class="reference internal" href="#next-steps">Next Steps</a></li>
@@ -619,12 +622,157 @@
 <li><p>Please see networkx documentation for more information: <a class="reference external" href="https://networkx.org/">https://networkx.org/</a></p></li>
 </ul>
 </section>
-<section id="analyze-stats-calculate-generic-network-histograms">
-<h2>‘Analyze -&gt; Stats -&gt; Calculate Generic Network Histograms’<a class="headerlink" href="#analyze-stats-calculate-generic-network-histograms" title="Link to this heading"></a></h2>
+<section id="analyze-stats-network-statistics-histograms">
+<h2>‘Analyze -&gt; Stats -&gt; Network Statistics Histograms’<a class="headerlink" href="#analyze-stats-network-statistics-histograms" title="Link to this heading"></a></h2>
 <ul class="simple">
-<li><p>This function simply generates and displays (as matplotlib histos and in the tabulated data widget) a number of generic histograms about distributions of node properties in the network.</p></li>
-<li><p>The histograms displayed were taken verbatim from this networkx analysis example page: <a class="reference external" href="https://networkx.org/nx-guides/content/exploratory_notebooks/facebook_notebook.html">https://networkx.org/nx-guides/content/exploratory_notebooks/facebook_notebook.html</a> (Please use this reference for information about the histograms)</p></li>
+<li><p>This function allows easy generation and displaying (as matplotlib histos and in the tabulated data widget) of a number of network histograms about distributions of node properties in the network.</p></li>
+<li><p>The histograms displayed are all generated using networkx functions to find information about the graph, such as shown in this networkx documentation: <a class="reference external" href="https://networkx.org/nx-guides/content/exploratory_notebooks/facebook_notebook.html">https://networkx.org/nx-guides/content/exploratory_notebooks/facebook_notebook.html</a> (Please use this reference for information about the histograms)</p></li>
+<li><p>Assuming you have calculated a network, selecting this option will display the following menu:</p></li>
 </ul>
+<a class="reference internal image-reference" href="_images/network_histos.png"><img alt="Network_histos" src="_images/network_histos.png" style="width: 500px;" />
+</a>
+<p><em>Once a network is generated, selecting any of the green button options will generate a graph of the corresponding distribution, and export the data to the tabulated data widget</em></p>
+<section id="id6">
+<h3>Parameter Explanations<a class="headerlink" href="#id6" title="Link to this heading"></a></h3>
+<ol class="arabic simple">
+<li><dl class="simple">
+<dt>Degree Distribution…</dt><dd><ul class="simple">
+<li><p>Shows the count of connections per node across your network.</p></li>
+<li><p>Use to identify network architecture: power-law distributions indicate hub-based networks, normal distributions show egalitarian connectivity.</p></li>
+</ul>
+</dd>
+</dl>
+</li>
+<li><dl class="simple">
+<dt>Shortest Path Length Distribution…</dt><dd><ul class="simple">
+<li><p>Displays the minimum number of steps between all node pairs.</p></li>
+<li><p>Use to assess network efficiency: narrow peaks at low values indicate efficient “small world” networks.</p></li>
+</ul>
+</dd>
+</dl>
+</li>
+<li><dl class="simple">
+<dt>Degree Centrality…</dt><dd><ul class="simple">
+<li><p>Measures direct influence through immediate connections.</p></li>
+<li><p>Use to identify nodes with the most direct reach in your network.</p></li>
+</ul>
+</dd>
+</dl>
+</li>
+<li><dl class="simple">
+<dt>Betweenness Centrality…</dt><dd><ul class="simple">
+<li><p>Identifies critical bridge nodes that connect different network regions.</p></li>
+<li><p>Use to find bottlenecks and assess network vulnerability to node removal.</p></li>
+</ul>
+</dd>
+</dl>
+</li>
+<li><dl class="simple">
+<dt>Closeness Centrality…</dt><dd><ul class="simple">
+<li><p>Measures how quickly each node can reach all other nodes.</p></li>
+<li><p>Use to identify nodes optimally positioned for information spreading.</p></li>
+</ul>
+</dd>
+</dl>
+</li>
+<li><dl class="simple">
+<dt>Eigenvector Centrality…</dt><dd><ul class="simple">
+<li><p>Measures prestige by weighting connections to highly-connected nodes.</p></li>
+<li><p>Use to identify nodes connected to important hubs (quality over quantity of connections).</p></li>
+</ul>
+</dd>
+</dl>
+</li>
+<li><dl class="simple">
+<dt>Harmonic Centrality…</dt><dd><ul class="simple">
+<li><p>Robust version of closeness centrality that handles disconnected components.</p></li>
+<li><p>Use when your network may have isolated clusters or components.</p></li>
+</ul>
+</dd>
+</dl>
+</li>
+<li><dl class="simple">
+<dt>Load Centrality…</dt><dd><ul class="simple">
+<li><p>Shows traffic burden each node would carry in network flow.</p></li>
+<li><p>Use to identify potential communication bottlenecks and workload distribution.</p></li>
+</ul>
+</dd>
+</dl>
+</li>
+<li><dl class="simple">
+<dt>Current Flow Betweenness…</dt><dd><ul class="simple">
+<li><p>Models flow using electrical circuit principles (considers all paths, not just shortest).</p></li>
+<li><p>Use for more realistic assessment of node importance in flow networks.</p></li>
+</ul>
+</dd>
+</dl>
+</li>
+<li><dl class="simple">
+<dt>Communicability Betweenness…</dt><dd><ul class="simple">
+<li><p>Measures bridging importance based on walks of all lengths.</p></li>
+<li><p>Use to identify nodes important for sustained, multi-step communication processes.</p></li>
+</ul>
+</dd>
+</dl>
+</li>
+<li><dl class="simple">
+<dt>Clustering Coefficient…</dt><dd><ul class="simple">
+<li><p>Measures how interconnected each node’s immediate neighbors are.</p></li>
+<li><p>Use to identify tight-knit communities versus sparse, tree-like regions.</p></li>
+</ul>
+</dd>
+</dl>
+</li>
+<li><dl class="simple">
+<dt>Triangle Count…</dt><dd><ul class="simple">
+<li><p>Counts triangular connections (three mutually connected nodes) per node.</p></li>
+<li><p>Use to assess local group cohesion and community strength.</p></li>
+</ul>
+</dd>
+</dl>
+</li>
+<li><dl class="simple">
+<dt>K-Core Decomposition…</dt><dd><ul class="simple">
+<li><p>Identifies nested dense subgroups where all nodes have minimum degree k.</p></li>
+<li><p>Use to reveal hierarchical community structure and dense network cores.</p></li>
+</ul>
+</dd>
+</dl>
+</li>
+<li><dl class="simple">
+<dt>Eccentricity…</dt><dd><ul class="simple">
+<li><p>Shows the maximum distance from each node to any other reachable node.</p></li>
+<li><p>Use to identify peripheral versus central nodes and assess network compactness.</p></li>
+</ul>
+</dd>
+</dl>
+</li>
+<li><dl class="simple">
+<dt>Node Connectivity…</dt><dd><ul class="simple">
+<li><p>Measures minimum nodes needed to disconnect each node’s neighborhood.</p></li>
+<li><p>Use to assess local network robustness around individual nodes.</p></li>
+</ul>
+</dd>
+</dl>
+</li>
+<li><dl class="simple">
+<dt>Average Dispersion…</dt><dd><ul class="simple">
+<li><p>Measures how scattered each node’s neighbors are from each other.</p></li>
+<li><p>Use to distinguish bridge nodes (high dispersion) from community-centered nodes (low dispersion).</p></li>
+</ul>
+</dd>
+</dl>
+</li>
+<li><dl class="simple">
+<dt>Network Bridges…</dt><dd><ul class="simple">
+<li><p>Identifies edges whose removal would disconnect network components.</p></li>
+<li><p>Use to find critical connections essential for network cohesion.</p></li>
+</ul>
+</dd>
+</dl>
+</li>
+</ol>
+</section>
 </section>
 <section id="analyze-stats-radial-distribution-analysis">
 <h2>‘Analyze -&gt; Stats -&gt; Radial Distribution Analysis’<a class="headerlink" href="#analyze-stats-radial-distribution-analysis" title="Link to this heading"></a></h2>
@@ -633,8 +781,8 @@
 <li><p>Use this method to evaluate how far apart your connected nodes tend to be in 3D space, and how those relationships are distributed.</p></li>
 <li><p>For example, we would typically expect more efficient networks to mostly have an abundance of short connections and a minority of long connections.</p></li>
 </ul>
-<section id="id6">
-<h3>Parameter Explanations<a class="headerlink" href="#id6" title="Link to this heading"></a></h3>
+<section id="id7">
+<h3>Parameter Explanations<a class="headerlink" href="#id7" title="Link to this heading"></a></h3>
 <ol class="arabic simple">
 <li><dl class="simple">
 <dt>Bucket Distance…</dt><dd><ul class="simple">
@@ -657,16 +805,6 @@
 </ul>
 </section>
 </section>
-<section id="analyze-stats-degree-distribution-analysis">
-<h2>‘Analyze -&gt; Stats -&gt; Degree Distribution Analysis’<a class="headerlink" href="#analyze-stats-degree-distribution-analysis" title="Link to this heading"></a></h2>
-<ul class="simple">
-<li><p>This method creates a graph showing the degree (of any given node) on the x axis and the total proportion of nodes with that degree in the network on the y axis. (Note that degree = the number of neighbors a node has).</p></li>
-<li><p>Use this method to evaluate how connected the network is, and how meaningful those connections tend to be.</p></li>
-<li><p>For example, we would typically expect more efficient networks to mostly have an abundance of low-degree nodes and a minority of high degree nodes.</p></li>
-<li><p>The only parameter it asks for is an output directory (If a string path is included to a directory, the resulting graph will be autosaved there).</p></li>
-<li><p>Press ‘Get Degree Distribution’ to open a new matplotlib window showing the graph, and also place the obtained data in as a new table in the tabulated data widget.</p></li>
-</ul>
-</section>
 <section id="analyze-stats-identity-distribution-of-neighbors">
 <h2>‘Analyze -&gt; Stats -&gt; Identity Distribution of Neighbors’<a class="headerlink" href="#analyze-stats-identity-distribution-of-neighbors" title="Link to this heading"></a></h2>
 <ul class="simple">
@@ -676,8 +814,8 @@
 </ul>
 <a class="reference internal image-reference" href="_images/analyze4.png"><img alt="NeighborID Menu" src="_images/analyze4.png" style="width: 200px;" />
 </a>
-<section id="id7">
-<h3>Parameter Explanations<a class="headerlink" href="#id7" title="Link to this heading"></a></h3>
+<section id="id8">
+<h3>Parameter Explanations<a class="headerlink" href="#id8" title="Link to this heading"></a></h3>
 <ol class="arabic simple">
 <li><dl class="simple">
 <dt>Root Identity to Search…</dt><dd><ul class="simple">
@@ -781,8 +919,8 @@
 </li>
 </ul>
 </section>
-<section id="id8">
-<h3>Algorithm Explanation<a class="headerlink" href="#id8" title="Link to this heading"></a></h3>
+<section id="id9">
+<h3>Algorithm Explanation<a class="headerlink" href="#id9" title="Link to this heading"></a></h3>
 <ol class="arabic simple">
 <li><p>Mode 1 just counts neighbors that are immediate neighbors in the network of the desired node ID.</p></li>
 <li><p>Mode 2 searches using either a distance transform or psuedo-3D binary dilation. It searches outward from nodes of the desired ID type, and hence does not actually include them. This is why this option never evaluates its own clustering.</p></li>
@@ -800,8 +938,8 @@
 </ul>
 <a class="reference internal image-reference" href="_images/ripley_menu.png"><img alt="Ripley Menu" src="_images/ripley_menu.png" style="width: 400px;" />
 </a>
-<section id="id9">
-<h3>Parameter Explanations<a class="headerlink" href="#id9" title="Link to this heading"></a></h3>
+<section id="id10">
+<h3>Parameter Explanations<a class="headerlink" href="#id10" title="Link to this heading"></a></h3>
 <ol class="arabic simple">
 <li><dl class="simple">
 <dt>Root Identity to Search for Neighbors</dt><dd><ul class="simple">
@@ -921,8 +1059,8 @@
 <li><p>This method plots the nodes into a 2D or 3D graph, with a color corresponding to community density.</p></li>
 <li><p>Red nodes are higher density than expected in a community, blue ones are lower density than expected.</p></li>
 </ul>
-<section id="id10">
-<h3>Parameter Explanations<a class="headerlink" href="#id10" title="Link to this heading"></a></h3>
+<section id="id11">
+<h3>Parameter Explanations<a class="headerlink" href="#id11" title="Link to this heading"></a></h3>
 <ol class="arabic simple">
 <li><dl class="simple">
 <dt>(Optional) - Total Number of Nodes</dt><dd><ul class="simple">
@@ -954,8 +1092,8 @@
 <li><p>It will require you to get ‘node_centroids’ and ‘communities’ properties if unassigned.</p></li>
 </ul>
 </section>
-<section id="id11">
-<h3>Algorithm Explanations:<a class="headerlink" href="#id11" title="Link to this heading"></a></h3>
+<section id="id12">
+<h3>Algorithm Explanations:<a class="headerlink" href="#id12" title="Link to this heading"></a></h3>
 <ol class="arabic simple">
 <li><p>Determine total nodes by trying multiple fallback sources: network nodes, centroids, identities, or unique node array values.</p></li>
 <li><p>Calculate baseline density as the expected nodes per community if randomly distributed (total nodes / num communities).</p></li>
@@ -972,12 +1110,13 @@
 <li><p>The output can be the distribution of nearest neighbor values (+ their average), or it can be the average of all identity combinations (for bulk processing).</p></li>
 <li><p>This method can also yield heatmaps for nearest neighbor relationships as either graphs or image overlays.</p></li>
 </ul>
-<section id="id12">
-<h3>Parameter Explanations<a class="headerlink" href="#id12" title="Link to this heading"></a></h3>
+<section id="id13">
+<h3>Parameter Explanations<a class="headerlink" href="#id13" title="Link to this heading"></a></h3>
 <ol class="arabic simple">
 <li><p>Root Identity… (If node identities property exists) - Identities of this node type will be evaluated for nearest neighbors of some other node type.</p></li>
 <li><p>Neighbor identities… (If node identities property exists) - Identities of this node type will be searched for. Can be the same as param 1, or can include all nodes except param 1.</p></li>
 <li><p>Number of Nearest Neighbors… - Default set to 1. This is the number of nearest neighbors each node will find. If 1, it just looks for its closest neighbor distance. Increasing this value will have each node instead get the average distance to that many nearest neighbors. (This value will cause the program to return if it is greater than the number of possible neighbors).</p></li>
+<li><p>Use Centroids? - Whether to use centroids to find the neighbors, or to search from entire objects. Note that centroids is faster but only works well for spheroids. Entire objects, however, do not support averaging out multiple nearest neighbor, instead always setting the above param to 1 if selected.</p></li>
 <li><p>Heatmap - Enabling this will cause a heatmap to be generated. Red nodes will be closer on average to their nearest neighbor, while blue nodes will be further.</p></li>
 <li><p>3D - If generating a matplotlib heatmap, enabling this will make the graph 3D. Disabling it will make it 2D.</p></li>
 <li><p>Overlay - If enabled, the heatmap will be created as an image overlay in Overlay2 channel instead of a graph.</p></li>
@@ -988,13 +1127,13 @@
 <li><p>Note that this method automatically applies the xy_scale and z_scale set in the current properties. To ensure property distances, please make sure those are correct in Image -&gt; Properties. By default, they are 1.</p></li>
 </ul>
 </section>
-<section id="id13">
-<h3>Algorithm Explanations:<a class="headerlink" href="#id13" title="Link to this heading"></a></h3>
+<section id="id14">
+<h3>Algorithm Explanations:<a class="headerlink" href="#id14" title="Link to this heading"></a></h3>
 <ol class="arabic simple">
 <li><p>Depending on the desired identities, the nodes are broken into a root set and a neighbor set.</p></li>
-<li><p>The centroids of the neighbor set are used to build a KDTree, which is a points-based data structure good for querying distance relationships. <a class="reference external" href="https://docs.scipy.org/doc/scipy/reference/generated/scipy.spatial.KDTree.html">https://docs.scipy.org/doc/scipy/reference/generated/scipy.spatial.KDTree.html</a></p></li>
+<li><p>The centroids (or if not using centroids, assesses entire object borders obtained from skimage find_boundaries method) of the neighbor set are used to build a KDTree, which is a points-based data structure good for querying distance relationships. <a class="reference external" href="https://docs.scipy.org/doc/scipy/reference/generated/scipy.spatial.KDTree.html">https://docs.scipy.org/doc/scipy/reference/generated/scipy.spatial.KDTree.html</a></p></li>
 <li><p>For each point in the root set, the desired number of nearest neighbors are obtained by querying the KDTree. These values are averaged per point and returned. The total average for the set is also returned.</p></li>
-<li><p>When generating the heatmap, color intensity is centered around the average distance to neighbors in the set, with ln(average dist / dist of point) being used to create the color scale.</p></li>
+<li><p>When generating the heatmap, color intensity is based on whether the object is closer than would be expected in a uniform distribution, with ln(approx expected dist in a uniform distribution / actual dist of point) being used to create the color scale.</p></li>
 </ol>
 </section>
 </section>
@@ -1019,8 +1158,8 @@
 <li><p>If you enable it, the system will attempt to attempt to use the GPU to calculate. Note that this is only possible with a working CUDA toolkit.</p></li>
 </ul>
 </section>
-<section id="id14">
-<h3>Algorithm Explanation<a class="headerlink" href="#id14" title="Link to this heading"></a></h3>
+<section id="id15">
+<h3>Algorithm Explanation<a class="headerlink" href="#id15" title="Link to this heading"></a></h3>
 <ol class="arabic simple">
 <li><p>The scipy.ndimage.find_objects() method is used to get bounding boxes around all the labeled objects.</p></li>
 <li><p>For each object, a subarray is cut out around it using its bounding box, with padding on all sides.</p></li>
@@ -1040,8 +1179,8 @@
 </ul>
 <a class="reference internal image-reference" href="_images/analyze5.png"><img alt="edgenode Menu" src="_images/analyze5.png" style="width: 800px;" />
 </a>
-<section id="id15">
-<h3>Parameter Explanations<a class="headerlink" href="#id15" title="Link to this heading"></a></h3>
+<section id="id16">
+<h3>Parameter Explanations<a class="headerlink" href="#id16" title="Link to this heading"></a></h3>
 <ol class="arabic simple">
 <li><dl class="simple">
 <dt>node_search:</dt><dd><ul class="simple">
@@ -1078,8 +1217,8 @@
 <li><p>Press Calculate to run the method with the desired parameters. The output data will be used to create a new table in the tabulated data widget.</p></li>
 </ul>
 </section>
-<section id="id16">
-<h3>Algorithm Explanation<a class="headerlink" href="#id16" title="Link to this heading"></a></h3>
+<section id="id17">
+<h3>Algorithm Explanation<a class="headerlink" href="#id17" title="Link to this heading"></a></h3>
 <ol class="arabic simple">
 <li><p>The scipy.ndimage.find_objects() method is used to get bounding boxes around all the labeled objects in the nodes channel.</p></li>
 <li><p>For each object, a subarray is cut out around it using its bounding box, that includes the object plus any additional space that it will need to perform a search/dilation.</p></li>
@@ -1104,8 +1243,8 @@
 </ul>
 <a class="reference internal image-reference" href="_images/analyze6.png"><img alt="edgenode Menu" src="_images/analyze6.png" style="width: 800px;" />
 </a>
-<section id="id17">
-<h3>Parameter Explanations<a class="headerlink" href="#id17" title="Link to this heading"></a></h3>
+<section id="id18">
+<h3>Parameter Explanations<a class="headerlink" href="#id18" title="Link to this heading"></a></h3>
 <ol class="arabic simple">
 <li><dl class="simple">
 <dt>Execution Mode</dt><dd><ul class="simple">
@@ -1154,8 +1293,8 @@
 <ul class="simple">
 <li><p>This method can be used to extract information about hub nodes, which are the nodes that are the fewest degrees of seperation from any other node.</p></li>
 </ul>
-<section id="id18">
-<h3>Parameter Explanations<a class="headerlink" href="#id18" title="Link to this heading"></a></h3>
+<section id="id19">
+<h3>Parameter Explanations<a class="headerlink" href="#id19" title="Link to this heading"></a></h3>
 <ul class="simple">
 <li><p>This method only has two parameters.</p></li>
 </ul>
@@ -1187,8 +1326,8 @@
 <li><p>This method can be used to extract information about ‘mother nodes’, which are we define as those nodes that contain connections between one community and another.</p></li>
 <li><p>This method would be used to identify what nodes enable interaction between seperate communities.</p></li>
 </ul>
-<section id="id19">
-<h3>Parameter Explanations<a class="headerlink" href="#id19" title="Link to this heading"></a></h3>
+<section id="id20">
+<h3>Parameter Explanations<a class="headerlink" href="#id20" title="Link to this heading"></a></h3>
 <ul class="simple">
 <li><p>This method only has one parameter.</p></li>
 </ul>
@@ -1211,8 +1350,8 @@
 <ul class="simple">
 <li><p>This method can be used to generate an overlay that shows what nodes belong to which community.</p></li>
 </ul>
-<section id="id20">
-<h3>Parameter Explanations<a class="headerlink" href="#id20" title="Link to this heading"></a></h3>
+<section id="id21">
+<h3>Parameter Explanations<a class="headerlink" href="#id21" title="Link to this heading"></a></h3>
 <ul class="simple">
 <li><p>This method only has two parameters.</p></li>
 </ul>
@@ -1249,8 +1388,8 @@
 <ul class="simple">
 <li><p>This method can be used to generate an overlay that shows what nodes belong to which identity.</p></li>
 </ul>
-<section id="id21">
-<h3>Parameter Explanations<a class="headerlink" href="#id21" title="Link to this heading"></a></h3>
+<section id="id22">
+<h3>Parameter Explanations<a class="headerlink" href="#id22" title="Link to this heading"></a></h3>
 <ul class="simple">
 <li><p>This method only has two parameters.</p></li>
 </ul>
@@ -1282,6 +1421,14 @@
 <li><p>The last submenu is ‘Randomize’, and is used to generate random variants of data.</p></li>
 </ul>
 </section>
+</section>
+<section id="analyze-data-overlays-centroid-umap">
+<h2>‘Analyze -&gt; Data/Overlays -&gt; Centroid UMAP’<a class="headerlink" href="#analyze-data-overlays-centroid-umap" title="Link to this heading"></a></h2>
+<ul class="simple">
+<li><p>This method will create a UMAP, clustering nodes based on the similarity of their centroids. In short, it lets you easily eyeball what sort of things are next to each other.</p></li>
+<li><p>If node_identities exist, the nodes will all be colored based on their identity. Unassigned nodes will get called ‘Unknown’ in such a case.</p></li>
+<li><p>This method does not have any parameters. Simply run it to show the UMAP.</p></li>
+</ul>
 </section>
 <section id="analyze-randomize-generate-equivalent-random-network">
 <h2>‘Analyze -&gt; Randomize -&gt; Generate Equivalent Random Network’<a class="headerlink" href="#analyze-randomize-generate-equivalent-random-network" title="Link to this heading"></a></h2>

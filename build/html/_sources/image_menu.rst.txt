@@ -60,10 +60,11 @@ All Image Menu Options
 
 'Image -> Overlays -> Color Nodes (or edges)'
 --------------------------
-* If the nodes channel is present, then this method will create a new RGB overlay where each grayscale label in the nodes image is assigned a unique color.
-* This overlay will be placed in Overlay2, while a legend saying what node corresponds to what color will be placed in the tabulated data widget.
-* This is an excellent way to visualize what nodes have been labeled. Note that if the nodes channel is empty, this operation will be performed on the edges channel instead, assuming it exists.
-* The only parameter, down_factor, applies an internal downsample equivalent to the inputted integer on all three dimensions before drawing the overlay. This can be used to speed up processing, but note that over-downsampling small nodes may cause them to be removed from the image.
+* This method will create a new RGB overlay where each grayscale label in the nodes (or edges) image is assigned a unique color.
+* This overlay will be placed in Overlay2, while a legend saying what node/edge corresponds to what color will be placed in the tabulated data widget.
+* This is an excellent way to visualize what nodes/edges have been labeled.
+* The first parameter is a dropdown menu to tell the program whether to color the nodes or the edges.
+* The second parameter, down_factor, applies an internal downsample equivalent to the inputted integer on all three dimensions before drawing the overlay. This can be used to speed up processing, but note that over-downsampling small nodes may cause them to be removed from the image.
 
 'Image -> Overlays -> Shuffle'
 --------------------------
@@ -114,3 +115,4 @@ Parameter Explanations
 * Selecting this just opens the Cellpose3 GUI (Stringer, C., Pachitariu, M. Cellpose3: one-click image restoration for improved cellular segmentation. Nat Methods 22, 592–599 (2025). https://doi.org/10.1038/s41592-025-02595-5), provided it has been installed in NetTracer3D's package environment.
 * Cellpose3 is my favorite open-source tool to segment cells with, so I added this option as a suggestion to use it together with NetTracer3d.
 * This requires Cellpose3 to be installed in NetTracer3D's package environment.
+* If NetTracer3D has a 3D image or no image is present, the 3D-stack version of cellpose will open. If a 2D image is open in NetTracer3D, the 2D-stack version of cellpose will open.

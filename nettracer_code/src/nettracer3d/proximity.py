@@ -88,7 +88,7 @@ def process_label(args):
     print(f"Processing node {label}")
     
     # Get the pre-computed bounding box for this label
-    slice_obj = bounding_boxes[label-1]  # -1 because label numbers start at 1
+    slice_obj = bounding_boxes[int(label)-1]  # -1 because label numbers start at 1
     if slice_obj is None:
         return None, None
         
@@ -113,7 +113,7 @@ def create_node_dictionary(nodes, num_nodes, dilate_xy, dilate_z, targets=None, 
     with ThreadPoolExecutor(max_workers=mp.cpu_count()) as executor:
         # Create args list with bounding_boxes included
         args_list = [(nodes, i, dilate_xy, dilate_z, array_shape, bounding_boxes) 
-                    for i in range(1, num_nodes + 1)]
+                    for i in range(1, int(num_nodes) + 1)]
 
         if targets is not None:
             args_list = [tup for tup in args_list if tup[1] in targets]
@@ -144,7 +144,7 @@ def find_shared_value_pairs(input_dict):
 
 #Related to kdtree centroid searching:
 
-def populate_array(centroids, clip=False):
+def populate_array(centroids, clip=False, shape = None):
     """
     Create a 3D array from centroid coordinates.
     
@@ -164,12 +164,16 @@ def populate_array(centroids, clip=False):
     coords = np.array(list(centroids.values()))
     # Round coordinates to nearest integer
     coords = np.round(coords).astype(int)
-    min_coords = coords.min(axis=0)
-    max_coords = coords.max(axis=0)
+    if shape is None:
+        min_coords = coords.min(axis=0)
+        max_coords = coords.max(axis=0)
+    else:
+        min_coords = [0, 0, 0]
+        max_coords = shape
     
     # Check for negative coordinates only if not clipping
-    if not clip and np.any(min_coords < 0):
-        raise ValueError("Negative coordinates found in centroids")
+    #if not clip and np.any(min_coords < 0):
+        #raise ValueError("Negative coordinates found in centroids")
     
     # Apply clipping if requested
     clipped_centroids = {}
@@ -183,10 +187,15 @@ def populate_array(centroids, clip=False):
         for i, obj_id in enumerate(centroids.keys()):
             clipped_centroids[obj_id] = coords[i].tolist()
     
-    # Create array
-    array = np.zeros((max_coords[0] + 1, 
-                     max_coords[1] + 1, 
-                     max_coords[2] + 1), dtype=int)
+    if shape is None:
+        # Create array
+        array = np.zeros((max_coords[0] + 1, 
+                         max_coords[1] + 1, 
+                         max_coords[2] + 1), dtype=int)
+    else:
+        array = np.zeros((max_coords[0], 
+                         max_coords[1], 
+                         max_coords[2]), dtype=int)
     
     # Populate array with (possibly clipped) rounded coordinates
     for i, (obj_id, coord) in enumerate(centroids.items()):
@@ -194,7 +203,10 @@ def populate_array(centroids, clip=False):
             z, y, x = coords[i]  # Use pre-computed clipped coordinates
         else:
             z, y, x = np.round([coord[0], coord[1], coord[2]]).astype(int)
-        array[z, y, x] = obj_id
+        try:
+            array[z, y, x] = obj_id
+        except:
+            pass
         
     if clip:
         return array, clipped_centroids
@@ -328,7 +340,7 @@ def find_neighbors_kdtree(radius, centroids=None, array=None, targets=None, n_jo
     
     if targets is None:
         # Original behavior: find neighbors for all points
-        query_points = points
+        query_points = np.array(points)
         query_indices = list(range(len(points)))
     else:
         # Convert targets to set for O(1) lookup
@@ -354,7 +366,6 @@ def find_neighbors_kdtree(radius, centroids=None, array=None, targets=None, n_jo
         # Convert to numpy array for querying
         query_points = np.array(target_points)
         query_indices = target_indices
-
         
         # Handle case where no target values were found
         if len(query_points) == 0:
@@ -373,6 +384,7 @@ def find_neighbors_kdtree(radius, centroids=None, array=None, targets=None, n_jo
     
     # Skip parallelization for small datasets or when n_jobs=1
     if n_jobs == 1 or len(neighbor_indices) < 100:
+    #if True:
         # Sequential processing (original logic with max_neighbors support)
         output = []
         for i, neighbors in enumerate(neighbor_indices):
@@ -457,68 +469,121 @@ def extract_pairwise_connections(connections):
     return output
 
 
-def average_nearest_neighbor_distances(point_centroids, root_set, compare_set, xy_scale=1.0, z_scale=1.0, num = 1):
+def average_nearest_neighbor_distances(point_centroids, root_set, compare_set, xy_scale=1.0, z_scale=1.0, num=1, do_borders=False):
     """
     Calculate the average distance between each point in root_set and its nearest neighbor in compare_set.
     
     Args:
-        point_centroids (dict): Dictionary mapping point IDs to [Z, Y, X] coordinates
-        root_set (set): Set of point IDs to find nearest neighbors for
-        compare_set (set): Set of point IDs to search for nearest neighbors in
+        point_centroids (dict): Dictionary mapping point IDs to [Z, Y, X] coordinates (when do_borders=False)
+                               OR dictionary mapping labels to border coordinates (when do_borders=True)
+        root_set (set or dict): Set of point IDs (when do_borders=False) 
+                               OR dict {label: border_coords} (when do_borders=True)
+        compare_set (set or numpy.ndarray): Set of point IDs (when do_borders=False)
+                                           OR 1D array of border coordinates (when do_borders=True)
         xy_scale (float): Scaling factor for X and Y coordinates
         z_scale (float): Scaling factor for Z coordinate
+        num (int): Number of nearest neighbors (ignored when do_borders=True, always uses 1)
+        do_borders (bool): If True, perform border-to-border distance calculation
     
     Returns:
-        float: Average distance to nearest neighbors
+        tuple: (average_distance, distances_dict)
     """
     
-    # Extract and scale coordinates for compare_set
-    compare_coords = []
-    compare_ids = list(compare_set)
-    
-    for point_id in compare_ids:
-        z, y, x = point_centroids[point_id]
-        compare_coords.append([z * z_scale, y * xy_scale, x * xy_scale])
-    
-    compare_coords = np.array(compare_coords)
-    
-    # Build KDTree for efficient nearest neighbor search
-    tree = KDTree(compare_coords)
-    
-    distances = {}
-    same_sets = root_set == compare_set
-    
-    for root_id in root_set:
-        # Get scaled coordinates for root point
-        z, y, x = point_centroids[root_id]
-        root_coord = np.array([z * z_scale, y * xy_scale, x * xy_scale])
+    if do_borders:
+        # Border comparison mode
+        if not isinstance(compare_set, np.ndarray):
+            raise ValueError("When do_borders=True, compare_set must be a numpy array of coordinates")
         
-        if same_sets:
-            # When sets are the same, find 2 nearest neighbors and take the second one
-            # (first one would be the point itself)
-            distances_to_all, indices = tree.query(root_coord, k= (num + 1))
-
-            temp_dist = 0
-            for i in range(1, len(distances_to_all)):
-                temp_dist += distances_to_all[i]
-
-            distances[root_id] = temp_dist/(len(distances_to_all) - 1)
-
-        else:
-            # Different sets, find nearest neighbors
-            distances_to_all, _ = tree.query(root_coord, k=num)
-            temp_dist = 0
-            for val in distances_to_all:
-                temp_dist += val
-
-            distances[root_id] = temp_dist/(len(distances_to_all))
-
-    avg = np.mean(list(distances.values())) if list(distances.values()) else 0.0
-
+        # Vectorized scaling for compare coordinates
+        compare_coords_scaled = compare_set.astype(float)
+        compare_coords_scaled[:, 0] *= z_scale  # Z coordinates
+        compare_coords_scaled[:, 1:] *= xy_scale  # Y and X coordinates
+        
+        distances = {}
+        
+        for label, border_coords in root_set.items():
+            if len(border_coords) == 0:
+                continue
+                
+            # Vectorized scaling for border coordinates
+            border_coords_scaled = border_coords.astype(float)
+            border_coords_scaled[:, 0] *= z_scale  # Z coordinates
+            border_coords_scaled[:, 1:] *= xy_scale  # Y and X coordinates
+            
+            # Remove overlapping coordinates to avoid distance = 0
+            # Create a set of tuples for fast membership testing
+            border_coords_set = set(map(tuple, border_coords_scaled))
+            
+            # Filter out overlapping coordinates from compare set
+            non_overlapping_mask = np.array([
+                tuple(coord) not in border_coords_set 
+                for coord in compare_coords_scaled
+            ])
+            
+            if not np.any(non_overlapping_mask):
+                # All compare coordinates overlap - skip this object or set to NaN
+                distances[label] = np.nan
+                continue
+            
+            filtered_compare_coords = compare_coords_scaled[non_overlapping_mask]
+            
+            # Build KDTree with filtered coordinates
+            tree = KDTree(filtered_compare_coords)
+            
+            # Vectorized nearest neighbor search for all border points at once
+            distances_to_all, _ = tree.query(border_coords_scaled, k=1)
+            
+            # Find minimum distance for this object
+            distances[label] = np.min(distances_to_all)
+        
+        # Calculate average excluding NaN values
+        valid_distances = [d for d in distances.values() if not np.isnan(d)]
+        avg = np.mean(valid_distances) if valid_distances else np.nan
+        return avg, distances
     
-    # Return average distance
-    return avg, distances
-
+    else:
+        # Original centroid comparison mode (unchanged)
+        # Extract coordinates for compare_set
+        compare_coords = np.array([point_centroids[point_id] for point_id in compare_set])
+        
+        # Vectorized scaling for compare coordinates
+        compare_coords_scaled = compare_coords.astype(float)
+        compare_coords_scaled[:, 0] *= z_scale  # Z coordinates
+        compare_coords_scaled[:, 1:] *= xy_scale  # Y and X coordinates
+        
+        # Build KDTree for efficient nearest neighbor search
+        tree = KDTree(compare_coords_scaled)
+        
+        distances = {}
+        same_sets = root_set == compare_set
+        
+        # Extract and scale root coordinates all at once
+        root_coords = np.array([point_centroids[root_id] for root_id in root_set])
+        root_coords_scaled = root_coords.astype(float)
+        root_coords_scaled[:, 0] *= z_scale  # Z coordinates
+        root_coords_scaled[:, 1:] *= xy_scale  # Y and X coordinates
+        
+        # Vectorized nearest neighbor search for all root points
+        if same_sets:
+            distances_to_all, indices = tree.query(root_coords_scaled, k=(num + 1))
+            # Remove self-matches (first column) and average the rest
+            if num == 1:
+                distances_array = distances_to_all[:, 1]  # Just take second nearest
+            else:
+                distances_array = np.mean(distances_to_all[:, 1:], axis=1)
+        else:
+            distances_to_all, _ = tree.query(root_coords_scaled, k=num)
+            if num == 1:
+                distances_array = distances_to_all.flatten()
+            else:
+                distances_array = np.mean(distances_to_all, axis=1)
+        
+        # Map back to root_ids
+        for i, root_id in enumerate(root_set):
+            distances[root_id] = distances_array[i]
+        
+        avg = np.mean(distances_array) if len(distances_array) > 0 else 0.0
+        return avg, distances
 
 
 #voronois:
@@ -599,10 +664,10 @@ def convert_centroids_to_array(centroids_list, xy_scale = 1, z_scale = 1):
     points_array[:, 1:] = points_array[:, 1:] * xy_scale #account for scaling
 
     points_array[:, 0] = points_array[:, 0] * z_scale #account for scaling
-        
+
     return points_array
 
-def generate_r_values(points_array, step_size, bounds = None, dim = 2, max_proportion=0.5):
+def generate_r_values(points_array, step_size, bounds = None, dim = 2, max_proportion=0.5, max_r = None):
     """
     Generate an array of r values based on point distribution and step size.
     
@@ -634,18 +699,27 @@ def generate_r_values(points_array, step_size, bounds = None, dim = 2, max_propo
         min_coords = np.array([0,0,0])
         dimensions = max_coords - min_coords
 
-    max_dimension = np.max(dimensions)
+    if 1 in dimensions:
+        dimensions = np.delete(dimensions, 0) #Presuming 2D data 
+
+    min_dimension = np.min(dimensions) #Biased for smaller dimension now for safety
     
     # Calculate maximum r value (typically half the shortest side for 2D,
     # or scaled by max_proportion for general use)
-    max_r = max_dimension * max_proportion
+    if max_r is None:
+        max_r = min_dimension * max_proportion
+        if max_proportion < 1:
+            print(f"Omitting search radii beyond {max_r}")
+    else:
+        print(f"Omitting search radii beyond {max_r} (to keep analysis within the mask)")
+
     
     # Generate r values from 0 to max_r with step_size increments
     num_steps = int(max_r / step_size)
     r_values = np.linspace(step_size, max_r, num_steps)
 
     if r_values[0] == 0:
-        np.delete(r_values, 0)
+        r_values = np.delete(r_values, 0)
     
     return r_values
 
@@ -662,7 +736,7 @@ def convert_augmented_array_to_points(augmented_array):
     # Extract just the coordinate columns (all except first column)
     return augmented_array[:, 1:]
 
-def optimized_ripleys_k(reference_points, subset_points, r_values, bounds=None, edge_correction=True, dim = 2, is_subset = False):
+def optimized_ripleys_k(reference_points, subset_points, r_values, bounds=None, dim = 2, is_subset = False, volume = None, n_subset = None):
     """
     Optimized computation of Ripley's K function using KD-Tree with simplified but effective edge correction.
     
@@ -677,7 +751,8 @@ def optimized_ripleys_k(reference_points, subset_points, r_values, bounds=None, 
     K_values: numpy array of K values corresponding to r_values
     """
     n_ref = len(reference_points)
-    n_subset = len(subset_points)
+    if n_subset is None:
+        n_subset = len(subset_points)
 
     # Determine bounds if not provided
     if bounds is None:
@@ -688,10 +763,12 @@ def optimized_ripleys_k(reference_points, subset_points, r_values, bounds=None, 
     # Calculate volume of study area
     min_bounds, max_bounds = bounds
     sides = max_bounds - min_bounds
-    if dim == 2:
-        volume = sides[0] * sides[1]
-    else:
-        volume = np.prod(sides)
+
+    if volume is None:
+        if dim == 2:
+            volume = sides[0] * sides[1]
+        else:
+            volume = np.prod(sides)
     
     # Point intensity (points per unit volume)
     intensity = n_ref / volume
@@ -705,94 +782,19 @@ def optimized_ripleys_k(reference_points, subset_points, r_values, bounds=None, 
     # For each r value, compute cumulative counts
     for i, r in enumerate(r_values):
         total_count = 0
-        
+
         # Query the tree for all points within radius r of each subset point
         for j, point in enumerate(subset_points):
             # Find all reference points within radius r
             indices = tree.query_ball_point(point, r)
             count = len(indices)
-            
-            # Apply edge correction if needed
-            if edge_correction:
-                # Calculate edge correction weight
-                weight = 1.0
-                
-                if dim == 2:
-                    # For 2D - check all four boundaries
-                    x, y = point
                     
-                    # Distances to all boundaries
-                    x_min_dist = x - min_bounds[0]
-                    x_max_dist = max_bounds[0] - x
-                    y_min_dist = y - min_bounds[1]
-                    y_max_dist = max_bounds[1] - y
-                    
-                    proportion_in = 1.0
-                    # Apply correction for each boundary if needed
-                    if x_min_dist < r:
-                        proportion_in -= 0.5 * (1 - x_min_dist/r)
-                    if x_max_dist < r:
-                        proportion_in -= 0.5 * (1 - x_max_dist/r)
-                    if y_min_dist < r:
-                        proportion_in -= 0.5 * (1 - y_min_dist/r)
-                    if y_max_dist < r:
-                        proportion_in -= 0.5 * (1 - y_max_dist/r)
-                    
-                    # Corner correction
-                    if ((x_min_dist < r and y_min_dist < r) or 
-                        (x_min_dist < r and y_max_dist < r) or
-                        (x_max_dist < r and y_min_dist < r) or
-                        (x_max_dist < r and y_max_dist < r)):
-                        proportion_in += 0.1  # Add a small boost for corners
-                    
-                elif dim == 3:
-                    # For 3D - check all six boundaries
-                    x, y, z = point
-                    
-                    # Distances to all boundaries
-                    x_min_dist = x - min_bounds[0]
-                    x_max_dist = max_bounds[0] - x
-                    y_min_dist = y - min_bounds[1]
-                    y_max_dist = max_bounds[1] - y
-                    z_min_dist = z - min_bounds[2]
-                    z_max_dist = max_bounds[2] - z
-                    
-                    proportion_in = 1.0
-                    # Apply correction for each boundary if needed
-                    if x_min_dist < r:
-                        proportion_in -= 0.25 * (1 - x_min_dist/r)
-                    if x_max_dist < r:
-                        proportion_in -= 0.25 * (1 - x_max_dist/r)
-                    if y_min_dist < r:
-                        proportion_in -= 0.25 * (1 - y_min_dist/r)
-                    if y_max_dist < r:
-                        proportion_in -= 0.25 * (1 - y_max_dist/r)
-                    if z_min_dist < r:
-                        proportion_in -= 0.25 * (1 - z_min_dist/r)
-                    if z_max_dist < r:
-                        proportion_in -= 0.25 * (1 - z_max_dist/r)
-                    
-                    # Corner correction for 3D (if point is near a corner)
-                    num_close_edges = (
-                        (x_min_dist < r) + (x_max_dist < r) +
-                        (y_min_dist < r) + (y_max_dist < r) +
-                        (z_min_dist < r) + (z_max_dist < r)
-                    )
-                    if num_close_edges >= 2:
-                        proportion_in += 0.05 * num_close_edges  # Stronger boost for more edges
-                
-                # Ensure proportion_in stays within reasonable bounds
-                proportion_in = max(0.1, min(1.0, proportion_in))
-                weight = 1.0 / proportion_in
-                
-                count *= weight
-            
             total_count += count
-        
+
         # Subtract self-counts if points appear in both sets
         if is_subset or np.array_equal(reference_points, subset_points):
             total_count -= n_ref  # Subtract all self-counts
-        
+
         # Normalize
         K_values[i] = total_count / (n_subset * intensity)
     

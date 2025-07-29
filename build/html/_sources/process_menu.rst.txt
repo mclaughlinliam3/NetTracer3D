@@ -10,7 +10,7 @@ The Process Menu offers options for calculating networks and altering image cont
 
 .. _connectivity_network:
 
-'Process -> Calculate -> Calculate Connectivity Network...'
+'Process -> Calculate Network -> Calculate Connectivity Network...'
 -------------------------------------------------------
 * This method is used to connect objects in the nodes channel via objects in the edges channel.
 * Please see :doc:`quickstart` for a detailed walkthrough about using this function.
@@ -59,8 +59,7 @@ Parameter Explanations
     * Note: This occurs after NetTracer3D has discretized (split up) the edges. It functions similarly but NOT the same as removing the trunk from the network in-post. It will instead remove the highest-volume (literally, the largest) edge.
     * Meanwhile, removing the trunk from the network in post takes out the most interconnected edge. Many times this will have the same result, but not always. Just make sure you are using the version of trunk removal that you want.
 #. Use GPU:
-    * Has NetTracer3D attempt to use the GPU for the distance transform and Gaussian Blur steps. 
-    * This generally works great for the gaussian blur, although the GPU distance transform algorithm is extremely greedy with VRAM.
+    * Has NetTracer3D attempt to use the GPU for the distance transform step. 
     * If fast dilation is enabled and your system runs out of VRAM doing the distance transform, this algorithm is set up to iteratively retry the operation with successive downsamples, until it finds one that fits in your GPU. This downsample is only temporary - NetTracer3D is attempting to find seed kernels to reassign labels in a full-sized binary dilation.
     * Note that this of course runs the risk of removing nodes from your array, as described in parameter 7 (Use parameter 7 for more direct control over this behavior).
     * If the distance transform fails for any othe reason on GPU, it will by default be computed on CPU instead. The CPU version will never attempt to downsample.
@@ -69,7 +68,7 @@ Parameter Explanations
     * Makes NetTracer3D label objects in the nodes channel with a simple adjacency-labeling scheme (ie, all discrete objects in space aquire a unique number).
     * **DISABLE** this option if your nodes were already labeled elsewhere.
 #. Use Inner Edges:
-    * If enabled, edges that connect nodes that exist soley within said nodes' search regions will be used to make connections. (Requiring the gaussian blur step).
+    * If enabled, edges that connect nodes that exist soley within said nodes' search regions will be used to make connections.
     * Note that there is not really a great reason to disable this, but it could be because you only want more distant connections to be considered.
 #. Use Fast Dilation:
     * If enabled, dilation will be predicted using pseudo-3D binary kernels.
@@ -95,7 +94,7 @@ Algorithm Explanations
 1. Nodes are expanded based on their search distance. This expansion is accomplished through the use of a distance transform that assigns outer 'shell' regions a label corresponding to the internal labeled node they are closest to.
 2. The search region is used to split the edges up. Edges outside the search region become 'outer edges', while those inside the search region become 'inner edges'. The edge pieces aquire unique labels, conveying their identity.
 3. (If not using param 5), outer edges are still dilated a single time to force them to once more overlap the search region by a single voxel. The search region for every node can then be evaluated for what 'outer edge' it interacts with.
-4. Since inner edges potentially course through many search regions, an additional step is required to find their node-to-node connections. The gaussian blur of the search region is aquired, with 'blurry' regions representing node borders. These node borders can be extracted and used to isolate the 'inner edge pieces' that exist inside of them, which all aquire unique label IDs. We can dilate those inner edge pieces once to evaluate which nodes touch them.
+4. Since inner edges potentially course through many search regions, an additional step is required to find their node-to-node connections. The border of the search region is acquired via the skimage find_boundaries method. These node borders can be extracted and used to isolate the 'inner edge pieces' that exist inside of them, which all aquire unique label IDs. We can dilate those inner edge pieces once to evaluate which nodes touch them.
 5. The group of edges that each node interacts with can then be sorted through. Any nodes that interact with the same edge are connected.
 6. Finally, the connections are used to create a NetworkX graph object which can be used for network analysis.
 
@@ -103,7 +102,7 @@ Algorithm Explanations
 
 .. _proximity_network:
 
-'Process -> Calculate -> Calculate Proximity Network...'
+'Process -> Calculate Network -> Calculate Proximity Network...'
 -------------------------------------------------------
 * This method is used to connect objects in the nodes channel based on whether they are within some user-defined distance of each other.
 * Please see :doc:`quickstart` for a brief walkthrough about using this function.
@@ -164,7 +163,21 @@ Algorithm Explanations
 
 * Press 'Run Proximity Network' to run the method with the desired parameters. The output data populate their respective areas, ie the four channels for images that are loaded, or the right table widgets for any spreadsheet-style properties.
 
-'Process -> Calculate -> Calculate Centroids...'
+'Process -> Calculate Network -> Calculate Branchpoint Network...'
+--------------------------------------
+* This method is used to connect the branchpoints of a branchy binary segmented image (such as blood vessels), converting them into nodes of a network.
+* This method brings up the menu to generate nodes from edge vertices. Once nodes are created, they search their immediate 3x3x3 neighborhood and assign connections based on which edges they encounter.
+* The binary image must begin in the 'edges' channel, since nodes will be generated at the branchpoints.
+* This method just forks the node generation from edges method with some suggested default parameters pre-selected, but see :ref:`generate nodes` for parameter and algorithm explanations.
+
+'Process -> Calculate Network -> Calculate Branch Adjacency Network'
+--------------------------------------------------------------------
+* This method is used to connect the adjacent branches of a branchy binary segmented image (such as blood vessels), converting them the branches themselves (as opposed to the branchpoints) into nodes of a network.
+* This method brings up the menu to label branches, followed by running a proximity network of distance = 1.
+* The binary image must begin in the 'edges' channel.
+* This method just forks the branch labelling method with some suggested default parameters pre-selected, but see :ref:`label branches` for parameter and algorithm explanations.
+
+'Process -> Calculate Network -> Calculate Centroids...'
 --------------------------------------
 * This method is used to calculate and set the nodes or edge centroid properties.
 * The centroid is the center of mass of an object and can be used as a low-memory way to track its general location.
@@ -504,19 +517,25 @@ Algorithm Explanations
 
 * The feature maps for the 'Quick Model' are as follows:
 
-1. Gaussian Blurs for sigma values 1, 2, 4, 8 (obtained via scipy.ndimage.gaussian_filter())
-2. Difference of Gaussians for sigma values 1-2, 2-4, and 4-8.
-3. The gradiant magnitude, obtained from scipy.ndimage.sobel() sobel kernels in each dimension.
+#. The original image.
+#. Gaussian Blurs for sigma values 1, 2, 4, 8 (obtained via scipy.ndimage.gaussian_filter())
+#. Difference of Gaussians for sigma values 1-2, 2-4, and 4-8.
+#. The gradiant magnitude, obtained from scipy.ndimage.sobel() sobel kernels in each dimension.
 
-* The feature maps for 'Detailed Model' are as follows:
+* The feature maps for 'Detailed Model' are computed using multiple scales and morphological operators:
 
-1. Gaussian Blurs for sigma values 1, 2, 4, 8 (obtained via scipy.ndimage.gaussian_filter())
-2. Difference of Gaussians for sigma values 1-2, 2-4, and 4-8.
-3. The gradiant magnitude, obtained from scipy.ndimage.sobel() sobel kernels in each dimension.
-4. Local means
-5. Local variances
-6. The Laplacian (sum of second derivatives)
-7. The Hessian Determinate (Product of second derivatives)
+#. The original Image
+#. Gaussian Blurs for sigma values 1, 2, 4, 8 (obtained via scipy.ndimage.gaussian_filter())
+#. Difference of Gaussians (DoG) for sigma values 1-2, 2-4, and 4-8.
+#. Gaussian Gradient Magnitudes - Computed for each sigma value using scipy.ndimage.sobel() kernels in all three dimensions (x, y, z). Magnitude calculated as sqrt(gx² + gy² + gz²) for each Gaussian-smoothed image. Captures edge strength at multiple scales.
+#. Laplacian of Gaussian - Second-order derivative features computed using scipy.ndimage.laplace(). Applied to each Gaussian-smoothed image at different sigma values. Detects blob-like structures and zero-crossings.
+#. Largest Hessian Eigenvalue - Computes the largest eigenvalue of the 3x3 Hessian matrix at each voxel. Uses second-order derivatives (hxx, hyy, hzz, hxy, hxz, hyz) via scipy.ndimage.gaussian_filter() with order parameters. Fully vectorized computation using numpy.linalg.eigvals() for all spatial locations simultaneously. Captures local curvature information and tubular/sheet-like structures.
+#. Feature Normalization - Intensity features (original image, Gaussians, DoGs) are kept in raw form. Morphological features (gradients, Laplacians, Hessian eigenvalues) are normalized using z-score standardization. Normalization applied per-feature across all spatial dimensions to ensure balanced feature contributions.
+
+* In general, the quick model is preferable for images with good SNR, while the detailed model weights morphology harder and so is better for poor SNR but typically requires more training.
+* For RGB images, each channel is processed independently, meaning it requires 3x as many maps.
+* Training by 2D patterns simply uses 2D alternatives to the above described maps.
+* Training with GPU simply uses cupy methods to get the above described maps.
 
 * Note these feature maps are computed in parallel, so while chunk processing is done sequentially to preserve RAM (especially due to feature map bloat), some speed can be recouped by parellel computing of the maps themselves.
 
@@ -539,6 +558,7 @@ Parameter Explanations
 'Process -> Image -> Crop Channels'
 -------------------------------------------------------
 * This method can be used to crop all the avialable channels.
+* Note that it can be auto-called for a target region by holding Shift while left clicking and dragging in the Image Viewer Window.
 
 Parameter Explanations
 ~~~~~~~~~~~~~~~~~~~~~~~
@@ -573,6 +593,8 @@ Parameter Explanations
 1. Remove Branches Pixel Length...?
     * The length (in pixels/voxels, not scaled) of terminal branches (or spines) to remove from the skeleton output.
     * This method only removes terminal branches. Internal branches will never be effected regardless of how large this param is.
+    * This method will not trim branches that are longer than the designated length.
+    * However, it will punch holes into branchpoints to fully remove branches. Holes can be filled by dilating the image once, then skeletonizing it again/eroding it once. Currently, these holes are not filled by default.
 2. Attempt to Auto Correct Skeleton looping
     * The skeletonize algo used here has a tendency to leave fat loop artifacts in thick regions of skeletonization.
     * Enabling this method will have NetTracer3D attempt to remove those artifacts and replace them with simple medial skeletons.
@@ -583,9 +605,10 @@ Algorithm Explanations
 2. If param 2 is enabled, NetTracer3D will run its 'Process -> Image -> Fill Holes' method, which will for the most part succesfully fill loop artifacts, returning them into 3D blobs. It will then just run the skeletonization again, which is often able to accurately skeletonize the blobs.
 3. If param 1 is enabled, NetTracer3D will iterate along the skeleton and identify endpoints as those regions that only have one neighbor. It will 'crawl' up from those endpoints along the skeleton a number of times equal to the inputed value (or until it hits a junction), and remove all associated positive voxels.
 
-'Process -> Image -> Watershed'
+'Process -> Image -> Binary Watershed'
 -------------------------------------
-* This method can be used to watershed an image, which splits (via labeling) apart fused objects that 'look' like two seperate objects.
+* This method can be used to watershed a binary image, which splits (via labeling) apart fused objects that 'look' like two seperate objects.
+* It is meant to be applied to binary segmentations, not segmentations of raw images.
 * This method is ideal for seperating overlapping objects in a binary segmentation, for example adjacent cells.
 * Selecting this method will show the following menu:
 
@@ -597,20 +620,19 @@ Parameter Explanations
 ~~~~~~~~~~~~~~~~~~~~~~~
 Running Watershed 
 
-1. Output Directory
+#. Output Directory
     * If a string path is included to a directory, the resulting Watershed will be saved there after it's calculated. If nothing is included, this will save nothing by default, and the user will need to save in post with 'File -> Save (As)'
-2. Proportion
+#. Smallest Radius
+    * The smallest radius of objects that you want to be split off by the watershed. Objects any smaller may get thresholded out - this value always overrides below 'proportion' param. Somewhat more intuitive param then below, use a conservative value a bit smaller than your smallest object's radius.
+#. Proportion
     * Controls how 'aggressive' the watershed is. See algorithm explanation.
-3. Use GPU
+    * Proportion (0-1) of distance transform value set [ie unique elements] to exclude (ie 0.2 = 20% of the set of all values of the distance transform get excluded).Essentially, vals closer to 0 are less likely to split objects but also won't kick out small objects from the output, vals slightly further from 0 will split more aggressively, but vals closer to 1 become unstable, leading to objects being evicted or labelling errors. Recommend something between 0.05 and 0.4, but it depends on the data (Or just enter a smallest radius above to avoid using this). Will tell you in command window what equivalent 'smallest radius' this is.
+#. Use GPU
     * Whether or not to try to use the GPU (only possible with a working CUDA toolkit).
     * Note that this method will always fall back to CPU if the GPU fails.
     * This method will additionally attempt to downsample your image if the GPU runs out of memory - see below for more information.
-4. Smallest Radius
-    * This param is supposed to predict param 2 based on the radius of the smallest object you want 'Watershedded' out, however I am not sure it always works and so it may be better to ignore it.
 5. Kernel Obtainment GPU downsample
     * If using GPU, provides user control to any forced downsampling that occurs for the first distance transform (which has larger labeled objects, so it can be a bit more aggressive) - see algorithm explanations.
-6. Smart Label GPU downsample
-    * If using GPU, provides user control to any forced downsampling that occurs for the second distance transform. Usually less aggressive than param 5 can be, due to the array containing smaller kernels at this point.
 
 Algorithm Explanations
 ~~~~~~~~~~~~~~~~~~~~~~~
@@ -618,10 +640,10 @@ Algorithm Explanations
 2. Like the other distance transforms in NetTracer3D, if the system runs out of VRAM computing the distance transform on GPU, it will reattempt with serial downsampling. This will ostensibly give the same output unless labeled objects have a dimension smaller than the downsample factor, after which they might be removed from the image. Do not use GPU if that may occur on this image.
 3. These regions are then erroded based on the value 'Proportion' - Essentially for a proportion of 0.05 (default), only the internal distance values with in the top 5% of the set of all distance values will be kept, to be used as seed kernels for relabeling the image.
 4. These seed kernels are assigned unique labels with the scipy.ndimage.label() method, before they are used to relabel the original binary image.
-5. This labeling is done with the Smart Label function (see Process -> Image -> Neighbor Labels). Essentially, all binary elements in the original image take on the label corresponding to the labeled seed they are closest to, effectively splitting up regions with small fusions in the original image.
+5. The relabelling (and ultimate watershed) from the kernels unto the binary image is then completed with the skimage watershed method.
 
-* This algorithm can be a bit slow on large images due to the double DTs. Additionally, the 'proportion' param is a bit hard to select. 0.05 works rather well for many cases, but if watershed outputs are not quite right, please try varying values for 'proportion', increasing from 0.05 to around 0.5 typically.
-* Despite this cumbersomeness, this algorithm can 3D watershed quite excellently when given the right params. Below is an example:
+* This algorithm can be a bit slow on large images. The 'proportion' param is a bit hard to select; therefore, smallest radius is the better option, if it is known (The measurement points can be used to obtain this value). For proportion, 0.05 works rather well for many cases, but if watershed outputs are not quite right, please try varying values for 'proportion', increasing from 0.05 to around 0.5 typically.
+* Below is an example:
 
 *Before Watershedding*
 
@@ -634,6 +656,28 @@ Algorithm Explanations
 .. image:: _static/shed2.png
    :width: 600px
    :alt: Watershed Post
+
+'Process -> Image -> Gray Watershed'
+-------------------------------------
+* This method can be used to watershed a grayscale image that has had its foreground segmented out, which seperates and labels objects based on their user-designated size and the object's blobbiness.
+* This is best used as a quick way to segment cells without training ML models.
+* The foreground must still be segmented out first, however. This can be easily done by intensity thresholding (accessible via the pencil widget).
+    * If the foreground is not segmented, the entire image will end up getting labeled based on the peaks, which is typically not desired.
+
+Parameter Explanations
+~~~~~~~~~~~~~~~~~~~~~~~
+#. Minimum Peak Distance...
+    * This value is important to set correctly to make this function perform well. This 'minimum peak' is the shortest distance between labeled components. For cells, for example, you can measure the distance between two adjacent, touching cells (with the measurement points tool).
+    * The 'peak' is based on the intensity of the cells so it would be between a pair of high intensity values on said cells. 
+    * If this value is too small, groups of cells may be over-labelled. If it is too large, under-labelled.
+#. Minimum Peak Intensity...
+    * This value can be set to ignore any part of the image below this intensity when finding peaks.
+
+Algorithm Explanations
+~~~~~~~~~~~~~~~~~~~~~~
+#. This skimage 'peaklocal_max' function is used to find the peaks in the image (regions of high intensity), separated by the above params.
+#. These peaks are drawn onto a copy of the array.
+#. The original array is binarized, and its cells are labeled by proximity to the peaks via the skimage watershed method.
 
 'Process -> Image -> Invert'
 -------------------------------------------------------
@@ -656,9 +700,11 @@ Algorithm Explanations
 * The idea behind this method is if the user loaded the centroids property alone, for example from a previous session or extracted from another analysis tool, and then wanted to access the image functions.
 * This method has no parameters. Simply press run it and the node centroids (if assigned) will become a new nodes image.
 
+.. _generate nodes:
+
 'Process -> Generate -> Generate Nodes (From 'Edge' Vertices)'
 -------------------------------------------------------------------
-* This method is designed to be used to create branchpoint networks. See see :ref:`branchpoint` for a brief walkthrough.
+* This method is designed to be used to create branchpoint networks. See :ref:`branchpoint` for a brief walkthrough.
 * It takes a binary segmentation in the edges channel and skeletonizes it, before placing new nodes along any branchpoints in the skeleton.
 * Selecting this function will show the following menu:
 
@@ -702,9 +748,11 @@ Algorithm Explanations
 6. If param 5 is enabled, the branchpoints are dilated as described, in order to merge nearby branchpoints. The resulting branchpoints are relabeled.
 7. The newly labeled branchpoint array is placed in the nodes channel to be used to make branchpoint networks.
 
+.. _label branches:
+
 'Process -> Generate -> Label Branches'
 -------------------------------------------------------------------
-* This method is designed to be used to label the branches of a binary mask (presumably, segmented from a branchy structure). See see :ref:`branches` for a brief walkthrough.
+* This method is designed to be used to label the branches of a binary mask (presumably, segmented from a branchy structure). See :ref:`branches` for a brief walkthrough.
 * Labeling branches can be a way to create networks (via branch proximity), or to label an image with meaningful domains that can be used for connectivity networks, calculating radii, etc.
 * Selecting this function will show the following menu:
 

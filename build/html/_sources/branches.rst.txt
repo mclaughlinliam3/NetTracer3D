@@ -31,40 +31,21 @@ We can see this image has succesfully identified the majority of the branches he
 Examples of Tweaking Branch Labels (Optional)
 ----------------
 
-However, in this instance, there are several areas that may be worth addressing for a more accurate labeling, which I will discuss below:
-There are three issues I will address:
+However, in this instance, there are few areas that may be worth addressing for a more accurate labeling.
 
-1. The body of the neuron has been divided into a plethora of branches. (The algorithm optimally handles branch-structures and tends to get confused over bulbous ones).
-2. There are little branches at the end of some of the dendrites that do not belong there. (In this case, this is due to segmentation artifacts not fully fusing the ends of the dendrites in the segmentation).
-3. Some branches share a label. (This can occur due to how this algorithm works at a fundamental level [although it can be addressed in post] because the system is *guessing* so to speak what constitutes a unique branch. See the section on this algorithm for more information.)
+* Mainly, that there are little branches at the end of some of the dendrites that do not belong there. (In this case, this is due to segmentation artifacts making the edges appear to have really small branches).
 
-Luckily NetTracer3D offers a suite of tools for improving segmentations in post. 
+Luckily NetTracer3D's branch labelling algorithm has a good variety of auto-correcting tools when labeling branches. Here are a few that are enabled by default that I generally recommend:
 
-Handling over-labeled globs
-~~~~~~~~~~~~~~~~~~~
+1. By default, 'Auto-Correct 2' is enabled in the branch labeler. This option collapses any internal labels and forces them to merge with neighbors bordering the background. Otherwise, the middle of the neuron here (the soma) would likely have obtained a mosaic-looking set of labels.
 
-To address the first one, I save my labeled branches and redo the branch labeling algorithm:
-
-.. image:: _static/branch3.png
-   :width: 500px
-   :alt: Branch Label Menu
-
-This time instead of using the default settings, I enable 'auto correct branches' and set its corresponding value below from 4 to 2 (2 just happened to do what I needed in my testing).
-This enables an optional sub-algorithm that evaluates groups of branches and decides if it should collapse over-abundant regions into a single branch.
-When I run the labeler with the new settings, I get this image:
-
-.. image:: _static/branch5.png
-   :width: 500px
-   :alt: Branch Grouped
-
-As we can see, this time it grouped branches together into much larger branches, and correctly identified the soma.
-But we'll assume that what I want is the abundance of branches in the first image, together with the soma.
-We'll save this new, broadly labeled branch image and set it aside while we return to the original labeling strategy.
+2. For 3D images, 'Attempt to Auto-Correct Skeleton Looping' is auto-enabled. This option attempts to convert any polyp-looking artifacts that show up in the internal skeletonization step back to single filaments (generally recommend).
+ * However, this is not enabled for 2D, so my neuron did not use it. Mainly this is because in 2D, it cannot tell the difference between an artifactual and a real loop, but in this case we don't have any real loops so we'll use it.
 
 Handling spine artifacts
 ~~~~~~~~~~~~~~~~~~~
 
-Reloading my binary image of a neuron into edges, I once more run the branch labeler, this time not enabling 'auto correct branches'. However, recalling my second issue, I would like to avoid those small, wrongly labeled terminal branches from slipping through.
+Reloading my binary image of a neuron into edges, I once more run the branch labeler. I would like to avoid those small, wrongly labeled terminal branches from slipping through.
 To do this, I want to decide what length of spine to remove from the image skeleton (which is used to label branches). This choice can be informed by skeletonizing my image with 'Process -> Image -> Skeletonize', then measuring the length of these terminal branches by right-clicking in the Image Viewer Window and placing measurement points:
 
 .. image:: _static/branch2.png
@@ -84,25 +65,24 @@ Now when I run my labeler, it ignores all *terminal* branches below that length.
 
 Handling split labels
 ~~~~~~~~~~~~~~~~~~~
-In the labeled output placed in the segmentation channel, I also want to address issue 3. To do this, I right click the image and choose 'Select All -> Edges'. Once everything is higlighted, I right click again and choose 'Selection -> Split non touching labels'.
-This causes all non-touching labels to take on unique identities, handling issue 3.
+* Depending on the the structure of the branched image, rarely certain branches may inherit the label of a nearby branch, if they are far away from the internal filament (skeleton) of their own branch and the adjacent branch is much smaller.
+* This issue does not apply here, but to address it, I could enable the 'Split Non-Touching Branches' correction option, which is relevant mainly for 'Branch Adjacency Networks', but generally not recommended if running purely morphological analysis.
 
-Putting it all together
+With Corrections
 ~~~~~~~~~~~~~~~~~~~
-Finally, to get the large soma label into this new many-branch image, I load the broadly labeled branch image (generated above) back into the nodes channel. With 'nodes' as my 'active image', I click on the soma to select it. Finally, I choose 'Selection -> Override Channel with Selection'.
-In the window that appears, I tell it to use my nodes selected region (from the nodes channel) to override my edges channel (selecting to place the output in the edges channel). This takes the labels from my nodes channel in the highlighted region, transposes them to not overlap with current labels in my edges channel, and stamps that region into my edges channel, effectively moving the soma label while keeping the rest of the branch labels.
 Our final branch labeled neuron looks like this:
 
 .. image:: _static/branch6.png
    :width: 500px
    :alt: Branch Final
-
-Although we could have grouped the soma manually, I demonstrated this algorithmically to show how this could be scaled up. If we were labeling many neurons and wanted each to look like this, the above steps will allow us to do it without rote selection (only, you would use the volume-based thresholder to select the somas).
+*Branches smaller than 8 voxels long have joined their neighbors*
 
 Branch Adjacency Network
 ----------------
-To create a network showing adjacent branches, first move the labeled branches into the nodes channel (either by saving and reloading it, or with 'Image -> Overlays -> Shuffle').
-Using the branches as nodes, create a proximity network using 'Process -> Calculate -> Calculate Proximity Network', using 1 voxel as the search param and searching from morphological shape rather than centroids. This will result in the generation of a network showing adjacent branches. The final product is shown below:
+* The simplest way to create a branch adjacency network is to run 'Process -> Calculate Network -> Calculate Branch Adjacency Network (of edges)'
+* This can be run on a binary image in the 'edges' channel.
+* It simply labels the branches with the same options as above, then calls the proximity network to find neighbors a distance of 1 voxel away.
+* Of course, it could also be accomplished by labeling the branches, moving them to the nodes channel, and manually running a proximity network.
 
 .. image:: _static/branch7.png
    :width: 500px
@@ -117,7 +97,7 @@ For example, in the below image, I label the bronchi on this 3D image of a mouse
 .. image:: _static/branch8.png
    :width: 500px
    :alt: Bronchi Image
-*This lovely dataset was provided by Rebecca Salamon from UC San Diego. Please use 'Image -> Show 3D' to call a Napari window that will automatically load active NetTracer3D datasets for 3D visualization.*
+*This dataset was shared by Rebecca Salamon from UC San Diego. Please use 'Image -> Show 3D' to call a Napari window that will automatically load active NetTracer3D datasets for 3D visualization.*
 
 .. image:: _static/branch9.png
    :width: 500px
@@ -133,10 +113,11 @@ For example, in the below image, I label the bronchi on this 3D image of a mouse
 
 Branchpoint Networks
 ----------------
-Another option for creating networks from branched objects is connecting the branchpoints rather than the branches themselves. To accomplish this, load your branchy image into edges and select 'Process -> Generate -> Generate Nodes from Edge Vertices'.
-You will be prompted by the same window that appears second in the branch-labeler algorithm. This is because the branch labeler actually uses the gennodes algorithm as an internal step, but executing it alone will give us nodes at branchpoints of the image skeleton without proceeding to the labeling step.
-We can then use that set of branchpoint nodes together with the image skeleton (which gennodes will transform your edges into) to create a connectivity network.
-Simply use 'Process -> Calculate -> Calculate Connectivity Network' after gennodes is finished. In the set of params that appear, **set 'Node Search' parameter to 2**. You must do this for accurate results, as this algorithm must dilate your edges a single time to see what neighbors they overlap with, and if your node vertices are too small, the edges will pass over that node and create a hub rather than a simple connection.
+* Another option for creating networks from branched objects is connecting the branchpoints rather than the branches themselves. To accomplish this, the easiest way is to run 'Process -> Calculate Network -> Calculate Branchpoint Network'
+* This can be run on a binary image in the 'edges' channel.
+* It simply assign nodes to branchpoints using the 'Process -> Generate -> Generate4 Nodes From Edge Vertices' option, then assigns neighbors based on which edges interact with which node.
+* Although not *exactly* the same, this can be accomplished by running the aforementioned methods to generate the nodes, then manually linking them with a connectivity network. (But note that if done this way, some level of node-search is required, which would probably be slower).
+
 In the below example, I segment, then create a branchpoint network from a 3D image of lymph nodes.
 
 .. image:: _static/lymph1.png

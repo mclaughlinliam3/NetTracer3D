@@ -6,14 +6,14 @@
   <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
 
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>All Process Menu Options &mdash; NetTracer3D 0.8.2 documentation</title>
+  <title>All Process Menu Options &mdash; NetTracer3D 0.9.0 documentation</title>
       <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=b86133f3" />
       <link rel="stylesheet" type="text/css" href="_static/css/theme.css?v=e59714d7" />
 
   
       <script src="_static/jquery.js?v=5d32c60e"></script>
       <script src="_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
-      <script src="_static/documentation_options.js?v=dbee5847"></script>
+      <script src="_static/documentation_options.js?v=39bb1c6d"></script>
       <script src="_static/doctools.js?v=9bcbadda"></script>
       <script src="_static/sphinx_highlight.js?v=dc90522c"></script>
     <script src="_static/js/theme.js"></script>
@@ -58,17 +58,19 @@
 <li class="toctree-l1"><a class="reference internal" href="file_menu.html">All File Menu Options</a></li>
 <li class="toctree-l1"><a class="reference internal" href="analyze_menu.html">All Analyze Menu Options</a></li>
 <li class="toctree-l1 current"><a class="current reference internal" href="#">All Process Menu Options</a><ul>
-<li class="toctree-l2"><a class="reference internal" href="#process-calculate-calculate-connectivity-network">‘Process -&gt; Calculate -&gt; Calculate Connectivity Network…’</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="#process-calculate-network-calculate-connectivity-network">‘Process -&gt; Calculate Network -&gt; Calculate Connectivity Network…’</a><ul>
 <li class="toctree-l3"><a class="reference internal" href="#parameter-explanations">Parameter Explanations</a></li>
 <li class="toctree-l3"><a class="reference internal" href="#algorithm-explanations">Algorithm Explanations</a></li>
 </ul>
 </li>
-<li class="toctree-l2"><a class="reference internal" href="#process-calculate-calculate-proximity-network">‘Process -&gt; Calculate -&gt; Calculate Proximity Network…’</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="#process-calculate-network-calculate-proximity-network">‘Process -&gt; Calculate Network -&gt; Calculate Proximity Network…’</a><ul>
 <li class="toctree-l3"><a class="reference internal" href="#id1">Parameter Explanations</a></li>
 <li class="toctree-l3"><a class="reference internal" href="#id2">Algorithm Explanations</a></li>
 </ul>
 </li>
-<li class="toctree-l2"><a class="reference internal" href="#process-calculate-calculate-centroids">‘Process -&gt; Calculate -&gt; Calculate Centroids…’</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="#process-calculate-network-calculate-branchpoint-network">‘Process -&gt; Calculate Network -&gt; Calculate Branchpoint Network…’</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#process-calculate-network-calculate-branch-adjacency-network">‘Process -&gt; Calculate Network -&gt; Calculate Branch Adjacency Network’</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#process-calculate-network-calculate-centroids">‘Process -&gt; Calculate Network -&gt; Calculate Centroids…’</a><ul>
 <li class="toctree-l3"><a class="reference internal" href="#id3">Parameter Explanations</a></li>
 <li class="toctree-l3"><a class="reference internal" href="#id4">Algorithm Explanations</a></li>
 </ul>
@@ -125,30 +127,35 @@
 <li class="toctree-l3"><a class="reference internal" href="#id22">Algorithm Explanations</a></li>
 </ul>
 </li>
-<li class="toctree-l2"><a class="reference internal" href="#process-image-watershed">‘Process -&gt; Image -&gt; Watershed’</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="#process-image-binary-watershed">‘Process -&gt; Image -&gt; Binary Watershed’</a><ul>
 <li class="toctree-l3"><a class="reference internal" href="#id23">Parameter Explanations</a></li>
 <li class="toctree-l3"><a class="reference internal" href="#id24">Algorithm Explanations</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="#process-image-gray-watershed">‘Process -&gt; Image -&gt; Gray Watershed’</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#id25">Parameter Explanations</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#id26">Algorithm Explanations</a></li>
 </ul>
 </li>
 <li class="toctree-l2"><a class="reference internal" href="#process-image-invert">‘Process -&gt; Image -&gt; Invert’</a></li>
 <li class="toctree-l2"><a class="reference internal" href="#process-image-z-project">‘Process -&gt; Image -&gt; Z-Project’</a></li>
 <li class="toctree-l2"><a class="reference internal" href="#process-generate-generate-nodes-from-node-centroids">‘Process -&gt; Generate -&gt; Generate Nodes (From Node Centroids)’</a></li>
 <li class="toctree-l2"><a class="reference internal" href="#process-generate-generate-nodes-from-edge-vertices">‘Process -&gt; Generate -&gt; Generate Nodes (From ‘Edge’ Vertices)’</a><ul>
-<li class="toctree-l3"><a class="reference internal" href="#id25">Parameter Explanations</a></li>
-<li class="toctree-l3"><a class="reference internal" href="#id26">Algorithm Explanations</a></li>
-</ul>
-</li>
-<li class="toctree-l2"><a class="reference internal" href="#process-generate-label-branches">‘Process -&gt; Generate -&gt; Label Branches’</a><ul>
 <li class="toctree-l3"><a class="reference internal" href="#id27">Parameter Explanations</a></li>
 <li class="toctree-l3"><a class="reference internal" href="#id28">Algorithm Explanations</a></li>
 </ul>
 </li>
+<li class="toctree-l2"><a class="reference internal" href="#process-generate-label-branches">‘Process -&gt; Generate -&gt; Label Branches’</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#id29">Parameter Explanations</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#id30">Algorithm Explanations</a></li>
+</ul>
+</li>
 <li class="toctree-l2"><a class="reference internal" href="#process-generate-generate-voronoi-diagram">‘Process -&gt; Generate -&gt; Generate Voronoi Diagram’</a><ul>
-<li class="toctree-l3"><a class="reference internal" href="#id29">Algorithm Explanations</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#id31">Algorithm Explanations</a></li>
 </ul>
 </li>
 <li class="toctree-l2"><a class="reference internal" href="#process-modify-network">‘Process -&gt; Modify Network’</a><ul>
-<li class="toctree-l3"><a class="reference internal" href="#id30">Parameter Explanations</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#id32">Parameter Explanations</a></li>
 </ul>
 </li>
 <li class="toctree-l2"><a class="reference internal" href="#next-steps">Next Steps</a></li>
@@ -195,8 +202,8 @@
 <ul class="simple">
 <li><p>The first submenu is the calculate menu, which has functions for calculating the networks and their properties.</p></li>
 </ul>
-<section id="process-calculate-calculate-connectivity-network">
-<span id="connectivity-network"></span><h2>‘Process -&gt; Calculate -&gt; Calculate Connectivity Network…’<a class="headerlink" href="#process-calculate-calculate-connectivity-network" title="Link to this heading"></a></h2>
+<section id="process-calculate-network-calculate-connectivity-network">
+<span id="connectivity-network"></span><h2>‘Process -&gt; Calculate Network -&gt; Calculate Connectivity Network…’<a class="headerlink" href="#process-calculate-network-calculate-connectivity-network" title="Link to this heading"></a></h2>
 <ul class="simple">
 <li><p>This method is used to connect objects in the nodes channel via objects in the edges channel.</p></li>
 <li><p>Please see <a class="reference internal" href="quickstart.html"><span class="doc">Quickstart - Segmenting Data and Generating Networks</span></a> for a detailed walkthrough about using this function.</p></li>
@@ -300,8 +307,7 @@
 </li>
 <li><dl class="simple">
 <dt>Use GPU:</dt><dd><ul class="simple">
-<li><p>Has NetTracer3D attempt to use the GPU for the distance transform and Gaussian Blur steps.</p></li>
-<li><p>This generally works great for the gaussian blur, although the GPU distance transform algorithm is extremely greedy with VRAM.</p></li>
+<li><p>Has NetTracer3D attempt to use the GPU for the distance transform step.</p></li>
 <li><p>If fast dilation is enabled and your system runs out of VRAM doing the distance transform, this algorithm is set up to iteratively retry the operation with successive downsamples, until it finds one that fits in your GPU. This downsample is only temporary - NetTracer3D is attempting to find seed kernels to reassign labels in a full-sized binary dilation.</p></li>
 <li><p>Note that this of course runs the risk of removing nodes from your array, as described in parameter 7 (Use parameter 7 for more direct control over this behavior).</p></li>
 <li><p>If the distance transform fails for any othe reason on GPU, it will by default be computed on CPU instead. The CPU version will never attempt to downsample.</p></li>
@@ -320,7 +326,7 @@
 </li>
 <li><dl class="simple">
 <dt>Use Inner Edges:</dt><dd><ul class="simple">
-<li><p>If enabled, edges that connect nodes that exist soley within said nodes’ search regions will be used to make connections. (Requiring the gaussian blur step).</p></li>
+<li><p>If enabled, edges that connect nodes that exist soley within said nodes’ search regions will be used to make connections.</p></li>
 <li><p>Note that there is not really a great reason to disable this, but it could be because you only want more distant connections to be considered.</p></li>
 </ul>
 </dd>
@@ -365,7 +371,7 @@
 <li><p>Nodes are expanded based on their search distance. This expansion is accomplished through the use of a distance transform that assigns outer ‘shell’ regions a label corresponding to the internal labeled node they are closest to.</p></li>
 <li><p>The search region is used to split the edges up. Edges outside the search region become ‘outer edges’, while those inside the search region become ‘inner edges’. The edge pieces aquire unique labels, conveying their identity.</p></li>
 <li><p>(If not using param 5), outer edges are still dilated a single time to force them to once more overlap the search region by a single voxel. The search region for every node can then be evaluated for what ‘outer edge’ it interacts with.</p></li>
-<li><p>Since inner edges potentially course through many search regions, an additional step is required to find their node-to-node connections. The gaussian blur of the search region is aquired, with ‘blurry’ regions representing node borders. These node borders can be extracted and used to isolate the ‘inner edge pieces’ that exist inside of them, which all aquire unique label IDs. We can dilate those inner edge pieces once to evaluate which nodes touch them.</p></li>
+<li><p>Since inner edges potentially course through many search regions, an additional step is required to find their node-to-node connections. The border of the search region is acquired via the skimage find_boundaries method. These node borders can be extracted and used to isolate the ‘inner edge pieces’ that exist inside of them, which all aquire unique label IDs. We can dilate those inner edge pieces once to evaluate which nodes touch them.</p></li>
 <li><p>The group of edges that each node interacts with can then be sorted through. Any nodes that interact with the same edge are connected.</p></li>
 <li><p>Finally, the connections are used to create a NetworkX graph object which can be used for network analysis.</p></li>
 </ol>
@@ -374,8 +380,8 @@
 </ul>
 </section>
 </section>
-<section id="process-calculate-calculate-proximity-network">
-<span id="proximity-network"></span><h2>‘Process -&gt; Calculate -&gt; Calculate Proximity Network…’<a class="headerlink" href="#process-calculate-calculate-proximity-network" title="Link to this heading"></a></h2>
+<section id="process-calculate-network-calculate-proximity-network">
+<span id="proximity-network"></span><h2>‘Process -&gt; Calculate Network -&gt; Calculate Proximity Network…’<a class="headerlink" href="#process-calculate-network-calculate-proximity-network" title="Link to this heading"></a></h2>
 <ul class="simple">
 <li><p>This method is used to connect objects in the nodes channel based on whether they are within some user-defined distance of each other.</p></li>
 <li><p>Please see <a class="reference internal" href="quickstart.html"><span class="doc">Quickstart - Segmenting Data and Generating Networks</span></a> for a brief walkthrough about using this function.</p></li>
@@ -494,8 +500,26 @@
 </ul>
 </section>
 </section>
-<section id="process-calculate-calculate-centroids">
-<h2>‘Process -&gt; Calculate -&gt; Calculate Centroids…’<a class="headerlink" href="#process-calculate-calculate-centroids" title="Link to this heading"></a></h2>
+<section id="process-calculate-network-calculate-branchpoint-network">
+<h2>‘Process -&gt; Calculate Network -&gt; Calculate Branchpoint Network…’<a class="headerlink" href="#process-calculate-network-calculate-branchpoint-network" title="Link to this heading"></a></h2>
+<ul class="simple">
+<li><p>This method is used to connect the branchpoints of a branchy binary segmented image (such as blood vessels), converting them into nodes of a network.</p></li>
+<li><p>This method brings up the menu to generate nodes from edge vertices. Once nodes are created, they search their immediate 3x3x3 neighborhood and assign connections based on which edges they encounter.</p></li>
+<li><p>The binary image must begin in the ‘edges’ channel, since nodes will be generated at the branchpoints.</p></li>
+<li><p>This method just forks the node generation from edges method with some suggested default parameters pre-selected, but see <a class="reference internal" href="#generate-nodes"><span class="std std-ref">‘Process -&gt; Generate -&gt; Generate Nodes (From ‘Edge’ Vertices)’</span></a> for parameter and algorithm explanations.</p></li>
+</ul>
+</section>
+<section id="process-calculate-network-calculate-branch-adjacency-network">
+<h2>‘Process -&gt; Calculate Network -&gt; Calculate Branch Adjacency Network’<a class="headerlink" href="#process-calculate-network-calculate-branch-adjacency-network" title="Link to this heading"></a></h2>
+<ul class="simple">
+<li><p>This method is used to connect the adjacent branches of a branchy binary segmented image (such as blood vessels), converting them the branches themselves (as opposed to the branchpoints) into nodes of a network.</p></li>
+<li><p>This method brings up the menu to label branches, followed by running a proximity network of distance = 1.</p></li>
+<li><p>The binary image must begin in the ‘edges’ channel.</p></li>
+<li><p>This method just forks the branch labelling method with some suggested default parameters pre-selected, but see <a class="reference internal" href="#label-branches"><span class="std std-ref">‘Process -&gt; Generate -&gt; Label Branches’</span></a> for parameter and algorithm explanations.</p></li>
+</ul>
+</section>
+<section id="process-calculate-network-calculate-centroids">
+<h2>‘Process -&gt; Calculate Network -&gt; Calculate Centroids…’<a class="headerlink" href="#process-calculate-network-calculate-centroids" title="Link to this heading"></a></h2>
 <ul class="simple">
 <li><p>This method is used to calculate and set the nodes or edge centroid properties.</p></li>
 <li><p>The centroid is the center of mass of an object and can be used as a low-memory way to track its general location.</p></li>
@@ -1072,23 +1096,28 @@
 <li><p>The feature maps for the ‘Quick Model’ are as follows:</p></li>
 </ul>
 <ol class="arabic simple">
+<li><p>The original image.</p></li>
 <li><p>Gaussian Blurs for sigma values 1, 2, 4, 8 (obtained via scipy.ndimage.gaussian_filter())</p></li>
 <li><p>Difference of Gaussians for sigma values 1-2, 2-4, and 4-8.</p></li>
 <li><p>The gradiant magnitude, obtained from scipy.ndimage.sobel() sobel kernels in each dimension.</p></li>
 </ol>
 <ul class="simple">
-<li><p>The feature maps for ‘Detailed Model’ are as follows:</p></li>
+<li><p>The feature maps for ‘Detailed Model’ are computed using multiple scales and morphological operators:</p></li>
 </ul>
 <ol class="arabic simple">
+<li><p>The original Image</p></li>
 <li><p>Gaussian Blurs for sigma values 1, 2, 4, 8 (obtained via scipy.ndimage.gaussian_filter())</p></li>
-<li><p>Difference of Gaussians for sigma values 1-2, 2-4, and 4-8.</p></li>
-<li><p>The gradiant magnitude, obtained from scipy.ndimage.sobel() sobel kernels in each dimension.</p></li>
-<li><p>Local means</p></li>
-<li><p>Local variances</p></li>
-<li><p>The Laplacian (sum of second derivatives)</p></li>
-<li><p>The Hessian Determinate (Product of second derivatives)</p></li>
+<li><p>Difference of Gaussians (DoG) for sigma values 1-2, 2-4, and 4-8.</p></li>
+<li><p>Gaussian Gradient Magnitudes - Computed for each sigma value using scipy.ndimage.sobel() kernels in all three dimensions (x, y, z). Magnitude calculated as sqrt(gx² + gy² + gz²) for each Gaussian-smoothed image. Captures edge strength at multiple scales.</p></li>
+<li><p>Laplacian of Gaussian - Second-order derivative features computed using scipy.ndimage.laplace(). Applied to each Gaussian-smoothed image at different sigma values. Detects blob-like structures and zero-crossings.</p></li>
+<li><p>Largest Hessian Eigenvalue - Computes the largest eigenvalue of the 3x3 Hessian matrix at each voxel. Uses second-order derivatives (hxx, hyy, hzz, hxy, hxz, hyz) via scipy.ndimage.gaussian_filter() with order parameters. Fully vectorized computation using numpy.linalg.eigvals() for all spatial locations simultaneously. Captures local curvature information and tubular/sheet-like structures.</p></li>
+<li><p>Feature Normalization - Intensity features (original image, Gaussians, DoGs) are kept in raw form. Morphological features (gradients, Laplacians, Hessian eigenvalues) are normalized using z-score standardization. Normalization applied per-feature across all spatial dimensions to ensure balanced feature contributions.</p></li>
 </ol>
 <ul class="simple">
+<li><p>In general, the quick model is preferable for images with good SNR, while the detailed model weights morphology harder and so is better for poor SNR but typically requires more training.</p></li>
+<li><p>For RGB images, each channel is processed independently, meaning it requires 3x as many maps.</p></li>
+<li><p>Training by 2D patterns simply uses 2D alternatives to the above described maps.</p></li>
+<li><p>Training with GPU simply uses cupy methods to get the above described maps.</p></li>
 <li><p>Note these feature maps are computed in parallel, so while chunk processing is done sequentially to preserve RAM (especially due to feature map bloat), some speed can be recouped by parellel computing of the maps themselves.</p></li>
 </ul>
 </section>
@@ -1132,6 +1161,7 @@
 <h2>‘Process -&gt; Image -&gt; Crop Channels’<a class="headerlink" href="#process-image-crop-channels" title="Link to this heading"></a></h2>
 <ul class="simple">
 <li><p>This method can be used to crop all the avialable channels.</p></li>
+<li><p>Note that it can be auto-called for a target region by holding Shift while left clicking and dragging in the Image Viewer Window.</p></li>
 </ul>
 <section id="id19">
 <h3>Parameter Explanations<a class="headerlink" href="#id19" title="Link to this heading"></a></h3>
@@ -1180,6 +1210,8 @@
 <dt>Remove Branches Pixel Length…?</dt><dd><ul class="simple">
 <li><p>The length (in pixels/voxels, not scaled) of terminal branches (or spines) to remove from the skeleton output.</p></li>
 <li><p>This method only removes terminal branches. Internal branches will never be effected regardless of how large this param is.</p></li>
+<li><p>This method will not trim branches that are longer than the designated length.</p></li>
+<li><p>However, it will punch holes into branchpoints to fully remove branches. Holes can be filled by dilating the image once, then skeletonizing it again/eroding it once. Currently, these holes are not filled by default.</p></li>
 </ul>
 </dd>
 </dl>
@@ -1203,10 +1235,11 @@
 </ol>
 </section>
 </section>
-<section id="process-image-watershed">
-<h2>‘Process -&gt; Image -&gt; Watershed’<a class="headerlink" href="#process-image-watershed" title="Link to this heading"></a></h2>
+<section id="process-image-binary-watershed">
+<h2>‘Process -&gt; Image -&gt; Binary Watershed’<a class="headerlink" href="#process-image-binary-watershed" title="Link to this heading"></a></h2>
 <ul class="simple">
-<li><p>This method can be used to watershed an image, which splits (via labeling) apart fused objects that ‘look’ like two seperate objects.</p></li>
+<li><p>This method can be used to watershed a binary image, which splits (via labeling) apart fused objects that ‘look’ like two seperate objects.</p></li>
+<li><p>It is meant to be applied to binary segmentations, not segmentations of raw images.</p></li>
 <li><p>This method is ideal for seperating overlapping objects in a binary segmentation, for example adjacent cells.</p></li>
 <li><p>Selecting this method will show the following menu:</p></li>
 </ul>
@@ -1224,8 +1257,16 @@
 </dl>
 </li>
 <li><dl class="simple">
+<dt>Smallest Radius</dt><dd><ul class="simple">
+<li><p>The smallest radius of objects that you want to be split off by the watershed. Objects any smaller may get thresholded out - this value always overrides below ‘proportion’ param. Somewhat more intuitive param then below, use a conservative value a bit smaller than your smallest object’s radius.</p></li>
+</ul>
+</dd>
+</dl>
+</li>
+<li><dl class="simple">
 <dt>Proportion</dt><dd><ul class="simple">
 <li><p>Controls how ‘aggressive’ the watershed is. See algorithm explanation.</p></li>
+<li><p>Proportion (0-1) of distance transform value set [ie unique elements] to exclude (ie 0.2 = 20% of the set of all values of the distance transform get excluded).Essentially, vals closer to 0 are less likely to split objects but also won’t kick out small objects from the output, vals slightly further from 0 will split more aggressively, but vals closer to 1 become unstable, leading to objects being evicted or labelling errors. Recommend something between 0.05 and 0.4, but it depends on the data (Or just enter a smallest radius above to avoid using this). Will tell you in command window what equivalent ‘smallest radius’ this is.</p></li>
 </ul>
 </dd>
 </dl>
@@ -1239,23 +1280,11 @@
 </dd>
 </dl>
 </li>
-<li><dl class="simple">
-<dt>Smallest Radius</dt><dd><ul class="simple">
-<li><p>This param is supposed to predict param 2 based on the radius of the smallest object you want ‘Watershedded’ out, however I am not sure it always works and so it may be better to ignore it.</p></li>
-</ul>
-</dd>
-</dl>
-</li>
+</ol>
+<ol class="arabic simple" start="5">
 <li><dl class="simple">
 <dt>Kernel Obtainment GPU downsample</dt><dd><ul class="simple">
 <li><p>If using GPU, provides user control to any forced downsampling that occurs for the first distance transform (which has larger labeled objects, so it can be a bit more aggressive) - see algorithm explanations.</p></li>
-</ul>
-</dd>
-</dl>
-</li>
-<li><dl class="simple">
-<dt>Smart Label GPU downsample</dt><dd><ul class="simple">
-<li><p>If using GPU, provides user control to any forced downsampling that occurs for the second distance transform. Usually less aggressive than param 5 can be, due to the array containing smaller kernels at this point.</p></li>
 </ul>
 </dd>
 </dl>
@@ -1269,11 +1298,11 @@
 <li><p>Like the other distance transforms in NetTracer3D, if the system runs out of VRAM computing the distance transform on GPU, it will reattempt with serial downsampling. This will ostensibly give the same output unless labeled objects have a dimension smaller than the downsample factor, after which they might be removed from the image. Do not use GPU if that may occur on this image.</p></li>
 <li><p>These regions are then erroded based on the value ‘Proportion’ - Essentially for a proportion of 0.05 (default), only the internal distance values with in the top 5% of the set of all distance values will be kept, to be used as seed kernels for relabeling the image.</p></li>
 <li><p>These seed kernels are assigned unique labels with the scipy.ndimage.label() method, before they are used to relabel the original binary image.</p></li>
-<li><p>This labeling is done with the Smart Label function (see Process -&gt; Image -&gt; Neighbor Labels). Essentially, all binary elements in the original image take on the label corresponding to the labeled seed they are closest to, effectively splitting up regions with small fusions in the original image.</p></li>
+<li><p>The relabelling (and ultimate watershed) from the kernels unto the binary image is then completed with the skimage watershed method.</p></li>
 </ol>
 <ul class="simple">
-<li><p>This algorithm can be a bit slow on large images due to the double DTs. Additionally, the ‘proportion’ param is a bit hard to select. 0.05 works rather well for many cases, but if watershed outputs are not quite right, please try varying values for ‘proportion’, increasing from 0.05 to around 0.5 typically.</p></li>
-<li><p>Despite this cumbersomeness, this algorithm can 3D watershed quite excellently when given the right params. Below is an example:</p></li>
+<li><p>This algorithm can be a bit slow on large images. The ‘proportion’ param is a bit hard to select; therefore, smallest radius is the better option, if it is known (The measurement points can be used to obtain this value). For proportion, 0.05 works rather well for many cases, but if watershed outputs are not quite right, please try varying values for ‘proportion’, increasing from 0.05 to around 0.5 typically.</p></li>
+<li><p>Below is an example:</p></li>
 </ul>
 <p><em>Before Watershedding</em></p>
 <a class="reference internal image-reference" href="_images/shed1.png"><img alt="Watershed Pre" src="_images/shed1.png" style="width: 600px;" />
@@ -1281,6 +1310,49 @@
 <p><em>After Watershedding</em></p>
 <a class="reference internal image-reference" href="_images/shed2.png"><img alt="Watershed Post" src="_images/shed2.png" style="width: 600px;" />
 </a>
+</section>
+</section>
+<section id="process-image-gray-watershed">
+<h2>‘Process -&gt; Image -&gt; Gray Watershed’<a class="headerlink" href="#process-image-gray-watershed" title="Link to this heading"></a></h2>
+<ul class="simple">
+<li><p>This method can be used to watershed a grayscale image that has had its foreground segmented out, which seperates and labels objects based on their user-designated size and the object’s blobbiness.</p></li>
+<li><p>This is best used as a quick way to segment cells without training ML models.</p></li>
+<li><dl class="simple">
+<dt>The foreground must still be segmented out first, however. This can be easily done by intensity thresholding (accessible via the pencil widget).</dt><dd><ul>
+<li><p>If the foreground is not segmented, the entire image will end up getting labeled based on the peaks, which is typically not desired.</p></li>
+</ul>
+</dd>
+</dl>
+</li>
+</ul>
+<section id="id25">
+<h3>Parameter Explanations<a class="headerlink" href="#id25" title="Link to this heading"></a></h3>
+<ol class="arabic simple">
+<li><dl class="simple">
+<dt>Minimum Peak Distance…</dt><dd><ul class="simple">
+<li><p>This value is important to set correctly to make this function perform well. This ‘minimum peak’ is the shortest distance between labeled components. For cells, for example, you can measure the distance between two adjacent, touching cells (with the measurement points tool).</p></li>
+<li><p>The ‘peak’ is based on the intensity of the cells so it would be between a pair of high intensity values on said cells.</p></li>
+<li><p>If this value is too small, groups of cells may be over-labelled. If it is too large, under-labelled.</p></li>
+</ul>
+</dd>
+</dl>
+</li>
+<li><dl class="simple">
+<dt>Minimum Peak Intensity…</dt><dd><ul class="simple">
+<li><p>This value can be set to ignore any part of the image below this intensity when finding peaks.</p></li>
+</ul>
+</dd>
+</dl>
+</li>
+</ol>
+</section>
+<section id="id26">
+<h3>Algorithm Explanations<a class="headerlink" href="#id26" title="Link to this heading"></a></h3>
+<ol class="arabic simple">
+<li><p>This skimage ‘peaklocal_max’ function is used to find the peaks in the image (regions of high intensity), separated by the above params.</p></li>
+<li><p>These peaks are drawn onto a copy of the array.</p></li>
+<li><p>The original array is binarized, and its cells are labeled by proximity to the peaks via the skimage watershed method.</p></li>
+</ol>
 </section>
 </section>
 <section id="process-image-invert">
@@ -1314,16 +1386,16 @@
 </ul>
 </section>
 <section id="process-generate-generate-nodes-from-edge-vertices">
-<h2>‘Process -&gt; Generate -&gt; Generate Nodes (From ‘Edge’ Vertices)’<a class="headerlink" href="#process-generate-generate-nodes-from-edge-vertices" title="Link to this heading"></a></h2>
+<span id="generate-nodes"></span><h2>‘Process -&gt; Generate -&gt; Generate Nodes (From ‘Edge’ Vertices)’<a class="headerlink" href="#process-generate-generate-nodes-from-edge-vertices" title="Link to this heading"></a></h2>
 <ul class="simple">
-<li><p>This method is designed to be used to create branchpoint networks. See see <a class="reference internal" href="branches.html#branchpoint"><span class="std std-ref">Branchpoint Networks</span></a> for a brief walkthrough.</p></li>
+<li><p>This method is designed to be used to create branchpoint networks. See <a class="reference internal" href="branches.html#branchpoint"><span class="std std-ref">Branchpoint Networks</span></a> for a brief walkthrough.</p></li>
 <li><p>It takes a binary segmentation in the edges channel and skeletonizes it, before placing new nodes along any branchpoints in the skeleton.</p></li>
 <li><p>Selecting this function will show the following menu:</p></li>
 </ul>
 <a class="reference internal image-reference" href="_images/process5.png"><img alt="GenNodes Menu" src="_images/process5.png" style="width: 800px;" />
 </a>
-<section id="id25">
-<h3>Parameter Explanations<a class="headerlink" href="#id25" title="Link to this heading"></a></h3>
+<section id="id27">
+<h3>Parameter Explanations<a class="headerlink" href="#id27" title="Link to this heading"></a></h3>
 <ol class="arabic simple">
 <li><dl class="simple">
 <dt>Downsample Factor:</dt><dd><ul class="simple">
@@ -1386,8 +1458,8 @@
 <li><p>Select ‘Run Node Generation’ to run this method with the desired parameters. The edges will be skeletonized, while the new nodes will load into the nodes channel.</p></li>
 </ul>
 </section>
-<section id="id26">
-<h3>Algorithm Explanations<a class="headerlink" href="#id26" title="Link to this heading"></a></h3>
+<section id="id28">
+<h3>Algorithm Explanations<a class="headerlink" href="#id28" title="Link to this heading"></a></h3>
 <ol class="arabic simple">
 <li><p>3D skeletonization is achieved via the sklearn.morphology.skeletonize() algorithm: <a class="reference external" href="https://scikit-image.org/docs/stable/auto_examples/edges/plot_skeleton.html">https://scikit-image.org/docs/stable/auto_examples/edges/plot_skeleton.html</a></p></li>
 <li><p>If param 7 is enabled, NetTracer3D will run its ‘Process -&gt; Image -&gt; Fill Holes’ method, which will for the most part succesfully fill loop artifacts, returning them into 3D blobs. It will then just run the skeletonization again, which is often able to accurately skeletonize the blobs.</p></li>
@@ -1400,16 +1472,16 @@
 </section>
 </section>
 <section id="process-generate-label-branches">
-<h2>‘Process -&gt; Generate -&gt; Label Branches’<a class="headerlink" href="#process-generate-label-branches" title="Link to this heading"></a></h2>
+<span id="label-branches"></span><h2>‘Process -&gt; Generate -&gt; Label Branches’<a class="headerlink" href="#process-generate-label-branches" title="Link to this heading"></a></h2>
 <ul class="simple">
-<li><p>This method is designed to be used to label the branches of a binary mask (presumably, segmented from a branchy structure). See see <a class="reference internal" href="branches.html#branches"><span class="std std-ref">Labeling Branches and Branch Networks</span></a> for a brief walkthrough.</p></li>
+<li><p>This method is designed to be used to label the branches of a binary mask (presumably, segmented from a branchy structure). See <a class="reference internal" href="branches.html#branches"><span class="std std-ref">Labeling Branches and Branch Networks</span></a> for a brief walkthrough.</p></li>
 <li><p>Labeling branches can be a way to create networks (via branch proximity), or to label an image with meaningful domains that can be used for connectivity networks, calculating radii, etc.</p></li>
 <li><p>Selecting this function will show the following menu:</p></li>
 </ul>
 <a class="reference internal image-reference" href="_images/process6.png"><img alt="Branch Menu" src="_images/process6.png" style="width: 800px;" />
 </a>
-<section id="id27">
-<h3>Parameter Explanations<a class="headerlink" href="#id27" title="Link to this heading"></a></h3>
+<section id="id29">
+<h3>Parameter Explanations<a class="headerlink" href="#id29" title="Link to this heading"></a></h3>
 <ol class="arabic simple">
 <li><dl class="simple">
 <dt>Generate Nodes from edges?</dt><dd><ul class="simple">
@@ -1471,8 +1543,8 @@
 <li><p>Select ‘Run Node Generation’ to run this method with the desired parameters. The edges will be branch-labeled, while the new nodes (branchpoints) will load into the nodes channel.</p></li>
 </ul>
 </section>
-<section id="id28">
-<h3>Algorithm Explanations<a class="headerlink" href="#id28" title="Link to this heading"></a></h3>
+<section id="id30">
+<h3>Algorithm Explanations<a class="headerlink" href="#id30" title="Link to this heading"></a></h3>
 <ol class="arabic simple">
 <li><p>The branch labeler starts with the same set of steps as ‘Process -&gt; Generate -&gt; Generate Nodes (From ‘Edge’ Vertices)’, so please see its section above for an outline of those steps.</p></li>
 <li><p>Once branchpoint nodes are generated, however, they are used as a mask to break up the skeleton.</p></li>
@@ -1492,8 +1564,8 @@
 <li><p>Voronoi diagrams have other uses in spatial mathematics but NetTracer3D only offers the option to generate one - it does not use it directly for anything.</p></li>
 <li><p>To run this method, simply select it from the menu bar. If node_centroids exist, their Voronoi diagram will be generated and loaded into Overlay2.</p></li>
 </ul>
-<section id="id29">
-<h3>Algorithm Explanations<a class="headerlink" href="#id29" title="Link to this heading"></a></h3>
+<section id="id31">
+<h3>Algorithm Explanations<a class="headerlink" href="#id31" title="Link to this heading"></a></h3>
 <ul class="simple">
 <li><dl class="simple">
 <dt>This method uses the scipy.spatial KDTree Class to query for the centroid that is closest to each given point in the image, being assigned a label corresponding to their closest centroid.</dt><dd><ul>
@@ -1514,8 +1586,8 @@
 </ul>
 <a class="reference internal image-reference" href="_images/process7.png"><img alt="Modify Menu" src="_images/process7.png" style="width: 800px;" />
 </a>
-<section id="id30">
-<h3>Parameter Explanations<a class="headerlink" href="#id30" title="Link to this heading"></a></h3>
+<section id="id32">
+<h3>Parameter Explanations<a class="headerlink" href="#id32" title="Link to this heading"></a></h3>
 <ol class="arabic simple">
 <li><dl class="simple">
 <dt>Remove Unsassigned IDs from Centroid List?</dt><dd><ul class="simple">

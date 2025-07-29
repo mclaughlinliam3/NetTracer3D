@@ -1,6 +1,6 @@
 [project]
 name = "nettracer3d"
-version = "0.8.2"
+version = "0.9.0"
 authors = [
   { name="Liam McLaughlin", email="liamm@wustl.edu" },
 ]

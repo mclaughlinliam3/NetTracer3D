@@ -12,6 +12,7 @@ import random
 from . import node_draw
 
 
+
 def binarize(image):
     """Convert an array from numerical values to boolean mask"""
     image = image != 0
@@ -462,7 +463,6 @@ def get_color_name_mapping():
         'bright_cyan': (0, 255, 255),
         'dark_teal': (0, 128, 128),
         'turquoise': (64, 224, 208),
-        'aqua': (0, 255, 255),
         'seafoam': (159, 226, 191),
         'teal_blue': (54, 117, 136),
         
@@ -517,21 +517,90 @@ def rgb_to_color_name(rgb: Tuple[int, int, int]) -> str:
         distance = np.sqrt(np.sum((rgb_array - np.array(color_rgb)) ** 2))
         if distance < min_distance:
             min_distance = distance
-            closest_color = color_name + f" {str(rgb_array)}"
-            
+            #closest_color = color_name + f" {str(rgb_array)}" # <- if we want RGB names
+            closest_color = color_name
+
     return closest_color
 
-def convert_node_colors_to_names(node_to_color: Dict[int, Tuple[int, int, int]]) -> Dict[int, str]:
+def convert_node_colors_to_names(node_to_color: Dict[int, Tuple[int, int, int]], 
+                                show_legend: bool = True,
+                                figsize: Tuple[int, int] = (10, 8),
+                                save_path: str = None) -> Dict[int, str]:
     """
     Convert a dictionary of node-to-RGB mappings to node-to-color-name mappings.
+    Optionally displays a matplotlib legend showing the mappings.
     
     Args:
         node_to_color: Dictionary mapping node IDs to RGB tuples
+        show_legend: Whether to display the color legend plot
+        figsize: Figure size as (width, height) for the legend
+        save_path: Optional path to save the legend figure
         
     Returns:
         Dictionary mapping node IDs to color names
     """
-    return {node: rgb_to_color_name(color) for node, color in node_to_color.items()}
+    # Convert colors to names
+    node_to_names = {node: rgb_to_color_name(color) for node, color in node_to_color.items()}
+    
+    # Create legend if requested
+    if show_legend:
+        import matplotlib.pyplot as plt
+        from matplotlib.patches import Rectangle
+        
+        num_entries = len(node_to_color)
+        
+        # Calculate dynamic spacing based on number of entries
+        entry_height = 0.8
+        total_height = num_entries * entry_height + 1.5  # Extra space for title and margins
+        
+        # Create figure and axis with proper scaling
+        fig, ax = plt.subplots(figsize=figsize)
+        ax.set_xlim(0, 10)
+        ax.set_ylim(0, total_height)
+        ax.axis('off')
+        
+        # Title
+        ax.text(5, total_height - 0.5, 'Color Legend', 
+                fontsize=16, fontweight='bold', ha='center')
+        
+        # Sort nodes for consistent display
+        sorted_nodes = sorted(node_to_color.keys())
+        
+        # Create legend entries
+        for i, node in enumerate(sorted_nodes):
+            y_pos = total_height - (i + 1) * entry_height - 0.8
+            rgb = node_to_color[node]
+            color_name = node_to_names[node]
+            
+            # Normalize RGB values for matplotlib (0-1 range)
+            norm_rgb = tuple(c/255.0 for c in rgb)
+            
+            # Draw color swatch (using actual RGB values)
+            swatch = Rectangle((1.0, y_pos - 0.15), 0.8, 0.3, 
+                              facecolor=norm_rgb, edgecolor='black', linewidth=1)
+            ax.add_patch(swatch)
+            
+            # Node ID (exactly as it appears in dict keys)
+            ax.text(0.2, y_pos, str(node), fontsize=12, fontweight='bold', 
+                    va='center', ha='left')
+            
+            # Color name (mapped name, nicely formatted)
+            ax.text(2.2, y_pos, color_name.replace('_', ' ').title(), 
+                    fontsize=11, va='center', ha='left')
+        
+        # Add border around the legend
+        border = Rectangle((0.1, 0.1), 9.8, total_height - 0.2, 
+                          fill=False, edgecolor='gray', linewidth=2)
+        ax.add_patch(border)
+        
+        plt.tight_layout()
+        
+        if save_path:
+            plt.savefig(save_path, dpi=300, bbox_inches='tight')
+            
+        plt.show()
+    
+    return node_to_names
 
 def generate_distinct_colors(n_colors: int) -> List[Tuple[int, int, int]]:
     """
@@ -586,7 +655,7 @@ def assign_node_colors(node_list: List[int], labeled_array: np.ndarray) -> Tuple
     
     # Create lookup table
     max_label = max(max(labeled_array.flat), max(node_list) if node_list else 0)
-    color_lut = np.zeros((max_label + 1, 4), dtype=np.uint8)  # Transparent by default
+    color_lut = np.zeros((int(max_label) + 1, 4), dtype=np.uint8)  # Transparent by default
     
     for node_id, color in node_to_color.items():
         color_lut[node_id] = color
@@ -596,7 +665,7 @@ def assign_node_colors(node_list: List[int], labeled_array: np.ndarray) -> Tuple
     
     # Convert colors for naming
     node_to_color_rgb = {k: tuple(v[:3]) for k, v in node_to_color.items()}
-    node_to_color_names = convert_node_colors_to_names(node_to_color_rgb)
+    node_to_color_names = convert_node_colors_to_names(node_to_color_rgb, show_legend = False)
     
     return rgba_array, node_to_color_names
 
@@ -616,7 +685,7 @@ def assign_community_colors(community_dict: Dict[int, int], labeled_array: np.nd
     
     # Create lookup table - this is the key optimization
     max_label = max(max(labeled_array.flat), max(node_to_color.keys()) if node_to_color else 0)
-    color_lut = np.zeros((max_label + 1, 4), dtype=np.uint8)  # Transparent by default
+    color_lut = np.zeros((int(max_label) + 1, 4), dtype=np.uint8)  # Transparent by default
     
     for node_id, color in node_to_color.items():
         color_lut[node_id] = color

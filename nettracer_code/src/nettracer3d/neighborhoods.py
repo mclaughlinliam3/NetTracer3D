@@ -2,11 +2,13 @@ import numpy as np
 from sklearn.cluster import KMeans
 from sklearn.metrics import calinski_harabasz_score
 import matplotlib.pyplot as plt
-from typing import Dict, Set
+from typing import Dict, Set, List, Tuple, Optional
 import umap
 from matplotlib.colors import LinearSegmentedColormap
 from sklearn.cluster import DBSCAN
 from sklearn.neighbors import NearestNeighbors
+import matplotlib.colors as mcolors
+
 
 
 import os
@@ -308,11 +310,43 @@ def plot_dict_heatmap(unsorted_data_dict, id_set, figsize=(12, 8), title="Neighb
     
 
 
+def generate_distinct_colors(n_colors: int) -> List[str]:
+    """
+    Generate visually distinct colors using matplotlib's tab and Set colormaps.
+    Falls back to HSV generation for large numbers of colors.
+    
+    Args:
+        n_colors: Number of distinct colors needed
+    
+    Returns:
+        List of color strings compatible with matplotlib
+    """
+    if n_colors <= 10:
+        # Use tab10 colormap for up to 10 colors
+        colors = plt.cm.tab10(np.linspace(0, 1, min(n_colors, 10)))
+        return [mcolors.rgb2hex(color) for color in colors[:n_colors]]
+    elif n_colors <= 20:
+        # Use tab20 for up to 20 colors
+        colors = plt.cm.tab20(np.linspace(0, 1, min(n_colors, 20)))
+        return [mcolors.rgb2hex(color) for color in colors[:n_colors]]
+    else:
+        # For larger numbers, use HSV space
+        colors = []
+        for i in range(n_colors):
+            hue = i / n_colors
+            color = mcolors.hsv_to_rgb([hue, 0.8, 0.9])  # High saturation and value
+            colors.append(mcolors.rgb2hex(color))
+        return colors
+
+
 def visualize_cluster_composition_umap(cluster_data: Dict[int, np.ndarray], 
                                      class_names: Set[str],
-                                     label = False,
+                                     label: bool = False,
                                      n_components: int = 2,
-                                     random_state: int = 42):
+                                     random_state: int = 42,
+                                     id_dictionary: Optional[Dict[int, str]] = None, 
+                                     graph_label = "Community ID",
+                                     title = 'UMAP Visualization of Community Compositions'):
     """
     Convert cluster composition data to UMAP visualization.
     
@@ -323,10 +357,15 @@ def visualize_cluster_composition_umap(cluster_data: Dict[int, np.ndarray],
         representing the composition of each cluster
     class_names : set
         Set of strings representing the class names (order corresponds to array indices)
+    label : bool
+        Whether to show cluster ID labels on the plot
     n_components : int
         Number of UMAP components (default: 2 for 2D visualization)
     random_state : int
         Random state for reproducibility
+    id_dictionary : dict, optional
+        Dictionary mapping cluster IDs to identity names. If provided, colors will be
+        assigned by identity rather than cluster ID, and a legend will be shown.
     
     Returns:
     --------
@@ -335,7 +374,10 @@ def visualize_cluster_composition_umap(cluster_data: Dict[int, np.ndarray],
     """
     
     # Convert set to sorted list for consistent ordering
-    class_labels = sorted(list(class_names))
+    try:
+        class_labels = sorted(list(class_names))
+    except:
+        class_labels = None
     
     # Extract cluster IDs and compositions
     cluster_ids = list(cluster_data.keys())
@@ -347,57 +389,124 @@ def visualize_cluster_composition_umap(cluster_data: Dict[int, np.ndarray],
     # Fit and transform the composition data
     embedding = reducer.fit_transform(compositions)
     
+    # Prepare colors and labels based on whether id_dictionary is provided
+    if id_dictionary is not None:
+        # Get unique identities and assign colors (group all unknown into single "Unknown" category)
+        identities = [id_dictionary.get(cluster_id, "Unknown") for cluster_id in cluster_ids]
+        unique_identities = sorted(list(set(identities)))
+        colors = generate_distinct_colors(len(unique_identities))
+        identity_to_color = {identity: colors[i] for i, identity in enumerate(unique_identities)}
+        point_colors = [identity_to_color[identity] for identity in identities]
+        use_identity_coloring = True
+    else:
+        # Use default cluster ID coloring
+        point_colors = cluster_ids
+        use_identity_coloring = False
+    
     # Create visualization
-    plt.figure(figsize=(10, 8))
+    plt.figure(figsize=(12, 8))
     
     if n_components == 2:
-        scatter = plt.scatter(embedding[:, 0], embedding[:, 1], 
-                            c=cluster_ids, cmap='viridis', s=100, alpha=0.7)
+        if use_identity_coloring:
+            scatter = plt.scatter(embedding[:, 0], embedding[:, 1], 
+                                c=point_colors, s=100, alpha=0.7)
+        else:
+            scatter = plt.scatter(embedding[:, 0], embedding[:, 1], 
+                                c=point_colors, cmap='viridis', s=100, alpha=0.7)
         
         if label:
             # Add cluster ID labels
             for i, cluster_id in enumerate(cluster_ids):
-                plt.annotate(f'{cluster_id}', 
+                display_label = f'{cluster_id}'
+                if id_dictionary is not None:
+                    identity = id_dictionary.get(cluster_id, "Unknown")
+                    display_label = f'{cluster_id}\n({identity})'
+                
+                plt.annotate(display_label, 
                             (embedding[i, 0], embedding[i, 1]),
                             xytext=(5, 5), textcoords='offset points',
-                            fontsize=9, alpha=0.8)
+                            fontsize=9, alpha=0.8, ha='left')
         
-        plt.colorbar(scatter, label='Community ID')
+        # Add appropriate legend/colorbar
+        if use_identity_coloring:
+            # Create custom legend for identities
+            legend_elements = [plt.Line2D([0], [0], marker='o', color='w', 
+                                        markerfacecolor=identity_to_color[identity], 
+                                        markersize=10, label=identity)
+                             for identity in unique_identities]
+            plt.legend(handles=legend_elements, title='Identity', 
+                      bbox_to_anchor=(1.05, 1), loc='upper left')
+        else:
+            plt.colorbar(scatter, label=graph_label)
+        
         plt.xlabel('UMAP Component 1')
         plt.ylabel('UMAP Component 2')
-        plt.title('UMAP Visualization of Community Compositions')
+        if use_identity_coloring:
+            title += ' (Colored by Identity)'
+        plt.title(title)
         
     elif n_components == 3:
-        fig = plt.figure(figsize=(12, 9))
+        fig = plt.figure(figsize=(14, 10))
         ax = fig.add_subplot(111, projection='3d')
-        scatter = ax.scatter(embedding[:, 0], embedding[:, 1], embedding[:, 2],
-                           c=cluster_ids, cmap='viridis', s=100, alpha=0.7)
         
-        # Add cluster ID labels
-        for i, cluster_id in enumerate(cluster_ids):
-            ax.text(embedding[i, 0], embedding[i, 1], embedding[i, 2],
-                   f'C{cluster_id}', fontsize=8)
+        if use_identity_coloring:
+            scatter = ax.scatter(embedding[:, 0], embedding[:, 1], embedding[:, 2],
+                               c=point_colors, s=100, alpha=0.7)
+        else:
+            scatter = ax.scatter(embedding[:, 0], embedding[:, 1], embedding[:, 2],
+                               c=point_colors, cmap='viridis', s=100, alpha=0.7)
+        
+        if label:
+            # Add cluster ID labels
+            for i, cluster_id in enumerate(cluster_ids):
+                display_label = f'C{cluster_id}'
+                if id_dictionary is not None:
+                    identity = id_dictionary.get(cluster_id, "Unknown")
+                    display_label = f'C{cluster_id}\n({identity})'
+                
+                ax.text(embedding[i, 0], embedding[i, 1], embedding[i, 2],
+                       display_label, fontsize=8)
         
         ax.set_xlabel('UMAP Component 1')
         ax.set_ylabel('UMAP Component 2')
         ax.set_zlabel('UMAP Component 3')
-        ax.set_title('3D UMAP Visualization of Cluster Compositions')
-        plt.colorbar(scatter, label='Cluster ID')
+        title = '3D UMAP Visualization of Cluster Compositions'
+        if use_identity_coloring:
+            title += ' (Colored by Identity)'
+        ax.set_title(title)
+        
+        # Add appropriate legend/colorbar
+        if use_identity_coloring:
+            # Create custom legend for identities
+            legend_elements = [plt.Line2D([0], [0], marker='o', color='w', 
+                                        markerfacecolor=identity_to_color[identity], 
+                                        markersize=10, label=identity)
+                             for identity in unique_identities]
+            ax.legend(handles=legend_elements, title='Identity', 
+                     bbox_to_anchor=(1.05, 1), loc='upper left')
+        else:
+            plt.colorbar(scatter, label='Cluster ID')
     
     plt.tight_layout()
     plt.show()
     
-    # Print composition details
-    print("Cluster Compositions:")
-    print(f"Classes: {class_labels}")
-    for i, cluster_id in enumerate(cluster_ids):
-        composition = compositions[i]
-        print(f"Cluster {cluster_id}: {composition}")
-        # Show which classes dominate this cluster
-        dominant_indices = np.argsort(composition)[::-1][:2]  # Top 2
-        dominant_classes = [class_labels[idx] for idx in dominant_indices]
-        dominant_values = [composition[idx] for idx in dominant_indices]
-        print(f"  Dominant: {dominant_classes[0]} ({dominant_values[0]:.3f}), {dominant_classes[1]} ({dominant_values[1]:.3f})")
+    if class_labels is not None:
+        # Print composition details
+        print("Cluster Compositions:")
+        print(f"Classes: {class_labels}")
+        for i, cluster_id in enumerate(cluster_ids):
+            composition = compositions[i]
+            identity_info = ""
+            if id_dictionary is not None:
+                identity = id_dictionary.get(cluster_id, "Unknown")
+                identity_info = f" (Identity: {identity})"
+            
+            print(f"Cluster {cluster_id}{identity_info}: {composition}")
+            # Show which classes dominate this cluster
+            dominant_indices = np.argsort(composition)[::-1][:2]  # Top 2
+            dominant_classes = [class_labels[idx] for idx in dominant_indices]
+            dominant_values = [composition[idx] for idx in dominant_indices]
+            print(f"  Dominant: {dominant_classes[0]} ({dominant_values[0]:.3f}), {dominant_classes[1]} ({dominant_values[1]:.3f})")
     
     return embedding
 
@@ -535,25 +644,41 @@ def create_community_heatmap(community_intensity, node_community, node_centroids
         
         # Create colormap function (RdBu_r - red for high, blue for low, yellow/white for middle)
         def intensity_to_rgb(intensity, min_val, max_val):
-            """Convert intensity value to RGB using RdBu_r colormap logic"""
+            """Convert intensity value to RGB using RdBu_r colormap logic, centered at 0"""
+            
+            # Handle edge case where all values are the same
             if max_val == min_val:
-                # All same value, use neutral color
+                if intensity == 0:
+                    return np.array([255, 255, 255], dtype=np.uint8)  # White for 0
+                elif intensity > 0:
+                    return np.array([255, 200, 200], dtype=np.uint8)  # Light red for positive
+                else:
+                    return np.array([200, 200, 255], dtype=np.uint8)  # Light blue for negative
+            
+            # Find the maximum absolute value for symmetric scaling around 0
+            max_abs = max(abs(min_val), abs(max_val))
+            
+            # If max_abs is 0, everything is 0, so return white
+            if max_abs == 0:
                 return np.array([255, 255, 255], dtype=np.uint8)  # White
             
-            # Normalize to -1 to 1 range (like RdBu_r colormap)
-            normalized = 2 * (intensity - min_val) / (max_val - min_val) - 1
+            # Normalize intensity to -1 to 1 range, centered at 0
+            normalized = intensity / max_abs
             normalized = np.clip(normalized, -1, 1)
             
             if normalized > 0:
-                # Positive values: white to red
+                # Positive values: white to red (intensity 0 = white, max positive = red)
                 r = 255
                 g = int(255 * (1 - normalized))
                 b = int(255 * (1 - normalized))
-            else:
-                # Negative values: white to blue
+            elif normalized < 0:
+                # Negative values: white to blue (intensity 0 = white, max negative = blue)  
                 r = int(255 * (1 + normalized))
                 g = int(255 * (1 + normalized))
                 b = 255
+            else:
+                # Exactly 0: white
+                r, g, b = 255, 255, 255
             
             return np.array([r, g, b], dtype=np.uint8)
         
@@ -759,25 +884,41 @@ def create_node_heatmap(node_intensity, node_centroids, shape=None, is_3d=True,
         
         # Create colormap function (RdBu_r - red for high, blue for low, yellow/white for middle)
         def intensity_to_rgb(intensity, min_val, max_val):
-            """Convert intensity value to RGB using RdBu_r colormap logic"""
+            """Convert intensity value to RGB using RdBu_r colormap logic, centered at 0"""
+            
+            # Handle edge case where all values are the same
             if max_val == min_val:
-                # All same value, use neutral color
+                if intensity == 0:
+                    return np.array([255, 255, 255], dtype=np.uint8)  # White for 0
+                elif intensity > 0:
+                    return np.array([255, 200, 200], dtype=np.uint8)  # Light red for positive
+                else:
+                    return np.array([200, 200, 255], dtype=np.uint8)  # Light blue for negative
+            
+            # Find the maximum absolute value for symmetric scaling around 0
+            max_abs = max(abs(min_val), abs(max_val))
+            
+            # If max_abs is 0, everything is 0, so return white
+            if max_abs == 0:
                 return np.array([255, 255, 255], dtype=np.uint8)  # White
             
-            # Normalize to -1 to 1 range (like RdBu_r colormap)
-            normalized = 2 * (intensity - min_val) / (max_val - min_val) - 1
+            # Normalize intensity to -1 to 1 range, centered at 0
+            normalized = intensity / max_abs
             normalized = np.clip(normalized, -1, 1)
             
             if normalized > 0:
-                # Positive values: white to red
+                # Positive values: white to red (intensity 0 = white, max positive = red)
                 r = 255
                 g = int(255 * (1 - normalized))
                 b = int(255 * (1 - normalized))
-            else:
-                # Negative values: white to blue
+            elif normalized < 0:
+                # Negative values: white to blue (intensity 0 = white, max negative = blue)  
                 r = int(255 * (1 + normalized))
                 g = int(255 * (1 + normalized))
                 b = 255
+            else:
+                # Exactly 0: white
+                r, g, b = 255, 255, 255
             
             return np.array([r, g, b], dtype=np.uint8)
         

@@ -13,6 +13,7 @@ src/nettracer3d/nettracer_gui.py
 src/nettracer3d/network_analysis.py
 src/nettracer3d/network_draw.py
 src/nettracer3d/node_draw.py
+src/nettracer3d/painting.py
 src/nettracer3d/proximity.py
 src/nettracer3d/run.py
 src/nettracer3d/segmenter.py

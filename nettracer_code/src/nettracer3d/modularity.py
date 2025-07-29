@@ -103,7 +103,7 @@ def read_excel_to_lists(file_path, sheet_name=0):
 
 
 
-def show_communities_flex(G, master_list, normalized_weights, geo_info = None, geometric=False, directory=None, weighted=True, partition=None, style=0):
+def show_communities_flex(G, master_list, normalized_weights, geo_info=None, geometric=False, directory=None, weighted=True, partition=None, style=0):
 
     if normalized_weights is None:
         G, edge_weights = network_analysis.weighted_network(master_list)
@@ -137,10 +137,25 @@ def show_communities_flex(G, master_list, normalized_weights, geo_info = None, g
 
     # Create a mapping of community IDs to sequential indices
     unique_communities = sorted(set(partition.values()))
-    community_to_index = {comm: idx for idx, comm in enumerate(unique_communities)}
+    
+    # Use the same color generation method as the overlay system
+    # Get community sizes for sorting (largest first)
+    from collections import Counter
+    community_sizes = Counter(partition.values())
+    sorted_communities = sorted(unique_communities, key=lambda x: community_sizes[x], reverse=True)
+    
+    from . import community_extractor
 
-    # Prepare colors using the number of unique communities
-    colors = [plt.cm.jet(i / len(unique_communities)) for i in range(len(unique_communities))]
+    # Generate distinct colors using the same method as assign_community_colors
+    colors_rgb = community_extractor.generate_distinct_colors(len(unique_communities))
+    
+    # Create community to color mapping (same order as the overlay system)
+    community_to_color = {comm: colors_rgb[i] for i, comm in enumerate(sorted_communities)}
+    
+    # Convert RGB tuples to matplotlib format (0-1 range)
+    colors_matplotlib = {}
+    for comm, rgb in community_to_color.items():
+        colors_matplotlib[comm] = tuple(c/255.0 for c in rgb)
 
     if weighted:
         G = nx.Graph()
@@ -156,7 +171,7 @@ def show_communities_flex(G, master_list, normalized_weights, geo_info = None, g
             for community_id, nodes in communities.items():
                 node_sizes_list = [z_pos[node] for node in nodes]
                 nx.draw_networkx_nodes(G, pos, nodelist=nodes, 
-                                     node_color=[colors[community_to_index[community_id]]], 
+                                     node_color=[colors_matplotlib[community_id]], 
                                      node_size=node_sizes_list, alpha=0.8)
 
             # Draw edges with normalized weights
@@ -172,7 +187,7 @@ def show_communities_flex(G, master_list, normalized_weights, geo_info = None, g
             # Draw the nodes, coloring them according to their community
             for community_id, nodes in communities.items():
                 nx.draw_networkx_nodes(G, pos, nodelist=nodes, 
-                                     node_color=[colors[community_to_index[community_id]]], 
+                                     node_color=[colors_matplotlib[community_id]], 
                                      node_size=100, alpha=0.8)
 
             # Draw edges with normalized weights
@@ -183,8 +198,8 @@ def show_communities_flex(G, master_list, normalized_weights, geo_info = None, g
             nx.draw_networkx_labels(G, pos)
 
     else:
-        # Create node color list based on partition and mapping
-        node_colors = [colors[community_to_index[partition[node]]] for node in G.nodes()]
+        # Create node color list based on partition and the same color mapping
+        node_colors = [colors_matplotlib[partition[node]] for node in G.nodes()]
 
         if geometric:
             pos, z_pos = simple_network.geometric_positions(geo_info[0], geo_info[1])

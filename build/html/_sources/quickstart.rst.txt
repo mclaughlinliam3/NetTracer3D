@@ -31,6 +31,7 @@ The NetTracer3D interface consists of:
 * (Top Right) Tabulated Data: Where data tables from analysis will be placed.
 * (Bottom Right) Network Data: Where paired nodes in your network will be organized.
 * (Top) Menu Bar: Options to load/export data and run analysis.
+   * Including the camera widget (Top Right). Click this to save a 2D tiff of whatever is currently being displayed in the Image Viewer Window.
 
 In addition, since it will be usually run out of the command window, be sure to check your command window for printed updates about what NetTracer3D is actually doing.
 
@@ -62,7 +63,9 @@ Before we start with an example, we'll go over the control panel on the bottom. 
     * Click the pencil widget to open the menu to either Threshold or use Machine-Learning segmentation. Please see the Threshold/Segment guide for more information.
 7. The channel widgets (Nodes, Edges, Overlay1, Overlay2)
     * Click the channel widgets to toggle whether the channel is visible. The 'x' widget located next to the channel buttons will prompt if you want to delete that channel or not.
-8. The scrollbar.
+8. Blue Checkbox (Right of Channel Widgets)
+    * By default, NetTracer3D will show any loaded images in the central Image Viewer Window. Unchecking this will stop it from being rendered by default, instead toggling off any channels that get loaded in. This is because very large 2D planes may lag the display window, but many of NetTracer3D's functions do not require actual rendering, so this can avoid said lag if we don't need to actually see the image.
+9. The scrollbar.
     * The knob at the center of the scroll bar can be moved with the mouse to scroll through the 3D image stack. Use the left or right arrows on either side to scroll one frame at a time. Shift + mouse wheel can also be used to scroll through the stack. Ctrl + Shift + Mouse Wheel will result in a faster scroll.
 
 
@@ -77,7 +80,8 @@ To load an image, select File -> Load. You will see the following options:
 4. Load Overlay 1
 5. Load Overlay 2
 6. Load Network
-7. Load Misc Properties
+7. Load from excel helper
+8. Load Misc Properties
 
 Options 2-5 correspond the the four image viewing channels that are supported in NetTracer3D.
 Whenever you are beginning with a new image that you would like to segment, load it into the nodes channel with 'Load Nodes'.
@@ -125,6 +129,10 @@ In such cases, clicking on an object in the window will select all elements in t
 * To select additional objects, hold ctrl + click to select a new object while maintaining the previous selection.
 * To select multiple objects at once, click and drag in the image viewer window to create a selection (also supports ctrl + click).
 
+* To zoom in, select the magnifying glass (or press z) and left click. Right clicking will zoom back out. Click and drag with the magnifying glass to zoom in on a specific region.
+* To pan, select the hand (or middle mouse) and drag around in the image viewer window.
+   * Note that entering pan mode will lag in images with very large 2D planes.
+
 .. _segmenting:
 
 Segmenting Data
@@ -169,10 +177,13 @@ Referencing the above image, the ML segmentation uses the following options:
 * Train by 3D Patterns (Processing Options): When selected, the model will be trained using 3D feature maps.
 * Train Quick Model (Training): Click to train the model to segment your image based on the regions selected in your training data.
 * Train More Detailed Model (Training): Does the same as above but has additional feature training.
-* Save Model (Training): Saves purely the extracted training data from the current model as a .npz file. 
-* Load Model (Training): Loads the saved training data in the .npz file into a new model. This new model can receive additional trainings from seperate images while maintaining its previous data. Note that loaded quick models can only be layered onto new quick models, while loaded detailed models can only be layered onto new detailed models. Attempting to combine seperate model types will ignore the previous model data.
 * Preview Segment (Segmentation): When clicked, the model will begin segmenting your image as a preview, without interrupting the current training session. Use this to assess the current state of the model to decide if it needs additional training. This preview will be displayed in the highlight overlay, with foreground denoted by yellow and background denoted by blue.
+* Pause/Resume (Segmentation): Pauses/Resumes the preview segmenter.
 * Segment All (Segmentation): When clicked (after a warning), the training session will pause to segment the entire image with the current model. It is recommended that you save your images before doing this (File -> Save Network 3D Object As), in case the segmentation needs to be interrupted (It can only be paused by terminating the program). When finished, the binary segmentation will be placed in Overlay 2.
+* Save Model (Saving/Loading): Saves purely the extracted training data from the current model as a .npz file. 
+* Load Model (Saving/Loading): Loads the saved training data in the .npz file into a new model. This new model can receive additional trainings from seperate images while maintaining its previous data. Note that loaded quick models can only be layered onto new quick models, while loaded detailed models can only be layered onto new detailed models. Attempting to combine seperate model types will ignore the previous model data.
+* Load Image... (Saving/Loading): Loads a new image into the 'nodes' channel for segmentation. Note this load option supports RGB images (For example, H&E stain), which normally is not allowed in the 'nodes' channel.
+
 
 .. image:: _static/seg_example.png
    :width: 800px

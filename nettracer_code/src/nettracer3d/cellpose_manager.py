@@ -16,14 +16,15 @@ class CellposeGUILauncher:
         """
         self.parent_widget = parent_widget
         self.cellpose_process = None
-    
-    def launch_cellpose_gui(self, image_path=None, working_directory=None):
+        
+    def launch_cellpose_gui(self, image_path=None, working_directory=None, use_3d=False):
         """
         Launch cellpose GUI in a separate thread.
         
         Args:
             image_path (str, optional): Path to image file to load automatically
             working_directory (str, optional): Directory to start cellpose in
+            use_3d (bool, optional): Whether to launch cellpose 3D version (default: False)
         
         Returns:
             bool: True if launch was initiated successfully
@@ -33,6 +34,10 @@ class CellposeGUILauncher:
             try:
                 # Build command
                 cmd = [sys.executable, "-m", "cellpose"]
+                
+                # Add 3D flag if requested
+                if use_3d:
+                    cmd.append("--Zstack")
                 
                 # Add image path if provided
                 if image_path and Path(image_path).exists():
@@ -55,29 +60,35 @@ class CellposeGUILauncher:
             except Exception as e:
                 if self.parent_widget:
                     # Show error in main thread
-                    self.show_error(f"Failed to launch cellpose GUI: {str(e)}")
+                    version_str = "3D " if use_3d else ""
+                    self.show_error(f"Failed to launch cellpose {version_str}GUI: {str(e)}")
                 else:
-                    print(f"Failed to launch cellpose GUI: {str(e)}")
+                    version_str = "3D " if use_3d else ""
+                    print(f"Failed to launch cellpose {version_str}GUI: {str(e)}")
         
         try:
             # Start cellpose in separate thread
             thread = threading.Thread(target=run_cellpose, daemon=True)
             thread.start()
             
-            if self.parent_widget:
-                self.show_info("Cellpose GUI launched!")
-            else:
-                print("Cellpose GUI launched!")
+            #if self.parent_widget:
+                #version_str = "3D " if use_3d else ""
+                #self.show_info(f"Cellpose {version_str}GUI launched!")
+            #else:
+                #version_str = "3D " if use_3d else ""
+                #print(f"Cellpose {version_str}GUI launched!")
             
             return True
             
         except Exception as e:
             if self.parent_widget:
-                self.show_error(f"Failed to start cellpose thread: {str(e)}")
+                version_str = "3D " if use_3d else ""
+                self.show_error(f"Failed to start cellpose {version_str}thread: {str(e)}")
             else:
-                print(f"Failed to start cellpose thread: {str(e)}")
+                version_str = "3D " if use_3d else ""
+                print(f"Failed to start cellpose {version_str}thread: {str(e)}")
             return False
-    
+        
     def launch_with_directory(self, directory_path):
         """
         Launch cellpose GUI with a specific directory.

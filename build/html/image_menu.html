@@ -6,14 +6,14 @@
   <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
 
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>All Image Menu Options &mdash; NetTracer3D 0.8.2 documentation</title>
+  <title>All Image Menu Options &mdash; NetTracer3D 0.9.0 documentation</title>
       <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=b86133f3" />
       <link rel="stylesheet" type="text/css" href="_static/css/theme.css?v=e59714d7" />
 
   
       <script src="_static/jquery.js?v=5d32c60e"></script>
       <script src="_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
-      <script src="_static/documentation_options.js?v=dbee5847"></script>
+      <script src="_static/documentation_options.js?v=39bb1c6d"></script>
       <script src="_static/doctools.js?v=9bcbadda"></script>
       <script src="_static/sphinx_highlight.js?v=dc90522c"></script>
     <script src="_static/js/theme.js"></script>
@@ -221,10 +221,11 @@
 <section id="image-overlays-color-nodes-or-edges">
 <h2>‘Image -&gt; Overlays -&gt; Color Nodes (or edges)’<a class="headerlink" href="#image-overlays-color-nodes-or-edges" title="Link to this heading"></a></h2>
 <ul class="simple">
-<li><p>If the nodes channel is present, then this method will create a new RGB overlay where each grayscale label in the nodes image is assigned a unique color.</p></li>
-<li><p>This overlay will be placed in Overlay2, while a legend saying what node corresponds to what color will be placed in the tabulated data widget.</p></li>
-<li><p>This is an excellent way to visualize what nodes have been labeled. Note that if the nodes channel is empty, this operation will be performed on the edges channel instead, assuming it exists.</p></li>
-<li><p>The only parameter, down_factor, applies an internal downsample equivalent to the inputted integer on all three dimensions before drawing the overlay. This can be used to speed up processing, but note that over-downsampling small nodes may cause them to be removed from the image.</p></li>
+<li><p>This method will create a new RGB overlay where each grayscale label in the nodes (or edges) image is assigned a unique color.</p></li>
+<li><p>This overlay will be placed in Overlay2, while a legend saying what node/edge corresponds to what color will be placed in the tabulated data widget.</p></li>
+<li><p>This is an excellent way to visualize what nodes/edges have been labeled.</p></li>
+<li><p>The first parameter is a dropdown menu to tell the program whether to color the nodes or the edges.</p></li>
+<li><p>The second parameter, down_factor, applies an internal downsample equivalent to the inputted integer on all three dimensions before drawing the overlay. This can be used to speed up processing, but note that over-downsampling small nodes may cause them to be removed from the image.</p></li>
 </ul>
 </section>
 <section id="image-overlays-shuffle">
@@ -322,6 +323,7 @@
 <li><p>Selecting this just opens the Cellpose3 GUI (Stringer, C., Pachitariu, M. Cellpose3: one-click image restoration for improved cellular segmentation. Nat Methods 22, 592–599 (2025). <a class="reference external" href="https://doi.org/10.1038/s41592-025-02595-5">https://doi.org/10.1038/s41592-025-02595-5</a>), provided it has been installed in NetTracer3D’s package environment.</p></li>
 <li><p>Cellpose3 is my favorite open-source tool to segment cells with, so I added this option as a suggestion to use it together with NetTracer3d.</p></li>
 <li><p>This requires Cellpose3 to be installed in NetTracer3D’s package environment.</p></li>
+<li><p>If NetTracer3D has a 3D image or no image is present, the 3D-stack version of cellpose will open. If a 2D image is open in NetTracer3D, the 2D-stack version of cellpose will open.</p></li>
 </ul>
 </section>
 </section>

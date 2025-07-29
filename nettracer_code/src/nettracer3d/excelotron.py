@@ -1238,7 +1238,7 @@ class TabbedIdentityWidget(QFrame):
 
 class ExcelToDictGUI(QMainWindow):
     # Add this signal
-    data_exported = pyqtSignal(dict, str)  # dictionary, property_name
+    data_exported = pyqtSignal(dict, str, bool)  # dictionary, property_name, add_status
     
     def __init__(self):
         super().__init__()
@@ -1255,6 +1255,7 @@ class ExcelToDictGUI(QMainWindow):
         
         self.setWindowTitle("Excel to Python Dictionary Converter")
         self.setGeometry(100, 100, 1200, 800)
+        self.add = False
         
         self.setup_ui()
 
@@ -1414,6 +1415,14 @@ class ExcelToDictGUI(QMainWindow):
         self.export_btn.clicked.connect(self.export_dictionary)
         export_layout.addWidget(self.export_btn)
 
+        self.add_button = QPushButton("+")
+        self.add_button.setFixedSize(20, 20)
+        self.add_button.setCheckable(True)
+        self.add_button.setChecked(False)
+        self.add_button.clicked.connect(self.toggle_add)
+        export_layout.addWidget(self.add_button)
+
+
         right_layout.addLayout(export_layout)
 
         right_widget.setLayout(right_layout)
@@ -1430,6 +1439,15 @@ class ExcelToDictGUI(QMainWindow):
 
         # Add splitter to main layout
         main_layout.addWidget(splitter)
+
+    def toggle_add(self):
+
+        if self.add_button.isChecked():
+            print("Exported Properties will be added onto existing ones")
+            self.add = True
+        else:
+            print("Exported Properties will be override existing ones")
+            self.add = False
 
     def load_template(self, template_name):
         if template_name in self.templates:
@@ -1681,12 +1699,13 @@ class ExcelToDictGUI(QMainWindow):
                 return
                 
             # Emit signal to parent application
-            self.data_exported.emit(result_dict, property_name)
+            self.data_exported.emit(result_dict, property_name, self.add)
             
             # Still store in global variables for backward compatibility
             import builtins
             builtins.excel_dict = result_dict
             builtins.target_property = property_name
+            builtins.add = self.add
             
             # Show success message with preview
             preview = str(result_dict)

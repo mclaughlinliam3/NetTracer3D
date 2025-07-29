@@ -9,6 +9,7 @@ In the default viewer mode:
 ----------------------------
 
 * 'Z' = toggle zoom mode.
+    * Left clicking + Dragging will in zoom mode will zoom in on specific regions.
 * 'X' = toggle highlight overlay visibility.
 * 'Middle Mouse' = Toggle Pan Mode.
 * 'Shift + Scroll Wheel' = Move Through Image Stack.
@@ -16,8 +17,7 @@ In the default viewer mode:
 * 'Shift + F' = Search for a node or an edge in the image channels.
 * 'Ctrl + Left Click in the image viewer window' = Select/deselect object without deselecting others that are selected.
 * 'Left Click + Drag in the image viewer window' = Group select objects. (Add ctrl to not deselect current selection)
-    * And hold shift while dragging to instead zoom in on a specific region.
-    * Likewise, left clicking and dragging while in zoom-mode will zoom in on specific regions without requiring shift being held.
+    * And hold shift while dragging to instead crop a specific region.
 * 'Ctrl + S' = If no Network3D object has been saved this session, the user will be prompted to create a new folder to save one. If one has been created, then the current state of the data will be saved to the last-saved location of the Network3D object. (Avoids having to go through the save menu).
 * 'Ctrl + L' = If no Network3D object has been loaded this session, the user will be prompted to find a folder to load one from. If one has been loaded, then the same directory will be used to load a Network3D Object. (In case the user has messed around with the current data and wants to reload it from baseline easily).
 
