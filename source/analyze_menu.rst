@@ -111,8 +111,10 @@ Parameter Explanations
         2. Weighted Average Identity of All Communities - This option provides compositional info of all communities, weighted by community size. (Does not support UMAP)
 #. Generate UMAP
     * Select this option to generate a UMAP comparing the community compositions.
-#. If Using Above - Label UMAP points?
-    * This option labels the communities within the UMAP by their numerical label. Deselect this option to avoid these labels showing up on the graph.
+#. Label UMAP Points How?
+    * 'No Label' - UMAP points are not labeled
+    * By Community - Assigns each point their numerical label.
+    * By Neighborhood - Colors communities in the UMAP by what neighborhood they belong to, presuming they have been assigned a neighborhood via 'Analyze -> Network -> Convert Network Communities...'
 #. Min Community Size to be grouped...
     * If empty, this param does nothing.
     * If an int is entered, any communities with nodes fewer than this val will not be included in the UMAP — since we might not care about small, insignificant communities.
@@ -677,7 +679,7 @@ Parameter Explanations
 
 'Analyze -> Data/Overlays -> Centroid UMAP'
 --------------------------------------
-* This method will create a UMAP, clustering nodes based on the similarity of their centroids. In short, it lets you easily eyeball what sort of things are next to each other.
+* This method will create a UMAP, clustering nodes based on the similarity of their centroids. In short, it lets you easily eyeball what sort of things are next to each other. Its uses are more for 3D data, as 2D data can give a similar impression just by looking at the image.
 * If node_identities exist, the nodes will all be colored based on their identity. Unassigned nodes will get called 'Unknown' in such a case.
 * This method does not have any parameters. Simply run it to show the UMAP.
 

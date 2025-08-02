@@ -65,16 +65,9 @@ McLaughlin, L., Zhang, B., Sharma, S. et al. Three dimensional multiscalar neuro
 
 NetTracer3D was developed by Liam McLaughlin while working under Dr. Sanjay Jain at Washington University School of Medicine.
 
--- Version 0.9.0 Updates --
-	* Note that this includes updates for 0.8.3 - 0.9.0
-	* Bug Fixes
-	* Updated network histogram statistics menu, and moved degree distribution here
-	* Added gray watershed
-	* Updated binary watershed
-	* Improved branch labelling method
-	* Updated branch removal in skeletonization method to no longer trim branches that do not reach their node.
-	* Added default branchpoint and branch-adjacency calculation options.
-	* Improved speed of painting and panning.
-	* Enabled the nearest neighbor method to handle non-centroid objects, for the first neighbor at least. And updated it to actually predict theoretical clustering when coloring the heatmap.
-	* Improved segmenter.
-	* Added centroids UMAP method.
+-- Version 0.9.1 Updates --
+	* Adjusted the segment by 3D function to now show the 3D chunks in the preview mode. Previously it showed 2D segmentations in the preview which finished the current plane faster but didn't show accurate training data.
+	* Adjusted the neighborhood heatmap predicted range value to now just simulate a uniform distribution rather than trying to use a mathematical algorithm. 
+	* The image display window now uses image pyramids and cropping for zoom ins so it should run a lot faster on bigger images.
+	* The community UMAP can now color them by neighborhood.
+	* No longer zooms all the way out by default with right click in zoom mode. Now user needs to Shift + Right Click.

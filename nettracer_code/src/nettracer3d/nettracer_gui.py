@@ -466,6 +466,8 @@ class ImageViewerWindow(QMainWindow):
 
         self.resume = False
 
+        self.hold_update = False
+
     def start_left_scroll(self):
         """Start scrolling left when left arrow is pressed."""
         # Single increment first
@@ -500,7 +502,6 @@ class ImageViewerWindow(QMainWindow):
             self.slice_slider.setValue(new_value)
         elif self.scroll_direction > 0 and new_value <= self.slice_slider.maximum():
             self.slice_slider.setValue(new_value)
-        
 
     def create_highlight_overlay(self, node_indices=None, edge_indices=None, overlay1_indices = None, overlay2_indices = None, bounds = False):
         """
@@ -513,6 +514,17 @@ class ImageViewerWindow(QMainWindow):
 
         self.mini_overlay = False #If this method is ever being called, it means we are rendering the entire overlay so mini overlay needs to reset.
         self.mini_overlay_data = None
+
+
+        if not self.high_button.isChecked():
+
+            if len(self.clicked_values['edges']) > 0:
+                self.format_for_upperright_table(self.clicked_values['edges'], title = 'Selected Edges')
+            if len(self.clicked_values['nodes']) > 0:
+                self.format_for_upperright_table(self.clicked_values['nodes'], title = 'Selected Nodes')
+
+            return
+
 
         def process_chunk(chunk_data, indices_to_check):
             """Process a single chunk of the array to create highlight mask"""
@@ -550,7 +562,7 @@ class ImageViewerWindow(QMainWindow):
         current_xlim = self.ax.get_xlim() if hasattr(self, 'ax') and self.ax.get_xlim() != (0, 1) else None
         current_ylim = self.ax.get_ylim() if hasattr(self, 'ax') and self.ax.get_ylim() != (0, 1) else None
         
-        if not node_indices and not edge_indices and not overlay1_indices and not overlay2_indices:
+        if not node_indices and not edge_indices and not overlay1_indices and not overlay2_indices and self.machine_window is None:
             self.highlight_overlay = None
             self.highlight_bounds = None
             self.update_display(preserve_zoom=(current_xlim, current_ylim))
@@ -623,7 +635,7 @@ class ImageViewerWindow(QMainWindow):
             self.highlight_overlay = np.maximum(self.highlight_overlay, overlay1_overlay)
         if overlay2_overlay is not None:
             self.highlight_overlay = np.maximum(self.highlight_overlay, overlay2_overlay)
-                
+        
         # Update display
         self.update_display(preserve_zoom=(current_xlim, current_ylim))
 
@@ -819,10 +831,6 @@ class ImageViewerWindow(QMainWindow):
                 
         # Update display
         self.update_display(preserve_zoom=(current_xlim, current_ylim))
-
-
-
-        
 
 
 
@@ -1991,7 +1999,10 @@ class ImageViewerWindow(QMainWindow):
                             del my_network.network_lists[0][i]
                             del my_network.network_lists[1][i]
                             del my_network.network_lists[2][i]
-
+                    for node in self.clicked_values['nodes']:
+                        del my_network.node_centroids[node]
+                        del my_network.node_identities[node]
+                        del my_network.communities[node]
 
 
             if len(self.clicked_values['edges']) > 0:
@@ -2006,6 +2017,8 @@ class ImageViewerWindow(QMainWindow):
                             del my_network.network_lists[0][i]
                             del my_network.network_lists[1][i]
                             del my_network.network_lists[2][i]
+                    for node in self.clicked_values['edges']:
+                        del my_network.edge_centroids[edge]
 
             my_network.network_lists = my_network.network_lists
 
@@ -2021,7 +2034,7 @@ class ImageViewerWindow(QMainWindow):
                 for column in range(model.columnCount(None)):
                     self.network_table.resizeColumnToContents(column)
 
-            self.show_centroid_dialog()
+            #self.show_centroid_dialog()
         except Exception as e:
             print(f"Error: {e}")
 
@@ -2147,11 +2160,16 @@ class ImageViewerWindow(QMainWindow):
         current_xlim = self.ax.get_xlim() if hasattr(self, 'ax') and self.ax.get_xlim() != (0, 1) else None
         current_ylim = self.ax.get_ylim() if hasattr(self, 'ax') and self.ax.get_ylim() != (0, 1) else None
 
-        if self.high_button.isChecked():
+        if self.high_button.isChecked() and self.machine_window is None:
             if self.highlight_overlay is None and ((len(self.clicked_values['nodes']) + len(self.clicked_values['edges'])) > 0):
                 if self.needs_mini:
                     self.create_mini_overlay(node_indices = self.clicked_values['nodes'], edge_indices = self.clicked_values['edges'])
                     self.needs_mini = False
+                else:
+                    self.create_highlight_overlay(node_indices = self.clicked_values['nodes'], edge_indices = self.clicked_values['edges'])
+            else:
+                self.create_highlight_overlay(node_indices = self.clicked_values['nodes'], edge_indices = self.clicked_values['edges'])
+
         
         self.update_display(preserve_zoom=(current_xlim, current_ylim))
 
@@ -2233,6 +2251,11 @@ class ImageViewerWindow(QMainWindow):
                 
                 # Store current channel visibility state
                 self.pre_pan_channel_state = self.channel_visible.copy()
+
+                self.prev_down = self.downsample_factor
+                if self.throttle:
+                    if self.downsample_factor < 3:
+                        self.validate_downsample_input(text = 3)
                 
                 # Create static background from currently visible channels
                 self.create_pan_background()
@@ -2782,7 +2805,7 @@ class ImageViewerWindow(QMainWindow):
         self.pan_zoom_state = (current_xlim, current_ylim)
 
     def create_composite_for_pan(self):
-        """Create a properly rendered composite image for panning"""
+        """Create a properly rendered composite image for panning with downsample support"""
         # Get active channels and dimensions (copied from update_display)
         active_channels = [i for i in range(4) if self.channel_data[i] is not None]
         if active_channels:
@@ -2793,8 +2816,33 @@ class ImageViewerWindow(QMainWindow):
         else:
             return None
         
-        # Create a blank RGBA composite to accumulate all channels
-        composite = np.zeros((min_height, min_width, 4), dtype=np.float32)
+        # Store original dimensions for coordinate mapping
+        self.original_dims = (min_height, min_width)
+        
+        # Get current downsample factor
+        downsample_factor = getattr(self, 'downsample_factor', 1)
+        
+        # Calculate display dimensions (downsampled)
+        display_height = min_height // downsample_factor
+        display_width = min_width // downsample_factor
+        
+        # Helper function to downsample image (same as in update_display)
+        def downsample_image(image, factor):
+            if factor == 1:
+                return image
+            
+            # Handle different image types
+            if len(image.shape) == 2:
+                # Grayscale
+                return image[::factor, ::factor]
+            elif len(image.shape) == 3:
+                # RGB/RGBA
+                return image[::factor, ::factor, :]
+            else:
+                return image
+        
+        # Create a blank RGBA composite to accumulate all channels (using display dimensions)
+        composite = np.zeros((display_height, display_width, 4), dtype=np.float32)
         
         # Process each visible channel exactly like update_display does
         for channel in range(4):
@@ -2811,24 +2859,27 @@ class ImageViewerWindow(QMainWindow):
                 else:
                     current_image = self.channel_data[channel]
 
+                # Downsample the image for rendering
+                display_image = downsample_image(current_image, downsample_factor)
+
                 if is_rgb and self.channel_data[channel].shape[-1] == 3:
                     # RGB image - convert to RGBA and blend
-                    rgb_alpha = np.ones((*current_image.shape[:2], 4), dtype=np.float32)
-                    rgb_alpha[:, :, :3] = current_image.astype(np.float32) / 255.0
+                    rgb_alpha = np.ones((*display_image.shape[:2], 4), dtype=np.float32)
+                    rgb_alpha[:, :, :3] = display_image.astype(np.float32) / 255.0
                     rgb_alpha[:, :, 3] = 0.7  # Same alpha as update_display
                     composite = self.blend_layers(composite, rgb_alpha)
                     
                 elif is_rgb and self.channel_data[channel].shape[-1] == 4:
                     # RGBA image - blend directly
-                    rgba_image = current_image.astype(np.float32) / 255.0
+                    rgba_image = display_image.astype(np.float32) / 255.0
                     composite = self.blend_layers(composite, rgba_image)
                     
                 else:
                     # Regular channel processing (same logic as update_display)
                     if self.min_max[channel][0] == None:
-                        self.min_max[channel][0] = np.min(current_image)
+                        self.min_max[channel][0] = np.min(self.channel_data[channel])
                     if self.min_max[channel][1] == None:
-                        self.min_max[channel][1] = np.max(current_image)
+                        self.min_max[channel][1] = np.max(self.channel_data[channel])
 
                     img_min = self.min_max[channel][0]
                     img_max = self.min_max[channel][1]
@@ -2840,16 +2891,16 @@ class ImageViewerWindow(QMainWindow):
                         vmin = img_min + (img_max - img_min) * self.channel_brightness[channel]['min']
                         vmax = img_min + (img_max - img_min) * self.channel_brightness[channel]['max']
                     
-                    # Normalize the image
+                    # Normalize the downsampled image
                     if vmin == vmax:
-                        normalized_image = np.zeros_like(current_image)
+                        normalized_image = np.zeros_like(display_image)
                     else:
-                        normalized_image = np.clip((current_image - vmin) / (vmax - vmin), 0, 1)
+                        normalized_image = np.clip((display_image - vmin) / (vmax - vmin), 0, 1)
                     
                     # Apply channel color and alpha
                     if channel == 2 and self.machine_window is not None:
                         # Special case for machine window channel 2
-                        channel_rgba = self.apply_machine_colormap(current_image)
+                        channel_rgba = self.apply_machine_colormap(display_image)
                     else:
                         # Regular channel with custom color
                         color = self.base_colors[channel]
@@ -2862,16 +2913,18 @@ class ImageViewerWindow(QMainWindow):
                     # Blend this channel into the composite
                     composite = self.blend_layers(composite, channel_rgba)
         
-        # Add highlight overlays if they exist (same logic as update_display)
+        # Add highlight overlays if they exist (with downsampling)
         if self.mini_overlay and self.highlight and self.machine_window is None:
-            highlight_rgba = self.create_highlight_rgba(self.mini_overlay_data, yellow=True)
+            display_overlay = downsample_image(self.mini_overlay_data, downsample_factor)
+            highlight_rgba = self.create_highlight_rgba(display_overlay, yellow=True)
             composite = self.blend_layers(composite, highlight_rgba)
         elif self.highlight_overlay is not None and self.highlight:
             highlight_slice = self.highlight_overlay[self.current_slice]
+            display_highlight = downsample_image(highlight_slice, downsample_factor)
             if self.machine_window is None:
-                highlight_rgba = self.create_highlight_rgba(highlight_slice, yellow=True)
+                highlight_rgba = self.create_highlight_rgba(display_highlight, yellow=True)
             else:
-                highlight_rgba = self.create_highlight_rgba(highlight_slice, yellow=False)
+                highlight_rgba = self.create_highlight_rgba(display_highlight, yellow=False)
             composite = self.blend_layers(composite, highlight_rgba)
         
         # Convert to 0-255 range for display
@@ -2902,7 +2955,7 @@ class ImageViewerWindow(QMainWindow):
         if yellow:
             # Yellow highlight
             mask = highlight_data > 0
-            rgba[mask] = [1, 1, 0, 0.5]  # Yellow with alpha 0.5
+            rgba[mask] = [1, 1, 0, 0.8]  # Yellow with alpha 0.5
         else:
             # Multi-color highlight for machine window
             mask_1 = (highlight_data == 1)
@@ -2914,7 +2967,31 @@ class ImageViewerWindow(QMainWindow):
 
     def blend_layers(self, base, overlay):
         """Alpha blend two RGBA layers"""
-        # Standard alpha blending formula
+        
+        def resize_overlay_to_base(overlay_arr, base_arr):
+            base_height, base_width = base_arr.shape[:2]
+            overlay_height, overlay_width = overlay_arr.shape[:2]
+            
+            # First crop if overlay is larger
+            cropped_overlay = overlay_arr[:base_height, :base_width]
+            
+            # Then pad if still smaller after cropping
+            current_height, current_width = cropped_overlay.shape[:2]
+            pad_height = base_height - current_height
+            pad_width = base_width - current_width
+            
+            if pad_height > 0 or pad_width > 0:
+                cropped_overlay = np.pad(cropped_overlay,
+                                        ((0, pad_height), (0, pad_width), (0, 0)),
+                                        mode='constant', constant_values=0)
+            
+            return cropped_overlay
+        
+        # Resize the ENTIRE overlay array to match base dimensions
+        if overlay.shape[:2] != base.shape[:2]:
+            overlay = resize_overlay_to_base(overlay, base)
+        
+        # Now extract alpha channels (they should be the same size)
         alpha_overlay = overlay[:, :, 3:4]
         alpha_base = base[:, :, 3:4]
         
@@ -2936,17 +3013,26 @@ class ImageViewerWindow(QMainWindow):
         return result
 
     def update_display_pan_mode(self):
-        """Lightweight display update for pan preview mode"""
+        """Lightweight display update for pan preview mode with downsample support"""
 
         if self.is_pan_preview and self.pan_background_image is not None:
             # Clear and setup axes
             self.ax.clear()
             self.ax.set_facecolor('black')
             
-            # Get dimensions
-            height, width = self.pan_background_image.shape[:2]
+            # Get original dimensions (before downsampling)
+            if hasattr(self, 'original_dims') and self.original_dims:
+                height, width = self.original_dims
+            else:
+                # Fallback to pan background image dimensions
+                height, width = self.pan_background_image.shape[:2]
+                # If we have downsample factor, scale back up
+                downsample_factor = getattr(self, 'downsample_factor', 1)
+                height *= downsample_factor
+                width *= downsample_factor
             
             # Display the composite background with preserved zoom
+            # Use extent to stretch downsampled image back to original coordinate space
             self.ax.imshow(self.pan_background_image, 
                           extent=(-0.5, width-0.5, height-0.5, -0.5),
                           aspect='equal')
@@ -2956,10 +3042,16 @@ class ImageViewerWindow(QMainWindow):
                 self.ax.set_xlim(self.pan_zoom_state[0])
                 self.ax.set_ylim(self.pan_zoom_state[1])
             
+            # Get downsample factor for title display
+            downsample_factor = getattr(self, 'downsample_factor', 1)
+            
             # Style the axes (same as update_display)
             self.ax.set_xlabel('X')
-            self.ax.set_ylabel('Y') 
-            self.ax.set_title(f'Slice {self.current_slice}')
+            self.ax.set_ylabel('Y')
+            if downsample_factor > 1:
+                self.ax.set_title(f'Slice {self.current_slice} (DS: {downsample_factor}x)')
+            else:
+                self.ax.set_title(f'Slice {self.current_slice}')
             self.ax.xaxis.label.set_color('black')
             self.ax.yaxis.label.set_color('black')
             self.ax.title.set_color('black')
@@ -2967,7 +3059,7 @@ class ImageViewerWindow(QMainWindow):
             for spine in self.ax.spines.values():
                 spine.set_color('black')
                 
-            # Add measurement points if they exist (same as update_display)
+            # Add measurement points if they exist (coordinates remain in original space)
             for point in self.measurement_points:
                 x1, y1, z1 = point['point1']
                 x2, y2, z2 = point['point2']
@@ -3093,7 +3185,10 @@ class ImageViewerWindow(QMainWindow):
                 except:
                     pass
                 self.selection_rect = None
-                self.canvas.draw()
+                current_xlim = self.ax.get_xlim() if hasattr(self, 'ax') and self.ax.get_xlim() != (0, 1) else None
+                current_ylim = self.ax.get_ylim() if hasattr(self, 'ax') and self.ax.get_ylim() != (0, 1) else None
+                self.update_display(preserve_zoom=(current_xlim, current_ylim))  
+                #self.canvas.draw()
 
         elif self.zoom_mode:
             # Handle zoom mode press
@@ -3126,11 +3221,13 @@ class ImageViewerWindow(QMainWindow):
                 
                 new_xlim = [xdata - x_range, xdata + x_range]
                 new_ylim = [ydata - y_range, ydata + y_range]
+
+                shift_pressed = 'shift' in event.modifiers
                 
-                if (new_xlim[0] <= self.original_xlim[0] or 
-                    new_xlim[1] >= self.original_xlim[1] or
-                    new_ylim[0] <= self.original_ylim[0] or
-                    new_ylim[1] >= self.original_ylim[1]):
+                if (new_xlim[0] <= 0 or 
+                    new_xlim[1] >= self.shape[2] or
+                    new_ylim[0] <= 0 or
+                    new_ylim[1] >= self.shape[1]) or shift_pressed:
                     self.ax.set_xlim(self.original_xlim)
                     self.ax.set_ylim(self.original_ylim)
                 else:
@@ -3142,7 +3239,10 @@ class ImageViewerWindow(QMainWindow):
                     if not hasattr(self, 'zoom_changed'):
                         self.zoom_changed = False
 
-            self.canvas.draw()
+            current_xlim = self.ax.get_xlim() if hasattr(self, 'ax') and self.ax.get_xlim() != (0, 1) else None
+            current_ylim = self.ax.get_ylim() if hasattr(self, 'ax') and self.ax.get_ylim() != (0, 1) else None
+            self.update_display(preserve_zoom=(current_xlim, current_ylim))    
+            #self.canvas.draw()
 
         #  Handle brush mode cleanup with paint session management
         if self.brush_mode and hasattr(self, 'painting') and self.painting:
@@ -3277,7 +3377,7 @@ class ImageViewerWindow(QMainWindow):
                 
                 if not hasattr(self, 'zoom_changed'):
                     self.zoom_changed = False
-                
+
             elif event.button == 3:  # Right click - zoom out
                 x_range = (current_xlim[1] - current_xlim[0])
                 y_range = (current_ylim[1] - current_ylim[0])
@@ -3296,10 +3396,11 @@ class ImageViewerWindow(QMainWindow):
                     self.ax.set_ylim(new_ylim)
 
 
-                self.zoom_changed = False  # Flag that zoom has changed
-                
-            
-            self.canvas.draw()
+            current_xlim = self.ax.get_xlim() if hasattr(self, 'ax') and self.ax.get_xlim() != (0, 1) else None
+            current_ylim = self.ax.get_ylim() if hasattr(self, 'ax') and self.ax.get_ylim() != (0, 1) else None
+            self.update_display(preserve_zoom=(current_xlim, current_ylim))                
+
+            #self.canvas.draw()
         
         elif event.button == 3:  # Right click
             self.create_context_menu(event)
@@ -3606,11 +3707,109 @@ class ImageViewerWindow(QMainWindow):
         help_button = menubar.addAction("Help")
         help_button.triggered.connect(self.help_me)
 
+        # Initialize downsample factor
+        self.downsample_factor = 1
+        
+        """
+        # Create container widget for corner controls
+        corner_widget = QWidget()
+        corner_layout = QHBoxLayout(corner_widget)
+        corner_layout.setContentsMargins(5, 0, 5, 0)
+        
+        # Add downsample control
+        downsample_label = QLabel("Downsample Display:")
+        downsample_label.setStyleSheet("color: black; font-size: 11px;")
+        corner_layout.addWidget(downsample_label)
+        
+        self.downsample_input = QLineEdit("1")
+        self.downsample_input.setFixedWidth(40)
+        self.downsample_input.setFixedHeight(25)
+        self.downsample_input.setStyleSheet("""
+            #QLineEdit {
+                #border: 1px solid gray;
+                #border-radius: 2px;
+                #padding: 1px;
+                #font-size: 11px;
+            #}
+        """)
+        self.downsample_input.textChanged.connect(self.on_downsample_changed)
+        self.downsample_input.editingFinished.connect(self.validate_downsample_input)
+        corner_layout.addWidget(self.downsample_input)
+        
+        # Add some spacing
+        corner_layout.addSpacing(10)
+
+        # Add camera button
+        cam_button = QPushButton("📷")
+        cam_button.setFixedSize(40, 40)
+        cam_button.setStyleSheet("font-size: 24px;")
+        cam_button.clicked.connect(self.snap)
+        corner_layout.addWidget(cam_button)
+        
+        # Set as corner widget
+        menubar.setCornerWidget(corner_widget, Qt.Corner.TopRightCorner)
+        """
         cam_button = QPushButton("📷")
         cam_button.setFixedSize(40, 40)
         cam_button.setStyleSheet("font-size: 24px;")  # Makes emoji larger
         cam_button.clicked.connect(self.snap)
         menubar.setCornerWidget(cam_button, Qt.Corner.TopRightCorner)
+
+    def on_downsample_changed(self, text):
+        """Called whenever the text in the downsample input changes"""
+        try:
+            if text.strip() == "":
+                self.downsample_factor = 1
+            else:
+                value = float(text)
+                if value <= 0:
+                    self.downsample_factor = 1
+                else:
+                    self.downsample_factor = int(value) if value == int(value) else value
+        except (ValueError, TypeError):
+            self.downsample_factor = 1
+
+    def validate_downsample_input(self, text = None, update = True):
+        """Called when user finishes editing (loses focus or presses Enter)"""
+        if text:
+            self.downsample_factor = text
+        else:
+            try: # If enabled for manual display downsampling
+                text = self.downsample_input.text().strip()
+                if text == "":
+                    # Empty input - set to default
+                    self.downsample_factor = 1
+                    self.downsample_input.setText("1")
+                else:
+                    value = int(text)
+                    if value < 1:
+                        # Invalid value - reset to default
+                        self.downsample_factor = 1
+                        self.downsample_input.setText("1")
+                    else:
+                        # Valid value - use it (prefer int if possible)
+                        if value == int(value):
+                            self.downsample_factor = int(value)
+                            self.downsample_input.setText(str(int(value)))
+                        else:
+                            self.downsample_factor = value
+                            self.downsample_input.setText(f"{value:.1f}")
+            except:
+                # Invalid input - reset to default
+                self.downsample_factor = 1
+
+        self.throttle = self.shape[1] * self.shape[2] > 3000 * 3000 * self.downsample_factor
+        if self.machine_window is not None:
+            if self.throttle: #arbitrary throttle for large arrays.
+                self.machine_window.update_interval = 10
+            else:
+                self.machine_window.update_interval = 1  # Increased to 1s
+        
+        # Optional: Trigger display update if you want immediate effect
+        if update:
+            current_xlim = self.ax.get_xlim() if hasattr(self, 'ax') and self.ax.get_xlim() != (0, 1) else None
+            current_ylim = self.ax.get_ylim() if hasattr(self, 'ax') and self.ax.get_ylim() != (0, 1) else None
+            self.update_display(preserve_zoom=(current_xlim, current_ylim))
 
     def snap(self):
         try:
@@ -3643,7 +3842,14 @@ class ImageViewerWindow(QMainWindow):
                     filename += '.png'
                     format_type = 'png'
                 
-                # Method 1: Save with axes bbox (recommended)
+                if self.downsample_factor > 1:
+                    self.pan_mode = True # Update display will ignore downsamples if this is true so we can just use it here
+                    self.downsample_factor = 1
+                    current_xlim = self.ax.get_xlim() if hasattr(self, 'ax') and self.ax.get_xlim() != (0, 1) else None
+                    current_ylim = self.ax.get_ylim() if hasattr(self, 'ax') and self.ax.get_ylim() != (0, 1) else None
+                    self.update_display(preserve_zoom=(current_xlim, current_ylim))
+
+                # Save with axes bbox
                 bbox = self.ax.get_window_extent().transformed(self.figure.dpi_scale_trans.inverted())
                 self.figure.savefig(filename,
                                   dpi=300,
@@ -3654,6 +3860,8 @@ class ImageViewerWindow(QMainWindow):
                                   pad_inches=0)
                 
                 print(f"Axes snapshot saved: {filename}")
+
+                self.toggle_pan_mode() # Assesses pan state since we messed with its vars potentially
                 
         except Exception as e:
             print(f"Error saving snapshot: {e}")
@@ -4372,7 +4580,7 @@ class ImageViewerWindow(QMainWindow):
 
             if directory != "":
 
-                self.reset(network = True, xy_scale = 1, z_scale = 1, edges = True, network_overlay = True, id_overlay = True)
+                self.reset(network = True, xy_scale = 1, z_scale = 1, edges = True, network_overlay = True, id_overlay = True, update = False)
 
                 my_network.assemble(directory)
 
@@ -4685,6 +4893,7 @@ class ImageViewerWindow(QMainWindow):
         """Load a channel and enable active channel selection if needed."""
 
         try:
+            self.hold_update = True
             if not data:  # For solo loading
                 filename, _ = QFileDialog.getOpenFileName(
                     self,
@@ -4752,9 +4961,13 @@ class ImageViewerWindow(QMainWindow):
             try:
                 if len(self.channel_data[channel_index].shape) == 3:  # potentially 2D RGB
                     if self.channel_data[channel_index].shape[-1] in (3, 4):  # last dim is 3 or 4
-                        if self.confirm_rgb_dialog():
-                            # User confirmed it's 2D RGB, expand to 4D
+                        if not data and self.shape is None:
+                            if self.confirm_rgb_dialog():
+                                # User confirmed it's 2D RGB, expand to 4D
+                                self.channel_data[channel_index] = np.expand_dims(self.channel_data[channel_index], axis=0)
+                        elif self.shape[0] == 1: # this can only be true if the user already loaded in a 2d image
                             self.channel_data[channel_index] = np.expand_dims(self.channel_data[channel_index], axis=0)
+
             except:
                 pass
 
@@ -4861,6 +5074,11 @@ class ImageViewerWindow(QMainWindow):
                 pass
 
             self.shape = self.channel_data[channel_index].shape
+            if self.shape[1] * self.shape[2] > 3000 * 3000 * self.downsample_factor:
+                self.throttle = True
+            else:
+                self.throttle = False
+
 
             self.img_height, self.img_width = self.shape[1], self.shape[2]
             self.original_ylim, self.original_xlim = (self.shape[1] + 0.5, -0.5), (-0.5, self.shape[2] - 0.5)
@@ -4878,7 +5096,6 @@ class ImageViewerWindow(QMainWindow):
 
                 self.update_display(reset_resize = reset_resize, preserve_zoom = preserve_zoom)
 
-
                 
         except Exception as e:
 
@@ -4890,7 +5107,7 @@ class ImageViewerWindow(QMainWindow):
                     f"Failed to load tiff file: {str(e)}"
                 )
 
-    def delete_channel(self, channel_index, called = True):
+    def delete_channel(self, channel_index, called = True, update = True):
         """Delete the specified channel and update the display."""
         if called:
             # Confirm deletion
@@ -4936,11 +5153,13 @@ class ImageViewerWindow(QMainWindow):
                 else:
                     # If no channels are available, disable active channel selector
                     self.active_channel_combo.setEnabled(False)
+                    self.shape = None # Also there is not an active shape anymore
             
-            # Update display
-            self.update_display()
+            if update:
+                # Update display
+                self.update_display()
 
-    def reset(self, nodes = False, network = False, xy_scale = 1, z_scale = 1, edges = False, search_region = False, network_overlay = False, id_overlay = False):
+    def reset(self, nodes = False, network = False, xy_scale = 1, z_scale = 1, edges = False, search_region = False, network_overlay = False, id_overlay = False, update = True):
         """Method to flexibly reset certain fields to free up the RAM as desired"""
         
         # Set scales first before any clearing operations
@@ -4961,10 +5180,10 @@ class ImageViewerWindow(QMainWindow):
             self.selection_table.setModel(PandasModel(empty_df))
 
         if nodes:
-            self.delete_channel(0, False)
+            self.delete_channel(0, False, update = update)
 
         if edges:
-            self.delete_channel(1, False)
+            self.delete_channel(1, False, update = update)
         try:
             if search_region:
                 my_network.search_region = None
@@ -4972,10 +5191,10 @@ class ImageViewerWindow(QMainWindow):
             pass
 
         if network_overlay:
-            self.delete_channel(2, False)
+            self.delete_channel(2, False, update = update)
 
         if id_overlay:
-            self.delete_channel(3, False)
+            self.delete_channel(3, False, update = update)
 
 
 
@@ -5109,7 +5328,10 @@ class ImageViewerWindow(QMainWindow):
             self.current_slice = slice_value
             if self.mini_overlay == True: #If we are rendering the highlight overlay for selected values one at a time.
                 self.create_mini_overlay(node_indices = self.clicked_values['nodes'], edge_indices = self.clicked_values['edges'])
-            self.update_display(preserve_zoom=view_settings)
+            if not self.hold_update:
+                self.update_display(preserve_zoom=view_settings)
+            else:
+                self.hold_update = False
             #if self.machine_window is not None:
                 #self.machine_window.poke_segmenter()
             self.pending_slice = None
@@ -5127,51 +5349,59 @@ class ImageViewerWindow(QMainWindow):
         self.update_display(preserve_zoom = (current_xlim, current_ylim))
 
 
-
-    
-    def update_display(self, preserve_zoom=None, dims = None, called = False, reset_resize = False):
-        """Update the display with currently visible channels and highlight overlay."""
+    def update_display(self, preserve_zoom=None, dims=None, called=False, reset_resize=False, skip=False):
+        """Optimized display update with view-based cropping for performance."""
         try:
-            self.figure.clear()
+            # Initialize reusable components if they don't exist
+            if not hasattr(self, 'channel_images'):
+                self.channel_images = {}
+                self.highlight_image = None
+                self.measurement_artists = []
+                self.axes_initialized = False
+                self.original_dims = None
+            
+            # Handle special states (pan, static background)
             if self.pan_background_image is not None:
-                # Restore previously visible channels
                 self.channel_visible = self.pre_pan_channel_state.copy()
                 self.is_pan_preview = False
                 self.pan_background_image = None
                 if self.resume:
                     self.machine_window.segmentation_worker.resume()
                     self.resume = False
+                if self.prev_down != self.downsample_factor:
+                    self.validate_downsample_input(text = self.prev_down)
+                    return
+           
             if self.static_background is not None:
-                # NEW: Convert virtual strokes to real data before cleanup
+                # Your existing virtual strokes conversion logic
                 if (hasattr(self, 'virtual_draw_operations') and self.virtual_draw_operations) or \
                    (hasattr(self, 'virtual_erase_operations') and self.virtual_erase_operations) or \
                    (hasattr(self, 'current_operation') and self.current_operation):
-                    # Finish current operation first
                     if hasattr(self, 'current_operation') and self.current_operation:
                         self.pm.finish_current_virtual_operation()
-                    # Now convert to real data
                     self.pm.convert_virtual_strokes_to_data()
                 
-                # Restore hidden channels
                 try:
                     for i in self.restore_channels:
                         self.channel_visible[i] = True
                     self.restore_channels = []
                 except:
                     pass
-
                 self.static_background = None
-
+                
+                # Your existing machine_window logic
                 if self.machine_window is None:
                     try:
-                        self.channel_data[4][self.current_slice, :, :] = n3d.overlay_arrays_simple(self.channel_data[self.temp_chan][self.current_slice, :, :], self.channel_data[4][self.current_slice, :, :])
-                        self.load_channel(self.temp_chan, self.channel_data[4], data = True, end_paint = True)
+                        self.channel_data[4][self.current_slice, :, :] = n3d.overlay_arrays_simple(
+                            self.channel_data[self.temp_chan][self.current_slice, :, :], 
+                            self.channel_data[4][self.current_slice, :, :])
+                        self.load_channel(self.temp_chan, self.channel_data[4], data=True, end_paint=True)
                         self.channel_data[4] = None
                         self.channel_visible[4] = False
                     except:
                         pass
 
-            # Get active channels and their dimensions
+            # Get dimensions
             active_channels = [i for i in range(4) if self.channel_data[i] is not None]
             if dims is None:
                 if active_channels:
@@ -5180,247 +5410,258 @@ class ImageViewerWindow(QMainWindow):
                     min_height = min(d[0] for d in dims)
                     min_width = min(d[1] for d in dims)
                 else:
-                    min_height = 1
-                    min_width = 1
+                    min_height = min_width = 1
             else:
-                min_height = dims[0]
-                min_width = dims[1]
+                min_height, min_width = dims[:2]
+            
+            # Store original dimensions for pixel coordinate conversion
+            self.original_dims = (min_height, min_width)
 
-            # Set axes limits before displaying any images
+            # Initialize axes only once or when needed
+            if not self.axes_initialized or not hasattr(self, 'ax') or self.ax is None:
+                self.figure.clear()
+                self.figure.patch.set_facecolor('white')
+                self.ax = self.figure.add_subplot(111)
+                self.ax.set_facecolor('black')
+                self.axes_initialized = True
+                
+                # Style the axes once
+                self.ax.set_xlabel('X')
+                self.ax.set_ylabel('Y')
+                self.ax.xaxis.label.set_color('black')
+                self.ax.yaxis.label.set_color('black')
+                self.ax.tick_params(colors='black')
+                for spine in self.ax.spines.values():
+                    spine.set_color('black')
+            else:
+                # Clear only the image data, keep axes structure
+                for img in list(self.ax.get_images()):
+                    img.remove()
+                # Clear measurement points
+                for artist in self.measurement_artists:
+                    artist.remove()
+                self.measurement_artists.clear()
+
+            # Determine the current view bounds (either from preserve_zoom or current state)
+            if preserve_zoom:
+                current_xlim, current_ylim = preserve_zoom
+            else:
+                current_xlim = (-0.5, self.shape[2] - 0.5)
+                current_ylim = (self.shape[1] - 0.5, -0.5)
+            
+            # Calculate the visible region in pixel coordinates
+            x_min = max(0, int(np.floor(current_xlim[0] + 0.5)))
+            x_max = min(min_width, int(np.ceil(current_xlim[1] + 0.5)))
+            y_min = max(0, int(np.floor(current_ylim[1] + 0.5)))  # Note: y is flipped
+            y_max = min(min_height, int(np.ceil(current_ylim[0] + 0.5)))
+
+            if not self.pan_mode: # If using image pyramids
+                size = (x_max - x_min) * (y_max - y_min)
+                if size < (3000 * 3000): # Smaller window
+                    val = 1
+                elif size > (3000 * 3000) and size < (6000 * 6000): # Med window
+                    val = 2
+                elif size > (6000 * 6000) and size < (9000 * 9000): # Large window
+                    val = 3
+                elif size > (9000 * 9000): # Very large window
+                    val = 3
+                self.validate_downsample_input(text = val, update = False)
+            downsample_factor = self.downsample_factor
+
+            # Add some padding to avoid edge artifacts during pan/zoom
+            padding = max(10, downsample_factor * 2)
+            x_min_padded = max(0, x_min - padding)
+            x_max_padded = min(min_width, x_max + padding)
+            y_min_padded = max(0, y_min - padding)
+            y_max_padded = min(min_height, y_max + padding)
+            
+            # Calculate the extent for the cropped region (in original coordinates)
+            crop_extent = (x_min_padded - 0.5, x_max_padded - 0.5, 
+                          y_max_padded - 0.5, y_min_padded - 0.5)
+
+            # Set limits to original dimensions (important for pixel queries)
             self.ax.set_xlim(-0.5, min_width - 0.5)
             self.ax.set_ylim(min_height - 0.5, -0.5)
+            self.ax.set_title(f'Slice {self.current_slice}')
+            self.ax.title.set_color('black')
             
-            # Create subplot with tight layout and white figure background
-            self.figure.patch.set_facecolor('white')
-            self.ax = self.figure.add_subplot(111)
-            
-            # Store current zoom limits if they exist and weren't provided
-     
-            current_xlim, current_ylim = preserve_zoom if preserve_zoom else (None, None)
-            
-            # Define base colors for each channel with increased intensity
             base_colors = self.base_colors
-            # Set only the axes (image area) background to black
-            self.ax.set_facecolor('black')
             
-            # Display each visible channel
+            # Helper function to crop and downsample image
+            def crop_and_downsample_image(image, y_start, y_end, x_start, x_end, factor):
+                # Crop first
+                if len(image.shape) == 2:
+                    cropped = image[y_start:y_end, x_start:x_end]
+                elif len(image.shape) == 3:
+                    cropped = image[y_start:y_end, x_start:x_end, :]
+                else:
+                    cropped = image
+                
+                # Then downsample if needed
+                if factor == 1:
+                    return cropped
+                
+                if len(cropped.shape) == 2:
+                    return cropped[::factor, ::factor]
+                elif len(cropped.shape) == 3:
+                    return cropped[::factor, ::factor, :]
+                else:
+                    return cropped
+            
+            # Update channel images efficiently with cropping and downsampling
             for channel in range(4):
-                if (self.channel_visible[channel] and 
-                    self.channel_data[channel] is not None):
-                    
-                    # Check if we're dealing with RGB data
-                    is_rgb = len(self.channel_data[channel].shape) == 4 and (self.channel_data[channel].shape[-1] == 3 or self.channel_data[channel].shape[-1] == 4)
+                if self.channel_visible[channel] and self.channel_data[channel] is not None:
+                    # Get current image data
+                    is_rgb = len(self.channel_data[channel].shape) == 4 and (
+                        self.channel_data[channel].shape[-1] in [3, 4])
                     
                     if len(self.channel_data[channel].shape) == 3 and not is_rgb:
                         current_image = self.channel_data[channel][self.current_slice, :, :]
                     elif is_rgb:
-                        current_image = self.channel_data[channel][self.current_slice]  # Already has RGB channels
+                        current_image = self.channel_data[channel][self.current_slice]
                     else:
                         current_image = self.channel_data[channel]
 
+                    # Crop and downsample the image for rendering
+                    display_image = crop_and_downsample_image(
+                        current_image, y_min_padded, y_max_padded, 
+                        x_min_padded, x_max_padded, downsample_factor)
+
                     if is_rgb and self.channel_data[channel].shape[-1] in [3, 4]:
-                        # For RGB/RGBA images, use brightness/contrast to control alpha instead
-                        
-                        # Calculate alpha based on brightness settings
+                        # RGB handling (keep your existing logic)
                         brightness_min = self.channel_brightness[channel]['min']
                         brightness_max = self.channel_brightness[channel]['max']
-                        
-                        # Map brightness range to alpha range (0.0 to 1.0)
-                        # brightness_min controls minimum alpha, brightness_max controls maximum alpha
                         alpha_range = brightness_max - brightness_min
-                        base_alpha = brightness_min                        
-                        # You can adjust these multipliers to control the alpha range
-                        final_alpha = base_alpha + alpha_range  # Scale to reasonable alpha range
-                        final_alpha = np.clip(final_alpha, 0.0, 1.0)  # Ensure valid alpha range
+                        base_alpha = brightness_min
+                        final_alpha = np.clip(base_alpha + alpha_range, 0.0, 1.0)
                         
-                        # Display the image with brightness-controlled alpha
-                        if current_image.shape[-1] == 4:
-                            # For RGBA, multiply existing alpha by our brightness-controlled alpha
-                            img_with_alpha = current_image.copy()
+                        if display_image.shape[-1] == 4:
+                            img_with_alpha = display_image.copy()
                             img_with_alpha[..., 3] = img_with_alpha[..., 3] * final_alpha
-                            self.ax.imshow(img_with_alpha)
+                            # Use crop_extent to place in correct location
+                            im = self.ax.imshow(img_with_alpha, extent=crop_extent)
                         else:
-                            # For RGB, apply brightness-controlled alpha directly
-                            self.ax.imshow(current_image, alpha=final_alpha)
-                            
+                            im = self.ax.imshow(display_image, alpha=final_alpha, extent=crop_extent)
                     else:
-                        # Regular channel processing with colormap (your existing code)
-                        # Calculate brightness/contrast limits from entire volume
+                        # Regular channel processing with optimized normalization
                         if self.min_max[channel][0] is None:
-                            self.min_max[channel][0] = np.min(self.channel_data[channel])
-                        if self.min_max[channel][1] is None:
-                            self.min_max[channel][1] = np.max(self.channel_data[channel])
-                        img_min = self.min_max[channel][0]
-                        img_max = self.min_max[channel][1]
+                            # For very large arrays, consider sampling for min/max
+                            if self.channel_data[channel].size > 1000000:
+                                sample = self.channel_data[channel][::max(1, self.channel_data[channel].shape[0]//100)]
+                                self.min_max[channel] = [np.min(sample), np.max(sample)]
+                            else:
+                                self.min_max[channel] = [np.min(self.channel_data[channel]), 
+                                                       np.max(self.channel_data[channel])]
                         
-                        # Calculate vmin and vmax, ensuring we don't get a zero range
+                        img_min, img_max = self.min_max[channel]
+                        
                         if img_min == img_max:
-                            vmin = img_min
-                            vmax = img_min + 1
+                            vmin, vmax = img_min, img_min + 1
+                            normalized_image = np.zeros_like(display_image)
                         else:
                             vmin = img_min + (img_max - img_min) * self.channel_brightness[channel]['min']
                             vmax = img_min + (img_max - img_min) * self.channel_brightness[channel]['max']
-                        
-                        # Normalize the image safely
-                        if vmin == vmax:
-                            normalized_image = np.zeros_like(current_image)
-                        else:
-                            normalized_image = np.clip((current_image - vmin) / (vmax - vmin), 0, 1)
+                            
+                            if vmin == vmax:
+                                normalized_image = np.zeros_like(display_image)
+                            else:
+                                normalized_image = np.clip((display_image - vmin) / (vmax - vmin), 0, 1)
                         
                         if channel == 2 and self.machine_window is not None:
                             custom_cmap = LinearSegmentedColormap.from_list(
                                 f'custom_{channel}',
-                                [(0, 0, 0, 0),          # transparent for 0
-                                 (0.5, 1, 0.5, 1),      # light green for 1
-                                 (1, 0.5, 0.5, 1)]      # light red for 2
+                                [(0, 0, 0, 0), (0.5, 1, 0.5, 1), (1, 0.5, 0.5, 1)]
                             )
-                            self.ax.imshow(current_image,
-                                         cmap=custom_cmap,
-                                         vmin=0,
-                                         vmax=2,
-                                         alpha=0.7,
-                                         interpolation='nearest',
-                                         extent=(-0.5, min_width-0.5, min_height-0.5, -0.5))
+                            im = self.ax.imshow(display_image, cmap=custom_cmap, vmin=0, vmax=2,
+                                              alpha=0.7, interpolation='nearest', extent=crop_extent)
                         else:
-                            # Create custom colormap with higher intensity
                             color = base_colors[channel]
                             custom_cmap = LinearSegmentedColormap.from_list(
-                                f'custom_{channel}',
-                                [(0,0,0,0), (*color,1)]
-                            )
+                                f'custom_{channel}', [(0,0,0,0), (*color,1)])
                             
-                            # Display the image with slightly higher alpha
-                            self.ax.imshow(normalized_image,
-                                         alpha=0.7,
-                                         cmap=custom_cmap,
-                                         vmin=0,
-                                         vmax=1,
-                                         extent=(-0.5, min_width-0.5, min_height-0.5, -0.5))
+                            im = self.ax.imshow(normalized_image, alpha=0.7, cmap=custom_cmap,
+                                              vmin=0, vmax=1, extent=crop_extent)
 
+            # Handle preview, overlays, and measurements (apply cropping here too)
             if self.preview and not called:
-                self.create_highlight_overlay_slice(self.targs, bounds = self.bounds)
+                self.create_highlight_overlay_slice(self.targs, bounds=self.bounds)
 
-            # Add highlight overlay if it exists
+            # Overlay handling (optimized with cropping and downsampling)
             if self.mini_overlay and self.highlight and self.machine_window is None:
-                highlight_cmap = LinearSegmentedColormap.from_list(
-                    'highlight',
-                    [(0, 0, 0, 0), (1, 1, 0, 1)]  # yellow
-                )
-                self.ax.imshow(self.mini_overlay_data,
-                             cmap=highlight_cmap,
-                             alpha=0.8)
-            elif self.highlight_overlay is not None and self.highlight and self.machine_window is None:
-                highlight_slice = self.highlight_overlay[self.current_slice]
-                highlight_cmap = LinearSegmentedColormap.from_list(
-                    'highlight',
-                    [(0, 0, 0, 0), (1, 1, 0, 1)]  # yellow
-                )
-                self.ax.imshow(highlight_slice,
-                             cmap=highlight_cmap,
-                             alpha=0.8)
+                highlight_cmap = LinearSegmentedColormap.from_list('highlight', [(0, 0, 0, 0), (1, 1, 0, 1)])
+                display_overlay = crop_and_downsample_image(
+                    self.mini_overlay_data, y_min_padded, y_max_padded, 
+                    x_min_padded, x_max_padded, downsample_factor)
+                self.ax.imshow(display_overlay, cmap=highlight_cmap, alpha=0.8, extent=crop_extent)
             elif self.highlight_overlay is not None and self.highlight:
                 highlight_slice = self.highlight_overlay[self.current_slice]
-                highlight_cmap = LinearSegmentedColormap.from_list(
-                    'highlight',
-                    [(0, 0, 0, 0),          # transparent for 0
-                     (1, 1, 0, 1),          # bright yellow for 1
-                     (0, 0.7, 1, 1)]        # cool blue for 2
-                )
-                self.ax.imshow(highlight_slice,
-                             cmap=highlight_cmap,
-                             vmin=0,
-                             vmax=2,         # Important: set vmax to 2 to accommodate both values
-                             alpha=0.3)
-
-            if self.channel_data[4] is not None:
-
-                highlight_slice = self.channel_data[4][self.current_slice]
-                img_min = self.min_max[4][0]
-                img_max = self.min_max[4][1]
-                
-                # Calculate vmin and vmax, ensuring we don't get a zero range
-                if img_min == img_max:
-                    vmin = img_min
-                    vmax = img_min + 1
+                display_highlight = crop_and_downsample_image(
+                    highlight_slice, y_min_padded, y_max_padded, 
+                    x_min_padded, x_max_padded, downsample_factor)
+                if self.machine_window is None:
+                    highlight_cmap = LinearSegmentedColormap.from_list('highlight', [(0, 0, 0, 0), (1, 1, 0, 1)])
+                    self.ax.imshow(display_highlight, cmap=highlight_cmap, alpha=0.8, extent=crop_extent)
                 else:
-                    vmin = img_min + (img_max - img_min) * self.channel_brightness[4]['min']
-                    vmax = img_min + (img_max - img_min) * self.channel_brightness[4]['max']
-                
-                # Normalize the image safely
-                if vmin == vmax:
-                    normalized_image = np.zeros_like(highlight_slice)
-                else:
-                    normalized_image = np.clip((highlight_slice - vmin) / (vmax - vmin), 0, 1)
+                    highlight_cmap = LinearSegmentedColormap.from_list('highlight', 
+                        [(0, 0, 0, 0), (1, 1, 0, 1), (0, 0.7, 1, 1)])
+                    self.ax.imshow(display_highlight, cmap=highlight_cmap, vmin=0, vmax=2, alpha=0.3, extent=crop_extent)
 
-                color = base_colors[self.temp_chan]
-                custom_cmap = LinearSegmentedColormap.from_list(
-                    f'custom_{4}',
-                    [(0,0,0,0), (*color,1)]
-                )
-                
-
-                self.ax.imshow(normalized_image,
-                             alpha=0.7,
-                             cmap=custom_cmap,
-                             vmin=0,
-                             vmax=1)
-
-            # Style the axes
-            self.ax.set_xlabel('X')
-            self.ax.set_ylabel('Y')
-            self.ax.set_title(f'Slice {self.current_slice}')
-
-            # Make axis labels and ticks black for visibility against white background
-            self.ax.xaxis.label.set_color('black')
-            self.ax.yaxis.label.set_color('black')
-            self.ax.title.set_color('black')
-            self.ax.tick_params(colors='black')
-            for spine in self.ax.spines.values():
-                spine.set_color('black')
-
-            # Adjust the layout to ensure the plot fits well in the figure
-            self.figure.tight_layout()
-
-            # Redraw measurement points and their labels
+            # Redraw measurement points efficiently (no cropping needed - these are vector graphics)
+            # Only draw points that are within the visible region for additional performance
             for point in self.measurement_points:
                 x1, y1, z1 = point['point1']
                 x2, y2, z2 = point['point2']
                 pair_idx = point['pair_index']
                 
-                # Draw points and labels if they're on current slice
-                if z1 == self.current_slice:
-                    self.ax.plot(x1, y1, 'yo', markersize=8)
-                    self.ax.text(x1, y1+5, str(pair_idx), 
-                                color='white', ha='center', va='bottom')
-                if z2 == self.current_slice:
-                    self.ax.plot(x2, y2, 'yo', markersize=8)
-                    self.ax.text(x2, y2+5, str(pair_idx), 
-                                color='white', ha='center', va='bottom')
+                # Check if points are in visible region
+                point1_visible = (z1 == self.current_slice and 
+                                current_xlim[0] <= x1 <= current_xlim[1] and 
+                                current_ylim[1] <= y1 <= current_ylim[0])
+                point2_visible = (z2 == self.current_slice and 
+                                current_xlim[0] <= x2 <= current_xlim[1] and 
+                                current_ylim[1] <= y2 <= current_ylim[0])
+                
+                if point1_visible:
+                    pt1 = self.ax.plot(x1, y1, 'yo', markersize=8)[0]
+                    txt1 = self.ax.text(x1, y1+5, str(pair_idx), color='white', ha='center', va='bottom')
+                    self.measurement_artists.extend([pt1, txt1])
                     
-                # Draw line if both points are on current slice
-                if z1 == z2 == self.current_slice:
-                    self.ax.plot([x1, x2], [y1, y2], 'r--', alpha=0.5)
-        
-            if active_channels:
-                self.ax.set_xlim(-0.5, min_width - 0.5)
-                self.ax.set_ylim(min_height - 0.5, -0.5)
+                if point2_visible:
+                    pt2 = self.ax.plot(x2, y2, 'yo', markersize=8)[0]
+                    txt2 = self.ax.text(x2, y2+5, str(pair_idx), color='white', ha='center', va='bottom')
+                    self.measurement_artists.extend([pt2, txt2])
+                    
+                if z1 == z2 == self.current_slice and (point1_visible or point2_visible):
+                    line = self.ax.plot([x1, x2], [y1, y2], 'r--', alpha=0.5)[0]
+                    self.measurement_artists.append(line)
 
+            # Store current view limits for next update
+            self.ax._current_xlim = current_xlim
+            self.ax._current_ylim = current_ylim
+
+            # Handle resizing
             if self.resizing:
                 self.original_xlim = self.ax.get_xlim()
                 self.original_ylim = self.ax.get_ylim()
-            # Restore zoom limits if they existed
+                
+            # Restore zoom (this sets the final view, not the data extent)
             if current_xlim is not None and current_ylim is not None:
                 self.ax.set_xlim(current_xlim)
                 self.ax.set_ylim(current_ylim)
+                
             if reset_resize:
                 self.resizing = False
             
-            self.canvas.draw()
+            # Use draw_idle for better performance
+            self.canvas.draw_idle()
+
+        except Exception as e:
+            pass
+            #import traceback
+            #print(traceback.format_exc())
 
 
-        except:
-            import traceback
-            print(traceback.format_exc())
+
 
     def get_channel_image(self, channel):
         """Find the matplotlib image object for a specific channel."""
@@ -5452,7 +5693,10 @@ class ImageViewerWindow(QMainWindow):
             stats['num_nodes'] = my_network.network.number_of_nodes()
             stats['num_edges'] = my_network.network.number_of_edges()
         except:
-            pass
+            try:
+                stats['num_nodes'] = len(np.unique(my_network.nodes)) - 1
+            except:
+                pass
 
         try:
             idens = invert_dict(my_network.node_identities)
@@ -7378,11 +7622,10 @@ class ComIdDialog(QDialog):
         self.umap.setChecked(True)
         layout.addRow("Generate UMAP?:", self.umap)
 
-        # weighted checkbox (default True)
-        self.label = QPushButton("Label")
-        self.label.setCheckable(True)
-        self.label.setChecked(False)
-        layout.addRow("If using above - label UMAP points?:", self.label)
+        self.label = QComboBox()
+        self.label.addItems(["No Label", "By Community", "By Neighborhood (If already calculated via 'Analyze -> Network -> Convert Network Communities...')"])
+        self.label.setCurrentIndex(0)
+        layout.addRow("Label UMAP Points How?:", self.label)
 
         self.limit = QLineEdit("")
         layout.addRow("Min Community Size for UMAP (Smaller communities will be ignored in graph, does not apply if empty)", self.limit)
@@ -7402,6 +7645,12 @@ class ComIdDialog(QDialog):
 
         try:
 
+            if self.parent().prev_coms is not None:
+                temp = my_network.communities
+                my_network.communities = self.parent().prev_coms
+            else:
+                temp = None
+
             if my_network.node_identities is None:
                 print("Node identities must be set")
 
@@ -7414,7 +7663,9 @@ class ComIdDialog(QDialog):
             mode = self.mode.currentIndex()
 
             umap = self.umap.isChecked()
-            label = self.label.isChecked()
+
+            label = self.label.currentIndex()
+
             proportional = self.proportional.isChecked()
             limit = int(self.limit.text()) if self.limit.text().strip() else 0
 
@@ -7427,9 +7678,12 @@ class ComIdDialog(QDialog):
 
             else:
 
-                info, names = my_network.community_id_info_per_com(umap = umap, label = label, limit = limit, proportional = proportional)
+                info, names = my_network.community_id_info_per_com(umap = umap, label = label, limit = limit, proportional = proportional, neighbors = temp)
 
                 self.parent().format_for_upperright_table(info, 'Community', names, 'Average of Community Makeup')
+
+            if self.parent().prev_coms is not None:
+                my_network.communities = temp
 
             self.accept()
 
@@ -7786,10 +8040,12 @@ class NearNeighDialog(QDialog):
                 title = f"Nearest {num} Neighbor(s) Distance of {targ} from {root}"
                 header = f"Shortest Distance to Closest {num} {targ}(s)"
                 header2 = f"{root} Node ID"
+                header3 = f'Theoretical Uniform Distance to Closest {num} {targ}(s)'
             else:
                 title = f"Nearest {num} Neighbor(s) Distance Between Nodes"
                 header = f"Shortest Distance to Closest {num} Nodes"
                 header2 = "Root Node ID"
+                header3 = f'Simulated Theoretical Uniform Distance to Closest {num} Nodes'
 
             if centroids and my_network.node_centroids is None:
                 self.parent().show_centroid_dialog()
@@ -7797,15 +8053,22 @@ class NearNeighDialog(QDialog):
                     return
 
             if not numpy:
-                avg, output, quant_overlay = my_network.nearest_neighbors_avg(root, targ, my_network.xy_scale, my_network.z_scale, num = num, heatmap = heatmap, threed = threed, quant = quant, centroids = centroids)
+                avg, output, quant_overlay, pred = my_network.nearest_neighbors_avg(root, targ, my_network.xy_scale, my_network.z_scale, num = num, heatmap = heatmap, threed = threed, quant = quant, centroids = centroids)
             else:
-                avg, output, overlay, quant_overlay = my_network.nearest_neighbors_avg(root, targ, my_network.xy_scale, my_network.z_scale, num = num, heatmap = heatmap, threed = threed, numpy = True, quant = quant, centroids = centroids)
+                avg, output, overlay, quant_overlay, pred = my_network.nearest_neighbors_avg(root, targ, my_network.xy_scale, my_network.z_scale, num = num, heatmap = heatmap, threed = threed, numpy = True, quant = quant, centroids = centroids)
                 self.parent().load_channel(3, overlay, data = True)
 
             if quant_overlay is not None:
                 self.parent().load_channel(2, quant_overlay, data = True)
+
+            avg = {header:avg}
+
+            if pred is not None:
+
+                avg[header3] = pred
+
             
-            self.parent().format_for_upperright_table([avg], metric = f'Avg {title}', title = f'Avg {title}')
+            self.parent().format_for_upperright_table(avg, 'Category', 'Value', title = f'Avg {title}')
             self.parent().format_for_upperright_table(output, header2, header, title = title)
 
             self.accept()
@@ -7830,7 +8093,7 @@ class NearNeighDialog(QDialog):
                 root = available[0]
 
                 for targ in available:
-                    avg, _, _ = my_network.nearest_neighbors_avg(root, targ, my_network.xy_scale, my_network.z_scale, num = num, centroids = centroids)
+                    avg, _, _, _ = my_network.nearest_neighbors_avg(root, targ, my_network.xy_scale, my_network.z_scale, num = num, centroids = centroids)
                     output_dict[f"{root} vs {targ}"] = avg
 
                 del available[0]
@@ -8742,15 +9005,6 @@ class ResizeDialog(QDialog):
             undo_button.clicked.connect(lambda: self.run_resize(undo = True))
             layout.addRow(undo_button)
 
-        if my_network.xy_scale != my_network.z_scale:
-            norm_button_upsize = QPushButton(f"Normalize Scaling with Upsample")
-            norm_button_upsize.clicked.connect(lambda: self.run_resize(upsize = True, special = True))
-            layout.addRow(norm_button_upsize)
-
-            norm_button_downsize = QPushButton("Normalize Scaling with Downsample")
-            norm_button_downsize.clicked.connect(lambda: self.run_resize(upsize = False, special = True))
-            layout.addRow(norm_button_downsize)
-
         run_button = QPushButton("Run Resize")
         run_button.clicked.connect(self.run_resize)
         layout.addRow(run_button)
@@ -8764,7 +9018,7 @@ class ResizeDialog(QDialog):
 
     def run_resize(self, undo = False, upsize = True, special = False):
         try:
-            self.parent().resizing = True
+            self.parent().resizing = False
             # Get parameters
             try:
                 resize = float(self.resize.text()) if self.resize.text() else None
@@ -8777,6 +9031,12 @@ class ResizeDialog(QDialog):
                 return
             
             resize = resize if resize is not None else (zsize, ysize, xsize)
+
+            if (self.parent().shape[1] * resize) < 1 or (self.parent().shape[2] * resize) < 1:
+                print("Incompatible x/y dimensions")
+                return
+            elif (self.parent().shape[0] * resize) < 1:
+                resize = (1, resize, resize)
 
             if special:
                 if upsize:
@@ -8819,11 +9079,7 @@ class ResizeDialog(QDialog):
                 new_shape = tuple(int(dim * resize) for dim in array_shape)
             else:
                 new_shape = tuple(int(dim * factor) for dim, factor in zip(array_shape, resize))
-                
-            #if any(dim < 1 for dim in new_shape):
-                #QMessageBox.critical(self, "Error", f"Resize would result in invalid dimensions: {new_shape}")
-                #self.reset_fields()
-                #return
+
 
             cubic = self.cubic.isChecked()
             order = 3 if cubic else 0
@@ -8837,7 +9093,7 @@ class ResizeDialog(QDialog):
                 for channel in range(4):
                     if self.parent().channel_data[channel] is not None:
                         resized_data = n3d.resize(self.parent().channel_data[channel], resize, order)
-                        self.parent().load_channel(channel, channel_data=resized_data, data=True, assign_shape = False)
+                        self.parent().load_channel(channel, channel_data=resized_data, data=True)
 
 
                 
@@ -8858,7 +9114,7 @@ class ResizeDialog(QDialog):
                 for channel in range(4):
                     if self.parent().channel_data[channel] is not None:
                         resized_data = n3d.upsample_with_padding(self.parent().channel_data[channel], original_shape = self.parent().original_shape)
-                        self.parent().load_channel(channel, channel_data=resized_data, data=True, assign_shape = False)
+                        self.parent().load_channel(channel, channel_data=resized_data, data=True)
 
                 if self.parent().mini_overlay_data is not None:
 
@@ -10172,7 +10428,7 @@ class SegmentationWorker(QThread):
         self.mem_lock = mem_lock
         self._stop = False
         self._paused = False  # Add pause flag
-        if self.machine_window.parent().shape[1] * self.machine_window.parent().shape[2] > 3000 * 3000: #arbitrary throttle for large arrays.
+        if self.machine_window.parent().shape[1] * self.machine_window.parent().shape[2] > 3000 * 3000 * self.machine_window.parent().downsample_factor: #arbitrary throttle for large arrays.
             self.update_interval = 10
         else:
             self.update_interval = 1  # Increased to 1s
@@ -10218,11 +10474,14 @@ class SegmentationWorker(QThread):
                 if self._stop:
                     break
                 
-                for z,y,x in foreground_coords:
-                    self.overlay[z,y,x] = 1
-                for z,y,x in background_coords:
-                    self.overlay[z,y,x] = 2
-                
+                if foreground_coords:
+                    fg_array = np.array(list(foreground_coords))
+                    self.overlay[fg_array[:, 0], fg_array[:, 1], fg_array[:, 2]] = 1
+
+                if background_coords:
+                    bg_array = np.array(list(background_coords))
+                    self.overlay[bg_array[:, 0], bg_array[:, 1], bg_array[:, 2]] = 2
+
                 self.chunks_since_update += 1
                 current_time = time.time()
                 if (self.chunks_since_update >= self.chunks_per_update and 
@@ -10246,27 +10505,6 @@ class SegmentationWorker(QThread):
             print(f"Error in segmentation: {e}")
             import traceback
             traceback.print_exc()
-
-    def run_batch(self):
-        try:
-            foreground_coords, _ = self.segmenter.segment_volume()
-            
-            # Modify the array directly
-            self.overlay.fill(False)
-            for z,y,x in foreground_coords:
-                # Check for pause/stop during batch processing too
-                self._check_pause()
-                if self._stop:
-                    break
-                self.overlay[z,y,x] = True
-                
-            self.finished.emit()
-            
-        except Exception as e:
-            print(f"Error in segmentation: {e}")
-            raise
-            
-
 
 
 class ThresholdWindow(QMainWindow):

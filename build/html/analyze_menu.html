@@ -6,14 +6,14 @@
   <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
 
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>All Analyze Menu Options &mdash; NetTracer3D 0.9.0 documentation</title>
+  <title>All Analyze Menu Options &mdash; NetTracer3D 0.9.1 documentation</title>
       <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=b86133f3" />
       <link rel="stylesheet" type="text/css" href="_static/css/theme.css?v=e59714d7" />
 
   
       <script src="_static/jquery.js?v=5d32c60e"></script>
       <script src="_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
-      <script src="_static/documentation_options.js?v=39bb1c6d"></script>
+      <script src="_static/documentation_options.js?v=9dc39874"></script>
       <script src="_static/doctools.js?v=9bcbadda"></script>
       <script src="_static/sphinx_highlight.js?v=dc90522c"></script>
     <script src="_static/js/theme.js"></script>
@@ -382,8 +382,10 @@
 </dl>
 </li>
 <li><dl class="simple">
-<dt>If Using Above - Label UMAP points?</dt><dd><ul class="simple">
-<li><p>This option labels the communities within the UMAP by their numerical label. Deselect this option to avoid these labels showing up on the graph.</p></li>
+<dt>Label UMAP Points How?</dt><dd><ul class="simple">
+<li><p>‘No Label’ - UMAP points are not labeled</p></li>
+<li><p>By Community - Assigns each point their numerical label.</p></li>
+<li><p>By Neighborhood - Colors communities in the UMAP by what neighborhood they belong to, presuming they have been assigned a neighborhood via ‘Analyze -&gt; Network -&gt; Convert Network Communities…’</p></li>
 </ul>
 </dd>
 </dl>
@@ -1425,7 +1427,7 @@
 <section id="analyze-data-overlays-centroid-umap">
 <h2>‘Analyze -&gt; Data/Overlays -&gt; Centroid UMAP’<a class="headerlink" href="#analyze-data-overlays-centroid-umap" title="Link to this heading"></a></h2>
 <ul class="simple">
-<li><p>This method will create a UMAP, clustering nodes based on the similarity of their centroids. In short, it lets you easily eyeball what sort of things are next to each other.</p></li>
+<li><p>This method will create a UMAP, clustering nodes based on the similarity of their centroids. In short, it lets you easily eyeball what sort of things are next to each other. Its uses are more for 3D data, as 2D data can give a similar impression just by looking at the image.</p></li>
 <li><p>If node_identities exist, the nodes will all be colored based on their identity. Unassigned nodes will get called ‘Unknown’ in such a case.</p></li>
 <li><p>This method does not have any parameters. Simply run it to show the UMAP.</p></li>
 </ul>

@@ -9,6 +9,9 @@ In the default viewer mode:
 ----------------------------
 
 * 'Z' = toggle zoom mode.
+    * Clicking will zoom in.
+    * Right clicking will zoom out.
+    * Shift + Right Click will zoom all the way out.
     * Left clicking + Dragging will in zoom mode will zoom in on specific regions.
 * 'X' = toggle highlight overlay visibility.
 * 'Middle Mouse' = Toggle Pan Mode.

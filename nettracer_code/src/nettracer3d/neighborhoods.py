@@ -346,7 +346,8 @@ def visualize_cluster_composition_umap(cluster_data: Dict[int, np.ndarray],
                                      random_state: int = 42,
                                      id_dictionary: Optional[Dict[int, str]] = None, 
                                      graph_label = "Community ID",
-                                     title = 'UMAP Visualization of Community Compositions'):
+                                     title = 'UMAP Visualization of Community Compositions',
+                                     neighborhoods: Optional[Dict[int, int]] = None):
     """
     Convert cluster composition data to UMAP visualization.
     
@@ -366,6 +367,9 @@ def visualize_cluster_composition_umap(cluster_data: Dict[int, np.ndarray],
     id_dictionary : dict, optional
         Dictionary mapping cluster IDs to identity names. If provided, colors will be
         assigned by identity rather than cluster ID, and a legend will be shown.
+    neighborhoods : dict, optional
+        Dictionary mapping node IDs to neighborhood IDs {node_id: neighborhood_id}.
+        If provided, points will be colored by neighborhood using community coloration methods.
     
     Returns:
     --------
@@ -389,25 +393,70 @@ def visualize_cluster_composition_umap(cluster_data: Dict[int, np.ndarray],
     # Fit and transform the composition data
     embedding = reducer.fit_transform(compositions)
     
-    # Prepare colors and labels based on whether id_dictionary is provided
-    if id_dictionary is not None:
-        # Get unique identities and assign colors (group all unknown into single "Unknown" category)
+    # Determine coloring scheme based on parameters
+    if neighborhoods is not None:
+        # Use neighborhood coloring - import the community extractor methods
+        from . import community_extractor
+        
+        # Filter neighborhoods to only include cluster_ids that exist in our data
+        filtered_neighborhoods = {node_id: neighborhood_id 
+                                for node_id, neighborhood_id in neighborhoods.items() 
+                                if node_id in cluster_ids}
+        
+        # Create a dummy labeled array just for the coloring function
+        # We only need the coloring logic, not actual clustering
+        dummy_array = np.array(cluster_ids)
+        
+        # Get colors using the community coloration method
+        _, neighborhood_color_names = community_extractor.assign_community_colors(
+            filtered_neighborhoods, dummy_array
+        )
+        
+        # Create color mapping for our points
+        unique_neighborhoods = sorted(list(set(filtered_neighborhoods.values())))
+        colors = community_extractor.generate_distinct_colors(len(unique_neighborhoods))
+        neighborhood_to_color = {neighborhood: colors[i] for i, neighborhood in enumerate(unique_neighborhoods)}
+        
+        # Map each cluster to its neighborhood color
+        point_colors = []
+        neighborhood_labels = []
+        for cluster_id in cluster_ids:
+            if cluster_id in filtered_neighborhoods:
+                neighborhood_id = filtered_neighborhoods[cluster_id]
+                point_colors.append(neighborhood_to_color[neighborhood_id])
+                neighborhood_labels.append(neighborhood_id)
+            else:
+                # Default color for nodes not in any neighborhood
+                point_colors.append((128, 128, 128))  # Gray
+                neighborhood_labels.append("Unknown")
+        
+        # Normalize RGB values for matplotlib (0-1 range)
+        point_colors = [(r/255.0, g/255.0, b/255.0) for r, g, b in point_colors]
+        use_neighborhood_coloring = True
+        
+    elif id_dictionary is not None:
+        # Use identity coloring (existing logic)
         identities = [id_dictionary.get(cluster_id, "Unknown") for cluster_id in cluster_ids]
         unique_identities = sorted(list(set(identities)))
         colors = generate_distinct_colors(len(unique_identities))
         identity_to_color = {identity: colors[i] for i, identity in enumerate(unique_identities)}
         point_colors = [identity_to_color[identity] for identity in identities]
         use_identity_coloring = True
+        use_neighborhood_coloring = False
     else:
         # Use default cluster ID coloring
         point_colors = cluster_ids
         use_identity_coloring = False
+        use_neighborhood_coloring = False
     
     # Create visualization
     plt.figure(figsize=(12, 8))
     
     if n_components == 2:
-        if use_identity_coloring:
+        if use_neighborhood_coloring:
+            scatter = plt.scatter(embedding[:, 0], embedding[:, 1], 
+                                c=point_colors, s=100, alpha=0.7)
+        elif use_identity_coloring:
             scatter = plt.scatter(embedding[:, 0], embedding[:, 1], 
                                 c=point_colors, s=100, alpha=0.7)
         else:
@@ -418,7 +467,10 @@ def visualize_cluster_composition_umap(cluster_data: Dict[int, np.ndarray],
             # Add cluster ID labels
             for i, cluster_id in enumerate(cluster_ids):
                 display_label = f'{cluster_id}'
-                if id_dictionary is not None:
+                if use_neighborhood_coloring and cluster_id in filtered_neighborhoods:
+                    neighborhood_id = filtered_neighborhoods[cluster_id]
+                    display_label = f'{cluster_id}\n(N{neighborhood_id})'
+                elif id_dictionary is not None:
                     identity = id_dictionary.get(cluster_id, "Unknown")
                     display_label = f'{cluster_id}\n({identity})'
                 
@@ -428,7 +480,20 @@ def visualize_cluster_composition_umap(cluster_data: Dict[int, np.ndarray],
                             fontsize=9, alpha=0.8, ha='left')
         
         # Add appropriate legend/colorbar
-        if use_identity_coloring:
+        if use_neighborhood_coloring:
+            # Create custom legend for neighborhoods
+            legend_elements = []
+            for neighborhood_id in unique_neighborhoods:
+                color = neighborhood_to_color[neighborhood_id]
+                norm_color = (color[0]/255.0, color[1]/255.0, color[2]/255.0)
+                legend_elements.append(
+                    plt.Line2D([0], [0], marker='o', color='w', 
+                              markerfacecolor=norm_color, 
+                              markersize=10, label=f'Neighborhood {neighborhood_id}')
+                )
+            plt.legend(handles=legend_elements, title='Neighborhoods', 
+                      bbox_to_anchor=(1.05, 1), loc='upper left')
+        elif use_identity_coloring:
             # Create custom legend for identities
             legend_elements = [plt.Line2D([0], [0], marker='o', color='w', 
                                         markerfacecolor=identity_to_color[identity], 
@@ -441,7 +506,9 @@ def visualize_cluster_composition_umap(cluster_data: Dict[int, np.ndarray],
         
         plt.xlabel('UMAP Component 1')
         plt.ylabel('UMAP Component 2')
-        if use_identity_coloring:
+        if use_neighborhood_coloring:
+            title += ' (Colored by Neighborhood)'
+        elif use_identity_coloring:
             title += ' (Colored by Identity)'
         plt.title(title)
         
@@ -449,7 +516,10 @@ def visualize_cluster_composition_umap(cluster_data: Dict[int, np.ndarray],
         fig = plt.figure(figsize=(14, 10))
         ax = fig.add_subplot(111, projection='3d')
         
-        if use_identity_coloring:
+        if use_neighborhood_coloring:
+            scatter = ax.scatter(embedding[:, 0], embedding[:, 1], embedding[:, 2],
+                               c=point_colors, s=100, alpha=0.7)
+        elif use_identity_coloring:
             scatter = ax.scatter(embedding[:, 0], embedding[:, 1], embedding[:, 2],
                                c=point_colors, s=100, alpha=0.7)
         else:
@@ -460,7 +530,10 @@ def visualize_cluster_composition_umap(cluster_data: Dict[int, np.ndarray],
             # Add cluster ID labels
             for i, cluster_id in enumerate(cluster_ids):
                 display_label = f'C{cluster_id}'
-                if id_dictionary is not None:
+                if use_neighborhood_coloring and cluster_id in filtered_neighborhoods:
+                    neighborhood_id = filtered_neighborhoods[cluster_id]
+                    display_label = f'C{cluster_id}\n(N{neighborhood_id})'
+                elif id_dictionary is not None:
                     identity = id_dictionary.get(cluster_id, "Unknown")
                     display_label = f'C{cluster_id}\n({identity})'
                 
@@ -471,12 +544,27 @@ def visualize_cluster_composition_umap(cluster_data: Dict[int, np.ndarray],
         ax.set_ylabel('UMAP Component 2')
         ax.set_zlabel('UMAP Component 3')
         title = '3D UMAP Visualization of Cluster Compositions'
-        if use_identity_coloring:
+        if use_neighborhood_coloring:
+            title += ' (Colored by Neighborhood)'
+        elif use_identity_coloring:
             title += ' (Colored by Identity)'
         ax.set_title(title)
         
         # Add appropriate legend/colorbar
-        if use_identity_coloring:
+        if use_neighborhood_coloring:
+            # Create custom legend for neighborhoods
+            legend_elements = []
+            for neighborhood_id in unique_neighborhoods:
+                color = neighborhood_to_color[neighborhood_id]
+                norm_color = (color[0]/255.0, color[1]/255.0, color[2]/255.0)
+                legend_elements.append(
+                    plt.Line2D([0], [0], marker='o', color='w', 
+                              markerfacecolor=norm_color, 
+                              markersize=10, label=f'Neighborhood {neighborhood_id}')
+                )
+            ax.legend(handles=legend_elements, title='Neighborhoods', 
+                     bbox_to_anchor=(1.05, 1), loc='upper left')
+        elif use_identity_coloring:
             # Create custom legend for identities
             legend_elements = [plt.Line2D([0], [0], marker='o', color='w', 
                                         markerfacecolor=identity_to_color[identity], 
@@ -496,12 +584,15 @@ def visualize_cluster_composition_umap(cluster_data: Dict[int, np.ndarray],
         print(f"Classes: {class_labels}")
         for i, cluster_id in enumerate(cluster_ids):
             composition = compositions[i]
-            identity_info = ""
-            if id_dictionary is not None:
+            additional_info = ""
+            if use_neighborhood_coloring and cluster_id in filtered_neighborhoods:
+                neighborhood_id = filtered_neighborhoods[cluster_id]
+                additional_info = f" (Neighborhood: {neighborhood_id})"
+            elif id_dictionary is not None:
                 identity = id_dictionary.get(cluster_id, "Unknown")
-                identity_info = f" (Identity: {identity})"
+                additional_info = f" (Identity: {identity})"
             
-            print(f"Cluster {cluster_id}{identity_info}: {composition}")
+            print(f"Cluster {cluster_id}{additional_info}: {composition}")
             # Show which classes dominate this cluster
             dominant_indices = np.argsort(composition)[::-1][:2]  # Top 2
             dominant_classes = [class_labels[idx] for idx in dominant_indices]

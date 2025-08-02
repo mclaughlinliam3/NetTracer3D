@@ -6,14 +6,14 @@
   <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
 
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Changelog &mdash; NetTracer3D 0.9.0 documentation</title>
+  <title>Changelog &mdash; NetTracer3D 0.9.1 documentation</title>
       <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=b86133f3" />
       <link rel="stylesheet" type="text/css" href="_static/css/theme.css?v=e59714d7" />
 
   
       <script src="_static/jquery.js?v=5d32c60e"></script>
       <script src="_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
-      <script src="_static/documentation_options.js?v=39bb1c6d"></script>
+      <script src="_static/documentation_options.js?v=9dc39874"></script>
       <script src="_static/doctools.js?v=9bcbadda"></script>
       <script src="_static/sphinx_highlight.js?v=dc90522c"></script>
     <script src="_static/js/theme.js"></script>
@@ -210,6 +210,14 @@
 <li><p>Enabled the nearest neighbor method to handle non-centroid objects, for the first neighbor at least. And updated it to actually predict theoretical clustering when coloring the heatmap.</p></li>
 <li><p>Improved segmenter.</p></li>
 <li><p>Added centroids UMAP method.</p></li>
+</ul>
+</dd>
+<dt>Version 0.9.1 Updates</dt><dd><ul class="simple">
+<li><p>Adjusted the segment by 3D function to now show the 3D chunks in the preview mode. Previously it showed 2D segmentations in the preview which finished the current plane faster but didn’t show accurate training data.</p></li>
+<li><p>Adjusted the neighborhood heatmap predicted range value to now just simulate a uniform distribution rather than trying to use a mathematical algorithm.</p></li>
+<li><p>The image display window now uses image pyramids and cropping for zoom ins so it should run a lot faster on bigger images.</p></li>
+<li><p>The community UMAP can now color them by neighborhood.</p></li>
+<li><p>No longer zooms all the way out by default with right click in zoom mode. Now user needs to Shift + Right Click.</p></li>
 </ul>
 </dd>
 </dl>

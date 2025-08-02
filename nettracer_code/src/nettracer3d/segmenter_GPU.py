@@ -60,8 +60,8 @@ class InteractiveSegmenter:
         self.sigmas = [1,2,4,8]
         self.windows = 10
         self.dogs = [(1, 2), (2, 4), (4, 8)]
-        self.master_chunk = 49
-        self.twod_chunk_size = 262144
+        self.master_chunk = 64
+        self.twod_chunk_size = 117649
 
         #Data when loading prev model:
         self.previous_foreground = None
@@ -72,7 +72,7 @@ class InteractiveSegmenter:
 
     def get_minimal_chunks_for_coordinates(self, coordinates_by_z):
         """
-        Get minimal set of 2D chunks needed to cover the given coordinates
+        GPU version - Get minimal set of 2D chunks needed to cover the given coordinates
         Uses same chunking logic as create_2d_chunks()
         """
         MAX_CHUNK_SIZE = self.twod_chunk_size
@@ -95,26 +95,81 @@ class InteractiveSegmenter:
                 # Single chunk for entire Z slice
                 needed_chunks[z] = [[z, 0, y_dim, 0, x_dim]]
             else:
-                # Multiple chunks - find which ones contain our coordinates
-                largest_dim = 'y' if y_dim >= x_dim else 'x'
-                num_divisions = int(cp.ceil(total_pixels / MAX_CHUNK_SIZE))
+                # Calculate optimal grid dimensions for square-ish chunks
+                num_chunks_needed = int(cp.ceil(total_pixels / MAX_CHUNK_SIZE))
+                
+                # Find factors that give us the most square-like grid
+                best_y_chunks = 1
+                best_x_chunks = num_chunks_needed
+                best_aspect_ratio = float('inf')
+                
+                for y_chunks in range(1, num_chunks_needed + 1):
+                    x_chunks = int(cp.ceil(num_chunks_needed / y_chunks))
+                    
+                    # Calculate actual chunk dimensions
+                    chunk_y_size = int(cp.ceil(y_dim / y_chunks))
+                    chunk_x_size = int(cp.ceil(x_dim / x_chunks))
+                    
+                    # Check if chunk size constraint is satisfied
+                    chunk_pixels = chunk_y_size * chunk_x_size
+                    if chunk_pixels > MAX_CHUNK_SIZE:
+                        continue
+                    
+                    # Calculate aspect ratio of the chunk
+                    aspect_ratio = max(chunk_y_size, chunk_x_size) / min(chunk_y_size, chunk_x_size)
+                    
+                    # Prefer more square-like chunks (aspect ratio closer to 1)
+                    if aspect_ratio < best_aspect_ratio:
+                        best_aspect_ratio = aspect_ratio
+                        best_y_chunks = y_chunks
+                        best_x_chunks = x_chunks
                 
                 chunks_for_z = []
                 
-                if largest_dim == 'y':
-                    div_size = int(cp.ceil(y_dim / num_divisions))
-                    for i in range(0, y_dim, div_size):
-                        end_i = min(i + div_size, y_dim)
-                        # Check if this chunk contains any of our coordinates
-                        if any(i <= y <= end_i-1 for y in y_coords):
-                            chunks_for_z.append([z, i, end_i, 0, x_dim])
+                # If no valid configuration found, fall back to single dimension division
+                if best_aspect_ratio == float('inf'):
+                    # Fall back to original logic
+                    largest_dim = 'y' if y_dim >= x_dim else 'x'
+                    num_divisions = int(cp.ceil(total_pixels / MAX_CHUNK_SIZE))
+                    
+                    if largest_dim == 'y':
+                        div_size = int(cp.ceil(y_dim / num_divisions))
+                        for i in range(0, y_dim, div_size):
+                            end_i = min(i + div_size, y_dim)
+                            # Check if this chunk contains any of our coordinates
+                            if any(i <= y <= end_i-1 for y in y_coords):
+                                chunks_for_z.append([z, i, end_i, 0, x_dim])
+                    else:
+                        div_size = int(cp.ceil(x_dim / num_divisions))
+                        for i in range(0, x_dim, div_size):
+                            end_i = min(i + div_size, x_dim)
+                            # Check if this chunk contains any of our coordinates
+                            if any(i <= x <= end_i-1 for x in x_coords):
+                                chunks_for_z.append([z, 0, y_dim, i, end_i])
                 else:
-                    div_size = int(cp.ceil(x_dim / num_divisions))
-                    for i in range(0, x_dim, div_size):
-                        end_i = min(i + div_size, x_dim)
-                        # Check if this chunk contains any of our coordinates
-                        if any(i <= x <= end_i-1 for x in x_coords):
-                            chunks_for_z.append([z, 0, y_dim, i, end_i])
+                    # Create the 2D grid of chunks and check which ones contain coordinates
+                    y_chunk_size = int(cp.ceil(y_dim / best_y_chunks))
+                    x_chunk_size = int(cp.ceil(x_dim / best_x_chunks))
+                    
+                    for y_idx in range(best_y_chunks):
+                        for x_idx in range(best_x_chunks):
+                            y_start = y_idx * y_chunk_size
+                            y_end = min(y_start + y_chunk_size, y_dim)
+                            x_start = x_idx * x_chunk_size
+                            x_end = min(x_start + x_chunk_size, x_dim)
+                            
+                            # Skip empty chunks (can happen at edges)
+                            if y_start >= y_dim or x_start >= x_dim:
+                                continue
+                            
+                            # Check if this chunk contains any of our coordinates
+                            chunk_contains_coords = any(
+                                y_start <= y <= y_end-1 and x_start <= x <= x_end-1
+                                for y, x in zip(y_coords, x_coords)
+                            )
+                            
+                            if chunk_contains_coords:
+                                chunks_for_z.append([z, y_start, y_end, x_start, x_end])
                 
                 needed_chunks[z] = chunks_for_z
         
@@ -139,102 +194,87 @@ class InteractiveSegmenter:
         return feature_map, (y_start, x_start)  # Return offset for coordinate mapping
 
 
-    def process_chunk_updated(self, chunk_coords):
-        """Updated process_chunk with proper 2D chunking"""
+    def process_chunk(self, chunk_coords):
+        """Updated GPU process_chunk with manual coordinate generation (faster)"""
+        import cupy as cp
         
-        foreground_coords = []
-        background_coords = []
-
-        if self.realtimechunks is None:
-            # 3D processing (original logic unchanged)
-            z_min, z_max = chunk_coords[0], chunk_coords[1]
-            y_min, y_max = chunk_coords[2], chunk_coords[3]
-            x_min, x_max = chunk_coords[4], chunk_coords[5]
+        chunk_info = self.realtimechunks[chunk_coords]
+        
+        if not self.use_two:
+            chunk_bounds = chunk_info['bounds']
+        else:
+            # 2D chunk format: key is (z, y_start, x_start), coords are [y_start, y_end, x_start, x_end]
+            z = chunk_info['z']
+            y_start, y_end, x_start, x_end = chunk_info['coords']
+            chunk_bounds = (z, y_start, y_end, x_start, x_end)  # Convert to tuple for consistency
+        
+        if not self.use_two:
+            # 3D processing - generate coordinates manually
+            z_start, z_end, y_start, y_end, x_start, x_end = chunk_bounds
             
-            z_range = cp.arange(z_min, z_max)
-            y_range = cp.arange(y_min, y_max)
-            x_range = cp.arange(x_min, x_max)
-            
+            # Generate coordinate array manually using CuPy
             chunk_coords_array = cp.stack(cp.meshgrid(
-                z_range, y_range, x_range, indexing='ij'
+                cp.arange(z_start, z_end),
+                cp.arange(y_start, y_end),
+                cp.arange(x_start, x_end),
+                indexing='ij'
             )).reshape(3, -1).T
             
-            chunk_coords_gpu = chunk_coords_array
+            # Extract subarray
+            subarray = self.image_3d[z_start:z_end, y_start:y_end, x_start:x_end]
             
-            subarray = self.image_3d[z_min:z_max+1, y_min:y_max+1, x_min:x_max+1]
-            
-            if self.use_two:
-                subarray = cp.squeeze(subarray)
-
-            if self.use_two and self.speed:
-                feature_map = self.compute_feature_maps_gpu_2d(image_2d=subarray)
-            elif self.use_two:
-                feature_map = self.compute_deep_feature_maps_gpu_2d(image_2d=subarray)
-            elif self.speed:
+            # Compute features for entire subarray
+            if self.speed:
                 feature_map = self.compute_feature_maps_gpu(subarray)
             else:
                 feature_map = self.compute_deep_feature_maps_gpu(subarray)
             
-            if self.use_two:
-                feature_map = cp.expand_dims(feature_map, axis=0)
-
-            local_coords = chunk_coords_gpu.copy()
-            local_coords[:, 0] -= z_min
-            local_coords[:, 1] -= y_min
-            local_coords[:, 2] -= x_min
-            
+            # Vectorized feature extraction using local coordinates
+            local_coords = chunk_coords_array - cp.array([z_start, y_start, x_start])
             features_gpu = feature_map[local_coords[:, 0], local_coords[:, 1], local_coords[:, 2]]
             
-            features_cpu = cp.asnumpy(features_gpu)
-            predictions = self.model.predict(features_cpu)
-            
-            pred_mask = cp.array(predictions, dtype=bool)
-            foreground_coords = chunk_coords_gpu[pred_mask]
-            background_coords = chunk_coords_gpu[~pred_mask]
-            
         else:
-            # 2D processing - compute features for chunk only (not full Z-slice)
-            chunk_coords_gpu = cp.array(chunk_coords)
-            z_coords = chunk_coords_gpu[:, 0]
-            y_coords = chunk_coords_gpu[:, 1]
-            x_coords = chunk_coords_gpu[:, 2]
+            # 2D processing - generate coordinates manually
+            z, y_start, y_end, x_start, x_end = chunk_bounds
             
-            z = int(cp.unique(z_coords)[0])  # All coordinates should have same Z
-            
-            # Get chunk bounds
-            y_min, y_max = int(cp.min(y_coords)), int(cp.max(y_coords))
-            x_min, x_max = int(cp.min(x_coords)), int(cp.max(x_coords))
-            
-            # Expand bounds slightly to ensure we capture the chunk properly
-            y_min = max(0, y_min)
-            x_min = max(0, x_min)
-            y_max = min(self.image_3d.shape[1], y_max + 1)
-            x_max = min(self.image_3d.shape[2], x_max + 1)
+            # Generate coordinate array for this Z slice using CuPy
+            chunk_coords_array = cp.stack(cp.meshgrid(
+                cp.array([z]),
+                cp.arange(y_start, y_end),
+                cp.arange(x_start, x_end),
+                indexing='ij'
+            )).reshape(3, -1).T
             
             # Extract 2D subarray for this chunk
-            subarray_2d = self.image_3d[z, y_min:y_max, x_min:x_max]
+            subarray_2d = self.image_3d[z, y_start:y_end, x_start:x_end]
             
-            # Compute features for just this chunk
+            # Compute 2D features for the subarray
             if self.speed:
                 feature_map = self.compute_feature_maps_gpu_2d(image_2d=subarray_2d)
             else:
                 feature_map = self.compute_deep_feature_maps_gpu_2d(image_2d=subarray_2d)
             
             # Convert global coordinates to local chunk coordinates
-            local_y_coords = y_coords - y_min
-            local_x_coords = x_coords - x_min
+            local_y_coords = chunk_coords_array[:, 1] - y_start
+            local_x_coords = chunk_coords_array[:, 2] - x_start
             
             # Extract features using local coordinates
             features_gpu = feature_map[local_y_coords, local_x_coords]
-            
-            features_cpu = cp.asnumpy(features_gpu)
-            predictions = self.model.predict(features_cpu)
-            
-            pred_mask = cp.array(predictions, dtype=bool)
-            foreground_coords = chunk_coords_gpu[pred_mask]
-            background_coords = chunk_coords_gpu[~pred_mask]
-            
-        return foreground_coords, background_coords
+        
+        # Common prediction logic - convert to CPU for model prediction
+        features_cpu = cp.asnumpy(features_gpu)
+        predictions = self.model.predict(features_cpu)
+        predictions_gpu = cp.array(predictions, dtype=bool)
+        
+        # Use boolean indexing to separate coordinates
+        foreground_coords = chunk_coords_array[predictions_gpu]
+        background_coords = chunk_coords_array[~predictions_gpu]
+        
+        # Convert to sets (convert back to CPU for set operations)
+        foreground = set(map(tuple, cp.asnumpy(foreground_coords)))
+        background = set(map(tuple, cp.asnumpy(background_coords)))
+        
+        return foreground, background
 
     def twodim_coords(self, z, y_start, y_end, x_start, x_end):
         """
@@ -638,7 +678,7 @@ class InteractiveSegmenter:
         return features
 
     def create_2d_chunks(self):
-        """Same 2D chunking logic"""
+        """GPU version - Updated 2D chunking to create more square-like chunks"""
         MAX_CHUNK_SIZE = self.twod_chunk_size
         chunks = []
         
@@ -650,21 +690,71 @@ class InteractiveSegmenter:
             if total_pixels <= MAX_CHUNK_SIZE:
                 chunks.append([z, 0, y_dim, 0, x_dim])
             else:
-                largest_dim = 'y' if y_dim >= x_dim else 'x'
-                num_divisions = int(cp.ceil(total_pixels / MAX_CHUNK_SIZE))
+                # Calculate optimal grid dimensions for square-ish chunks
+                num_chunks_needed = int(cp.ceil(total_pixels / MAX_CHUNK_SIZE))
                 
-                if largest_dim == 'y':
-                    div_size = int(cp.ceil(y_dim / num_divisions))
-                    for i in range(0, y_dim, div_size):
-                        end_i = min(i + div_size, y_dim)
-                        chunks.append([z, i, end_i, 0, x_dim])
+                # Find factors that give us the most square-like grid
+                best_y_chunks = 1
+                best_x_chunks = num_chunks_needed
+                best_aspect_ratio = float('inf')
+                
+                for y_chunks in range(1, num_chunks_needed + 1):
+                    x_chunks = int(cp.ceil(num_chunks_needed / y_chunks))
+                    
+                    # Calculate actual chunk dimensions
+                    chunk_y_size = int(cp.ceil(y_dim / y_chunks))
+                    chunk_x_size = int(cp.ceil(x_dim / x_chunks))
+                    
+                    # Check if chunk size constraint is satisfied
+                    chunk_pixels = chunk_y_size * chunk_x_size
+                    if chunk_pixels > MAX_CHUNK_SIZE:
+                        continue
+                    
+                    # Calculate aspect ratio of the chunk
+                    aspect_ratio = max(chunk_y_size, chunk_x_size) / min(chunk_y_size, chunk_x_size)
+                    
+                    # Prefer more square-like chunks (aspect ratio closer to 1)
+                    if aspect_ratio < best_aspect_ratio:
+                        best_aspect_ratio = aspect_ratio
+                        best_y_chunks = y_chunks
+                        best_x_chunks = x_chunks
+                
+                # If no valid configuration found, fall back to single dimension division
+                if best_aspect_ratio == float('inf'):
+                    # Fall back to original logic
+                    largest_dim = 'y' if y_dim >= x_dim else 'x'
+                    num_divisions = int(cp.ceil(total_pixels / MAX_CHUNK_SIZE))
+                    
+                    if largest_dim == 'y':
+                        div_size = int(cp.ceil(y_dim / num_divisions))
+                        for i in range(0, y_dim, div_size):
+                            end_i = min(i + div_size, y_dim)
+                            chunks.append([z, i, end_i, 0, x_dim])
+                    else:
+                        div_size = int(cp.ceil(x_dim / num_divisions))
+                        for i in range(0, x_dim, div_size):
+                            end_i = min(i + div_size, x_dim)
+                            chunks.append([z, 0, y_dim, i, end_i])
                 else:
-                    div_size = int(cp.ceil(x_dim / num_divisions))
-                    for i in range(0, x_dim, div_size):
-                        end_i = min(i + div_size, x_dim)
-                        chunks.append([z, 0, y_dim, i, end_i])
-        
+                    # Create the 2D grid of chunks
+                    y_chunk_size = int(cp.ceil(y_dim / best_y_chunks))
+                    x_chunk_size = int(cp.ceil(x_dim / best_x_chunks))
+                    
+                    for y_idx in range(best_y_chunks):
+                        for x_idx in range(best_x_chunks):
+                            y_start = y_idx * y_chunk_size
+                            y_end = min(y_start + y_chunk_size, y_dim)
+                            x_start = x_idx * x_chunk_size
+                            x_end = min(x_start + x_chunk_size, x_dim)
+                            
+                            # Skip empty chunks (can happen at edges)
+                            if y_start >= y_dim or x_start >= x_dim:
+                                continue
+                            
+                            chunks.append([z, y_start, y_end, x_start, x_end])
+            
         return chunks
+
  
     def segment_volume(self, array, chunk_size=None, gpu=True):
         """Optimized GPU version with sequential GPU processing and batched sklearn prediction"""
@@ -677,32 +767,8 @@ class InteractiveSegmenter:
         print("Chunking data...")
         
         if not self.use_two:
-            # 3D Processing
-            chunk_size = ((chunk_size + 15) // 32) * 32
-            
-            z_chunks = (self.image_3d.shape[0] + chunk_size - 1) // chunk_size
-            y_chunks = (self.image_3d.shape[1] + chunk_size - 1) // chunk_size
-            x_chunks = (self.image_3d.shape[2] + chunk_size - 1) // chunk_size
-            
-            chunk_starts = cp.array(cp.meshgrid(
-                cp.arange(z_chunks) * chunk_size,
-                cp.arange(y_chunks) * chunk_size,
-                cp.arange(x_chunks) * chunk_size,
-                indexing='ij'
-            )).reshape(3, -1).T
-            
-            chunks = []
-            for chunk_start_gpu in chunk_starts:
-                z_start = int(chunk_start_gpu[0])
-                y_start = int(chunk_start_gpu[1])
-                x_start = int(chunk_start_gpu[2])
-                
-                z_end = min(z_start + chunk_size, self.image_3d.shape[0])
-                y_end = min(y_start + chunk_size, self.image_3d.shape[1])
-                x_end = min(x_start + chunk_size, self.image_3d.shape[2])
-                
-                coords = [z_start, z_end, y_start, y_end, x_start, x_end]
-                chunks.append(coords)
+            chunks = self.compute_3d_chunks(chunk_size)
+
         else:
             chunks = self.create_2d_chunks()
         
@@ -889,8 +955,7 @@ class InteractiveSegmenter:
 
     def get_realtime_chunks_2d(self, chunk_size=None):
         """
-        Create chunks with 1 z-thickness (2D chunks across XY planes)
-        Now uses the same logic as create_2d_chunks for consistency
+        GPU version - Updated 2D chunking to match create_2d_chunks logic
         """
         
         MAX_CHUNK_SIZE = self.twod_chunk_size
@@ -912,154 +977,241 @@ class InteractiveSegmenter:
                     'z': z
                 }
             else:
-                # Multiple chunks per Z plane - divide along largest dimension
-                largest_dim = 'y' if y_dim >= x_dim else 'x'
-                num_divisions = int(cp.ceil(total_pixels / MAX_CHUNK_SIZE))
+                # Calculate optimal grid dimensions for square-ish chunks
+                num_chunks_needed = int(cp.ceil(total_pixels / MAX_CHUNK_SIZE))
                 
-                if largest_dim == 'y':
-                    # Divide along Y dimension
-                    div_size = int(cp.ceil(y_dim / num_divisions))
-                    for i in range(0, y_dim, div_size):
-                        end_i = min(i + div_size, y_dim)
-                        # Use (z, y_start, x_start) as key for consistency
-                        chunk_dict[(z, i, 0)] = {
-                            'coords': [i, end_i, 0, x_dim],  # [y_start, y_end, x_start, x_end]
-                            'processed': False,
-                            'z': z
-                        }
+                # Find factors that give us the most square-like grid
+                best_y_chunks = 1
+                best_x_chunks = num_chunks_needed
+                best_aspect_ratio = float('inf')
+                
+                for y_chunks in range(1, num_chunks_needed + 1):
+                    x_chunks = int(cp.ceil(num_chunks_needed / y_chunks))
+                    
+                    # Calculate actual chunk dimensions
+                    chunk_y_size = int(cp.ceil(y_dim / y_chunks))
+                    chunk_x_size = int(cp.ceil(x_dim / x_chunks))
+                    
+                    # Check if chunk size constraint is satisfied
+                    chunk_pixels = chunk_y_size * chunk_x_size
+                    if chunk_pixels > MAX_CHUNK_SIZE:
+                        continue
+                    
+                    # Calculate aspect ratio of the chunk
+                    aspect_ratio = max(chunk_y_size, chunk_x_size) / min(chunk_y_size, chunk_x_size)
+                    
+                    # Prefer more square-like chunks (aspect ratio closer to 1)
+                    if aspect_ratio < best_aspect_ratio:
+                        best_aspect_ratio = aspect_ratio
+                        best_y_chunks = y_chunks
+                        best_x_chunks = x_chunks
+                
+                # If no valid configuration found, fall back to single dimension division
+                if best_aspect_ratio == float('inf'):
+                    # Fall back to original logic
+                    largest_dim = 'y' if y_dim >= x_dim else 'x'
+                    num_divisions = int(cp.ceil(total_pixels / MAX_CHUNK_SIZE))
+                    
+                    if largest_dim == 'y':
+                        div_size = int(cp.ceil(y_dim / num_divisions))
+                        for i in range(0, y_dim, div_size):
+                            end_i = min(i + div_size, y_dim)
+                            chunk_dict[(z, i, 0)] = {
+                                'coords': [i, end_i, 0, x_dim],
+                                'processed': False,
+                                'z': z
+                            }
+                    else:
+                        div_size = int(cp.ceil(x_dim / num_divisions))
+                        for i in range(0, x_dim, div_size):
+                            end_i = min(i + div_size, x_dim)
+                            chunk_dict[(z, 0, i)] = {
+                                'coords': [0, y_dim, i, end_i],
+                                'processed': False,
+                                'z': z
+                            }
                 else:
-                    # Divide along X dimension
-                    div_size = int(cp.ceil(x_dim / num_divisions))
-                    for i in range(0, x_dim, div_size):
-                        end_i = min(i + div_size, x_dim)
-                        # Use (z, y_start, x_start) as key for consistency
-                        chunk_dict[(z, 0, i)] = {
-                            'coords': [0, y_dim, i, end_i],  # [y_start, y_end, x_start, x_end]
-                            'processed': False,
-                            'z': z
-                        }
+                    # Create the 2D grid of chunks
+                    y_chunk_size = int(cp.ceil(y_dim / best_y_chunks))
+                    x_chunk_size = int(cp.ceil(x_dim / best_x_chunks))
+                    
+                    for y_idx in range(best_y_chunks):
+                        for x_idx in range(best_x_chunks):
+                            y_start = y_idx * y_chunk_size
+                            y_end = min(y_start + y_chunk_size, y_dim)
+                            x_start = x_idx * x_chunk_size
+                            x_end = min(x_start + x_chunk_size, x_dim)
+                            
+                            # Skip empty chunks (can happen at edges)
+                            if y_start >= y_dim or x_start >= x_dim:
+                                continue
+                            
+                            chunk_dict[(z, y_start, x_start)] = {
+                                'coords': [y_start, y_end, x_start, x_end],
+                                'processed': False,
+                                'z': z
+                            }
         
         self.realtimechunks = chunk_dict
         print("Ready!")
 
-    def get_realtime_chunks(self, chunk_size=49):
+    def compute_3d_chunks(self, chunk_size=None):
+        """
+        Compute 3D chunks with consistent logic across all operations (GPU version).
         
-        # Determine if we need to chunk XY planes
-        small_dims = (self.image_3d.shape[1] <= chunk_size and 
-                     self.image_3d.shape[2] <= chunk_size)
-        few_z = self.image_3d.shape[0] <= 100  # arbitrary threshold
+        Args:
+            chunk_size: Optional chunk size, otherwise uses dynamic calculation
+            
+        Returns:
+            list: List of chunk coordinates [z_start, z_end, y_start, y_end, x_start, x_end]
+        """
+        import cupy as cp
+        import multiprocessing
         
-        # If small enough, each Z is one chunk
-        if small_dims and few_z:
-            chunk_size_xy = max(self.image_3d.shape[1], self.image_3d.shape[2])
-        else:
-            chunk_size_xy = chunk_size
-        
-        # Calculate chunks for XY plane
-        y_chunks = (self.image_3d.shape[1] + chunk_size_xy - 1) // chunk_size_xy
-        x_chunks = (self.image_3d.shape[2] + chunk_size_xy - 1) // chunk_size_xy
-        
-        # Populate chunk dictionary
-        chunk_dict = {}
-        
-        # Create chunks for each Z plane
-        for z in range(self.image_3d.shape[0]):
-            if small_dims:
-                
-                chunk_dict[(z, 0, 0)] = {
-                    'coords': [0, self.image_3d.shape[1], 0, self.image_3d.shape[2]],
-                    'processed': False,
-                    'z': z
-                }
+        # Use consistent chunk size calculation
+        if chunk_size is None:
+            if hasattr(self, 'master_chunk') and self.master_chunk is not None:
+                chunk_size = self.master_chunk
             else:
-                # Multiple chunks per Z
-                for y_chunk in range(y_chunks):
-                    for x_chunk in range(x_chunks):
-                        y_start = y_chunk * chunk_size_xy
-                        x_start = x_chunk * chunk_size_xy
-                        y_end = min(y_start + chunk_size_xy, self.image_3d.shape[1])
-                        x_end = min(x_start + chunk_size_xy, self.image_3d.shape[2])
-                        
-                        chunk_dict[(z, y_start, x_start)] = {
-                            'coords': [y_start, y_end, x_start, x_end],
-                            'processed': False,
-                            'z': z
-                        }
+                # Dynamic calculation (same as segmentation)
+                total_cores = multiprocessing.cpu_count()
+                total_volume = cp.prod(cp.array(self.image_3d.shape))
+                target_volume_per_chunk = total_volume / (total_cores * 4)
+                
+                chunk_size = int(cp.cbrt(target_volume_per_chunk))
+                chunk_size = max(16, min(chunk_size, min(self.image_3d.shape) // 2))
+                chunk_size = ((chunk_size + 7) // 16) * 16
+        
+        depth, height, width = self.image_3d.shape
+        
+        # Calculate chunk grid dimensions
+        z_chunks = (depth + chunk_size - 1) // chunk_size
+        y_chunks = (height + chunk_size - 1) // chunk_size
+        x_chunks = (width + chunk_size - 1) // chunk_size
+        
+        # Generate all chunk start positions using CuPy
+        chunk_starts = cp.array(cp.meshgrid(
+            cp.arange(z_chunks) * chunk_size,
+            cp.arange(y_chunks) * chunk_size,
+            cp.arange(x_chunks) * chunk_size,
+            indexing='ij'
+        )).reshape(3, -1).T
+        
+        
+        # Create chunk coordinate list
+        chunks = []
+        for z_start, y_start, x_start in chunk_starts:
+            z_end = min(z_start + chunk_size, depth)
+            y_end = min(y_start + chunk_size, height)
+            x_end = min(x_start + chunk_size, width)
+            coords = [int(z_start), int(z_end), int(y_start), int(y_end), int(x_start), int(x_end)]
+            chunks.append(coords)
+        
+        return chunks
 
-            self.realtimechunks = chunk_dict
 
+
+    def get_realtime_chunks(self, chunk_size=None):
+        if chunk_size is None:
+            chunk_size = self.master_chunk
+        
+        all_chunks = self.compute_3d_chunks(chunk_size)
+        
+        self.realtimechunks = {
+            i: {
+                'bounds': chunk_coords,  # Only store [z_start, z_end, y_start, y_end, x_start, x_end]
+                'processed': False,
+                'center': self._get_chunk_center(chunk_coords),  # Small tuple for distance calc
+                'is_3d': True  # Flag to indicate this is 3D chunking
+            }
+            for i, chunk_coords in enumerate(all_chunks)
+        }
         print("Ready!")
 
+    def _get_chunk_center(self, chunk_coords):
+        """Get center coordinate of chunk for distance calculations"""
+        z_start, z_end, y_start, y_end, x_start, x_end = chunk_coords
+        return (
+            (z_start + z_end) // 2,
+            (y_start + y_end) // 2,
+            (x_start + x_end) // 2
+        )
 
-    def segment_volume_realtime(self, gpu=True):
-        """Updated realtime segmentation - no more feature map caching needed"""
-        import cupy as cp
-        
+
+    def segment_volume_realtime(self, gpu=False):
         if self.realtimechunks is None:
             if not self.use_two:
-                self.get_realtime_chunks()
+                self.get_realtime_chunks()  # 3D chunks
             else:
-                self.get_realtime_chunks_2d()
+                self.get_realtime_chunks_2d()  # 2D chunks
         else:
-            for chunk_pos in self.realtimechunks:
-                self.realtimechunks[chunk_pos]['processed'] = False
-
-        chunk_dict = self.realtimechunks
+            for chunk_key in self.realtimechunks:
+                self.realtimechunks[chunk_key]['processed'] = False
         
-        def get_nearest_unprocessed_chunk(self):
-            """Get nearest unprocessed chunk prioritizing current Z"""
+        def get_nearest_unprocessed_chunk():
             curr_z = self.current_z if self.current_z is not None else self.image_3d.shape[0] // 2
             curr_y = self.current_y if self.current_y is not None else self.image_3d.shape[1] // 2
             curr_x = self.current_x if self.current_x is not None else self.image_3d.shape[2] // 2
             
-            # First try to find chunks at current Z
-            current_z_chunks = [(pos, info) for pos, info in chunk_dict.items() 
-                              if pos[0] == curr_z and not info['processed']]
+            unprocessed_chunks = [
+                (key, info) for key, info in self.realtimechunks.items() 
+                if not info['processed']
+            ]
             
-            if current_z_chunks:
-                nearest = min(current_z_chunks, 
-                            key=lambda x: ((x[0][1] - curr_y) ** 2 + 
-                                         (x[0][2] - curr_x) ** 2))
-                return nearest[0]
+            if not unprocessed_chunks:
+                return None
             
-            # If no chunks at current Z, find nearest Z with available chunks
-            available_z = sorted(
-                [(pos[0], pos) for pos, info in chunk_dict.items() 
-                 if not info['processed']],
-                key=lambda x: abs(x[0] - curr_z)
-            )
-            
-            if available_z:
-                target_z = available_z[0][0]
-                z_chunks = [(pos, info) for pos, info in chunk_dict.items() 
-                           if pos[0] == target_z and not info['processed']]
-                nearest = min(z_chunks, 
-                            key=lambda x: ((x[0][1] - curr_y) ** 2 + 
-                                         (x[0][2] - curr_x) ** 2))
+            if self.use_two:
+                # 2D chunks: key format is (z, y_start, x_start)
+                # First try to find chunks at current Z
+                current_z_chunks = [
+                    (key, info) for key, info in unprocessed_chunks 
+                    if key[0] == curr_z
+                ]
+                
+                if current_z_chunks:
+                    # Find nearest chunk at current Z by y,x distance
+                    nearest = min(current_z_chunks, 
+                                 key=lambda x: ((x[0][1] - curr_y) ** 2 + 
+                                               (x[0][2] - curr_x) ** 2))
+                    return nearest[0]
+                
+                # If no chunks at current Z, find nearest Z with available chunks
+                available_z_chunks = sorted(unprocessed_chunks, 
+                                           key=lambda x: abs(x[0][0] - curr_z))
+                
+                if available_z_chunks:
+                    # Get the nearest Z that has unprocessed chunks
+                    target_z = available_z_chunks[0][0][0]
+                    z_chunks = [
+                        (key, info) for key, info in unprocessed_chunks 
+                        if key[0] == target_z
+                    ]
+                    # Find nearest chunk in that Z by y,x distance
+                    nearest = min(z_chunks, 
+                                 key=lambda x: ((x[0][1] - curr_y) ** 2 + 
+                                               (x[0][2] - curr_x) ** 2))
+                    return nearest[0]
+            else:
+                # 3D chunks: use existing center-based distance calculation
+                nearest = min(unprocessed_chunks, 
+                             key=lambda x: sum((a - b) ** 2 for a, b in 
+                                             zip(x[1]['center'], (curr_z, curr_y, curr_x))))
                 return nearest[0]
             
             return None
         
         while True:
-            chunk_idx = get_nearest_unprocessed_chunk(self)
-            if chunk_idx is None:
+            chunk_key = get_nearest_unprocessed_chunk()
+            if chunk_key is None:
                 break
                 
-            chunk = chunk_dict[chunk_idx]
-            chunk['processed'] = True
-            coords = chunk['coords']  # [y_start, y_end, x_start, x_end]
-            z = chunk['z']
-
-            # Generate coordinates for this chunk
-            coords_array = self.twodim_coords(z, coords[0], coords[1], coords[2], coords[3])
+            self.realtimechunks[chunk_key]['processed'] = True
             
-            # Convert to CPU for processing
-            coords_list = list(map(tuple, cp.asnumpy(coords_array)))
+            # Process the chunk - pass the key, process_chunk will handle the rest
+            fore, back = self.process_chunk(chunk_key)
             
-            # Process the chunk - now computes features only for this chunk
-            fore, back = self.process_chunk_updated(coords_list)
-            
-            yield cp.asnumpy(fore), cp.asnumpy(back)
+            yield fore, back
 
 
     def cleanup(self):
@@ -1180,9 +1332,10 @@ class InteractiveSegmenter:
                                 local_x = x - x_offset
                                 feature_vector = feature_map[local_y, local_x]
                                 background_features.append(cp.asnumpy(feature_vector))
+                                
         else:
-        
-            box_size = self.master_chunk
+            # 3D processing - match segmentation chunking logic using compute_3d_chunks
+            chunk_size = self.master_chunk
             
             # Memory-efficient approach: compute features only for necessary subarrays
             foreground_features = []
@@ -1195,48 +1348,48 @@ class InteractiveSegmenter:
             z_fore = cp.argwhere(foreground_array_gpu == 1)
             z_back = cp.argwhere(foreground_array_gpu == 2)
             
-            # Convert back to NumPy for compatibility with the rest of the code
-            #z_fore_cpu = cp.asnumpy(z_fore)
-            #z_back_cpu = cp.asnumpy(z_back)
-            
             # If no scribbles, return empty lists
             if len(z_fore) == 0 and len(z_back) == 0:
                 return foreground_features, background_features
             
-            # Get dimensions of the input array
-            depth, height, width = foreground_array.shape
+            # Get all chunks using consistent method
+            all_chunks = self.compute_3d_chunks(self.master_chunk)
+            # Convert chunks to cupy array for vectorized operations
+            chunks_array = cp.array(all_chunks)  # Shape: (n_chunks, 6)
+            # columns: [z_start, z_end, y_start, y_end, x_start, x_end]
             
-            # Determine the minimum number of boxes needed to cover all scribbles
-            half_box = box_size // 2
+            # Combine all scribbles
+            all_scribbles = cp.vstack((z_fore, z_back)) if len(z_back) > 0 else z_fore
             
-            # Step 1: Find the minimum set of boxes that cover all scribbles
-            # We'll divide the volume into a grid of boxes of size box_size
+            # For each scribble, find which chunk it belongs to using vectorized operations
+            chunks_with_scribbles = set()
+            all_scribbles_cpu = cp.asnumpy(all_scribbles)  # Convert once for iteration
             
-            # Calculate how many boxes are needed in each dimension
-            z_grid_size = (depth + box_size - 1) // box_size
-            y_grid_size = (height + box_size - 1) // box_size
-            x_grid_size = (width + box_size - 1) // box_size
-            
-            # Track which grid cells contain scribbles
-            grid_cells_with_scribbles = set()
-            
-            # Map original coordinates to grid cells
-            for z, y, x in cp.vstack((z_fore, z_back)) if len(z_back) > 0 else z_fore:
-                grid_z = int(z // box_size)
-                grid_y = int(y // box_size)
-                grid_x = int(x // box_size)
-                grid_cells_with_scribbles.add((grid_z, grid_y, grid_x))
-            
-            # Step 2: Process each grid cell that contains scribbles
-            for grid_z, grid_y, grid_x in grid_cells_with_scribbles:
-                # Calculate the boundaries of this grid cell
-                z_min = grid_z * box_size
-                y_min = grid_y * box_size
-                x_min = grid_x * box_size
+            for z, y, x in all_scribbles_cpu:
+                # Vectorized check: find chunks that contain this scribble
+                # Check if scribble falls within each chunk's bounds
+                z_in_chunk = (chunks_array[:, 0] <= z) & (z < chunks_array[:, 1])
+                y_in_chunk = (chunks_array[:, 2] <= y) & (y < chunks_array[:, 3]) 
+                x_in_chunk = (chunks_array[:, 4] <= x) & (x < chunks_array[:, 5])
                 
-                z_max = min(z_min + box_size, depth)
-                y_max = min(y_min + box_size, height)
-                x_max = min(x_min + box_size, width)
+                # Find chunks where all conditions are true
+                matching_chunks = z_in_chunk & y_in_chunk & x_in_chunk
+                
+                # Get the chunk indices that match
+                chunk_indices = cp.where(matching_chunks)[0]
+                
+                # Add matching chunks to set (set automatically handles duplicates)
+                for idx in cp.asnumpy(chunk_indices):
+                    chunk_coords = tuple(cp.asnumpy(chunks_array[idx]))
+                    chunks_with_scribbles.add(chunk_coords)
+            
+            # Convert set to list
+            chunks_with_scribbles = list(chunks_with_scribbles)
+            
+            # Step 2: Process each chunk that contains scribbles (manual coordinate extraction)
+            for chunk_coords in chunks_with_scribbles:
+                # Extract chunk boundaries
+                z_min, z_max, y_min, y_max, x_min, x_max = chunk_coords
                 
                 # Extract the subarray (assuming image_3d is already a CuPy array)
                 subarray = self.image_3d[z_min:z_max, y_min:y_max, x_min:x_max]

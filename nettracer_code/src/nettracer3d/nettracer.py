@@ -5492,7 +5492,7 @@ class Network_3D:
         neighborhoods.visualize_cluster_composition_umap(self.node_centroids, None, id_dictionary = self.node_identities, graph_label = "Node ID", title = 'UMAP Visualization of Node Centroids') 
 
 
-    def community_id_info_per_com(self, umap = False, label = False, limit = 0, proportional = False):
+    def community_id_info_per_com(self, umap = False, label = 0, limit = 0, proportional = False, neighbors = None):
 
         community_dict = invert_dict(self.communities)
         summation = 0
@@ -5581,7 +5581,19 @@ class Network_3D:
         if umap:
             from . import neighborhoods
 
-            neighborhoods.visualize_cluster_composition_umap(umap_dict, id_set, label = label) 
+
+            if self.communities is not None and label == 2:
+                neighbor_group = {}
+                for node, com in self.communities.items():
+                    neighbor_group[com] = neighbors[node]
+                neighborhoods.visualize_cluster_composition_umap(umap_dict, id_set, neighborhoods = neighbor_group)
+            elif label == 1:
+                neighborhoods.visualize_cluster_composition_umap(umap_dict, id_set, label = True) 
+            else:
+                neighborhoods.visualize_cluster_composition_umap(umap_dict, id_set, label = False) 
+
+
+            #neighborhoods.visualize_cluster_composition_umap(umap_dict, id_set, label = label) 
 
         return output, id_set
 
@@ -5856,44 +5868,57 @@ class Network_3D:
 
     def nearest_neighbors_avg(self, root, targ, xy_scale = 1, z_scale = 1, num = 1, heatmap = False, threed = True, numpy = False, quant = False, centroids = True):
 
+        def distribute_points_uniformly(n, shape, z_scale, xy_scale, num, is_2d=False):
 
-        def distribute_points_uniformly(n, shape, z_scale, xy_scale, is_2d=False):
+            from scipy.spatial import KDTree
+
             if n <= 1:
                 return 0
-            
-            # Calculate total number of positions
+                        
+            # Calculate total positions and sampling step
             total_positions = np.prod(shape)
+            if n >= total_positions:
+                # If we want more points than positions, just return scaled unit distance
+                return xy_scale if is_2d else min(z_scale, xy_scale)
             
-            # Calculate the flat index spacing
-            flat_spacing = total_positions / n
+            # Create uniformly spaced indices
+            indices = np.linspace(0, total_positions - 1, n, dtype=int)
             
-            # Get the first two flat indices
-            idx1 = 0
-            idx2 = int(flat_spacing)
+            # Convert flat indices to coordinates
+            coords = []
+            for idx in indices:
+                coord = np.unravel_index(idx, shape)
+                if len(shape) == 3:
+                    # Apply scaling: [z, y, x] with respective scales
+                    scaled_coord = [coord[0] * z_scale, coord[1] * xy_scale, coord[2] * xy_scale]
+                elif len(shape) == 2:
+                    # Apply scaling: [y, x] with xy_scale
+                    scaled_coord = [coord[0] * xy_scale, coord[1] * xy_scale]
+                coords.append(scaled_coord)
             
-            # Convert to multi-dimensional coordinates theoretically
-            coord1 = np.unravel_index(idx1, shape)
-            coord2 = np.unravel_index(idx2, shape)
+            coords = np.array(coords)
             
-            # Apply scaling
-            if len(shape) == 3:
-                p1 = np.array([coord1[0] * z_scale, coord1[1] * xy_scale, coord1[2] * xy_scale])
-                p2 = np.array([coord2[0] * z_scale, coord2[1] * xy_scale, coord2[2] * xy_scale])
-            elif len(shape) == 2:
-                p1 = np.array([coord1[0] * xy_scale, coord1[1] * xy_scale])
-                p2 = np.array([coord2[0] * xy_scale, coord2[1] * xy_scale])
+            # Build KDTree
+            tree = KDTree(coords)
             
-            # Calculate neighbor distance
-            neighbor_distance = np.linalg.norm(p2 - p1)
+            # Pick a point near the middle of the array
+            middle_idx = len(coords) // 2
+            query_point = coords[middle_idx]
             
-            # Apply the dimensional factor
-            if is_2d:
-                neighbor_distance = neighbor_distance * 0.38
-            else:
-                neighbor_distance = neighbor_distance * 0.45
+            # Find the num+1 nearest neighbors (including the point itself)
+            distances, indices = tree.query(query_point, k=num+1)
             
-            return neighbor_distance
+            # Exclude the point itself (distance 0) and get the actual neighbors
+            neighbor_distances = distances[1:num+1]
+
+            if num == n:
+                neighbor_distances[-1] = neighbor_distances[-2]
             
+            avg_distance = np.mean(neighbor_distances)
+            
+            
+            return avg_distance
+
         do_borders = not centroids
 
         if centroids:
@@ -6017,7 +6042,7 @@ class Network_3D:
             else:
                 is_2d = False
 
-            pred = distribute_points_uniformly(len(compare_set), bounds, self.z_scale, self.xy_scale, is_2d = is_2d)
+            pred = distribute_points_uniformly(len(compare_set), bounds, self.z_scale, self.xy_scale, num = num, is_2d = is_2d)
 
             node_intensity = {}
             import math
@@ -6025,18 +6050,22 @@ class Network_3D:
 
             for node in root_set:
                 node_intensity[node] = math.log(pred/output[node])
+                #print(output[node])
                 node_centroids[node] = self.node_centroids[node]
 
             if numpy:
 
                 overlay = neighborhoods.create_node_heatmap(node_intensity, node_centroids, shape = shape, is_3d=threed, labeled_array = self.nodes, colorbar_label="Clustering Intensity", title = title)
 
-                return avg, output, overlay, quant_overlay
+                return avg, output, overlay, quant_overlay, pred
 
             else:
                 neighborhoods.create_node_heatmap(node_intensity, node_centroids, shape = shape, is_3d=threed, labeled_array = None, colorbar_label="Clustering Intensity", title = title)
 
-        return avg, output, quant_overlay
+        else:
+            pred = None
+
+        return avg, output, quant_overlay, pred
 
 
 
