@@ -967,3 +967,93 @@ def partition_objects_into_cells(object_centroids, cell_size):
     
     # Convert defaultdict to regular dict and sort keys
     return dict(sorted(cell_assignments.items()))
+
+
+
+# To use with the merge node identities manual calculation: 
+
+def get_reslice_indices_for_id(slice_obj, array_shape):
+    """Convert slice object to padded indices accounting for dilation and boundaries"""
+    if slice_obj is None:
+        return None, None, None
+        
+    z_slice, y_slice, x_slice = slice_obj
+    
+    # Extract min/max from slices
+    z_min, z_max = z_slice.start, z_slice.stop - 1
+    y_min, y_max = y_slice.start, y_slice.stop - 1
+    x_min, x_max = x_slice.start, x_slice.stop - 1
+
+    # Boundary checks
+    y_max = min(y_max, array_shape[1] - 1)
+    x_max = min(x_max, array_shape[2] - 1)
+    z_max = min(z_max, array_shape[0] - 1)
+    y_min = max(y_min, 0)
+    x_min = max(x_min, 0)
+    z_min = max(z_min, 0)
+
+    return [z_min, z_max], [y_min, y_max], [x_min, x_max]
+
+
+def _get_node_edge_dict_id(label_array, edge_array, label):
+    """Internal method used for the secondary algorithm to find which nodes interact with which edges."""
+    
+    # Create compound condition: label matches AND edge value > 0
+    valid_mask = (label_array == label) & (edge_array > 0)
+    valid_edges = edge_array[valid_mask]
+    
+    if len(valid_edges) > 0:
+        edge_val = np.mean(valid_edges)
+    else:
+        edge_val = 0  
+    
+    return edge_val
+    
+def process_label_id(args):
+    """Modified to use pre-computed bounding boxes instead of argwhere"""
+    nodes, edges, label, array_shape, bounding_boxes = args
+    
+    # Get the pre-computed bounding box for this label
+    slice_obj = bounding_boxes[int(label)-1]  # -1 because label numbers start at 1
+    if slice_obj is None:
+        return None, None, None
+        
+    z_vals, y_vals, x_vals = get_reslice_indices_for_id(slice_obj, array_shape)
+    if z_vals is None:
+        return None, None, None
+        
+    sub_nodes = reslice_3d_array((nodes, z_vals, y_vals, x_vals))
+    sub_edges = reslice_3d_array((edges, z_vals, y_vals, x_vals))
+    return label, sub_nodes, sub_edges
+
+
+def create_node_dictionary_id(nodes, edges, num_nodes):
+    """Modified to pre-compute all bounding boxes using find_objects"""
+    node_dict = {}
+    array_shape = nodes.shape
+    
+    # Get all bounding boxes at once
+    bounding_boxes = ndimage.find_objects(nodes)
+    
+    # Use ThreadPoolExecutor for parallel execution
+    with ThreadPoolExecutor(max_workers=mp.cpu_count()) as executor:
+        # Create args list with bounding_boxes included
+        args_list = [(nodes, edges, i, array_shape, bounding_boxes) 
+                    for i in range(1, int(num_nodes) + 1)]
+
+        # Execute parallel tasks to process labels
+        results = executor.map(process_label_id, args_list)
+
+        # Process results in parallel
+        for label, sub_nodes, sub_edges in results:
+            executor.submit(create_dict_entry_id, node_dict, label, sub_nodes, sub_edges)
+
+    return node_dict
+
+def create_dict_entry_id(node_dict, label, sub_nodes, sub_edges):
+    """Internal method used for the secondary algorithm to pass around args in parallel."""
+
+    if label is None:
+        pass
+    else:
+        node_dict[label] = _get_node_edge_dict_id(sub_nodes, sub_edges, label)

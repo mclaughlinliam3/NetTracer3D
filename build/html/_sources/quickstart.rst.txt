@@ -1,7 +1,7 @@
 .. _quickstart:
 
 ==========
-Quickstart - Segmenting Data and Generating Networks
+Quickstart - Segmenting Data and Generating Connectivity Networks
 ==========
 
 This guide will help you get started with NetTracer3D by walking through a simple example.
@@ -26,12 +26,15 @@ Interface Overview
 
 The NetTracer3D interface consists of:
 
-* (Left) Main Visualization Area: The image viewer window where the 3D stack is displayed as 2D slices.
+* (Left) Canvas/Main Visualization Area: The image viewer window where the 3D stack is displayed as 2D slices.
 * (Bottom) Control Panel: Widgets for quick interaction with the image viewer window.
 * (Top Right) Tabulated Data: Where data tables from analysis will be placed.
 * (Bottom Right) Network Data: Where paired nodes in your network will be organized.
 * (Top) Menu Bar: Options to load/export data and run analysis.
-   * Including the camera widget (Top Right). Click this to save a 2D tiff of whatever is currently being displayed in the Image Viewer Window.
+    * There are a few buttons in the top right to note:
+    1. The button that says '⤴' will eject the main canvas window, and the control panel, into a seperate window, in case the user wants them to be larger without the tables getting in the way.
+    2. The button with the camera will save a 2D tiff of whatever is being displayed in the canvas.
+    3. The button with the file will prompt the user to open a .xlsx/.CSV spreadsheet, to be loaded into the top right data tables. Some tables can be used to interact with the nodes, so being able to reload them may be desirable.
 
 In addition, since it will be usually run out of the command window, be sure to check your command window for printed updates about what NetTracer3D is actually doing.
 
@@ -44,28 +47,27 @@ The Control Panel
 
 Before we start with an example, we'll go over the control panel on the bottom. It includes the following widgets:
 
-1. The Active Image widget
+#. The Active Image widget
     * Clicking on the carrot will allow you to select which image is 'Active'. Many processing/analysis functions will by default run on the image that is 'Active'. Furthermore, when clicking or drawing in the Image Viewer Window, the 'Active' image is the one that will be referenced.
-2. The zoom widget (magnifying glass - Shortcut Z)
-    * Press z or click the magnifying glass widget to enter the zoom mode. Clicking the Image Viewer Window in zoom mode will cause you to zoom in. Right clicking will cause you to zoom out.
-3. The pan widget (hand - Shortcut middle mouse)
+#. The home widget; simply resets the view to default, in case you get stuck in a weird zoom state. (Shortcut - 'Shift + Right Click' while in zoom mode.)
+#. The zoom widget (magnifying glass - Shortcut Z)
+    * Press z or click the magnifying glass widget to enter the zoom mode. Clicking the Image Viewer Window in zoom mode will cause you to zoom in. Right clicking will cause you to zoom out. Dragging in zoom mode will zoom in on a specific area.
+#. The pan widget (hand - Shortcut middle mouse)
     * Press middle mouse button or click the hand widget to enter pan mode. Use the mouse to drag along the Image Viewer Window while in pan mode to move around the image.
-4. The highlight overlay display widget (eye - Shortcut X)
+#. The highlight overlay display widget (eye - Shortcut X)
     * Press x or click the eye widget to toggle whether the highlight overlay is visible. Clicking on objects in the node/edges channels (and certain other functions) will generate a yellow highlight atop the image viewer window that denotes what is selected.
-5. The image markup widget (pen)
+#. The image markup widget (pen)
     * Click the pen widget to enter the image markup mode. While in this mode, clicking on the active image will write values of 255 directly into the image data where you are clicking.  
         * While in pen mode, the following additional functionalities are offered:
             1. Left click will erase any positive data and write 0 directly into the image.
             2. Ctrl + Mouse Wheel will enlarge the draw/erase area.
             3. Press F to swap to a fill can. Clicking with the fill can will write the val 255 into the entirety of any background (0 value) areas in your image that are connected to the clicked point. While in fill can mode only, ctrl+z will undo the most recent action.
             4. Press D in either pen or fill can mode to enable the 3D version of these tools. The 3D pen will draw along several image stacks at once. The number of stacks above you are drawing on is indicated by the number above the 3D pen (i.e. a value of 5 will write into the current stack, 2 above, and 2 below). Use the mousewheel to enlarge or decrease this number. The 3D fill can will fill the entirety of a 3D hole (which can be the entire image background if not careful). Like the 2D fill can, use ctrl+z while still in the fill can mode to undo the last fill-can action.
-6. The threshold/segment widget (pencil)
+#. The threshold/segment widget (pencil)
     * Click the pencil widget to open the menu to either Threshold or use Machine-Learning segmentation. Please see the Threshold/Segment guide for more information.
-7. The channel widgets (Nodes, Edges, Overlay1, Overlay2)
+#. The channel widgets (Nodes, Edges, Overlay1, Overlay2)
     * Click the channel widgets to toggle whether the channel is visible. The 'x' widget located next to the channel buttons will prompt if you want to delete that channel or not.
-8. Blue Checkbox (Right of Channel Widgets)
-    * By default, NetTracer3D will show any loaded images in the central Image Viewer Window. Unchecking this will stop it from being rendered by default, instead toggling off any channels that get loaded in. This is because very large 2D planes may lag the display window, but many of NetTracer3D's functions do not require actual rendering, so this can avoid said lag if we don't need to actually see the image.
-9. The scrollbar.
+#. The scrollbar.
     * The knob at the center of the scroll bar can be moved with the mouse to scroll through the 3D image stack. Use the left or right arrows on either side to scroll one frame at a time. Shift + mouse wheel can also be used to scroll through the stack. Ctrl + Shift + Mouse Wheel will result in a faster scroll.
 
 
@@ -226,7 +228,25 @@ I apply this threshold and finally use 'Process -> Image -> Fill Holes' to fill 
    :width: 800px
    :alt: Slime Mold Segmentation
 
-Generating a Network Using Edges
+Introduction to Types of Networks
+---------------------------------
+NetTracer3D broadly can be used to create the four following flavors of networks. All of these convert a static image to an undirected network graph in some way.
+
+1. The Connectivity Network - Node objects are connected via a second image (The Edges Image).
+    * Ideal for objects such as cells or functional tissue units (ie ganglions, glomerulus, liver lobule etc), that may be interconnected via a secondary structure (ie nerves, blood vessels, lymphatics).
+    * However it requires 2 images, each segmented.
+2. The proximity network - Nodes are connected based on distance to each other.
+    * Ideal for evaluating general spatial arrangement of things, such as cells in an H&E stain or imaged with a microscope, ie CODEX.
+    * Less useful at grouping things laid out chaotically (ie every cell in a poorly differentiated neuroendocrine tumor), although you could help reduce the chaos by only creating a network from a certain type of cell.
+3. The branchpoint network - Nodes are created at branch vertices and connected based on their adjacency in the branch.
+    * Ideal for branched structures (ie nerves, vessels, lymphatics, roots). They should be segmented out in binary first - NetTracer3D will handle branch assignment.
+    * Quite good at describing how an object is branching, however loses morphological information.
+4. The branch adjacency network - Branches themselves become nodes.
+    * Similar approach as above, however the connections are based on whether the entire branch is touching another branch.
+    * More useful than branchpoint network for interacting with branches directly, however the branchy structure is slightly obfuscated in the graph, as we don't know what order the branches arise in as they branch off each other.
+
+
+The Connectivity Network - Generating a Network Using An Edge Image
 --------------
 
 Similar to the nodes, we segment the edges from the image (I did not show this process but it would be the same steps as above, just selecting the connection regions rather than the nodes). This is the image through which the nodes will be connected. (In imaging this will often be on a different channel, such as an overlapping image of nerves or vessels. In this demo, we use the same image for both).
@@ -277,31 +297,22 @@ This is where NetTracer3D shines! For example, the image below is one such usage
    :width: 800px
    :alt: Example Network
 
-Generating a Network Based on Proximity
---------------
-We will go over another simple example of creating networks. This one is even easier, as it only requires nodes to function, and simply groups nodes as connected pairs based on their distance to each other.
-Open a new instance of NetTracer3D and once more load in the binary segmentation of the nodes that was created above.
-First, use 'Process -> Image -> Label Objects' to assign each binary object a unique label.
-Next, select 'Process -> Calculate -> Calculate Proximity Network'.
+There are lots of options for obtaining statistics on our network structure, but one of the simplest ways is to select 'Analyze -> Stats -> Network Statistics Histograms'. Choosing this option will reveal the following menu.
 
-.. image:: _static/proximity_menu.png
+.. image:: _static/histogram_example.png
    :width: 800px
-   :alt: Proximity Network Menu
-*Here we can see the menu to generate proximity networks. The search distance here is set to 300, which means nodes will look 300 pixels out for connections (although this will correspond to your scalings). Note there are two options available for searching, shown in the carrot dropdown next to 'Execution Mode'. The first option searches from centroids and works quite well with big data as the data structure is far simpler. The second option searches from object borders and may be slower on large images by comparison. In this case, I use the second option since these objects are heterogenously sized. For more information on using this algorithm, see* :ref:`proximity_network` 
+   :alt: Example analysis
 
-And after algorithm execution:
+Each of the green buttons will yield a different histogram for a nodal distribution of some network property, with each indicating some quality of the network. In this case, I generate the degree distribution for the nodes, which shows me how many connections each node is making. It generates a histogram for me, and places the underlying data in the top right table.
+NetTracer3D is designed to be highly interactable. Any upper right table that has the structure '{col 1 - integers : col 2 - numbers}' can be used to threshold the nodes. This means I can use any of these network histograms, and more!
 
-.. image:: _static/proximity.png
+.. image:: _static/histogram_example2.png
    :width: 800px
-   :alt: Proximity Network
+   :alt: Example analysis2
 
-.. image:: _static/proximity2.png
-   :width: 800px
-   :alt: Proximity Network 2
-
-
-Proximity networks are a generic way to group together objects in 3D space and are ideal, for example, for grouping together cellular neighborhoods.
-One use for such cellular neighborhoods is grouping them into communities and analyzing their composition!
+I simply right click my table and choose 'Use to Threshold Nodes'. In the interactive thresholder, I select the region of the histogram I want to keep. If I press 'Apply Threshold', I then reduce my nodes channel to just that set of nodes (make sure to back up your original nodes). Doing this will not alter the underlying network data. However, if I instead wanted to keep this selection without eliminating any nodes, just closing the threshold window will leave the selection in the highlight overlay, which can be exported or used to do anything else the highlight overlay can do.
+Furthermore, if the nodes channel is set as my active channel, the subgraph of connections between my selected objects will be sent to my 'selection' table in the lower right, in case I want to pull out a specific subregion of the network. 
+While right clicking in the upper-right table, other options include saving the table as a spreadsheet. I can also use the folder button in the top right can be used to load spreadsheets in the expected format (same as saved), in case I want to re-use something to threshold the nodes, for example.
 
 Exporting Data
 ---------
@@ -343,4 +354,4 @@ Using Network (And/Or Image) data in python
 
 Next Steps
 ---------
-Once you have a hang on generating the default network types, proceed to the :doc:`branches` to learn about using NetTracer3D to label branches of objects and create branch networks.
+Once you have a hang on generating the 'connectivity network', proceed to :doc:`proximity` to learn about using NetTracer3D to create networks based on proximity, which is useful for analyzing spatial arrangement of cells, for example.

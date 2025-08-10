@@ -77,6 +77,17 @@ Our final branch labeled neuron looks like this:
    :alt: Branch Final
 *Branches smaller than 8 voxels long have joined their neighbors*
 
+Morphological Analysis
+~~~~~~~~~~~~~~~~~~~~~~~~
+* Beyond just networks, NetTracer3D offers a suite of options for morphological and/or spatial analysis that doesn't even pertain to the network itself.
+* For example here, I use 'Analyze -> Stats -> Calculate Radii', then use the radii table to threshold my branches by radius, shown below.
+* Any calculation done on the nodes can be used to threshold the nodes from the table, generally speaking, which makes NetTracer3D very useful at tying analytics back into spatial analysis.
+
+.. image:: _static/radii_thresh.png
+   :width: 800px
+   :alt: radii_thresh
+*Note that thresholding with the tables always applies on the nodes, but labelling branches puts them in the edges channel by default sometimes. You can use 'Image -> Overlays -> Shuffle' to move images around to where you want them.
+
 Branch Adjacency Network
 ----------------
 * The simplest way to create a branch adjacency network is to run 'Process -> Calculate Network -> Calculate Branch Adjacency Network (of edges)'

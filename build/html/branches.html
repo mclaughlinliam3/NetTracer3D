@@ -6,14 +6,14 @@
   <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
 
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Labeling Branches and Branch Networks &mdash; NetTracer3D 0.9.1 documentation</title>
+  <title>Labeling Branches and Branch Networks &mdash; NetTracer3D 1.0.0 documentation</title>
       <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=b86133f3" />
       <link rel="stylesheet" type="text/css" href="_static/css/theme.css?v=e59714d7" />
 
   
       <script src="_static/jquery.js?v=5d32c60e"></script>
       <script src="_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
-      <script src="_static/documentation_options.js?v=9dc39874"></script>
+      <script src="_static/documentation_options.js?v=8d563738"></script>
       <script src="_static/doctools.js?v=9bcbadda"></script>
       <script src="_static/sphinx_highlight.js?v=dc90522c"></script>
     <script src="_static/js/theme.js"></script>
@@ -21,7 +21,7 @@
     <link rel="index" title="Index" href="genindex.html" />
     <link rel="search" title="Search" href="search.html" />
     <link rel="next" title="Properties of a Network3D Object" href="properties.html" />
-    <link rel="prev" title="Quickstart - Segmenting Data and Generating Networks" href="quickstart.html" /> 
+    <link rel="prev" title="Proximity Networks - Ideal for Cellular Data" href="proximity.html" /> 
 </head>
 
 <body class="wy-body-for-nav"> 
@@ -46,13 +46,15 @@
               <p class="caption" role="heading"><span class="caption-text">User Guide:</span></p>
 <ul class="current">
 <li class="toctree-l1"><a class="reference internal" href="installation.html">Installation</a></li>
-<li class="toctree-l1"><a class="reference internal" href="quickstart.html">Quickstart - Segmenting Data and Generating Networks</a></li>
+<li class="toctree-l1"><a class="reference internal" href="quickstart.html">Quickstart - Segmenting Data and Generating Connectivity Networks</a></li>
+<li class="toctree-l1"><a class="reference internal" href="proximity.html">Proximity Networks - Ideal for Cellular Data</a></li>
 <li class="toctree-l1 current"><a class="current reference internal" href="#">Labeling Branches and Branch Networks</a><ul>
 <li class="toctree-l2"><a class="reference internal" href="#labeling-branches">Labeling Branches</a></li>
 <li class="toctree-l2"><a class="reference internal" href="#examples-of-tweaking-branch-labels-optional">Examples of Tweaking Branch Labels (Optional)</a><ul>
 <li class="toctree-l3"><a class="reference internal" href="#handling-spine-artifacts">Handling spine artifacts</a></li>
 <li class="toctree-l3"><a class="reference internal" href="#handling-split-labels">Handling split labels</a></li>
 <li class="toctree-l3"><a class="reference internal" href="#with-corrections">With Corrections</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#morphological-analysis">Morphological Analysis</a></li>
 </ul>
 </li>
 <li class="toctree-l2"><a class="reference internal" href="#branch-adjacency-network">Branch Adjacency Network</a></li>
@@ -168,6 +170,17 @@ To do this, I want to decide what length of spine to remove from the image skele
 </a>
 <p><em>Branches smaller than 8 voxels long have joined their neighbors</em></p>
 </section>
+<section id="morphological-analysis">
+<h3>Morphological Analysis<a class="headerlink" href="#morphological-analysis" title="Link to this heading"></a></h3>
+<ul class="simple">
+<li><p>Beyond just networks, NetTracer3D offers a suite of options for morphological and/or spatial analysis that doesn’t even pertain to the network itself.</p></li>
+<li><p>For example here, I use ‘Analyze -&gt; Stats -&gt; Calculate Radii’, then use the radii table to threshold my branches by radius, shown below.</p></li>
+<li><p>Any calculation done on the nodes can be used to threshold the nodes from the table, generally speaking, which makes NetTracer3D very useful at tying analytics back into spatial analysis.</p></li>
+</ul>
+<a class="reference internal image-reference" href="_images/radii_thresh.png"><img alt="radii_thresh" src="_images/radii_thresh.png" style="width: 800px;" />
+</a>
+<p><a href="#id1"><span class="problematic" id="id2">*</span></a>Note that thresholding with the tables always applies on the nodes, but labelling branches puts them in the edges channel by default sometimes. You can use ‘Image -&gt; Overlays -&gt; Shuffle’ to move images around to where you want them.</p>
+</section>
 </section>
 <section id="branch-adjacency-network">
 <h2>Branch Adjacency Network<a class="headerlink" href="#branch-adjacency-network" title="Link to this heading"></a></h2>
@@ -225,7 +238,7 @@ For example, in the below image, I label the bronchi on this 3D image of a mouse
            </div>
           </div>
           <footer><div class="rst-footer-buttons" role="navigation" aria-label="Footer">
-        <a href="quickstart.html" class="btn btn-neutral float-left" title="Quickstart - Segmenting Data and Generating Networks" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left" aria-hidden="true"></span> Previous</a>
+        <a href="proximity.html" class="btn btn-neutral float-left" title="Proximity Networks - Ideal for Cellular Data" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left" aria-hidden="true"></span> Previous</a>
         <a href="properties.html" class="btn btn-neutral float-right" title="Properties of a Network3D Object" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right" aria-hidden="true"></span></a>
     </div>
 

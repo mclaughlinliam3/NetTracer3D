@@ -65,9 +65,7 @@ McLaughlin, L., Zhang, B., Sharma, S. et al. Three dimensional multiscalar neuro
 
 NetTracer3D was developed by Liam McLaughlin while working under Dr. Sanjay Jain at Washington University School of Medicine.
 
--- Version 0.9.1 Updates --
-	* Adjusted the segment by 3D function to now show the 3D chunks in the preview mode. Previously it showed 2D segmentations in the preview which finished the current plane faster but didn't show accurate training data.
-	* Adjusted the neighborhood heatmap predicted range value to now just simulate a uniform distribution rather than trying to use a mathematical algorithm. 
-	* The image display window now uses image pyramids and cropping for zoom ins so it should run a lot faster on bigger images.
-	* The community UMAP can now color them by neighborhood.
-	* No longer zooms all the way out by default with right click in zoom mode. Now user needs to Shift + Right Click.
+-- Version 1.0.0 Updates --
+
+	* The 'network selection' table is now auto-populated when using the multiple-identity selector, and when using the node thresholder.
+	* And other minor adjustments/bug fixes

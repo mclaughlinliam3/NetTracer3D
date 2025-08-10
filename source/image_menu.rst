@@ -33,7 +33,12 @@ All Image Menu Options
     * However one might want to load it into the nodes property if they desire to run the Connectivity Network again and would like to skip the node search expansion step (which is the slow step).
 8. Network Status
     * This button will be enabled if something is currently loaded into the Network property/table. Disabling it and entering the new properties will empty the network. It will also purge the communities property.
-
+9. Identities status
+    * Will be checked if the nodes identities property is set.
+10. Enter (Erases Unchecked Properties)
+    * Accepts reassigned properties (mainly just xy and z scales if altered), but anything that was unchecked will be purged from the current session.
+11. Report Properties
+    * Any property associated with a spreadsheet that exists in the current session will populate the upperright table.
 
 'Image -> Adjust Brightness/Contrast'
 --------------------------

@@ -89,3 +89,17 @@ Version 0.9.1 Updates
 	* The image display window now uses image pyramids and cropping for zoom ins so it should run a lot faster on bigger images.
 	* The community UMAP can now color them by neighborhood.
 	* No longer zooms all the way out by default with right click in zoom mode. Now user needs to Shift + Right Click.
+
+Versions 0.9.2 - 1.0.0 Updates
+	* Tables can now be opened to the rightside upper widget if they are the right format.
+	* Similarly, tables that have the format node id column:numerical values can now be used liberally to threshold the nodes, meaning most outputs of network analysis can be used to threshold nodes.
+	* The overlay 2 is now cyan by default.
+	* Moved some file menu options around.
+	* The 'merge node id' option now offers interactive support for assisted thresholding for any new identity channels the user is trying to merge with.
+	* The 'merge nodes' option now can provide centroids prior to the merge, since oftentimes objects end up on top of each other.
+	* Erode can now optionally preserve object labels.
+	* Added some compatibility for nodes being assigned 'multiple identities'
+	* Image viewer canvas window can now be popped out into a separate window. 
+	* Image pyramid calculation is more dynamic instead of using arbitrary size thresholds.
+	* The 'network selection' table is now auto-populated when using the multiple-identity selector, and when using the node thresholder.
+	* Bug Fixes

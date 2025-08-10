@@ -105,7 +105,7 @@ Algorithm Explanations
 'Process -> Calculate Network -> Calculate Proximity Network...'
 -------------------------------------------------------
 * This method is used to connect objects in the nodes channel based on whether they are within some user-defined distance of each other.
-* Please see :doc:`quickstart` for a brief walkthrough about using this function.
+* Please see :doc:`proximity` for a brief walkthrough about using this function.
 * Selecting this function will show the following menu:
 
 .. image:: _static/process1.png
@@ -114,8 +114,6 @@ Algorithm Explanations
 
 Parameter Explanations
 ~~~~~~~~~~~~~~~
-#. Output Directory
-    * If a string path is included to a directory, the resulting Network3D Object will be saved there as it's calculated. If nothing is included, this will save nothing by default, and the user will need to save in post with 'File -> Save (As)'
 #. Search Region Distance...
     * This value is the distance nodes will search for other nodes to connect to. Note that this value is scaled corresponding to the xy_scale/z_scale parameters. (As in, if you set xy_scale/z_scale correctly, then treat this as a real-value, such as microns, for your image).
 #. xy_scale
@@ -126,22 +124,28 @@ Parameter Explanations
     * The dropdown menu will display two options.
         1. 'From Centroids...' - The search is done starting from centroids, looking for other centroids. The algorithm that this uses should be faster for larger datasets. It is ideal to use when your nodes can be represented well by centroids, such as if they are small or relatively homogenous spheroids. Note that because centroids are used, this option allows this function to run without any nodes image whatsoever, assuming the node_centroids property was loaded in. This might be useful when importing data that has already been extracted out of an image elsewhere, as a set of centroids, for example.
         2. 'From Morphological Shape...' - The search is done starting from each nodes' border in 3D space. This algorithm is slower but is better suited handling non-homogenous or oddly-shaped nodes.
-#. (If using morphological) Use Fast Dilation...
-    * If enabled, dilation will be predicted using pseudo-3D binary kernels.
-    * When disabled, dilation will be done using a perfect distance transform.
-    * For more information on this algorithm, see :ref:`dilation`.
-    * This does not apply at all for the centroid search option.
 #. Create Networks only from a specific Node Identity?
     * This option will only appear if something is assigned to the node_identities property.
     * If so, there will be a dropdown menu to select one of your defined node-identities subtypes.
     * (If not 'None): Whichever node identity subtype is selected - only those nodes will be used to make network connections (however, they will be able to connect to any other node type).
     * Use this to simplify network structures when you are only interested in one node subtypes' relationship to the rest of the nodes.
+#. Output Directory
+    * If a string path is included to a directory, the resulting Network3D Object will be saved there as it's calculated. If nothing is included, this will save nothing by default, and the user will need to save in post with 'File -> Save (As)'
 #. Generate Overlays
     * If enabled, NetTracer3D will execute 'Image -> Overlay -> Create Network Overlay' and 'Image -> Overlay -> Create ID Overlay' (which will override Overay 1 and 2, respectively).
 #. If using centroid search:... Populate Nodes from Centroids?
     * If enabled and centroid search is run, the centroids will be used to create a new nodes image that will be placed in the nodes channel.
     * This new image will start at 0 in each dimension and be bounded by the highest value centroid in each dimension.
     * As described, the centroid search does not require a nodes image, but only that node_centroids is loaded in, so if centroids are extracted elsewhere and loaded in without an image, this method will allow the user to then create an image to explore other functions with.
+#. (If using centroids): Max number of closest neighbors...
+    * Restricts nodes from only making a number of connections to the integer value passed to this param.
+    * They will connect to their n nearest neighbors within the search region.
+    * This is a useful way to simplify dense networks.
+#. (If using morphological) Use Fast Dilation...
+    * If enabled, dilation will be predicted using pseudo-3D binary kernels.
+    * When disabled, dilation will be done using a perfect distance transform.
+    * For more information on this algorithm, see :ref:`dilation`.
+    * This does not apply at all for the centroid search option.
 
 Algorithm Explanations
 ~~~~~~~~~~~~~~~
@@ -200,6 +204,8 @@ Parameter Explanations
         1. Nodes and Edges - Attempt to find centroids for both the node and edge channels.
         2. Nodes - Attempt to find centroids for just the nodes channel.
         3. Edges - Attempt to find centroids for just the edges channel.
+#. Skip Node Centroids Without Identity Property?:
+    * If checked, any nodes that do not have an identity will not get a centroid. Useful if I am not interested in those nodes.
 
 * Press 'Run Calculate Centroids' to run the method with the desired parameters. The output data will be added to the tabulated data widget in the top right, while also setting the respective centroids property.
 * Note that this method runs on whatever channel is designated as 'Active Image' in the bottom left.
@@ -374,7 +380,8 @@ Parameter Explanations
 #. Execution mode
     * This dropdown window provides two erosion options.
         1. 'Psuedo3D Binary Kernels' - Erodes in 2D in the XY and XZ planes, trying to simulate a 3D dilation. The image will be binarized prior to erosion. For small-to-medium erosion, this option can save time but will not result in a perfect erosion due to not being able to 'see' diagonally. Note that for particularly large erosions (relative to the starting objects), this option may actually be slower than distance transform.
-        3. 'Distance-Transform Based' - Use this erode objects via a distance transform, allowing for more perfect erosions, but often being slower.
+        2. 'Distance-Transform Based' - Use this erode objects via a distance transform, allowing for more perfect erosions, but often being slower.
+        3. 'Preserve Labels' - Also uses the distance transform, but also makes each object keep its label. Labeled objects that share a border will see that border get eroded as well.
 
 * Press 'Run Erode' to run the method with the desired parameters. Note the channel refered to in 'Active Image' is the one that will be eroded, with the output also being returned there.
 
@@ -383,7 +390,7 @@ Algorithm Explanations
 
 * This algorithm pretty much works the same as the binary options for dilating, except openCV2 erode method to handle the Psuedo-3D kernels over the dilate method, and in the case of the distance transform, it is performed without inverting the image. 
 * For context, see :ref:`dilation`.
-* Note that this method currently does not support preserving the labels unlike dilation.
+* If labels are kept, the skimage find_borders method is used to boolean threshold out the borders so that the resulting distance transform can tell the labeled objects to move away from each other.
 * As a side note, erosion can be combined with dilation to preform something called an 'Open' or 'Close' operation.
     * An Open operation is an erosion followed by an equivalent level of dilation, which can be a cheap way to split apart objects that are just barely touching, while also eliminating noise, although it can be a bit disfiguring on masks at large values.
     * A more useful operation is Close, which is a dilation followed by an equivalent erosion. The result will fuse together nearby objects while keeping the image mask a similar shape/size. This is useful for NetTracer3D specically as a way to fix segmentation artifacts (holes), without having to touch the 'diledge' parameter in the main method.
@@ -603,7 +610,7 @@ Algorithm Explanations
 ~~~~~~~~~~~~~~~~~~~~~~~
 1. 3D skeletonization is achieved via the sklearn.morphology.skeletonize() algorithm: https://scikit-image.org/docs/stable/auto_examples/edges/plot_skeleton.html
 2. If param 2 is enabled, NetTracer3D will run its 'Process -> Image -> Fill Holes' method, which will for the most part succesfully fill loop artifacts, returning them into 3D blobs. It will then just run the skeletonization again, which is often able to accurately skeletonize the blobs.
-3. If param 1 is enabled, NetTracer3D will iterate along the skeleton and identify endpoints as those regions that only have one neighbor. It will 'crawl' up from those endpoints along the skeleton a number of times equal to the inputed value (or until it hits a junction), and remove all associated positive voxels.
+3. If param 1 is enabled, NetTracer3D will iterate along the skeleton and identify endpoints as those regions that only have one neighbor. It will 'crawl' up from those endpoints along the skeleton a number of times equal to the inputed value (or until it hits a junction), and remove all associated positive voxels. If a branch is too long though (and it never reaches its parent branch), it will not get trimmed at all. Because this will leave holes in the skeleton if a branch gets back to its parent branch, the method actually dilates the result once, then skeletonizes that an additional time, which will fill those holes. 
 
 'Process -> Image -> Binary Watershed'
 -------------------------------------
@@ -805,15 +812,11 @@ Algorithm Explanations
 
 Algorithm Explanations
 ~~~~~~~~~~~~~~~~~~~~~~~
-* This method uses the scipy.spatial KDTree Class to query for the centroid that is closest to each given point in the image, being assigned a label corresponding to their closest centroid.
-    * https://docs.scipy.org/doc/scipy/reference/generated/scipy.spatial.KDTree.html
-* Note that running the smart dilate (preserves labels - see :ref:`dilation`) via distance transform with some large dilation essentially generates a Voronoi diagram, except it can be used on 3D objects and not just centroids. However, this version should be faster if only querying centroids.
+* This method now just runs smart dilate with a maximal dimension length of the image as the dilation parameter.
 
-
-
-'Process -> Modify Network'
+'Process -> Modify Network/Properties'
 -------------------------------------
-* The final option in 'Process' is 'Modify Network', which provides several options for transforming network structure post calculation.
+* The final option in 'Process' is 'Modify Network/Properties', which provides several options for transforming network structure post calculation.
 * Selecting it shows the following menu:
 
 .. image:: _static/process7.png
@@ -827,7 +830,9 @@ Parameter Explanations
     * Some of the ID-oriented functions expect all the nodes to have an id.
     * This method specifically removes all centroids of nodes that are not associated with an id.
     * Then we can use the centroids to make proximity networks without having to worry about unassigned ids.
-    * That's all it does. This function is somewhat niche because I needed it for something I was doing.
+#. Force Any Multiple IDs to Pick a Random Single ID?
+    * If a node has multiple identities associated with it, it will randomly pick a single one to be.
+    * This is useful with identity visualization (ie, code identities), when we have a lot of identity permutations but don't want them cluttering things.
 #. Remove Any Nodes Not in Nodes Channel From Properties?
     * This method will remove any nodes from the node_centroids and node_identities properties if their label is not present in the image in the nodes channel.
     * This method is essentially here to support cropping datasets. If you crop an image and would like to eliminate any additional labels from the other properties that are no longer in the image, this is the way to do it.

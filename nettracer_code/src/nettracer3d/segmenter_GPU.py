@@ -320,10 +320,10 @@ class InteractiveSegmenter:
         if image_3d is None:
             image_3d = self.image_3d  # Assuming this is already a cupy array
 
-        if image_3d.ndim == 4 and image_3d.shape[-1] == 3:
+        if image_3d.ndim == 4 and (image_3d.shape[-1] == 3 or image_3d.shape[-1] == 4):
             # RGB case - process each channel
             features_per_channel = []
-            for channel in range(3):
+            for channel in range(image_3d.shape[-1]):
                 channel_features = self.compute_feature_maps_gpu(image_3d[..., channel])
                 features_per_channel.append(channel_features)
             
@@ -376,10 +376,10 @@ class InteractiveSegmenter:
         if image_3d is None:
             image_3d = self.image_3d  # Assuming this is already a cupy array
 
-        if image_3d.ndim == 4 and image_3d.shape[-1] == 3:
+        if image_3d.ndim == 4 and (image_3d.shape[-1] == 3 or image_3d.shape[-1] == 4):
             # RGB case - process each channel
             features_per_channel = []
-            for channel in range(3):
+            for channel in range(image_3d.shape[-1]):
                 channel_features = self.compute_deep_feature_maps_gpu(image_3d[..., channel])
                 features_per_channel.append(channel_features)
             
@@ -507,10 +507,10 @@ class InteractiveSegmenter:
         if image_2d is None:
             image_2d = cp.asarray(self.image_3d[z, :, :])
 
-        if image_2d.ndim == 3 and image_2d.shape[-1] == 3:
+        if image_2d.ndim == 3 and (image_2d.shape[-1] == 3 or image_2d.shape[-1] == 4):
             # RGB case - process each channel
             features_per_channel = []
-            for channel in range(3):
+            for channel in range(image_2d.shape[-1]):
                 channel_features = self.compute_feature_maps_gpu_2d(image_2d = image_2d[..., channel])
                 features_per_channel.append(channel_features)
             
@@ -567,10 +567,10 @@ class InteractiveSegmenter:
         if image_2d is None:
             image_2d = cp.asarray(self.image_3d[z, :, :])
 
-        if image_2d.ndim == 3 and image_2d.shape[-1] == 3:
+        if image_2d.ndim == 3 and (image_2d.shape[-1] == 3 or image_2d.shape[-1] == 4):
             # RGB case - process each channel
             features_per_channel = []
-            for channel in range(3):
+            for channel in range(image_2d.shape[-1]):
                 channel_features = self.compute_deep_feature_maps_gpu_2d(image_2d = image_2d[..., channel])
                 features_per_channel.append(channel_features)
             
@@ -1082,7 +1082,10 @@ class InteractiveSegmenter:
                 chunk_size = max(16, min(chunk_size, min(self.image_3d.shape) // 2))
                 chunk_size = ((chunk_size + 7) // 16) * 16
         
-        depth, height, width = self.image_3d.shape
+        try:
+            depth, height, width = self.image_3d.shape
+        except:
+            depth, height, width, rgb = self.image_3d.shape
         
         # Calculate chunk grid dimensions
         z_chunks = (depth + chunk_size - 1) // chunk_size

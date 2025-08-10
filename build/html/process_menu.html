@@ -6,14 +6,14 @@
   <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
 
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>All Process Menu Options &mdash; NetTracer3D 0.9.1 documentation</title>
+  <title>All Process Menu Options &mdash; NetTracer3D 1.0.0 documentation</title>
       <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=b86133f3" />
       <link rel="stylesheet" type="text/css" href="_static/css/theme.css?v=e59714d7" />
 
   
       <script src="_static/jquery.js?v=5d32c60e"></script>
       <script src="_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
-      <script src="_static/documentation_options.js?v=9dc39874"></script>
+      <script src="_static/documentation_options.js?v=8d563738"></script>
       <script src="_static/doctools.js?v=9bcbadda"></script>
       <script src="_static/sphinx_highlight.js?v=dc90522c"></script>
     <script src="_static/js/theme.js"></script>
@@ -46,7 +46,8 @@
               <p class="caption" role="heading"><span class="caption-text">User Guide:</span></p>
 <ul>
 <li class="toctree-l1"><a class="reference internal" href="installation.html">Installation</a></li>
-<li class="toctree-l1"><a class="reference internal" href="quickstart.html">Quickstart - Segmenting Data and Generating Networks</a></li>
+<li class="toctree-l1"><a class="reference internal" href="quickstart.html">Quickstart - Segmenting Data and Generating Connectivity Networks</a></li>
+<li class="toctree-l1"><a class="reference internal" href="proximity.html">Proximity Networks - Ideal for Cellular Data</a></li>
 <li class="toctree-l1"><a class="reference internal" href="branches.html">Labeling Branches and Branch Networks</a></li>
 <li class="toctree-l1"><a class="reference internal" href="properties.html">Properties of a Network3D Object</a></li>
 <li class="toctree-l1"><a class="reference internal" href="excel_helper.html">Using the Spreadsheet Loader</a></li>
@@ -154,7 +155,7 @@
 <li class="toctree-l3"><a class="reference internal" href="#id31">Algorithm Explanations</a></li>
 </ul>
 </li>
-<li class="toctree-l2"><a class="reference internal" href="#process-modify-network">‘Process -&gt; Modify Network’</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="#process-modify-network-properties">‘Process -&gt; Modify Network/Properties’</a><ul>
 <li class="toctree-l3"><a class="reference internal" href="#id32">Parameter Explanations</a></li>
 </ul>
 </li>
@@ -206,7 +207,7 @@
 <span id="connectivity-network"></span><h2>‘Process -&gt; Calculate Network -&gt; Calculate Connectivity Network…’<a class="headerlink" href="#process-calculate-network-calculate-connectivity-network" title="Link to this heading"></a></h2>
 <ul class="simple">
 <li><p>This method is used to connect objects in the nodes channel via objects in the edges channel.</p></li>
-<li><p>Please see <a class="reference internal" href="quickstart.html"><span class="doc">Quickstart - Segmenting Data and Generating Networks</span></a> for a detailed walkthrough about using this function.</p></li>
+<li><p>Please see <a class="reference internal" href="quickstart.html"><span class="doc">Quickstart - Segmenting Data and Generating Connectivity Networks</span></a> for a detailed walkthrough about using this function.</p></li>
 <li><p>The vast majority of its parameters are optional, however a few of them are advised to be considered for use with each execution of this method.</p></li>
 <li><p>Selecting this function will show the following menu:</p></li>
 </ul>
@@ -384,7 +385,7 @@
 <span id="proximity-network"></span><h2>‘Process -&gt; Calculate Network -&gt; Calculate Proximity Network…’<a class="headerlink" href="#process-calculate-network-calculate-proximity-network" title="Link to this heading"></a></h2>
 <ul class="simple">
 <li><p>This method is used to connect objects in the nodes channel based on whether they are within some user-defined distance of each other.</p></li>
-<li><p>Please see <a class="reference internal" href="quickstart.html"><span class="doc">Quickstart - Segmenting Data and Generating Networks</span></a> for a brief walkthrough about using this function.</p></li>
+<li><p>Please see <a class="reference internal" href="proximity.html"><span class="doc">Proximity Networks - Ideal for Cellular Data</span></a> for a brief walkthrough about using this function.</p></li>
 <li><p>Selecting this function will show the following menu:</p></li>
 </ul>
 <a class="reference internal image-reference" href="_images/process1.png"><img alt="Proximity Network Menu" src="_images/process1.png" style="width: 800px;" />
@@ -392,13 +393,6 @@
 <section id="id1">
 <h3>Parameter Explanations<a class="headerlink" href="#id1" title="Link to this heading"></a></h3>
 <ol class="arabic simple">
-<li><dl class="simple">
-<dt>Output Directory</dt><dd><ul class="simple">
-<li><p>If a string path is included to a directory, the resulting Network3D Object will be saved there as it’s calculated. If nothing is included, this will save nothing by default, and the user will need to save in post with ‘File -&gt; Save (As)’</p></li>
-</ul>
-</dd>
-</dl>
-</li>
 <li><dl class="simple">
 <dt>Search Region Distance…</dt><dd><ul class="simple">
 <li><p>This value is the distance nodes will search for other nodes to connect to. Note that this value is scaled corresponding to the xy_scale/z_scale parameters. (As in, if you set xy_scale/z_scale correctly, then treat this as a real-value, such as microns, for your image).</p></li>
@@ -435,21 +429,18 @@
 </dl>
 </li>
 <li><dl class="simple">
-<dt>(If using morphological) Use Fast Dilation…</dt><dd><ul class="simple">
-<li><p>If enabled, dilation will be predicted using pseudo-3D binary kernels.</p></li>
-<li><p>When disabled, dilation will be done using a perfect distance transform.</p></li>
-<li><p>For more information on this algorithm, see <a class="reference internal" href="#dilation"><span class="std std-ref">‘Process -&gt; Image -&gt; Dilate’</span></a>.</p></li>
-<li><p>This does not apply at all for the centroid search option.</p></li>
-</ul>
-</dd>
-</dl>
-</li>
-<li><dl class="simple">
 <dt>Create Networks only from a specific Node Identity?</dt><dd><ul class="simple">
 <li><p>This option will only appear if something is assigned to the node_identities property.</p></li>
 <li><p>If so, there will be a dropdown menu to select one of your defined node-identities subtypes.</p></li>
 <li><p>(If not ‘None): Whichever node identity subtype is selected - only those nodes will be used to make network connections (however, they will be able to connect to any other node type).</p></li>
 <li><p>Use this to simplify network structures when you are only interested in one node subtypes’ relationship to the rest of the nodes.</p></li>
+</ul>
+</dd>
+</dl>
+</li>
+<li><dl class="simple">
+<dt>Output Directory</dt><dd><ul class="simple">
+<li><p>If a string path is included to a directory, the resulting Network3D Object will be saved there as it’s calculated. If nothing is included, this will save nothing by default, and the user will need to save in post with ‘File -&gt; Save (As)’</p></li>
 </ul>
 </dd>
 </dl>
@@ -466,6 +457,25 @@
 <li><p>If enabled and centroid search is run, the centroids will be used to create a new nodes image that will be placed in the nodes channel.</p></li>
 <li><p>This new image will start at 0 in each dimension and be bounded by the highest value centroid in each dimension.</p></li>
 <li><p>As described, the centroid search does not require a nodes image, but only that node_centroids is loaded in, so if centroids are extracted elsewhere and loaded in without an image, this method will allow the user to then create an image to explore other functions with.</p></li>
+</ul>
+</dd>
+</dl>
+</li>
+<li><dl class="simple">
+<dt>(If using centroids): Max number of closest neighbors…</dt><dd><ul class="simple">
+<li><p>Restricts nodes from only making a number of connections to the integer value passed to this param.</p></li>
+<li><p>They will connect to their n nearest neighbors within the search region.</p></li>
+<li><p>This is a useful way to simplify dense networks.</p></li>
+</ul>
+</dd>
+</dl>
+</li>
+<li><dl class="simple">
+<dt>(If using morphological) Use Fast Dilation…</dt><dd><ul class="simple">
+<li><p>If enabled, dilation will be predicted using pseudo-3D binary kernels.</p></li>
+<li><p>When disabled, dilation will be done using a perfect distance transform.</p></li>
+<li><p>For more information on this algorithm, see <a class="reference internal" href="#dilation"><span class="std std-ref">‘Process -&gt; Image -&gt; Dilate’</span></a>.</p></li>
+<li><p>This does not apply at all for the centroid search option.</p></li>
 </ul>
 </dd>
 </dl>
@@ -559,6 +569,13 @@
 </dd>
 </dl>
 </li>
+</ul>
+</dd>
+</dl>
+</li>
+<li><dl class="simple">
+<dt>Skip Node Centroids Without Identity Property?:</dt><dd><ul class="simple">
+<li><p>If checked, any nodes that do not have an identity will not get a centroid. Useful if I am not interested in those nodes.</p></li>
 </ul>
 </dd>
 </dl>
@@ -852,8 +869,11 @@
 <li><dl class="simple">
 <dt>Execution mode</dt><dd><ul class="simple">
 <li><dl class="simple">
-<dt>This dropdown window provides two erosion options.</dt><dd><p>1. ‘Psuedo3D Binary Kernels’ - Erodes in 2D in the XY and XZ planes, trying to simulate a 3D dilation. The image will be binarized prior to erosion. For small-to-medium erosion, this option can save time but will not result in a perfect erosion due to not being able to ‘see’ diagonally. Note that for particularly large erosions (relative to the starting objects), this option may actually be slower than distance transform.
-3. ‘Distance-Transform Based’ - Use this erode objects via a distance transform, allowing for more perfect erosions, but often being slower.</p>
+<dt>This dropdown window provides two erosion options.</dt><dd><ol class="arabic simple">
+<li><p>‘Psuedo3D Binary Kernels’ - Erodes in 2D in the XY and XZ planes, trying to simulate a 3D dilation. The image will be binarized prior to erosion. For small-to-medium erosion, this option can save time but will not result in a perfect erosion due to not being able to ‘see’ diagonally. Note that for particularly large erosions (relative to the starting objects), this option may actually be slower than distance transform.</p></li>
+<li><p>‘Distance-Transform Based’ - Use this erode objects via a distance transform, allowing for more perfect erosions, but often being slower.</p></li>
+<li><p>‘Preserve Labels’ - Also uses the distance transform, but also makes each object keep its label. Labeled objects that share a border will see that border get eroded as well.</p></li>
+</ol>
 </dd>
 </dl>
 </li>
@@ -871,7 +891,7 @@
 <ul class="simple">
 <li><p>This algorithm pretty much works the same as the binary options for dilating, except openCV2 erode method to handle the Psuedo-3D kernels over the dilate method, and in the case of the distance transform, it is performed without inverting the image.</p></li>
 <li><p>For context, see <a class="reference internal" href="#dilation"><span class="std std-ref">‘Process -&gt; Image -&gt; Dilate’</span></a>.</p></li>
-<li><p>Note that this method currently does not support preserving the labels unlike dilation.</p></li>
+<li><p>If labels are kept, the skimage find_borders method is used to boolean threshold out the borders so that the resulting distance transform can tell the labeled objects to move away from each other.</p></li>
 <li><dl class="simple">
 <dt>As a side note, erosion can be combined with dilation to preform something called an ‘Open’ or ‘Close’ operation.</dt><dd><ul>
 <li><p>An Open operation is an erosion followed by an equivalent level of dilation, which can be a cheap way to split apart objects that are just barely touching, while also eliminating noise, although it can be a bit disfiguring on masks at large values.</p></li>
@@ -1028,7 +1048,7 @@
 <h2>‘Process -&gt; Image -&gt; Threshold/Segment’<a class="headerlink" href="#process-image-threshold-segment" title="Link to this heading"></a></h2>
 <ul class="simple">
 <li><p>This method calls the threshold/segmenter, which can be used for volumetric, intensity-based, or ML thresholding.</p></li>
-<li><p>This window is the same one that will be pulled up when the pencil widget is clicked. Previously I went over using these windows in <a class="reference internal" href="quickstart.html"><span class="doc">Quickstart - Segmenting Data and Generating Networks</span></a>, so see <a class="reference internal" href="quickstart.html#segmenting"><span class="std std-ref">Segmenting Data</span></a> for a tutorial, however I will talk about more of their specifics here.</p></li>
+<li><p>This window is the same one that will be pulled up when the pencil widget is clicked. Previously I went over using these windows in <a class="reference internal" href="quickstart.html"><span class="doc">Quickstart - Segmenting Data and Generating Connectivity Networks</span></a>, so see <a class="reference internal" href="quickstart.html#segmenting"><span class="std std-ref">Segmenting Data</span></a> for a tutorial, however I will talk about more of their specifics here.</p></li>
 </ul>
 <section id="id16">
 <h3>Parameter Explanations<a class="headerlink" href="#id16" title="Link to this heading"></a></h3>
@@ -1231,7 +1251,7 @@
 <ol class="arabic simple">
 <li><p>3D skeletonization is achieved via the sklearn.morphology.skeletonize() algorithm: <a class="reference external" href="https://scikit-image.org/docs/stable/auto_examples/edges/plot_skeleton.html">https://scikit-image.org/docs/stable/auto_examples/edges/plot_skeleton.html</a></p></li>
 <li><p>If param 2 is enabled, NetTracer3D will run its ‘Process -&gt; Image -&gt; Fill Holes’ method, which will for the most part succesfully fill loop artifacts, returning them into 3D blobs. It will then just run the skeletonization again, which is often able to accurately skeletonize the blobs.</p></li>
-<li><p>If param 1 is enabled, NetTracer3D will iterate along the skeleton and identify endpoints as those regions that only have one neighbor. It will ‘crawl’ up from those endpoints along the skeleton a number of times equal to the inputed value (or until it hits a junction), and remove all associated positive voxels.</p></li>
+<li><p>If param 1 is enabled, NetTracer3D will iterate along the skeleton and identify endpoints as those regions that only have one neighbor. It will ‘crawl’ up from those endpoints along the skeleton a number of times equal to the inputed value (or until it hits a junction), and remove all associated positive voxels. If a branch is too long though (and it never reaches its parent branch), it will not get trimmed at all. Because this will leave holes in the skeleton if a branch gets back to its parent branch, the method actually dilates the result once, then skeletonizes that an additional time, which will fill those holes.</p></li>
 </ol>
 </section>
 </section>
@@ -1567,21 +1587,14 @@
 <section id="id31">
 <h3>Algorithm Explanations<a class="headerlink" href="#id31" title="Link to this heading"></a></h3>
 <ul class="simple">
-<li><dl class="simple">
-<dt>This method uses the scipy.spatial KDTree Class to query for the centroid that is closest to each given point in the image, being assigned a label corresponding to their closest centroid.</dt><dd><ul>
-<li><p><a class="reference external" href="https://docs.scipy.org/doc/scipy/reference/generated/scipy.spatial.KDTree.html">https://docs.scipy.org/doc/scipy/reference/generated/scipy.spatial.KDTree.html</a></p></li>
-</ul>
-</dd>
-</dl>
-</li>
-<li><p>Note that running the smart dilate (preserves labels - see <a class="reference internal" href="#dilation"><span class="std std-ref">‘Process -&gt; Image -&gt; Dilate’</span></a>) via distance transform with some large dilation essentially generates a Voronoi diagram, except it can be used on 3D objects and not just centroids. However, this version should be faster if only querying centroids.</p></li>
+<li><p>This method now just runs smart dilate with a maximal dimension length of the image as the dilation parameter.</p></li>
 </ul>
 </section>
 </section>
-<section id="process-modify-network">
-<h2>‘Process -&gt; Modify Network’<a class="headerlink" href="#process-modify-network" title="Link to this heading"></a></h2>
+<section id="process-modify-network-properties">
+<h2>‘Process -&gt; Modify Network/Properties’<a class="headerlink" href="#process-modify-network-properties" title="Link to this heading"></a></h2>
 <ul class="simple">
-<li><p>The final option in ‘Process’ is ‘Modify Network’, which provides several options for transforming network structure post calculation.</p></li>
+<li><p>The final option in ‘Process’ is ‘Modify Network/Properties’, which provides several options for transforming network structure post calculation.</p></li>
 <li><p>Selecting it shows the following menu:</p></li>
 </ul>
 <a class="reference internal image-reference" href="_images/process7.png"><img alt="Modify Menu" src="_images/process7.png" style="width: 800px;" />
@@ -1594,7 +1607,14 @@
 <li><p>Some of the ID-oriented functions expect all the nodes to have an id.</p></li>
 <li><p>This method specifically removes all centroids of nodes that are not associated with an id.</p></li>
 <li><p>Then we can use the centroids to make proximity networks without having to worry about unassigned ids.</p></li>
-<li><p>That’s all it does. This function is somewhat niche because I needed it for something I was doing.</p></li>
+</ul>
+</dd>
+</dl>
+</li>
+<li><dl class="simple">
+<dt>Force Any Multiple IDs to Pick a Random Single ID?</dt><dd><ul class="simple">
+<li><p>If a node has multiple identities associated with it, it will randomly pick a single one to be.</p></li>
+<li><p>This is useful with identity visualization (ie, code identities), when we have a lot of identity permutations but don’t want them cluttering things.</p></li>
 </ul>
 </dd>
 </dl>

@@ -4,6 +4,7 @@ import tifffile
 from scipy import ndimage
 from skimage import measure
 import cv2
+import ast
 import concurrent.futures
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from scipy.ndimage import zoom
@@ -381,6 +382,27 @@ def invert_dict(d):
     for key, value in d.items():
         inverted.setdefault(value, []).append(key)
     return inverted
+
+def invert_dict_special(d):
+
+    d = invert_dict(d)
+
+    new_dict = copy.deepcopy(d)
+
+    for key, vals in d.items():
+
+        try:
+            idens = ast.literal_eval(key)
+            for iden in idens:
+                try:
+                    new_dict[iden].extend(vals)
+                except:
+                    new_dict[iden] = vals
+            del new_dict[key]
+        except:
+            pass
+    return new_dict
+
 
 def invert_array(array):
     """Internal method used to flip node array indices. 0 becomes 255 and vice versa."""
@@ -1245,31 +1267,6 @@ def dilate_2D(array, search, scaling = 1):
 
     return inv
 
-def erode_2D(array, search, scaling=1):
-    """
-    Erode a 2D array using distance transform method.
-    
-    Parameters:
-    array -- Input 2D binary array
-    search -- Distance within which to erode
-    scaling -- Scaling factor (default: 1)
-    
-    Returns:
-    Eroded 2D array
-    """
-    # For erosion, we work directly with the foreground
-    # No need to invert the array
-    
-    # Compute distance transform on the foreground
-    dt = smart_dilate.compute_distance_transform_distance(array)
-    
-    # Apply scaling
-    dt = dt * scaling
-    
-    # Threshold to keep only points that are at least 'search' distance from the boundary
-    eroded = dt >= search
-    
-    return eroded
 
 def dilate_3D_dt(array, search_distance, xy_scaling=1.0, z_scaling=1.0):
     """
@@ -1331,7 +1328,42 @@ def dilate_3D_dt(array, search_distance, xy_scaling=1.0, z_scaling=1.0):
     
     return inv.astype(np.uint8)
 
-def erode_3D_dt(array, search_distance, xy_scaling=1.0, z_scaling=1.0):
+def erode_2D(array, search, scaling=1, preserve_labels = False):
+    """
+    Erode a 2D array using distance transform method.
+    
+    Parameters:
+    array -- Input 2D binary array
+    search -- Distance within which to erode
+    scaling -- Scaling factor (default: 1)
+    
+    Returns:
+    Eroded 2D array
+    """
+    # For erosion, we work directly with the foreground
+    # No need to invert the array
+
+    if preserve_labels:
+        from skimage.segmentation import find_boundaries
+        borders = find_boundaries(array, mode='thick')
+        mask = array * invert_array(borders)
+        mask = smart_dilate.compute_distance_transform_distance(mask)
+        mask = mask * scaling
+        mask = mask >= search
+        array = mask * array
+    else:
+        # Compute distance transform on the foreground
+        dt = smart_dilate.compute_distance_transform_distance(array)
+        
+        # Apply scaling
+        dt = dt * scaling
+        
+        # Threshold to keep only points that are at least 'search' distance from the boundary
+        array = dt > search
+    
+    return array
+
+def erode_3D_dt(array, search_distance, xy_scaling=1.0, z_scaling=1.0, preserve_labels = False):
     """
     Erode a 3D array using distance transform method. DT erosion produces perfect results 
     with Euclidean geometry, but may be slower for large arrays.
@@ -1349,43 +1381,24 @@ def erode_3D_dt(array, search_distance, xy_scaling=1.0, z_scaling=1.0):
     
     if array.shape[0] == 1:
         # Handle 2D case
-        return erode_2D(array, search_distance, scaling=xy_scaling)
+        return erode_2D(array, search_distance, scaling=xy_scaling, preserve_labels = True)
     
-    # For erosion, we work directly with the foreground (no inversion needed)
-    
-    """
-    # Determine which dimension needs resampling
-    if (z_scaling > xy_scaling):
-        # Z dimension needs to be stretched
-        zoom_factor = [z_scaling/xy_scaling, 1, 1]  # Scale factor for [z, y, x]
-        rev_factor = [xy_scaling/z_scaling, 1, 1] 
-        cardinal = xy_scaling
-    elif (xy_scaling > z_scaling):
-        # XY dimensions need to be stretched
-        zoom_factor = [1, xy_scaling/z_scaling, xy_scaling/z_scaling]  # Scale factor for [z, y, x]
-        rev_factor = [1, z_scaling/xy_scaling, z_scaling/xy_scaling]  # Scale factor for [z, y, x]
-        cardinal = z_scaling
-    else:
-        # Already uniform scaling, no need to resample
-        zoom_factor = None
-        rev_factor = None
-        cardinal = xy_scaling
-    
-    # Resample the mask if needed
-    if zoom_factor:
-        array = ndimage.zoom(array, zoom_factor, order=0)  # Use order=0 for binary masks
-    """
-    
-    print("Computing a distance transform for a perfect erosion...")
 
-    array = smart_dilate.compute_distance_transform_distance(array, sampling = [z_scaling, xy_scaling, xy_scaling])
-    
-    # Apply scaling factor
-    #array = array * cardinal
-    
-    # Threshold the distance transform to get eroded result
-    # For erosion, we keep only the points that are at least search_distance from the boundary
-    array = array >= search_distance
+    if preserve_labels:
+
+
+        from skimage.segmentation import find_boundaries
+
+        borders = find_boundaries(array, mode='thick')
+        mask = array * invert_array(borders)
+        mask = smart_dilate.compute_distance_transform_distance(mask, sampling = [z_scaling, xy_scaling, xy_scaling])
+        mask = mask >= search_distance
+        array = mask * array
+    else:
+        array = smart_dilate.compute_distance_transform_distance(array, sampling = [z_scaling, xy_scaling, xy_scaling])
+        # Threshold the distance transform to get eroded result
+        # For erosion, we keep only the points that are at least search_distance from the boundary
+        array = array > search_distance
     
     # Resample back to original dimensions if needed
     #if rev_factor:
@@ -1552,7 +1565,7 @@ def dilate_3D_old(tiff_array, dilated_x=3, dilated_y=3, dilated_z=3):
 
 
 def erode_3D(tiff_array, eroded_x, eroded_y, eroded_z):
-    """Internal method to erode an array in 3D. Erosion this way is much faster than using a distance transform although the latter is theoretically more accurate.
+    """Internal method to erode an array in 3D. Erosion this way is faster than using a distance transform although the latter is theoretically more accurate.
     Arguments are an array, and the desired pixel erosion amounts in X, Y, Z."""
 
     if tiff_array.shape[0] == 1:
@@ -1721,54 +1734,6 @@ def combine_edges(edge_labels_1, edge_labels_2):
     offset_labels = edge_labels_2 + max_val
     
     return np.where(mask, offset_labels, edge_labels_1)
-
-def combine_nodes(root_nodes, other_nodes, other_ID, identity_dict, root_ID = None):
-
-    """Internal method to merge two labelled node arrays into one"""
-
-    print("Combining node arrays")
-
-    mask = (root_nodes == 0) & (other_nodes > 0)
-    if np.any(mask):
-        max_val = np.max(root_nodes)
-        other_nodes[:] = np.where(mask, other_nodes + max_val, 0)
-
-    if root_ID is not None:
-        rootIDs = list(np.unique(root_nodes)) #Sets up adding these vals to the identitiy dictionary. Gets skipped if this has already been done.
-
-        if rootIDs[0] == 0: #np unique can include 0 which we don't want.
-            del rootIDs[0]
-
-    otherIDs = list(np.unique(other_nodes)) #Sets up adding other vals to the identity dictionary.
-
-    if otherIDs[0] == 0:
-        del otherIDs[0]
-
-    if root_ID is not None: #Adds the root vals to the dictionary if it hasn't already
-
-        if other_ID.endswith('.tiff'):
-            other_ID = other_ID[:-5]
-        elif other_ID.endswith('.tif'):
-            other_ID = other_ID[:-4]
-
-        for item in rootIDs:
-            identity_dict[item] = root_ID
-
-    for item in otherIDs: #Always adds the other vals to the dictionary
-        try:
-            other_ID = os.path.basename(other_ID)
-        except:
-            pass
-        if other_ID.endswith('.tiff'):
-            other_ID = other_ID[:-5]
-        elif other_ID.endswith('.tif'):
-            other_ID = other_ID[:-4]
-
-        identity_dict[item] = other_ID
-
-    nodes = root_nodes + other_nodes #Combine the outer edges with the inner edges modified via the above steps
-
-    return nodes, identity_dict
 
 def directory_info(directory = None):
     """Internal method to get the files in a directory, optionally the current directory if nothing passed"""
@@ -2102,22 +2067,34 @@ def dilate(arrayimage, amount, xy_scale = 1, z_scale = 1, directory = None, fast
 
     return arrayimage
 
-def erode(arrayimage, amount, xy_scale = 1, z_scale = 1, mode = 0):
-    if len(np.unique(arrayimage)) > 2: #binarize
+def erode(arrayimage, amount, xy_scale = 1, z_scale = 1, mode = 0, preserve_labels = False):
+    if not preserve_labels and len(np.unique(arrayimage)) > 2: #binarize
         arrayimage = binarize(arrayimage)
     erode_xy, erode_z = dilation_length_to_pixels(xy_scale, z_scale, amount, amount)
 
     if mode == 0:
         arrayimage = (erode_3D(arrayimage, erode_xy, erode_xy, erode_z)) * 255
     else:
-        arrayimage = erode_3D_dt(arrayimage, amount, xy_scaling=xy_scale, z_scaling=z_scale)
+        arrayimage = erode_3D_dt(arrayimage, amount, xy_scaling=xy_scale, z_scaling=z_scale, preserve_labels = preserve_labels)
 
     if np.max(arrayimage) == 1:
         arrayimage = arrayimage * 255
 
     return arrayimage
 
+def iden_set(idens):
 
+    idens = set(idens)
+    real_iden_set = []
+    for iden in idens:
+        try:
+            options = ast.literal_eval(iden)
+            for opt in options:
+                real_iden_set.append(opt)
+        except:
+            real_iden_set.append(iden)
+
+    return set(real_iden_set)
 
 
 
@@ -3813,7 +3790,7 @@ class Network_3D:
 
             self._search_region = self._nodes
 
-    def calculate_edges(self, binary_edges, diledge = None, inners = True, hash_inner_edges = True, search = None, remove_edgetrunk = 0, GPU = True, fast_dil = False, skeletonized = False):
+    def calculate_edges(self, binary_edges, diledge = None, inners = True, search = None, remove_edgetrunk = 0, GPU = True, fast_dil = False, skeletonized = False):
         """
         Method to calculate the edges that are used to directly connect nodes. May be done with or without the search region, however using search_region is recommended. 
         The search_region property must be set to use the search region, otherwise the nodes property must be set. Sets the edges property
@@ -3822,7 +3799,6 @@ class Network_3D:
         so some amount of dilation is recommended if there are any, but  not so much to create overconnectivity. This is a value that needs to be tuned by the user.
         :param inners: (Optional - Val = True; boolean). Will use inner edges if True, will not if False. Inner edges are parts of the edge mask that exist within search regions. If search regions overlap, 
         any edges that exist within the overlap will only assert connectivity if 'inners' is True.
-        :param hash_inner_edges: (Optional - Val = True; boolean). If False, all search regions that contain an edge object connecting multiple nodes will be assigned as connected.
         If True, an extra processing step is used to sort the correct connectivity amongst these search_regions. Can only be computed when search_regions property is set.
         :param search: (Optional - Val = None; int). Amount for nodes to search for connections, assuming the search_regions are not being used. Assigning a value to this param will utilize the secondary algorithm and not the search_regions.
         :param remove_edgetrunk: (Optional - Val = 0; int). Amount of times to remove the 'Trunk' from the edges. A trunk in this case is the largest (by vol) edge object remaining after nodes have broken up the edges.
@@ -3875,11 +3851,7 @@ class Network_3D:
         labelled_edges, num_edge = label_objects(outer_edges)
 
         if inners:
-
-            if search is None and hash_inner_edges is True:
-                inner_edges = hash_inners(self._search_region, binary_edges, GPU = GPU)
-            else:
-                inner_edges = establish_inner_edges(search_region, binary_edges)
+            inner_edges = hash_inners(self._search_region, binary_edges, GPU = GPU)
 
             del binary_edges
 
@@ -3905,7 +3877,58 @@ class Network_3D:
         """
         self._nodes, num_nodes = label_objects(nodes, structure_3d)
 
-    def merge_nodes(self, addn_nodes_name, label_nodes = True, root_id = "Root_Nodes"):
+    def combine_nodes(self, root_nodes, other_nodes, other_ID, identity_dict, root_ID = None, centroids = False):
+
+        """Internal method to merge two labelled node arrays into one"""
+
+        print("Combining node arrays")
+
+        mask = (root_nodes == 0) & (other_nodes > 0)
+        if np.any(mask):
+            max_val = np.max(root_nodes)
+            other_nodes[:] = np.where(mask, other_nodes + max_val, 0)
+        if centroids:
+            new_dict = network_analysis._find_centroids(other_nodes)
+            self.node_centroids.update(new_dict)
+
+        if root_ID is not None:
+            rootIDs = list(np.unique(root_nodes)) #Sets up adding these vals to the identitiy dictionary. Gets skipped if this has already been done.
+
+            if rootIDs[0] == 0: #np unique can include 0 which we don't want.
+                del rootIDs[0]
+
+        otherIDs = list(np.unique(other_nodes)) #Sets up adding other vals to the identity dictionary.
+
+        if otherIDs[0] == 0:
+            del otherIDs[0]
+
+        if root_ID is not None: #Adds the root vals to the dictionary if it hasn't already
+
+            if other_ID.endswith('.tiff'):
+                other_ID = other_ID[:-5]
+            elif other_ID.endswith('.tif'):
+                other_ID = other_ID[:-4]
+
+            for item in rootIDs:
+                identity_dict[item] = root_ID
+
+        for item in otherIDs: #Always adds the other vals to the dictionary
+            try:
+                other_ID = os.path.basename(other_ID)
+            except:
+                pass
+            if other_ID.endswith('.tiff'):
+                other_ID = other_ID[:-5]
+            elif other_ID.endswith('.tif'):
+                other_ID = other_ID[:-4]
+
+            identity_dict[item] = other_ID
+
+        nodes = root_nodes + other_nodes #Combine the outer edges with the inner edges modified via the above steps
+
+        return nodes, identity_dict
+
+    def merge_nodes(self, addn_nodes_name, label_nodes = True, root_id = "Root_Nodes", centroids = False):
         """
         Merges the self._nodes attribute with alternate labelled node images. The alternate nodes can be inputted as a string for a filepath to a tif,
         or as a directory address containing only tif images, which will merge the _nodes attribute with all tifs in the folder. The _node_identities attribute
@@ -3925,16 +3948,20 @@ class Network_3D:
             
         identity_dict = {} #A dictionary to deliniate the node identities
 
+        if centroids:
+            self.node_centroids = network_analysis._find_centroids(self._nodes)
+
+
         try: #Try presumes the input is a tif
             addn_nodes = tifffile.imread(addn_nodes_name) #If not this will fail and activate the except block
 
             if label_nodes is True:
                 addn_nodes, num_nodes2 = label_objects(addn_nodes) # Label the node objects. Note this presumes no overlap between node masks.
-                node_labels, identity_dict = combine_nodes(self._nodes, addn_nodes, addn_nodes_name, identity_dict, nodes_name) #This method stacks labelled arrays
+                node_labels, identity_dict = self.combine_nodes(self._nodes, addn_nodes, addn_nodes_name, identity_dict, nodes_name, centroids = centroids) #This method stacks labelled arrays
                 num_nodes = np.max(node_labels)
 
             else: #If nodes already labelled
-                node_labels, identity_dict = combine_nodes(self._nodes, addn_nodes, addn_nodes_name, identity_dict, nodes_name)
+                node_labels, identity_dict = self.combine_nodes(self._nodes, addn_nodes, addn_nodes_name, identity_dict, nodes_name, centroids = centroids)
                 num_nodes = int(np.max(node_labels))
 
         except: #Exception presumes the input is a directory containing multiple tifs, to allow multi-node stackage.
@@ -3952,16 +3979,15 @@ class Network_3D:
                     if label_nodes is True:
                         addn_nodes, num_nodes2 = label_objects(addn_nodes)  # Label the node objects. Note this presumes no overlap between node masks.
                         if i == 0:
-                            node_labels, identity_dict = combine_nodes(self._nodes, addn_nodes, addn_nodes_ID, identity_dict, nodes_name)
-
+                            node_labels, identity_dict = self.combine_nodes(self._nodes, addn_nodes, addn_nodes_ID, identity_dict, nodes_name, centroids = centroids)
                         else:
-                            node_labels, identity_dict = combine_nodes(node_labels, addn_nodes, addn_nodes_ID, identity_dict)
+                            node_labels, identity_dict = self.combine_nodes(node_labels, addn_nodes, addn_nodes_ID, identity_dict, centroids = centroids)
 
                     else:
                         if i == 0:
-                            node_labels, identity_dict = combine_nodes(self._nodes, addn_nodes, addn_nodes_ID, identity_dict, nodes_name)
+                            node_labels, identity_dict = self.combine_nodes(self._nodes, addn_nodes, addn_nodes_ID, identity_dict, nodes_name, centroids = centroids)
                         else:
-                            node_labels, identity_dict = combine_nodes(node_labels, addn_nodes, addn_nodes_ID, identity_dict)
+                            node_labels, identity_dict = self.combine_nodes(node_labels, addn_nodes, addn_nodes_ID, identity_dict, centroids = centroids)
                 except Exception as e:
                     print("Could not open additional nodes, verify they are being inputted correctly...")
 
@@ -4011,7 +4037,7 @@ class Network_3D:
             self._network_lists = network_analysis.read_excel_to_lists(df)
             self._network, net_weights = network_analysis.weighted_network(df)
 
-    def calculate_all(self, nodes, edges, xy_scale = 1, z_scale = 1, down_factor = None, search = None, diledge = None, inners = True, hash_inners = True, remove_trunk = 0, ignore_search_region = False, other_nodes = None, label_nodes = True, directory = None, GPU = True, fast_dil = True, skeletonize = False, GPU_downsample = None):
+    def calculate_all(self, nodes, edges, xy_scale = 1, z_scale = 1, down_factor = None, search = None, diledge = None, inners = True, remove_trunk = 0, ignore_search_region = False, other_nodes = None, label_nodes = True, directory = None, GPU = True, fast_dil = True, skeletonize = False, GPU_downsample = None):
         """
         Method to calculate and save to mem all properties of a Network_3D object. In general, after initializing a Network_3D object, this method should be called on the node and edge masks that will be used to calculate the network.
         :param nodes: (Mandatory; String or ndarray). Filepath to segmented nodes mask or a numpy array containing the same.
@@ -4024,7 +4050,6 @@ class Network_3D:
         so some amount of dilation is recommended if there are any, but not so much to create overconnectivity. This is a value that needs to be tuned by the user.
         :param inners: (Optional - Val = True; boolean). Will use inner edges if True, will not if False. Inner edges are parts of the edge mask that exist within search regions. If search regions overlap, 
         any edges that exist within the overlap will only assert connectivity if 'inners' is True.
-        :param hash_inners: (Optional - Val = True; boolean). If False, all search regions that contain an edge object connecting multiple nodes will be assigned as connected.
         If True, an extra processing step is used to sort the correct connectivity amongst these search_regions. Can only be computed when search_regions property is set.
         :param remove_trunk: (Optional - Val = 0; int). Amount of times to remove the 'Trunk' from the edges. A trunk in this case is the largest (by vol) edge object remaining after nodes have broken up the edges.
         Any 'Trunks' removed will be absent for connection calculations.
@@ -4086,7 +4111,7 @@ class Network_3D:
                 except:
                     pass
 
-            self.calculate_edges(edges, diledge = diledge, inners = inners, hash_inner_edges = hash_inners, search = search, remove_edgetrunk = remove_trunk, GPU = GPU, fast_dil = fast_dil, skeletonized = skeletonize) #Will have to be moved out if the second method becomes more directly implemented
+            self.calculate_edges(edges, diledge = diledge, inners = inners, search = search, remove_edgetrunk = remove_trunk, GPU = GPU, fast_dil = fast_dil, skeletonized = skeletonize) #Will have to be moved out if the second method becomes more directly implemented
         else:
             self._edges, _ = label_objects(edges)
 
@@ -5070,13 +5095,16 @@ class Network_3D:
 
 
             for node in G.nodes():
-                nodeid = node_identities[node]
-                neighbors = list(G.neighbors(node))
-                for subnode in neighbors:
-                    subnodeid = node_identities[subnode]
-                    if subnodeid == root:
-                        neighborhood_dict[nodeid] += 1
-                        break
+                try:
+                    nodeid = node_identities[node]
+                    neighbors = list(G.neighbors(node))
+                    for subnode in neighbors:
+                        subnodeid = node_identities[subnode]
+                        if subnodeid == root:
+                            neighborhood_dict[nodeid] += 1
+                            break
+                except:
+                    pass
 
             title1 = f'Neighborhood Distribution of Nodes in Network from Nodes: {root}'
             title2 = f'Neighborhood Distribution of Nodes in Network from Nodes {root} as a proportion of total nodes of that ID'
@@ -5185,34 +5213,22 @@ class Network_3D:
                     bounds = (min_coords, max_coords)
                     dim_list = max_coords - min_coords
 
-
-                if dim == 3:
-
-                    """
-                    if self.xy_scale > self.z_scale: # xy will be 'expanded' more so its components will be arbitrarily further from the border than z ones
-                        factor_xy = (self.z_scale/self.xy_scale) * factor # So 'factor' in the xy dim has to get smaller
-                        factor_z = factor
-                    elif self.z_scale > self.xy_scale: # Same idea
-                        factor_z = (self.xy_scale/self.z_scale) * factor
-                        factor_xy = factor
-                    else:
-                        factor_z = factor
-                        factor_xy = factor
-                    """
-
-                    for centroid in roots:
-
-                        if ((centroid[2] - min_coords[0]) > dim_list[0] * factor) and ((max_coords[0] - centroid[2]) > dim_list[0]  * factor) and ((centroid[1] - min_coords[1]) > dim_list[1] * factor) and ((max_coords[1] - centroid[1]) > dim_list[1] * factor) and ((centroid[0] - min_coords[2]) > dim_list[2] * factor) and ((max_coords[2] - centroid[0]) > dim_list[2] * factor):
+                for centroid in roots:
+                    # Assuming centroid is [z, y, x] based on your indexing
+                    z, y, x = centroid[0], centroid[1], centroid[2]
+                    
+                    # Check x-dimension
+                    x_ok = (x - min_coords[0]) > dim_list[0] * factor and (max_coords[0] - x) > dim_list[0] * factor
+                    # Check y-dimension  
+                    y_ok = (y - min_coords[1]) > dim_list[1] * factor and (max_coords[1] - y) > dim_list[1] * factor
+                    
+                    if dim == 3:  # 3D case
+                        # Check z-dimension
+                        z_ok = (z - min_coords[2]) > dim_list[2] * factor and (max_coords[2] - z) > dim_list[2] * factor
+                        if x_ok and y_ok and z_ok:
                             new_list.append(centroid)
-
-
-                        #if ((centroid[2] - min_coords[0]) > dim_list[0] * factor) and ((max_coords[0] - centroid[2]) > dim_list[0]  * factor) and ((centroid[1] - min_coords[1]) > dim_list[1] * factor) and ((max_coords[1] - centroid[1]) > dim_list[1] * factor) and ((centroid[0] - min_coords[2]) > dim_list[2] * factor) and ((max_coords[2] - centroid[0]) > dim_list[2] * factor):
-                            #new_list.append(centroid)
-                            #print(f"dim_list: {dim_list}, centroid: {centroid}, min_coords: {min_coords}, max_coords: {max_coords}")
-                else:
-                    for centroid in roots:
-
-                        if ((centroid[2] - min_coords[0]) > dim_list[0] * factor) and ((max_coords[0] - centroid[2]) > dim_list[0]  * factor) and ((centroid[1] - min_coords[1]) > dim_list[1] * factor) and ((max_coords[1] - centroid[1]) > dim_list[1] * factor):
+                    else:  # 2D case
+                        if x_ok and y_ok:
                             new_list.append(centroid)
 
             else:
@@ -5264,8 +5280,6 @@ class Network_3D:
             roots = new_list
             print(f"Utilizing {len(roots)} root points. Note that low n values are unstable.")
             is_subset = True
-
-
 
         roots = proximity.convert_centroids_to_array(roots, xy_scale = self.xy_scale, z_scale = self.z_scale)
 
@@ -5451,7 +5465,7 @@ class Network_3D:
 
         community_dict = invert_dict(self.communities)
         summation = 0
-        id_set = set(self.node_identities.values())
+        id_set = iden_set(self.node_identities.values())
         output = {sort: 0 for sort in id_set}
         template = copy.deepcopy(output)
 
@@ -5463,7 +5477,12 @@ class Network_3D:
             
             # Count identities in this community
             for node in nodes:
-                counter[self.node_identities[node]] += 1
+                try:
+                    idens = ast.literal_eval(self.node_identities[node])
+                    for iden in idens:
+                        counter[iden] += 1
+                except:
+                    counter[self.node_identities[node]] += 1
             
             # Convert to proportions within this community and weight by size
             for sort in counter:
@@ -5492,11 +5511,47 @@ class Network_3D:
         neighborhoods.visualize_cluster_composition_umap(self.node_centroids, None, id_dictionary = self.node_identities, graph_label = "Node ID", title = 'UMAP Visualization of Node Centroids') 
 
 
+    def identity_umap(self, data):
+
+        try:
+
+            neighbor_classes = {}
+            import random
+
+            umap_dict = copy.deepcopy(data)
+
+            for item in data.keys():
+                if item in self.node_identities:
+                    try:
+                        parse = ast.literal_eval(self.node_identities[item])
+                        neighbor_classes[item] = random.choice(parse)
+                    except:
+                        neighbor_classes[item] = self.node_identities[item]
+
+                else:
+                    del umap_dict[item]
+
+            from scipy.stats import zscore
+
+            # Z-score normalize each marker (column)
+            for key in umap_dict:
+                umap_dict[key] = zscore(umap_dict[key])
+
+
+            from . import neighborhoods
+
+            neighborhoods.visualize_cluster_composition_umap(umap_dict, None, id_dictionary = neighbor_classes, graph_label = "Node ID", title = 'UMAP Visualization of Node Identities by Z-Score') 
+
+        except Exception as e:
+            import traceback
+            print(traceback.format_exc())
+            print(f"Error: {e}")
+
     def community_id_info_per_com(self, umap = False, label = 0, limit = 0, proportional = False, neighbors = None):
 
         community_dict = invert_dict(self.communities)
         summation = 0
-        id_set = set(self.node_identities.values())
+        id_set = iden_set(self.node_identities.values())
         id_dict = {}
         for i, iden in enumerate(id_set):
             id_dict[iden] = i
@@ -5515,7 +5570,15 @@ class Network_3D:
 
                 # Count identities in this community
                 for node in nodes:
-                    counter[id_dict[self.node_identities[node]]] += 1 # Keep them as arrays
+                    try:
+                        idens = ast.literal_eval(self.node_identities[node])
+                        for iden in idens:
+                            counter[id_dict[iden]] += 1
+                    except:
+                        try:
+                            counter[id_dict[self.node_identities[node]]] += 1 # Keep them as arrays
+                        except:
+                            pass
 
                 for i in range(len(counter)): # Translate them into proportions out of 1
 
@@ -5527,11 +5590,10 @@ class Network_3D:
                     umap_dict[community] = counter
 
         else:
-            idens = invert_dict(self.node_identities)
+            idens = invert_dict_special(self.node_identities)
             iden_count = {}
             template = {}
             node_count = len(list(self.communities.keys()))
-
 
             for iden in id_set:
                 template[iden] = 0
@@ -5548,7 +5610,15 @@ class Network_3D:
                 counter = np.zeros(len(id_set))
 
                 for node in nodes:
-                    iden_tracker[self.node_identities[node]] += 1 
+                    try:
+                        idents = ast.literal_eval(self.node_identities[node])
+                        for iden in idents:
+                            iden_tracker[iden] += 1
+                    except:
+                        try:
+                            iden_tracker[self.node_identities[node]] += 1
+                        except:
+                            pass
 
                 i = 0
 
@@ -5585,7 +5655,10 @@ class Network_3D:
             if self.communities is not None and label == 2:
                 neighbor_group = {}
                 for node, com in self.communities.items():
-                    neighbor_group[com] = neighbors[node]
+                    try:
+                        neighbor_group[com] = neighbors[node]
+                    except:
+                        neighbor_group[com] = 0
                 neighborhoods.visualize_cluster_composition_umap(umap_dict, id_set, neighborhoods = neighbor_group)
             elif label == 1:
                 neighborhoods.visualize_cluster_composition_umap(umap_dict, id_set, label = True) 
@@ -5815,8 +5888,25 @@ class Network_3D:
             overlay = neighborhoods.create_community_heatmap(heat_dict, self.communities, self.node_centroids, shape = shape, is_3d=is3d, labeled_array = self.nodes)
             return heat_dict, overlay
 
+    def get_merge_node_dictionaries(self, path, data):
 
-    def merge_node_ids(self, path, data):
+        img_list = directory_info(path)
+        id_dicts = []
+        num_nodes = np.max(data)
+
+        for i, img in enumerate(img_list):
+            if img.endswith('.tiff') or img.endswith('.tif'):
+                print(f"Processing image {img}")
+                mask = tifffile.imread(f'{path}/{img}')
+                if len(mask.shape) == 2:
+                    mask = np.expand_dims(mask, axis = 0)
+
+                id_dict = proximity.create_node_dictionary_id(data, mask, num_nodes)
+                id_dicts.append(id_dict)
+
+        return id_dicts
+
+    def merge_node_ids(self, path, data, include = True):
 
         if self.node_identities is None: # Prepare modular dict
 
@@ -5825,45 +5915,81 @@ class Network_3D:
             nodes = list(np.unique(data))
             if 0 in nodes:
                 del nodes[0]
-
             for node in nodes:
-                self.node_identities[node] = ''
+
+                self.node_identities[node] = [] # Assign to lists at first
+        else:
+            for node, iden in self.node_identities.items():
+                try:
+                    self.node_identities[node] = ast.literal_eval(iden)
+                except:
+                    self.node_identities[node] = [iden]
+
+
 
         img_list = directory_info(path)
 
         for i, img in enumerate(img_list):
-            mask = tifffile.imread(f'{path}/{img}')
 
-            if len(np.unique(mask)) != 2:
+            if img.endswith('.tiff') or img.endswith('.tif'):
 
-                mask = otsu_binarize(mask)
+                mask = tifffile.imread(f'{path}/{img}')
 
-            nodes = data * mask
-            nodes = list(np.unique(nodes))
-            if 0 in nodes:
-                del nodes[0]
+                if len(np.unique(mask)) != 2:
 
-            if img.endswith('.tiff'):
-                base_name = img[:-5]
-            elif img.endswith('.tif'):
-                base_name = img[:-4]
-            else:
-                base_name = img
+                    mask = otsu_binarize(mask)
+                else:
+                    mask = mask != 0
 
-            for node in self.node_identities.keys():
+                nodes = data * mask
+                nodes = np.unique(nodes)
+                nodes = nodes.tolist()
+                if 0 in nodes:
+                    del nodes[0]
 
-                try:
+                if img.endswith('.tiff'):
+                    base_name = img[:-5]
+                elif img.endswith('.tif'):
+                    base_name = img[:-4]
+                else:
+                    base_name = img
 
-                    if node in nodes:
+                assigned = {}
 
-                        self.node_identities[node] += f" {base_name}+"
 
-                    else:
+                for node in self.node_identities.keys():
 
-                        self.node_identities[node] += f" {base_name}-"
+                    try:
 
-                except:
-                    pass
+                        if int(node) in nodes:
+
+                            self.node_identities[node].append(f'{base_name}+')
+
+                        elif include:
+
+                            self.node_identities[node].append(f'{base_name}-')
+
+                    except:
+                        pass
+
+        modify_dict = copy.deepcopy(self.node_identities)
+
+        for node, iden in self.node_identities.items():
+
+            try:
+
+                if len(iden) == 1:
+
+                    modify_dict[node] = str(iden[0]) # Singleton lists become bare strings
+                elif len(iden) == 0:
+                    del modify_dict[node]
+                else:
+                    modify_dict[node] = str(iden) # We hold multi element lists as strings for compatibility
+
+            except:
+                pass
+
+        self.node_identities = modify_dict
 
 
     def nearest_neighbors_avg(self, root, targ, xy_scale = 1, z_scale = 1, num = 1, heatmap = False, threed = True, numpy = False, quant = False, centroids = True):

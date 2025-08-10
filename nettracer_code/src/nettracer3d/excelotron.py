@@ -4,7 +4,7 @@ import numpy as np
 from PyQt6.QtWidgets import (QApplication, QMainWindow, QHBoxLayout, QVBoxLayout, 
                            QWidget, QTableWidget, QTableWidgetItem, QPushButton, 
                            QLabel, QLineEdit, QScrollArea, QFrame, QMessageBox,
-                           QHeaderView, QAbstractItemView, QSplitter, QTabWidget)
+                           QHeaderView, QAbstractItemView, QSplitter, QTabWidget, QCheckBox)
 from PyQt6.QtCore import Qt, QMimeData, pyqtSignal
 from PyQt6.QtGui import QDragEnterEvent, QDropEvent, QDrag, QPainter, QPixmap
 import os
@@ -502,6 +502,35 @@ class ClassifierGroupWidget(QFrame):
         
         header_layout.addStretch()
         
+        # Hierarchical toggle
+        self.hierarchical_checkbox = QCheckBox("Hierarchical")
+        self.hierarchical_checkbox.setChecked(True)  # Default to hierarchical
+        self.hierarchical_checkbox.setStyleSheet("""
+            QCheckBox {
+                font-weight: bold;
+                color: #007acc;
+                padding: 5px;
+            }
+            QCheckBox::indicator {
+                width: 18px;
+                height: 18px;
+            }
+            QCheckBox::indicator:unchecked {
+                border: 2px solid #007acc;
+                background-color: white;
+                border-radius: 3px;
+            }
+            QCheckBox::indicator:checked {
+                border: 2px solid #007acc;
+                background-color: #007acc;
+                border-radius: 3px;
+            }
+            QCheckBox::indicator:checked:hover {
+                background-color: #005a9e;
+            }
+        """)
+        header_layout.addWidget(self.hierarchical_checkbox)
+        
         # Add classifier button
         add_btn = QPushButton("+ Add Classifier")
         add_btn.setStyleSheet("""
@@ -559,7 +588,7 @@ class ClassifierGroupWidget(QFrame):
         layout.addWidget(preview_btn)
         
         self.setLayout(layout)
-    
+
     def add_classifier(self):
         self.classifier_counter += 1
         classifier_id = self.classifier_counter
@@ -597,25 +626,50 @@ class ClassifierGroupWidget(QFrame):
         matched_identities = set()
         classifier_usage = {classifier_id: 0 for classifier_id in classifier_ids}  # Now classifier_ids is defined
         
+
         for identity in original_identities:
-            identity_str = str(identity)
-            
-            # Check classifiers in order
-            for classifier_id in classifier_ids:
-                classifier = self.classifiers[classifier_id]
-                
-                if classifier.matches_identity(identity_str):
-                    # This classifier matches
-                    matched_identities.add(identity)
-                    classifier_usage[classifier_id] += 1  # Track usage
+                    identity_str = str(identity)
                     
-                    # Set the new ID if provided
-                    new_id = classifier.get_new_id()
-                    if new_id and identity in self.identity_remap_widget.identity_mappings:
-                        self.identity_remap_widget.identity_mappings[identity]['new_edit'].setText(new_id)
-                    
-                    # Move to next identity (hierarchical - first match wins)
-                    break
+                    # Check classifiers in order
+                    for classifier_id in classifier_ids:
+                        classifier = self.classifiers[classifier_id]
+                        
+                        if classifier.matches_identity(identity_str):
+                            # This classifier matches
+                            matched_identities.add(identity)
+                            classifier_usage[classifier_id] += 1  # Track usage
+                            
+                            # Set the new ID if provided
+                            new_id = classifier.get_new_id()
+                            if new_id and identity in self.identity_remap_widget.identity_mappings:
+                                if self.hierarchical_checkbox.isChecked():
+                                    # Hierarchical mode - just set the new ID
+                                    self.identity_remap_widget.identity_mappings[identity]['new_edit'].setText(new_id)
+                                else:
+                                    # Non-hierarchical mode - append to existing or create new
+                                    current_text = self.identity_remap_widget.identity_mappings[identity]['new_edit'].text().strip()
+                                    if current_text:
+                                        # Parse existing text to see if it's already a list
+                                        try:
+                                            existing_list = literal_eval(current_text)
+                                            if isinstance(existing_list, list):
+                                                existing_list.append(new_id)
+                                                new_text = str(existing_list)
+                                            else:
+                                                # Current text is a single value, make it a list
+                                                new_text = str([current_text, new_id])
+                                        except:
+                                            # If parsing fails, treat as single value
+                                            new_text = str([current_text, new_id])
+                                    else:
+                                        # No existing text, just set the new ID
+                                        new_text = new_id
+                                    
+                                    self.identity_remap_widget.identity_mappings[identity]['new_edit'].setText(new_text)
+                            
+                            # Only break if hierarchical mode (first match wins)
+                            if self.hierarchical_checkbox.isChecked():
+                                break
         
         # Remove identities that didn't match any classifier
         unmatched_identities = set(original_identities) - matched_identities

@@ -197,6 +197,11 @@ Selecting 'Save As provides the following options':
 2. Excel
     * Saves the table as a .xlsx for analysis in Microsoft Excel.
 
+'Use to Threshold Nodes'
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+If a table is of the structure {col 1 - Integers : col 2 - Numbers}, it can be used to try to threshold what is in the nodes channel (mainly, if this table was generated in reference to said nodes).
+This can be used to interactively sort out any set of data that was used to analyze the nodes.
+
 'Close All'
 ~~~~~~~~~~~~~~~~~~~~~~~
 Shuts all active tables (Sometimes a bunch can get populated here from doing random things, so it's nice to clear out sometimes).

@@ -192,10 +192,10 @@ class InteractiveSegmenter:
         if image_2d is None:
             image_2d = self.image_3d[z, :, :]
 
-        if image_2d.ndim == 3 and image_2d.shape[-1] == 3:
+        if image_2d.ndim == 3 and (image_2d.shape[-1] == 3 or image_2d.shape[-1] == 4):
             # RGB case - process each channel
             features_per_channel = []
-            for channel in range(3):
+            for channel in range(image_2d.shape[-1]):
                 channel_features = self.compute_deep_feature_maps_cpu_2d(image_2d = image_2d[..., channel])
                 features_per_channel.append(channel_features)
             
@@ -308,10 +308,10 @@ class InteractiveSegmenter:
         if image_2d is None:
             image_2d = self.image_3d[z, :, :]
 
-        if image_2d.ndim == 3 and image_2d.shape[-1] == 3:
+        if image_2d.ndim == 3 and (image_2d.shape[-1] == 3 or image_2d.shape[-1] == 4):
             # RGB case - process each channel
             features_per_channel = []
-            for channel in range(3):
+            for channel in range(image_2d.shape[-1]):
                 channel_features = self.compute_feature_maps_cpu_2d(image_2d = image_2d[..., channel])
                 features_per_channel.append(channel_features)
             
@@ -361,10 +361,10 @@ class InteractiveSegmenter:
         if image_3d is None:
             image_3d = self.image_3d
 
-        if image_3d.ndim == 4 and image_3d.shape[-1] == 3:
+        if image_3d.ndim == 4 and (image_3d.shape[-1] == 3 or image_3d.shape[-1] == 4):
             # RGB case - process each channel
             features_per_channel = []
-            for channel in range(3):
+            for channel in range(image_3d.shape[-1]):
                 channel_features = self.compute_deep_feature_maps_cpu(image_3d[..., channel])
                 features_per_channel.append(channel_features)
             
@@ -483,127 +483,15 @@ class InteractiveSegmenter:
         
         return features
 
-    def compute_deep_feature_maps_cpu_smaller(self, image_3d=None): #smaller
-        """Optimized version using determinant instead of full eigenvalue computation. Currently not in use anywhere"""
-        if image_3d is None:
-            image_3d = self.image_3d
-        
-        # Calculate total number of features (using determinant instead of 3 eigenvalues)
-        num_basic_features = 1 + len(self.sigmas) + len(self.dogs)
-        num_gradient_features = len(self.sigmas)
-        num_laplacian_features = len(self.sigmas)
-        num_hessian_features = len(self.sigmas) * 3  # determinant + trace + frobenius norm
-        
-        total_features = num_basic_features + num_gradient_features + num_laplacian_features + num_hessian_features
-        
-        # Pre-allocate result array
-        features = np.empty(image_3d.shape + (total_features,), dtype=image_3d.dtype)
-        features[..., 0] = image_3d
-        
-        feature_idx = 1
-        
-        # Cache for Gaussian filters
-        gaussian_cache = {}
-        all_sigmas = set(self.sigmas)
-        for s1, s2 in self.dogs:
-            all_sigmas.add(s1)
-            all_sigmas.add(s2)
-        
-        # Pre-compute all Gaussian filters
-        for sigma in all_sigmas:
-            gaussian_cache[sigma] = ndimage.gaussian_filter(image_3d, sigma)
-        
-        # Gaussian smoothing
-        for sigma in self.sigmas:
-            features[..., feature_idx] = gaussian_cache[sigma]
-            feature_idx += 1
-        
-        # Difference of Gaussians
-        for s1, s2 in self.dogs:
-            features[..., feature_idx] = gaussian_cache[s1] - gaussian_cache[s2]
-            feature_idx += 1
-        
-        # Gaussian gradient magnitudes
-        for sigma in self.sigmas:
-            gaussian_img = gaussian_cache[sigma]
-            gx = ndimage.sobel(gaussian_img, axis=2, mode='reflect')
-            gy = ndimage.sobel(gaussian_img, axis=1, mode='reflect')
-            gz = ndimage.sobel(gaussian_img, axis=0, mode='reflect')
-            features[..., feature_idx] = np.sqrt(gx**2 + gy**2 + gz**2)
-            feature_idx += 1
-        
-        # Laplacian of Gaussian
-        for sigma in self.sigmas:
-            gaussian_img = gaussian_cache[sigma]
-            features[..., feature_idx] = ndimage.laplace(gaussian_img, mode='reflect')
-            feature_idx += 1
-        
-        # Hessian-based features (much faster than full eigenvalue computation)
-        for sigma in self.sigmas:
-            gaussian_img = gaussian_cache[sigma]
-            
-            # Compute second derivatives
-            hxx = ndimage.gaussian_filter(gaussian_img, sigma=0, order=[0, 0, 2], mode='reflect')
-            hyy = ndimage.gaussian_filter(gaussian_img, sigma=0, order=[0, 2, 0], mode='reflect')
-            hzz = ndimage.gaussian_filter(gaussian_img, sigma=0, order=[2, 0, 0], mode='reflect')
-            hxy = ndimage.gaussian_filter(gaussian_img, sigma=0, order=[0, 1, 1], mode='reflect')
-            hxz = ndimage.gaussian_filter(gaussian_img, sigma=0, order=[1, 0, 1], mode='reflect')
-            hyz = ndimage.gaussian_filter(gaussian_img, sigma=0, order=[1, 1, 0], mode='reflect')
-            
-            # Hessian determinant (captures overall curvature)
-            determinant = (hxx * (hyy * hzz - hyz**2) - 
-                          hxy * (hxy * hzz - hxz * hyz) + 
-                          hxz * (hxy * hyz - hyy * hxz))
-            features[..., feature_idx] = determinant
-            feature_idx += 1
-            
-            # Hessian trace (sum of eigenvalues)
-            trace = hxx + hyy + hzz
-            features[..., feature_idx] = trace
-            feature_idx += 1
-            
-            # Frobenius norm (overall curvature magnitude)
-            frobenius_norm = np.sqrt(hxx**2 + hyy**2 + hzz**2 + 2*(hxy**2 + hxz**2 + hyz**2))
-            features[..., feature_idx] = frobenius_norm
-            feature_idx += 1
-
-        """
-        # Normalize features: zero-mean, unit variance per feature band
-        # Compute mean and std across spatial dimensions (0,1,2), keeping feature dimension
-        feature_means = np.mean(features, axis=(0, 1, 2), keepdims=True)
-        feature_stds = np.std(features, axis=(0, 1, 2), keepdims=True)
-        
-        # Avoid division by zero for constant features
-        feature_stds = np.where(feature_stds == 0, 1, feature_stds)
-        
-        # Normalize in-place for memory efficiency
-        features = (features - feature_means) / feature_stds
-        """
-        # Normalize only morphological features, keep intensity features raw
-        intensity_features = features[..., :num_basic_features]  # original + gaussians + DoGs
-        morphology_features = features[..., num_basic_features:]  # gradients + laplacians + eigenvalues
-
-        # Normalize only morphological features
-        morph_means = np.mean(morphology_features, axis=(0,1,2), keepdims=True)
-        morph_stds = np.std(morphology_features, axis=(0,1,2), keepdims=True)
-        morph_stds = np.where(morph_stds == 0, 1, morph_stds)
-        morphology_features = (morphology_features - morph_means) / morph_stds
-
-        # Recombine
-        features = np.concatenate([intensity_features, morphology_features], axis=-1)
-
-        return features
-
-
     def compute_feature_maps_cpu(self, image_3d=None): #lil
         """Optimized version that caches Gaussian filters to avoid redundant computation"""
         if image_3d is None:
             image_3d = self.image_3d
 
-        if image_3d.ndim == 4 and image_3d.shape[-1] == 3:
+        if image_3d.ndim == 4 and (image_3d.shape[-1] == 3 or image_3d.shape[-1] == 4):
             # RGB case - process each channel
             features_per_channel = []
-            for channel in range(3):
+            for channel in range(image_3d.shape[-1]):
                 channel_features = self.compute_feature_maps_cpu(image_3d[..., channel])
                 features_per_channel.append(channel_features)
             
@@ -1420,7 +1308,10 @@ class InteractiveSegmenter:
                 chunk_size = max(16, min(chunk_size, min(self.image_3d.shape) // 2))
                 chunk_size = ((chunk_size + 7) // 16) * 16
         
-        depth, height, width = self.image_3d.shape
+        try:
+            depth, height, width = self.image_3d.shape
+        except:
+            depth, height, width, rgb = self.image_3d.shape
         
         # Calculate chunk grid dimensions
         z_chunks = (depth + chunk_size - 1) // chunk_size

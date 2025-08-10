@@ -37,6 +37,7 @@ To get started with NetTracer3D, check out the :doc:`installation` guide and the
 
    installation
    quickstart
+   proximity
    branches
    properties
    excel_helper

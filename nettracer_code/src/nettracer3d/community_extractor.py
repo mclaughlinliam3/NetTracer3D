@@ -549,54 +549,117 @@ def convert_node_colors_to_names(node_to_color: Dict[int, Tuple[int, int, int]],
         
         num_entries = len(node_to_color)
         
-        # Calculate dynamic spacing based on number of entries
-        entry_height = 0.8
-        total_height = num_entries * entry_height + 1.5  # Extra space for title and margins
+        # Calculate text widths to determine optimal figure size
+        sorted_nodes = sorted(node_to_color.keys())
         
-        # Create figure and axis with proper scaling
-        fig, ax = plt.subplots(figsize=figsize)
-        ax.set_xlim(0, 10)
+        # Create a temporary figure to measure text widths
+        temp_fig, temp_ax = plt.subplots(figsize=(1, 1))
+        
+        max_node_width = 0
+        max_color_width = 0
+        
+        for node in sorted_nodes:
+            color_name = node_to_names[node]
+            
+            # Measure node ID text width
+            node_text = temp_ax.text(0, 0, str(node), fontsize=12, fontweight='bold')
+            node_bbox = node_text.get_window_extent(renderer=temp_fig.canvas.get_renderer())
+            node_width = node_bbox.width
+            max_node_width = max(max_node_width, node_width)
+            
+            # Measure color name text width
+            color_text = temp_ax.text(0, 0, color_name.replace('_', ' ').title(), fontsize=11)
+            color_bbox = color_text.get_window_extent(renderer=temp_fig.canvas.get_renderer())
+            color_width = color_bbox.width
+            max_color_width = max(max_color_width, color_width)
+        
+        plt.close(temp_fig)
+        
+        # Convert pixel widths to figure units (approximate conversion)
+        # This is a rough conversion - matplotlib uses 72 DPI by default
+        dpi = 72
+        max_node_width_fig = max_node_width / dpi
+        max_color_width_fig = max_color_width / dpi
+        
+        # Calculate optimal figure dimensions
+        entry_height = 0.6  # Reduced for tighter spacing
+        margin = 0.3
+        swatch_width = 0.8
+        spacing = 0.2
+        
+        # Calculate total width needed
+        total_width = (margin + max_node_width_fig + spacing + 
+                       swatch_width + spacing + max_color_width_fig + margin)
+        
+        # Ensure minimum width for readability
+        total_width = max(total_width, 4.0)
+        
+        # Calculate total height
+        title_height = 0.8
+        total_height = num_entries * entry_height + title_height + 2 * margin
+        
+        # Create the actual figure with calculated dimensions
+        fig, ax = plt.subplots(figsize=(total_width, total_height))
+        
+        # Set axis limits to match our calculated dimensions
+        ax.set_xlim(0, total_width)
         ax.set_ylim(0, total_height)
         ax.axis('off')
         
         # Title
-        ax.text(5, total_height - 0.5, 'Color Legend', 
-                fontsize=16, fontweight='bold', ha='center')
-        
-        # Sort nodes for consistent display
-        sorted_nodes = sorted(node_to_color.keys())
+        ax.text(total_width/2, total_height - margin - 0.2, 'Color Legend', 
+                fontsize=14, fontweight='bold', ha='center', va='top')
         
         # Create legend entries
         for i, node in enumerate(sorted_nodes):
-            y_pos = total_height - (i + 1) * entry_height - 0.8
+            y_pos = total_height - title_height - margin - (i + 1) * entry_height + entry_height/2
             rgb = node_to_color[node]
             color_name = node_to_names[node]
             
             # Normalize RGB values for matplotlib (0-1 range)
             norm_rgb = tuple(c/255.0 for c in rgb)
             
-            # Draw color swatch (using actual RGB values)
-            swatch = Rectangle((1.0, y_pos - 0.15), 0.8, 0.3, 
+            # Position calculations
+            node_x = margin
+            swatch_x = margin + max_node_width_fig + spacing
+            color_x = swatch_x + swatch_width + spacing
+            
+            # Node ID (left-aligned)
+            ax.text(node_x, y_pos, str(node), fontsize=12, fontweight='bold', 
+                    va='center', ha='left')
+            
+            # Draw color swatch
+            swatch_y = y_pos - entry_height/4
+            swatch = Rectangle((swatch_x, swatch_y), swatch_width, entry_height/2, 
                               facecolor=norm_rgb, edgecolor='black', linewidth=1)
             ax.add_patch(swatch)
             
-            # Node ID (exactly as it appears in dict keys)
-            ax.text(0.2, y_pos, str(node), fontsize=12, fontweight='bold', 
-                    va='center', ha='left')
-            
-            # Color name (mapped name, nicely formatted)
-            ax.text(2.2, y_pos, color_name.replace('_', ' ').title(), 
+            # Color name
+            formatted_name = color_name.replace('_', ' ').title()
+            # Truncate very long color names to prevent layout issues
+            if len(formatted_name) > 25:
+                formatted_name = formatted_name[:22] + "..."
+                
+            ax.text(color_x, y_pos, formatted_name, 
                     fontsize=11, va='center', ha='left')
         
-        # Add border around the legend
-        border = Rectangle((0.1, 0.1), 9.8, total_height - 0.2, 
-                          fill=False, edgecolor='gray', linewidth=2)
+        # Add a subtle border around the entire legend
+        border_margin = 0.1
+        border = Rectangle((border_margin, border_margin), 
+                          total_width - 2*border_margin, 
+                          total_height - 2*border_margin, 
+                          fill=False, edgecolor='lightgray', linewidth=1.5)
         ax.add_patch(border)
         
-        plt.tight_layout()
+        # Remove any extra whitespace
+        plt.tight_layout(pad=0.1)
+        
+        # Adjust the figure to eliminate whitespace
+        ax.margins(0)
+        fig.subplots_adjust(left=0, right=1, top=1, bottom=0)
         
         if save_path:
-            plt.savefig(save_path, dpi=300, bbox_inches='tight')
+            plt.savefig(save_path, dpi=300, bbox_inches='tight', pad_inches=0.05)
             
         plt.show()
     

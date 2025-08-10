@@ -5,7 +5,7 @@ from PyQt6.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout, QG
                             QFormLayout, QLineEdit, QPushButton, QFileDialog,
                             QLabel, QComboBox, QMessageBox, QTableView, QInputDialog,
                             QMenu, QTabWidget, QGroupBox)
-from PyQt6.QtCore import (QPoint, Qt, QAbstractTableModel, QTimer,  QThread, pyqtSignal, QObject, QCoreApplication)
+from PyQt6.QtCore import (QPoint, Qt, QAbstractTableModel, QTimer,  QThread, pyqtSignal, QObject, QCoreApplication, QEvent, QEventLoop)
 import numpy as np
 import time
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
@@ -18,7 +18,7 @@ from nettracer3d import smart_dilate as sdl
 from matplotlib.colors import LinearSegmentedColormap
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
 import pandas as pd
-from PyQt6.QtGui import (QFont, QCursor, QColor, QPixmap, QFontMetrics, QPainter, QPen)
+from PyQt6.QtGui import (QFont, QCursor, QColor, QPixmap, QFontMetrics, QPainter, QPen, QShortcut, QKeySequence)
 import tifffile
 import copy
 import multiprocessing as mp
@@ -109,7 +109,7 @@ class ImageViewerWindow(QMainWindow):
             self.color_dictionary['LIGHT_RED'],    # Lighter red
             self.color_dictionary['LIGHT_GREEN'],    # Lighter green
             self.color_dictionary['WHITE'],        # White
-            self.color_dictionary['WHITE']         # White
+            self.color_dictionary['CYAN']         # Now cyan
         ]
         
         
@@ -137,7 +137,6 @@ class ImageViewerWindow(QMainWindow):
         self.img_height = None
         self.pre_pan_channel_state = None  # Store which channels were visible before pan
         self.is_pan_preview = False        # Track if we're in pan preview mode
-        self.pre_pan_channel_state = None    # Store which channels were visible before pan
         self.pan_background_image = None     # Store the rendered composite image
         self.pan_zoom_state = None           # Store zoom state when pan began
         self.is_pan_preview = False          # Track if we're in pan preview mode
@@ -210,6 +209,11 @@ class ImageViewerWindow(QMainWindow):
         # Create zoom button and pan button
         buttons_widget = QWidget()
         buttons_layout = QHBoxLayout(buttons_widget)
+
+        self.reset_view = QPushButton("🏠")
+        self.reset_view.setFixedSize(20, 20)
+        self.reset_view.clicked.connect(self.home)
+        control_layout.addWidget(self.reset_view)
 
         # "Create" zoom button
         self.zoom_button = QPushButton("🔍")
@@ -294,14 +298,6 @@ class ImageViewerWindow(QMainWindow):
             
             control_layout.addWidget(channel_container)
 
-        self.show_channels = QPushButton("✓")
-        self.show_channels.setCheckable(True)
-        self.show_channels.setChecked(True)
-        self.show_channels.setFixedSize(20, 20)
-        self.show_channels.clicked.connect(self.toggle_chan_load)
-        control_layout.addWidget(self.show_channels)
-        self.chan_load = True
-
         # Create the main widget and layout
         main_widget = QWidget()
         self.setCentralWidget(main_widget)
@@ -309,18 +305,19 @@ class ImageViewerWindow(QMainWindow):
         
         # Create left panel for image and controls
         left_panel = QWidget()
-        left_layout = QVBoxLayout(left_panel)
+        self.left_layout = QVBoxLayout(left_panel)
+
         
         # Create matplotlib canvas for image display
         self.figure = Figure(figsize=(8, 8))
         self.canvas = FigureCanvas(self.figure)
         self.ax = self.figure.add_subplot(111)
-        left_layout.addWidget(self.canvas)
+        self.left_layout.addWidget(self.canvas)
 
         self.canvas.mpl_connect('scroll_event', self.on_mpl_scroll)
 
         
-        left_layout.addWidget(control_panel)
+        self.left_layout.addWidget(control_panel)
 
         # Add timer for debouncing slice updates
         self._slice_update_timer = QTimer()
@@ -358,7 +355,7 @@ class ImageViewerWindow(QMainWindow):
         self.continuous_scroll_timer.timeout.connect(self.continuous_scroll)
         self.scroll_direction = 0  # 0: none, -1: left, 1: right
         
-        left_layout.addWidget(slider_container)
+        self.left_layout.addWidget(slider_container)
 
         
         main_layout.addWidget(left_panel)
@@ -467,6 +464,393 @@ class ImageViewerWindow(QMainWindow):
         self.resume = False
 
         self.hold_update = False
+        self._first_pan_done = False
+
+
+    def load_file(self):
+        """Load CSV or Excel file and convert to dictionary format."""
+        try:
+            # Open file dialog
+            file_filter = "Spreadsheet Files (*.csv *.xlsx);;CSV Files (*.csv);;Excel Files (*.xlsx)"
+            filename, _ = QFileDialog.getOpenFileName(
+                self,
+                "Load File",
+                "",
+                file_filter
+            )
+            
+            if not filename:
+                return
+            
+            # Read the file
+            if filename.endswith('.csv'):
+                df = pd.read_csv(filename)
+            elif filename.endswith('.xlsx'):
+                df = pd.read_excel(filename)
+            else:
+                QMessageBox.warning(self, "Error", "Please select a CSV or Excel file.")
+                return
+            
+            if df.empty:
+                QMessageBox.warning(self, "Error", "The file appears to be empty.")
+                return
+            
+            # Extract headers
+            headers = df.columns.tolist()
+            if len(headers) < 1:
+                QMessageBox.warning(self, "Error", "File must have at least 1 column.")
+                return
+            
+            # Extract filename without extension for title
+            import os
+            title = os.path.splitext(os.path.basename(filename))[0]
+            
+            if len(headers) == 1:
+                # Single column: pass header to metric, column data as list to data, nothing to value
+                metric = headers[0]
+                data = df.iloc[:, 0].tolist()  # First column as list
+                value = None
+                
+                self.format_for_upperright_table(
+                    data=data,
+                    metric=metric,
+                    value=value,
+                    title=title
+                )
+            else:
+                # Multiple columns: create dictionary as before
+                # First column header (for metric parameter)
+                metric = headers[0]
+                
+                # Remaining headers (for value parameter)
+                value = headers[1:]
+                
+                # Create dictionary
+                data_dict = {}
+                
+                for index, row in df.iterrows():
+                    key = row.iloc[0]  # First column value as key
+                    
+                    if len(headers) == 2:
+                        # If only 2 columns, store single value
+                        data_dict[key] = row.iloc[1]
+                    else:
+                        # If more than 2 columns, store as list
+                        data_dict[key] = row.iloc[1:].tolist()
+                
+                if len(value) == 1:
+                    value = value[0]
+                
+                # Call the parent method
+                self.format_for_upperright_table(
+                    data=data_dict,
+                    metric=metric,
+                    value=value,
+                    title=title
+                )
+            
+            QMessageBox.information(
+                self,
+                "Success",
+                f"File '{title}' loaded successfully with {len(df)} entries."
+            )
+            
+        except Exception as e:
+            QMessageBox.critical(
+                self,
+                "Error",
+                f"Failed to load file: {str(e)}"
+            )
+        
+    def popup_canvas(self):
+        """Pop the canvas out into its own window"""
+        if hasattr(self, 'popup_window') and self.popup_window.isVisible():
+            # If popup already exists, just bring it to front
+            self.popup_window.raise_()
+            self.popup_window.activateWindow()
+            if hasattr(self, 'control_popup_window'):
+                self.control_popup_window.raise_()
+                self.control_popup_window.activateWindow()
+            # Also bring machine window to front if it exists
+            if self.machine_window is not None:
+                self.machine_window.raise_()
+                self.machine_window.activateWindow()
+            return
+        
+        self.is_popped = True
+
+        # Store original figure size and canvas size policy before popping out
+        self.original_figure_size = self.figure.get_size_inches()
+        self.original_canvas_size_policy = self.canvas.sizePolicy()
+        
+        # Create popup window for canvas
+        self.popup_window = QMainWindow()
+        self.popup_window.setWindowTitle("NetTracer3D - Canvas View")
+        self.popup_window.setGeometry(200, 200, 1000, 800)  # Bigger size
+        
+        # Install event filters for both window management and keyboard shortcuts
+        self.popup_window.installEventFilter(self)
+        
+        # Create popup window for control panel and slider
+        self.control_popup_window = QMainWindow()
+        self.control_popup_window.setWindowTitle("NetTracer3D - Controls")
+        self.control_popup_window.setGeometry(1220, 200, 400, 200)  # Bigger height for slider
+        
+        # Install event filter on control window too
+        self.control_popup_window.installEventFilter(self)
+        
+        # Make control window non-closeable while popped out
+        self.control_popup_window.setWindowFlags(
+            self.control_popup_window.windowFlags() & ~Qt.WindowType.WindowCloseButtonHint
+        )
+        
+        # Set control panel as child of canvas popup for natural stacking
+        self.control_popup_window.setParent(self.popup_window, Qt.WindowType.Window)
+        
+        # Remove canvas from left panel
+        self.canvas.setParent(None)
+        
+        # Remove control panel from left panel
+        # First find the control_panel widget
+        control_panel = None
+        for i in range(self.left_layout.count()):
+            widget = self.left_layout.itemAt(i).widget()
+            if widget and hasattr(widget, 'findChild') and widget.findChild(QComboBox):
+                control_panel = widget
+                break
+        
+        # Remove slider container from left panel
+        slider_container = None
+        for i in range(self.left_layout.count()):
+            widget = self.left_layout.itemAt(i).widget()
+            if widget and hasattr(widget, 'findChild') and widget.findChild(QSlider):
+                slider_container = widget
+                break
+        
+        if control_panel:
+            control_panel.setParent(None)
+            self.popped_control_panel = control_panel
+            
+        if slider_container:
+            slider_container.setParent(None)
+            self.popped_slider_container = slider_container
+        
+        # Move the actual canvas to popup window
+        self.popup_window.setCentralWidget(self.canvas)
+        
+        # Create a container widget for the control popup to hold both control panel and slider
+        control_container = QWidget()
+        control_container_layout = QVBoxLayout(control_container)
+        
+        # Add control panel to container
+        if control_panel:
+            control_container_layout.addWidget(control_panel)
+            
+        # Add slider container to container
+        if slider_container:
+            control_container_layout.addWidget(slider_container)
+        
+        # Set the container as the central widget
+        self.control_popup_window.setCentralWidget(control_container)
+        
+        # Create placeholder for left panel
+        placeholder = QLabel("Canvas and controls are popped out\nClick to return both")
+        placeholder.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        placeholder.setStyleSheet("""
+            QLabel {
+                background-color: #f0f0f0;
+                border: 2px dashed #ccc;
+                font-size: 14px;
+                color: #666;
+            }
+        """)
+        placeholder.mousePressEvent = lambda event: self.return_canvas()
+        
+        # Add placeholder to left layout
+        self.left_layout.insertWidget(0, placeholder)  # Insert at canvas position
+        self.canvas_placeholder = placeholder
+        
+        # Create keyboard shortcuts for popup windows
+        self.create_popup_shortcuts()
+        
+        # Show both popup windows
+        self.popup_window.show()
+        self.control_popup_window.show()
+        
+        # Ensure proper initial window order
+        self.ensure_window_order()
+        
+        # Connect close event to return canvas (only canvas window can be closed)
+        self.popup_window.closeEvent = self.on_popup_close
+
+    def eventFilter(self, obj, event):
+        """Filter events to manage window stacking and keyboard shortcuts"""
+        # Handle keyboard events for popup windows
+        if (obj == self.popup_window or obj == self.control_popup_window) and event.type() == QEvent.Type.KeyPress:
+            # Forward key events to main window's keyPressEvent method
+            self.keyPressEvent(event)
+            return True  # Event handled
+        
+        # Handle scroll events for popup canvas
+        if obj == self.popup_window and event.type() == QEvent.Type.Wheel:
+            # Forward wheel events to the scroll handler
+            canvas_widget = self.popup_window.centralWidget()
+            if canvas_widget == self.canvas:
+                # Create a mock matplotlib event from the Qt wheel event
+                self.handle_popup_scroll(event)
+                return True
+        
+        # Existing window stacking code
+        if obj == self.popup_window:
+            if event.type() == QEvent.Type.WindowActivate:
+                # Canvas popup was activated, raise our preferred windows
+                QTimer.singleShot(0, self.ensure_window_order)
+            elif event.type() == QEvent.Type.FocusIn:
+                # Canvas got focus, raise controls
+                QTimer.singleShot(0, self.ensure_window_order)
+        
+        return super().eventFilter(obj, event)
+
+    def create_popup_shortcuts(self):
+        """Create keyboard shortcuts for popup windows"""
+        if not hasattr(self, 'popup_shortcuts'):
+            self.popup_shortcuts = []
+        
+        # Define shortcuts - using your existing keyPressEvent logic
+        shortcuts_config = [
+            ('Z', lambda: self.zoom_button.click()),
+            ('Ctrl+Z', self.handle_undo),
+            ('X', lambda: self.high_button.click()),
+            ('Shift+F', self.handle_find),
+            ('Ctrl+S', self.handle_resave),
+            ('Ctrl+L', lambda: self.load_from_network_obj(directory=self.last_load)),
+            ('F', lambda: self.toggle_can() if self.brush_mode and self.machine_window is None else None),
+            ('D', lambda: self.toggle_threed() if self.brush_mode and self.machine_window is None else None),
+            ('A', lambda: self.machine_window.switch_foreground() if self.machine_window is not None else None),
+        ]
+        
+        # Create shortcuts for both popup windows
+        for key_seq, func in shortcuts_config:
+            # Canvas popup window shortcuts
+            shortcut1 = QShortcut(QKeySequence(key_seq), self.popup_window)
+            shortcut1.activated.connect(func)
+            self.popup_shortcuts.append(shortcut1)
+            
+            # Control popup window shortcuts
+            shortcut2 = QShortcut(QKeySequence(key_seq), self.control_popup_window)
+            shortcut2.activated.connect(func)
+            self.popup_shortcuts.append(shortcut2)
+
+    def handle_undo(self):
+        """Handle undo shortcut"""
+        try:
+            self.load_channel(self.last_change[1], self.last_change[0], True)
+        except:
+            pass
+
+    def handle_popup_scroll(self, qt_event):
+        """Handle scroll events in popup window"""
+        # Get the matplotlib canvas from the popup window
+        canvas = self.popup_window.centralWidget()
+        if canvas == self.canvas:
+            # Create a mock matplotlib event to pass to your existing scroll handler
+            # You might need to adapt this based on how your on_mpl_scroll method works
+            # For now, we'll try to call it directly with the Qt event
+            try:
+                # If your scroll handler needs a matplotlib event, you may need to 
+                # create a mock event or adapt the handler
+                pass  # You'll need to implement the scroll forwarding here
+            except:
+                pass
+
+    def ensure_window_order(self):
+        """Ensure control panel and machine window stay above canvas"""
+        if hasattr(self, 'control_popup_window') and self.control_popup_window.isVisible():
+            self.control_popup_window.raise_()
+        
+        if self.machine_window is not None and self.machine_window.isVisible():
+            self.machine_window.raise_()
+
+    def return_canvas(self):
+        """Return canvas and control panel to main window"""
+        if hasattr(self, 'popup_window'):
+            # Clean up popup shortcuts
+            if hasattr(self, 'popup_shortcuts'):
+                for shortcut in self.popup_shortcuts:
+                    shortcut.deleteLater()
+                del self.popup_shortcuts
+            
+            # Remove event filters when returning
+            self.popup_window.removeEventFilter(self)
+            if hasattr(self, 'control_popup_window'):
+                self.control_popup_window.removeEventFilter(self)
+            
+            # Remove canvas from popup
+            self.canvas.setParent(None)
+            self.is_popped = False
+            
+            # Remove control panel from popup
+            if hasattr(self, 'popped_control_panel') and hasattr(self, 'control_popup_window'):
+                self.popped_control_panel.setParent(None)
+                
+            # Remove slider container from popup
+            if hasattr(self, 'popped_slider_container') and hasattr(self, 'control_popup_window'):
+                self.popped_slider_container.setParent(None)
+            
+            # Remove placeholder
+            if hasattr(self, 'canvas_placeholder'):
+                self.canvas_placeholder.setParent(None)
+                del self.canvas_placeholder
+            
+            # Reset canvas to original size and size policy
+            if hasattr(self, 'original_figure_size'):
+                self.figure.set_size_inches(self.original_figure_size)
+            if hasattr(self, 'original_canvas_size_policy'):
+                self.canvas.setSizePolicy(self.original_canvas_size_policy)
+            
+            # Reset canvas minimum and maximum sizes to allow proper resizing
+            self.canvas.setMinimumSize(0, 0)  # Remove any minimum size constraints
+            self.canvas.setMaximumSize(16777215, 16777215)  # Reset to Qt's default maximum
+            
+            # Return canvas to left panel
+            self.left_layout.insertWidget(0, self.canvas)  # Insert at top
+            
+            # Return control panel to left panel (after canvas)
+            if hasattr(self, 'popped_control_panel'):
+                self.left_layout.insertWidget(1, self.popped_control_panel)  # Insert after canvas
+                del self.popped_control_panel
+                
+            # Return slider container to left panel (after control panel)
+            if hasattr(self, 'popped_slider_container'):
+                self.left_layout.insertWidget(2, self.popped_slider_container)  # Insert after control panel
+                del self.popped_slider_container
+            
+            # Force the canvas to redraw with proper sizing
+            self.canvas.draw()
+            
+            # Reset the main window layout to ensure proper proportions
+            # Get the main widget and force layout recalculation
+            main_widget = self.centralWidget()
+            if main_widget:
+                main_widget.updateGeometry()
+                main_widget.update()
+            
+            # Close both popup windows
+            self.popup_window.close()
+            if hasattr(self, 'control_popup_window'):
+                self.control_popup_window.close()
+                del self.control_popup_window
+            
+            # Clean up stored size references
+            if hasattr(self, 'original_figure_size'):
+                del self.original_figure_size
+            if hasattr(self, 'original_canvas_size_policy'):
+                del self.original_canvas_size_policy
+
+    def on_popup_close(self, event):
+        """Return canvas when popup is closed"""
+        self.return_canvas()
+        event.accept()
 
     def start_left_scroll(self):
         """Start scrolling left when left arrow is pressed."""
@@ -643,7 +1027,6 @@ class ImageViewerWindow(QMainWindow):
 
         """Highlight overlay generation method specific for the segmenter interactive mode"""
 
-
         def process_chunk_bounds(chunk_data, indices_to_check):
             """Process a single chunk of the array to create highlight mask"""
             mask = (chunk_data >= indices_to_check[0]) & (chunk_data <= indices_to_check[1])
@@ -714,7 +1097,39 @@ class ImageViewerWindow(QMainWindow):
             pass
 
         # Update display
-        self.update_display(preserve_zoom=(current_xlim, current_ylim), called = True)
+        self.update_display(preserve_zoom=(current_xlim, current_ylim))
+
+        if self.pan_mode:
+            self.create_pan_background()
+            current_xlim = self.ax.get_xlim()
+            current_ylim = self.ax.get_ylim()
+            self.update_display_pan_mode(current_xlim, current_ylim)
+
+        if my_network.network is not None:
+            try:
+                if self.active_channel == 0:
+
+                    # Get the existing DataFrame from the model
+                    original_df = self.network_table.model()._data
+                    
+                    # Create mask for rows where one column is any original node AND the other column is any neighbor
+                    mask = (
+                        (original_df.iloc[:, 0].isin(indices)) &
+                        (original_df.iloc[:, 1].isin(indices)))
+                    
+                    # Filter the DataFrame to only include direct connections
+                    filtered_df = original_df[mask].copy()
+                    
+                    # Create new model with filtered DataFrame and update selection table
+                    new_model = PandasModel(filtered_df)
+                    self.selection_table.setModel(new_model)
+                    
+                    # Switch to selection table
+                    self.selection_button.click()
+            except:
+                pass
+
+
 
     def create_mini_overlay(self, node_indices = None, edge_indices = None):
 
@@ -831,6 +1246,7 @@ class ImageViewerWindow(QMainWindow):
                 
         # Update display
         self.update_display(preserve_zoom=(current_xlim, current_ylim))
+
 
 
 
@@ -1687,6 +2103,13 @@ class ImageViewerWindow(QMainWindow):
                     except:
                         pass
 
+
+                if my_network.network is not None:
+                    try:
+                        info_dict['Neighbors'] = list(my_network.network.neighbors(label))
+                    except:
+                        pass
+
                 if my_network.communities is not None:
                     try:
                         info_dict['Community'] = my_network.communities[label]
@@ -1719,6 +2142,24 @@ class ImageViewerWindow(QMainWindow):
                 info_dict['Label'] = label
 
                 info_dict['Object Class'] = 'Edge'
+
+                try:
+                    # Get the existing DataFrame from the model
+                    original_df = self.network_table.model()._data
+                    
+                    # Create mask for rows where one column is any original node AND the other column is any neighbor
+                    mask = (
+                        (original_df.iloc[:, 0].isin(self.clicked_values['nodes'])) |
+                        (original_df.iloc[:, 1].isin(self.clicked_values['nodes'])) |
+                        (original_df.iloc[:, 2].isin(self.clicked_values['edges']))
+                        )
+
+                    filtered_df = original_df[mask].copy()
+                    node_list = list(set(filtered_df.iloc[:, 0].to_list() + filtered_df.iloc[:, 1].to_list()))
+                    info_dict["Num Nodes"] = len(node_list)
+                    info_dict['Nodes'] = node_list
+                except:
+                    pass
 
                 if my_network.edge_centroids is not None:
                     try:
@@ -2148,19 +2589,18 @@ class ImageViewerWindow(QMainWindow):
             print(f"Error: {e}")
 
 
-    def toggle_chan_load(self):
+    def home(self):
 
-        if self.show_channels.isChecked():
-            self.chan_load = True
-        else:
-            self.chan_load = False
+        self.update_display()
+
+
 
     def toggle_highlight(self):
         self.highlight = self.high_button.isChecked()
         current_xlim = self.ax.get_xlim() if hasattr(self, 'ax') and self.ax.get_xlim() != (0, 1) else None
         current_ylim = self.ax.get_ylim() if hasattr(self, 'ax') and self.ax.get_ylim() != (0, 1) else None
 
-        if self.high_button.isChecked() and self.machine_window is None:
+        if self.high_button.isChecked() and self.machine_window is None and not self.preview:
             if self.highlight_overlay is None and ((len(self.clicked_values['nodes']) + len(self.clicked_values['edges'])) > 0):
                 if self.needs_mini:
                     self.create_mini_overlay(node_indices = self.clicked_values['nodes'], edge_indices = self.clicked_values['edges'])
@@ -2173,16 +2613,24 @@ class ImageViewerWindow(QMainWindow):
         
         self.update_display(preserve_zoom=(current_xlim, current_ylim))
 
+        if self.pan_mode:
+            self.create_pan_background()
+            current_xlim = self.ax.get_xlim()
+            current_ylim = self.ax.get_ylim()
+            self.update_display_pan_mode(current_xlim, current_ylim)
+
         
     def toggle_zoom_mode(self):
         """Toggle zoom mode on/off."""
         self.zoom_mode = self.zoom_button.isChecked()
 
         if self.zoom_mode:
-            self.pan_button.setChecked(False)
+            if self.pan_mode:
+                self.update_display(preserve_zoom=(self.ax.get_xlim(), self.ax.get_ylim()))
+                self.pan_mode = False
+                self.pan_button.setChecked(False)
 
             self.pen_button.setChecked(False)
-            self.pan_mode = False
             self.brush_mode = False
             self.can = False
             self.threed = False
@@ -2198,10 +2646,6 @@ class ImageViewerWindow(QMainWindow):
                     self.pm.finish_current_virtual_operation()
                 # Now convert to real data
                 self.pm.convert_virtual_strokes_to_data()
-                current_xlim = self.ax.get_xlim()
-                current_ylim = self.ax.get_ylim()
-                self.update_display(preserve_zoom=(current_xlim, current_ylim))
-            if self.pan_mode:
                 current_xlim = self.ax.get_xlim()
                 current_ylim = self.ax.get_ylim()
                 self.update_display(preserve_zoom=(current_xlim, current_ylim))
@@ -2251,12 +2695,10 @@ class ImageViewerWindow(QMainWindow):
                 
                 # Store current channel visibility state
                 self.pre_pan_channel_state = self.channel_visible.copy()
-
-                self.prev_down = self.downsample_factor
-                if self.throttle:
-                    if self.downsample_factor < 3:
-                        self.validate_downsample_input(text = 3)
                 
+                current_xlim = self.ax.get_xlim()
+                current_ylim = self.ax.get_ylim()
+
                 # Create static background from currently visible channels
                 self.create_pan_background()
                 
@@ -2264,13 +2706,16 @@ class ImageViewerWindow(QMainWindow):
                 self.channel_visible = [False] * 4
                 self.is_pan_preview = True
                 
+                # Get current downsample factor
+                current_xlim = self.ax.get_xlim() if hasattr(self, 'ax') and self.ax.get_xlim() != (0, 1) else None
+                current_ylim = self.ax.get_ylim() if hasattr(self, 'ax') and self.ax.get_ylim() != (0, 1) else None
                 # Update display to show only background
-                self.update_display_pan_mode()
+                self.update_display_pan_mode(current_xlim, current_ylim)
+
 
         else:
-            current_xlim = self.ax.get_xlim()
-            current_ylim = self.ax.get_ylim()
-            self.update_display(preserve_zoom=(current_xlim, current_ylim))
+            self.setEnabled(True)
+            self.update_display(preserve_zoom=(self.ax.get_xlim(), self.ax.get_ylim()))
             if self.machine_window is None:
                 self.canvas.setCursor(Qt.CursorShape.ArrowCursor)
             else:
@@ -2280,6 +2725,11 @@ class ImageViewerWindow(QMainWindow):
         """Toggle brush mode on/off"""
         self.brush_mode = self.pen_button.isChecked()
         if self.brush_mode:
+
+            if self.pan_mode:
+                self.update_display(preserve_zoom=(self.ax.get_xlim(), self.ax.get_ylim()))
+                self.pan_mode = False
+                self.pan_button.setChecked(False)
 
             self.pm = painting.PaintManager(parent = self)
 
@@ -2737,7 +3187,6 @@ class ImageViewerWindow(QMainWindow):
             self.canvas.blit(self.ax.bbox)
 
         elif self.panning and self.pan_start is not None:
-
             # Calculate the movement
             dx = event.xdata - self.pan_start[0]
             dy = event.ydata - self.pan_start[1]
@@ -2751,22 +3200,23 @@ class ImageViewerWindow(QMainWindow):
             new_ylim = [ylim[0] - dy, ylim[1] - dy]
             
             # Get image bounds using cached dimensions
-            if self.img_width is not None:  # Changed from self.channel_data[0] check
+            if self.img_width is not None:
                 # Ensure new limits don't go beyond image bounds
                 if new_xlim[0] < 0:
                     new_xlim = [0, xlim[1] - xlim[0]]
-                elif new_xlim[1] > self.img_width:  # Changed from img_width variable lookup
+                elif new_xlim[1] > self.img_width:
                     new_xlim = [self.img_width - (xlim[1] - xlim[0]), self.img_width]
                     
                 if new_ylim[0] < 0:
                     new_ylim = [0, ylim[1] - ylim[0]]
-                elif new_ylim[1] > self.img_height:  # Changed from img_height variable lookup
+                elif new_ylim[1] > self.img_height:
                     new_ylim = [self.img_height - (ylim[1] - ylim[0]), self.img_height]
             
             # Apply new limits
             self.ax.set_xlim(new_xlim)
             self.ax.set_ylim(new_ylim)
-            self.canvas.draw_idle()  # Changed from draw() to draw_idle()
+            
+            self.canvas.draw_idle()
             
             # Update pan start position
             self.pan_start = (event.xdata, event.ydata)
@@ -2795,14 +3245,286 @@ class ImageViewerWindow(QMainWindow):
 
 
     def create_pan_background(self):
-        """Create a static background image from currently visible channels with proper rendering"""
-        # Store current zoom state
-        current_xlim = self.ax.get_xlim()
-        current_ylim = self.ax.get_ylim()
+            """Create a static background image from currently visible channels with proper rendering"""
+            # Store current zoom state
+            current_xlim = self.ax.get_xlim()
+            current_ylim = self.ax.get_ylim()
+            
+            # Try GPU acceleration first, fallback to CPU
+            try:
+                import cupy as cp
+                self.use_gpu = True
+            except ImportError:
+                self.use_gpu = False
+            
+            # Render all visible channels with proper colors/brightness into a single composite
+            self.channel_visible = self.pre_pan_channel_state.copy()
+            try:
+                if self.use_gpu:
+                    self.pan_background_image = self.create_composite_for_pan_gpu()
+                else:
+                    self.pan_background_image = self.create_composite_for_pan()
+            except Exception as e:
+                print(f'GPU implementation failed: {e}, falling back to CPU')
+                self.use_gpu = False
+                self.pan_background_image = self.create_composite_for_pan()
+            
+            self.pan_zoom_state = (current_xlim, current_ylim)
+
+    def create_composite_for_pan_gpu(self):
+        """Create a properly rendered composite image for panning with GPU acceleration"""
+        import cupy as cp
         
-        # Render all visible channels with proper colors/brightness into a single composite
-        self.pan_background_image = self.create_composite_for_pan()
-        self.pan_zoom_state = (current_xlim, current_ylim)
+        # Get active channels and dimensions (copied from update_display)
+        active_channels = [i for i in range(4) if self.channel_data[i] is not None]
+        if active_channels:
+            dims = [(self.channel_data[i].shape[1:3] if len(self.channel_data[i].shape) >= 3 else 
+                    self.channel_data[i].shape) for i in active_channels]
+            min_height = min(d[0] for d in dims)
+            min_width = min(d[1] for d in dims)
+        else:
+            return None
+        
+        # Store original dimensions for coordinate mapping
+        self.original_dims = (min_height, min_width)
+        
+        # Get current downsample factor
+        current_xlim = self.ax.get_xlim() if hasattr(self, 'ax') and self.ax.get_xlim() != (0, 1) else None
+        current_ylim = self.ax.get_ylim() if hasattr(self, 'ax') and self.ax.get_ylim() != (0, 1) else None
+
+        # Helper function to crop and downsample image on GPU
+        def crop_and_downsample_image_gpu(image_cp, y_start, y_end, x_start, x_end, factor):
+            # Crop first
+            if len(image_cp.shape) == 2:
+                cropped = image_cp[y_start:y_end, x_start:x_end]
+            elif len(image_cp.shape) == 3:
+                cropped = image_cp[y_start:y_end, x_start:x_end, :]
+            else:
+                cropped = image_cp
+            
+            # Then downsample if needed
+            if factor == 1:
+                return cropped
+            
+            if len(cropped.shape) == 2:
+                return cropped[::factor, ::factor]
+            elif len(cropped.shape) == 3:
+                return cropped[::factor, ::factor, :]
+            else:
+                return cropped
+
+        min_height, min_width = self.original_dims
+
+        # Calculate the visible region in pixel coordinates
+        x_min = max(0, int(np.floor(current_xlim[0] + 0.5)))
+        x_max = min(min_width, int(np.ceil(current_xlim[1] + 0.5)))
+        y_min = max(0, int(np.floor(current_ylim[1] + 0.5)))  # Note: y is flipped
+        y_max = min(min_height, int(np.ceil(current_ylim[0] + 0.5)))
+
+        box_len = int((x_max - x_min)/2)
+        box_height = int((y_max - y_min)/2)
+        x_min = max(0, x_min - box_len)
+        x_max = min(self.shape[2], x_max + box_len)
+        y_min = max(0, y_min - box_height)
+        y_max = min(self.shape[1], y_max + box_height)
+
+        size = (x_max - x_min) * (y_max - y_min)
+        val = int(np.ceil(size/(2000 * 2000)))
+        self.validate_downsample_input(text = val, update = False)
+
+        downsample_factor = self.downsample_factor
+
+        # Add some padding to avoid edge artifacts during pan/zoom
+        padding = max(10, downsample_factor * 2)
+        x_min_padded = max(0, x_min - padding)
+        x_max_padded = min(min_width, x_max + padding)
+        y_min_padded = max(0, y_min - padding)
+        y_max_padded = min(min_height, y_max + padding)
+
+        display_height = (y_max_padded - y_min_padded) // downsample_factor
+        display_width = (x_max_padded - x_min_padded) // downsample_factor
+        
+        # Create a blank RGBA composite to accumulate all channels (using display dimensions) - on GPU
+        composite = cp.zeros((display_height, display_width, 4), dtype=cp.float32)
+        
+        # Process each visible channel exactly like update_display does
+        for channel in range(4):
+            if (self.channel_visible[channel] and 
+                self.channel_data[channel] is not None):
+                
+                # Get current slice data (same logic as update_display)
+                is_rgb = len(self.channel_data[channel].shape) == 4 and (self.channel_data[channel].shape[-1] == 3 or self.channel_data[channel].shape[-1] == 4)
+                
+                if len(self.channel_data[channel].shape) == 3 and not is_rgb:
+                    current_image = self.channel_data[channel][self.current_slice, :, :]
+                elif is_rgb:
+                    current_image = self.channel_data[channel][self.current_slice]
+                else:
+                    current_image = self.channel_data[channel]
+
+                # Convert to CuPy array and crop/downsample on GPU
+                current_image_cp = cp.asarray(current_image)
+                display_image_cp = crop_and_downsample_image_gpu(
+                    current_image_cp, y_min_padded, y_max_padded, 
+                    x_min_padded, x_max_padded, downsample_factor)
+
+                if is_rgb and self.channel_data[channel].shape[-1] == 3:
+                    # RGB image - convert to RGBA and blend
+                    rgb_alpha = cp.ones((*display_image_cp.shape[:2], 4), dtype=cp.float32)
+                    rgb_alpha[:, :, :3] = display_image_cp.astype(cp.float32) / 255.0
+                    rgb_alpha[:, :, 3] = 0.7  # Same alpha as update_display
+                    composite = self.blend_layers_gpu(composite, rgb_alpha)
+                    
+                elif is_rgb and self.channel_data[channel].shape[-1] == 4:
+                    # RGBA image - blend directly
+                    rgba_image = display_image_cp.astype(cp.float32) / 255.0
+                    composite = self.blend_layers_gpu(composite, rgba_image)
+                    
+                else:
+                    # Regular channel processing (same logic as update_display)
+                    if self.min_max[channel][0] == None:
+                        self.min_max[channel][0] = cp.asnumpy(cp.min(current_image_cp))
+                    if self.min_max[channel][1] == None:
+                        self.min_max[channel][1] = cp.asnumpy(cp.max(current_image_cp))
+
+                    img_min = self.min_max[channel][0]
+                    img_max = self.min_max[channel][1]
+                    
+                    if img_min == img_max:
+                        vmin = img_min
+                        vmax = img_min + 1
+                    else:
+                        vmin = img_min + (img_max - img_min) * self.channel_brightness[channel]['min']
+                        vmax = img_min + (img_max - img_min) * self.channel_brightness[channel]['max']
+                    
+                    # Normalize the downsampled image on GPU
+                    if vmin == vmax:
+                        normalized_image = cp.zeros_like(display_image_cp)
+                    else:
+                        normalized_image = cp.clip((display_image_cp - vmin) / (vmax - vmin), 0, 1)
+                    
+                    # Apply channel color and alpha
+                    if channel == 2 and self.machine_window is not None:
+                        # Special case for machine window channel 2
+                        channel_rgba = self.apply_machine_colormap_gpu(display_image_cp)
+                    else:
+                        # Regular channel with custom color
+                        color = self.base_colors[channel]
+                        channel_rgba = cp.zeros((*normalized_image.shape, 4), dtype=cp.float32)
+                        channel_rgba[:, :, 0] = normalized_image * color[0]  # R
+                        channel_rgba[:, :, 1] = normalized_image * color[1]  # G  
+                        channel_rgba[:, :, 2] = normalized_image * color[2]  # B
+                        channel_rgba[:, :, 3] = normalized_image * 0.7       # A (same alpha as update_display)
+                    
+                    # Blend this channel into the composite
+                    composite = self.blend_layers_gpu(composite, channel_rgba)
+        
+        # Add highlight overlays if they exist (with downsampling)
+        if self.mini_overlay and self.highlight and self.machine_window is None:
+            mini_overlay_cp = cp.asarray(self.mini_overlay_data)
+            display_overlay = crop_and_downsample_image_gpu(mini_overlay_cp, y_min_padded, y_max_padded, x_min_padded, x_max_padded, downsample_factor)
+            highlight_rgba = self.create_highlight_rgba_gpu(display_overlay, yellow=True)
+            composite = self.blend_layers_gpu(composite, highlight_rgba)
+        elif self.highlight_overlay is not None and self.highlight:
+            highlight_slice = self.highlight_overlay[self.current_slice]
+            highlight_slice_cp = cp.asarray(highlight_slice)
+            display_highlight = crop_and_downsample_image_gpu(highlight_slice_cp, y_min_padded, y_max_padded, x_min_padded, x_max_padded, downsample_factor)
+            if self.machine_window is None:
+                highlight_rgba = self.create_highlight_rgba_gpu(display_highlight, yellow=True)
+            else:
+                highlight_rgba = self.create_highlight_rgba_gpu(display_highlight, yellow=False)
+            composite = self.blend_layers_gpu(composite, highlight_rgba)
+        
+        # Convert back to CPU and to 0-255 range for display
+        composite_cpu = cp.asnumpy(composite)
+        return (composite_cpu * 255).astype(np.uint8)
+
+    def apply_machine_colormap_gpu(self, image_cp):
+        """Apply the special machine window colormap for channel 2 - GPU version"""
+        import cupy as cp
+        
+        rgba = cp.zeros((*image_cp.shape, 4), dtype=cp.float32)
+        
+        # Transparent for 0
+        mask_0 = (image_cp == 0)
+        rgba[mask_0] = cp.array([0, 0, 0, 0])
+        
+        # Light green for 1
+        mask_1 = (image_cp == 1)
+        rgba[mask_1] = cp.array([0.5, 1, 0.5, 0.7])
+        
+        # Light red for 2
+        mask_2 = (image_cp == 2)
+        rgba[mask_2] = cp.array([1, 0.5, 0.5, 0.7])
+        
+        return rgba
+
+    def create_highlight_rgba_gpu(self, highlight_data_cp, yellow=True):
+        """Create RGBA highlight overlay - GPU version"""
+        import cupy as cp
+        
+        rgba = cp.zeros((*highlight_data_cp.shape, 4), dtype=cp.float32)
+        
+        if yellow:
+            # Yellow highlight
+            mask = highlight_data_cp > 0
+            rgba[mask] = cp.array([1, 1, 0, 0.8])  # Yellow with alpha 0.8
+        else:
+            # Multi-color highlight for machine window
+            mask_1 = (highlight_data_cp == 1)
+            mask_2 = (highlight_data_cp == 2)
+            rgba[mask_1] = cp.array([1, 1, 0, 0.5])      # Yellow for 1
+            rgba[mask_2] = cp.array([0, 0.7, 1, 0.5])    # Blue for 2
+        
+        return rgba
+
+    def blend_layers_gpu(self, base_cp, overlay_cp):
+        """Alpha blend two RGBA layers - GPU version"""
+        import cupy as cp
+        
+        def resize_overlay_to_base_gpu(overlay_arr_cp, base_arr_cp):
+            base_height, base_width = base_arr_cp.shape[:2]
+            overlay_height, overlay_width = overlay_arr_cp.shape[:2]
+            
+            # First crop if overlay is larger
+            cropped_overlay = overlay_arr_cp[:base_height, :base_width]
+            
+            # Then pad if still smaller after cropping
+            current_height, current_width = cropped_overlay.shape[:2]
+            pad_height = base_height - current_height
+            pad_width = base_width - current_width
+            
+            if pad_height > 0 or pad_width > 0:
+                cropped_overlay = cp.pad(cropped_overlay,
+                                        ((0, pad_height), (0, pad_width), (0, 0)),
+                                        mode='constant', constant_values=0)
+            
+            return cropped_overlay
+        
+        # Resize the ENTIRE overlay array to match base dimensions
+        if overlay_cp.shape[:2] != base_cp.shape[:2]:
+            overlay_cp = resize_overlay_to_base_gpu(overlay_cp, base_cp)
+        
+        # Now extract alpha channels (they should be the same size)
+        alpha_overlay = overlay_cp[:, :, 3:4]
+        alpha_base = base_cp[:, :, 3:4]
+        
+        # Calculate output alpha
+        alpha_out = alpha_overlay + alpha_base * (1 - alpha_overlay)
+        
+        # Calculate output RGB
+        rgb_out = cp.zeros_like(base_cp[:, :, :3])
+        mask = alpha_out[:, :, 0] > 0
+        
+        rgb_out[mask] = (overlay_cp[mask, :3] * alpha_overlay[mask] + 
+                         base_cp[mask, :3] * alpha_base[mask] * (1 - alpha_overlay[mask])) / alpha_out[mask]
+        
+        # Combine RGB and alpha
+        result = cp.zeros_like(base_cp)
+        result[:, :, :3] = rgb_out
+        result[:, :, 3:4] = alpha_out
+        
+        return result
 
     def create_composite_for_pan(self):
         """Create a properly rendered composite image for panning with downsample support"""
@@ -2820,26 +3542,60 @@ class ImageViewerWindow(QMainWindow):
         self.original_dims = (min_height, min_width)
         
         # Get current downsample factor
-        downsample_factor = getattr(self, 'downsample_factor', 1)
-        
-        # Calculate display dimensions (downsampled)
-        display_height = min_height // downsample_factor
-        display_width = min_width // downsample_factor
-        
-        # Helper function to downsample image (same as in update_display)
-        def downsample_image(image, factor):
-            if factor == 1:
-                return image
-            
-            # Handle different image types
+        current_xlim = self.ax.get_xlim() if hasattr(self, 'ax') and self.ax.get_xlim() != (0, 1) else None
+        current_ylim = self.ax.get_ylim() if hasattr(self, 'ax') and self.ax.get_ylim() != (0, 1) else None
+
+        # Helper function to crop and downsample image
+        def crop_and_downsample_image(image, y_start, y_end, x_start, x_end, factor):
+            # Crop first
             if len(image.shape) == 2:
-                # Grayscale
-                return image[::factor, ::factor]
+                cropped = image[y_start:y_end, x_start:x_end]
             elif len(image.shape) == 3:
-                # RGB/RGBA
-                return image[::factor, ::factor, :]
+                cropped = image[y_start:y_end, x_start:x_end, :]
             else:
-                return image
+                cropped = image
+            
+            # Then downsample if needed
+            if factor == 1:
+                return cropped
+            
+            if len(cropped.shape) == 2:
+                return cropped[::factor, ::factor]
+            elif len(cropped.shape) == 3:
+                return cropped[::factor, ::factor, :]
+            else:
+                return cropped
+
+        min_height, min_width = self.original_dims
+
+        # Calculate the visible region in pixel coordinates
+        x_min = max(0, int(np.floor(current_xlim[0] + 0.5)))
+        x_max = min(min_width, int(np.ceil(current_xlim[1] + 0.5)))
+        y_min = max(0, int(np.floor(current_ylim[1] + 0.5)))  # Note: y is flipped
+        y_max = min(min_height, int(np.ceil(current_ylim[0] + 0.5)))
+
+        box_len = int((x_max - x_min)/2)
+        box_height = int((y_max - y_min)/2)
+        x_min = max(0, x_min - box_len)
+        x_max = min(self.shape[2], x_max + box_len)
+        y_min = max(0, y_min - box_height)
+        y_max = min(self.shape[1], y_max + box_height)
+
+        size = (x_max - x_min) * (y_max - y_min)
+        val = max(2, int(np.ceil(size/(2000 * 2000))))
+        self.validate_downsample_input(text = val, update = False)
+
+        downsample_factor = self.downsample_factor
+
+        # Add some padding to avoid edge artifacts during pan/zoom
+        padding = max(10, downsample_factor * 2)
+        x_min_padded = max(0, x_min - padding)
+        x_max_padded = min(min_width, x_max + padding)
+        y_min_padded = max(0, y_min - padding)
+        y_max_padded = min(min_height, y_max + padding)
+
+        display_height = (y_max_padded - y_min_padded) // downsample_factor
+        display_width = (x_max_padded - x_min_padded) // downsample_factor
         
         # Create a blank RGBA composite to accumulate all channels (using display dimensions)
         composite = np.zeros((display_height, display_width, 4), dtype=np.float32)
@@ -2859,8 +3615,10 @@ class ImageViewerWindow(QMainWindow):
                 else:
                     current_image = self.channel_data[channel]
 
-                # Downsample the image for rendering
-                display_image = downsample_image(current_image, downsample_factor)
+                # Crop and downsample the image for rendering
+                display_image = crop_and_downsample_image(
+                    current_image, y_min_padded, y_max_padded, 
+                    x_min_padded, x_max_padded, downsample_factor)
 
                 if is_rgb and self.channel_data[channel].shape[-1] == 3:
                     # RGB image - convert to RGBA and blend
@@ -2915,12 +3673,12 @@ class ImageViewerWindow(QMainWindow):
         
         # Add highlight overlays if they exist (with downsampling)
         if self.mini_overlay and self.highlight and self.machine_window is None:
-            display_overlay = downsample_image(self.mini_overlay_data, downsample_factor)
+            display_overlay = crop_and_downsample_image(self.mini_overlay_data, y_min_padded, y_max_padded, x_min_padded, x_max_padded, downsample_factor)
             highlight_rgba = self.create_highlight_rgba(display_overlay, yellow=True)
             composite = self.blend_layers(composite, highlight_rgba)
         elif self.highlight_overlay is not None and self.highlight:
             highlight_slice = self.highlight_overlay[self.current_slice]
-            display_highlight = downsample_image(highlight_slice, downsample_factor)
+            display_highlight = crop_and_downsample_image(highlight_slice, y_min_padded, y_max_padded, x_min_padded, x_max_padded, downsample_factor)
             if self.machine_window is None:
                 highlight_rgba = self.create_highlight_rgba(display_highlight, yellow=True)
             else:
@@ -2960,8 +3718,8 @@ class ImageViewerWindow(QMainWindow):
             # Multi-color highlight for machine window
             mask_1 = (highlight_data == 1)
             mask_2 = (highlight_data == 2)
-            rgba[mask_1] = [1, 1, 0, 0.5]      # Yellow for 1
-            rgba[mask_2] = [0, 0.7, 1, 0.5]    # Blue for 2
+            rgba[mask_1] = [1, 1, 0, 0.3]      # Yellow for 1
+            rgba[mask_2] = [0, 0.7, 1, 0.3]    # Blue for 2
         
         return rgba
 
@@ -3012,7 +3770,7 @@ class ImageViewerWindow(QMainWindow):
         
         return result
 
-    def update_display_pan_mode(self):
+    def update_display_pan_mode(self, current_xlim, current_ylim):
         """Lightweight display update for pan preview mode with downsample support"""
 
         if self.is_pan_preview and self.pan_background_image is not None:
@@ -3030,17 +3788,59 @@ class ImageViewerWindow(QMainWindow):
                 downsample_factor = getattr(self, 'downsample_factor', 1)
                 height *= downsample_factor
                 width *= downsample_factor
+
+            downsample_factor = self.downsample_factor
+            min_height, min_width = self.original_dims
+
+            # Calculate the visible region in pixel coordinates
+            x_min = max(0, int(np.floor(current_xlim[0] + 0.5)))
+            x_max = min(min_width, int(np.ceil(current_xlim[1] + 0.5)))
+            y_min = max(0, int(np.floor(current_ylim[1] + 0.5)))  # Note: y is flipped
+            y_max = min(min_height, int(np.ceil(current_ylim[0] + 0.5)))
+
+            box_len = int((x_max - x_min)/2)
+            box_height = int((y_max - y_min)/2)
+            x_min = max(0, x_min - box_len)
+            x_max = min(self.shape[2], x_max + box_len)
+            y_min = max(0, y_min - box_height)
+            y_max = min(self.shape[1], y_max + box_height)
+
+            # Add some padding to avoid edge artifacts during pan/zoom
+            padding = max(10, downsample_factor * 2)
+            x_min_padded = max(0, x_min - padding)
+            x_max_padded = min(min_width, x_max + padding)
+            y_min_padded = max(0, y_min - padding)
+            y_max_padded = min(min_height, y_max + padding)
+
+            # Convert coordinates to downsampled space for cropping
+            downsample_factor = self.downsample_factor
+
+            # Convert to downsampled coordinates for cropping
+            x_min_ds = x_min // downsample_factor
+            x_max_ds = x_max // downsample_factor  
+            y_min_ds = y_min // downsample_factor
+            y_max_ds = y_max // downsample_factor
+
+            # Add padding in downsampled space
+            padding_ds = max(10 // downsample_factor, 2)
+            x_min_padded_ds = max(0, x_min_ds - padding_ds)
+            x_max_padded_ds = min(self.pan_background_image.shape[1], x_max_ds + padding_ds)
+            y_min_padded_ds = max(0, y_min_ds - padding_ds)
+            y_max_padded_ds = min(self.pan_background_image.shape[0], y_max_ds + padding_ds)
             
+            # Calculate the extent for the cropped region (in original coordinates)
+            crop_extent = (x_min_padded - 0.5, x_max_padded - 0.5, 
+                          y_max_padded - 0.5, y_min_padded - 0.5)
+
             # Display the composite background with preserved zoom
             # Use extent to stretch downsampled image back to original coordinate space
             self.ax.imshow(self.pan_background_image, 
-                          extent=(-0.5, width-0.5, height-0.5, -0.5),
+                          extent=crop_extent,
                           aspect='equal')
             
             # Restore the zoom state from when pan began
-            if hasattr(self, 'pan_zoom_state'):
-                self.ax.set_xlim(self.pan_zoom_state[0])
-                self.ax.set_ylim(self.pan_zoom_state[1])
+            self.ax.set_xlim(current_xlim)
+            self.ax.set_ylim(current_ylim)
             
             # Get downsample factor for title display
             downsample_factor = getattr(self, 'downsample_factor', 1)
@@ -3049,7 +3849,7 @@ class ImageViewerWindow(QMainWindow):
             self.ax.set_xlabel('X')
             self.ax.set_ylabel('Y')
             if downsample_factor > 1:
-                self.ax.set_title(f'Slice {self.current_slice} (DS: {downsample_factor}x)')
+                self.ax.set_title(f'Slice {self.current_slice}')
             else:
                 self.ax.set_title(f'Slice {self.current_slice}')
             self.ax.xaxis.label.set_color('black')
@@ -3091,6 +3891,21 @@ class ImageViewerWindow(QMainWindow):
 
         if self.pan_mode:
             
+            # Update display to show only background
+            current_xlim = self.ax.get_xlim() if hasattr(self, 'ax') and self.ax.get_xlim() != (0, 1) else None
+            current_ylim = self.ax.get_ylim() if hasattr(self, 'ax') and self.ax.get_ylim() != (0, 1) else None
+            #self.update_display(preserve_zoom = (current_xlim, current_ylim))
+            self.setEnabled(False)
+            
+            try:
+                self.create_pan_background()
+                current_xlim = self.ax.get_xlim()
+                current_ylim = self.ax.get_ylim()
+                self.update_display_pan_mode(current_xlim, current_ylim)
+            finally:
+                # Re-enable the widget when done
+                self.setEnabled(True)
+            
             self.panning = False
             self.pan_start = None
             self.canvas.setCursor(Qt.CursorShape.OpenHandCursor)
@@ -3111,9 +3926,13 @@ class ImageViewerWindow(QMainWindow):
                     self.show_crop_dialog(args)
 
                 elif self.zoom_mode: #Optional targeted zoom
+                    # Calculate aspect ratio to avoid zooming into very thin rectangles
+                    aspect_ratio = width / height if height > 0 else float('inf')
                     
-                    self.ax.set_xlim([x0, x0 + width])
-                    self.ax.set_ylim([y0 + height, y0])
+                    # Skip zoom if the rectangle is too narrow/thin (adjust thresholds as needed)
+                    if width > 10 and height > 10 and 0.1 < aspect_ratio < 10:
+                        self.ax.set_xlim([x0, x0 + width])
+                        self.ax.set_ylim([y0 + height, y0])
 
                     self.zoom_changed = True  # Flag that zoom has changed
                     
@@ -3152,8 +3971,9 @@ class ImageViewerWindow(QMainWindow):
                             self.create_highlight_overlay(node_indices=self.clicked_values['nodes'])
                         
                         # Try to highlight the last selected value in tables
-                        if self.clicked_values['nodes']:
+                        if len(self.clicked_values['nodes']) == 1:
                             self.highlight_value_in_tables(self.clicked_values['nodes'][-1])
+                            self.handle_info('node')
                             
                     elif self.active_channel == 1:  # Edges
                         if not ctrl_pressed:
@@ -3168,8 +3988,33 @@ class ImageViewerWindow(QMainWindow):
                             self.create_highlight_overlay(edge_indices=self.clicked_values['edges'])
                         
                         # Try to highlight the last selected value in tables
-                        if self.clicked_values['edges']:
+                        if len(self.clicked_values['edges']):
                             self.highlight_value_in_tables(self.clicked_values['edges'][-1])
+                            self.handle_info('edge')
+
+                    if len(self.clicked_values['nodes']) > 0 or len(self.clicked_values['edges']) > 0:  # Check if we have any nodes selected
+
+                        old_nodes = copy.deepcopy(self.clicked_values['nodes']) 
+
+                        # Get the existing DataFrame from the model
+                        original_df = self.network_table.model()._data
+                        
+                        # Create mask for rows where one column is any original node AND the other column is any neighbor
+                        mask = (
+                            ((original_df.iloc[:, 0].isin(self.clicked_values['nodes'])) &
+                            (original_df.iloc[:, 1].isin(self.clicked_values['nodes']))) |
+                            (original_df.iloc[:, 2].isin(self.clicked_values['edges']))
+                            )
+                        
+                        # Filter the DataFrame to only include direct connections
+                        filtered_df = original_df[mask].copy()
+                        
+                        # Create new model with filtered DataFrame and update selection table
+                        new_model = PandasModel(filtered_df)
+                        self.selection_table.setModel(new_model)
+                        
+                        # Switch to selection table
+                        self.selection_button.click()
             
             elif not self.selecting and self.selection_start:  # If we had a click but never started selection
                 # Handle as a normal click
@@ -3548,9 +4393,10 @@ class ImageViewerWindow(QMainWindow):
         load_action.triggered.connect(lambda: self.load_misc('Edge Centroids'))
         load_action = misc_menu.addAction("Load Node Communities")
         load_action.triggered.connect(lambda: self.load_misc('Communities'))
-        load_action = misc_menu.addAction("Merge Nodes")
+        node_identities = file_menu.addMenu('Images -> Node Identities')
+        load_action = node_identities.addAction("Merge Labeled Images Into Nodes")
         load_action.triggered.connect(lambda: self.load_misc('Merge Nodes'))
-        load_action = misc_menu.addAction("Merge Node IDs from Images")
+        load_action = node_identities.addAction("Assign Node Identities From Overlap With Other Images")
         load_action.triggered.connect(self.show_merge_node_id_dialog)
 
         
@@ -3602,7 +4448,7 @@ class ImageViewerWindow(QMainWindow):
         id_code_action = overlay_menu.addAction("Code Identities")
         id_code_action.triggered.connect(lambda: self.show_code_dialog(sort = 'Identity'))
         umap_action = overlay_menu.addAction("Centroid UMAP")
-        umap_action.triggered.connect(self.handle_umap)
+        umap_action.triggered.connect(self.handle_centroid_umap)
 
         rand_menu = analysis_menu.addMenu("Randomize")
         random_action = rand_menu.addAction("Generate Equivalent Random Network")
@@ -3669,10 +4515,10 @@ class ImageViewerWindow(QMainWindow):
         gennodes_action.triggered.connect(self.show_gennodes_dialog)
         branch_action = generate_menu.addAction("Label Branches")
         branch_action.triggered.connect(lambda: self.show_branch_dialog())
-        genvor_action = generate_menu.addAction("Generate Voronoi Diagram (From Node Centroids) - goes in Overlay2")
+        genvor_action = generate_menu.addAction("Generate Voronoi Diagram - goes in Overlay2")
         genvor_action.triggered.connect(self.voronoi)
 
-        modify_action = process_menu.addAction("Modify Network")
+        modify_action = process_menu.addAction("Modify Network/Properties")
         modify_action.triggered.connect(self.show_modify_dialog)
 
         
@@ -3691,8 +4537,6 @@ class ImageViewerWindow(QMainWindow):
         idoverlay_action.triggered.connect(self.show_idoverlay_dialog)
         coloroverlay_action = overlay_menu.addAction("Color Nodes (or Edges)")
         coloroverlay_action.triggered.connect(self.show_coloroverlay_dialog)
-        #searchoverlay_action = overlay_menu.addAction("Show Search Regions")
-        #searchoverlay_action.triggered.connect(self.show_search_dialog)
         shuffle_action = overlay_menu.addAction("Shuffle")
         shuffle_action.triggered.connect(self.show_shuffle_dialog)
         arbitrary_action = image_menu.addAction("Select Objects")
@@ -3710,32 +4554,19 @@ class ImageViewerWindow(QMainWindow):
         # Initialize downsample factor
         self.downsample_factor = 1
         
-        """
         # Create container widget for corner controls
         corner_widget = QWidget()
         corner_layout = QHBoxLayout(corner_widget)
         corner_layout.setContentsMargins(5, 0, 5, 0)
         
-        # Add downsample control
-        downsample_label = QLabel("Downsample Display:")
-        downsample_label.setStyleSheet("color: black; font-size: 11px;")
-        corner_layout.addWidget(downsample_label)
         
-        self.downsample_input = QLineEdit("1")
-        self.downsample_input.setFixedWidth(40)
-        self.downsample_input.setFixedHeight(25)
-        self.downsample_input.setStyleSheet("""
-            #QLineEdit {
-                #border: 1px solid gray;
-                #border-radius: 2px;
-                #padding: 1px;
-                #font-size: 11px;
-            #}
-        """)
-        self.downsample_input.textChanged.connect(self.on_downsample_changed)
-        self.downsample_input.editingFinished.connect(self.validate_downsample_input)
-        corner_layout.addWidget(self.downsample_input)
-        
+        # Add after your other buttons
+        self.popup_button = QPushButton("⤴") 
+        self.popup_button.setFixedSize(40, 40)
+        self.popup_button.setToolTip("Pop out canvas")
+        self.popup_button.clicked.connect(self.popup_canvas)
+        corner_layout.addWidget(self.popup_button)
+
         # Add some spacing
         corner_layout.addSpacing(10)
 
@@ -3745,15 +4576,15 @@ class ImageViewerWindow(QMainWindow):
         cam_button.setStyleSheet("font-size: 24px;")
         cam_button.clicked.connect(self.snap)
         corner_layout.addWidget(cam_button)
+
+        load_button = QPushButton("📁")
+        load_button.setFixedSize(40, 40)
+        load_button.setStyleSheet("font-size: 24px;")
+        load_button.clicked.connect(self.load_file)
+        corner_layout.addWidget(load_button)
         
         # Set as corner widget
         menubar.setCornerWidget(corner_widget, Qt.Corner.TopRightCorner)
-        """
-        cam_button = QPushButton("📷")
-        cam_button.setFixedSize(40, 40)
-        cam_button.setStyleSheet("font-size: 24px;")  # Makes emoji larger
-        cam_button.clicked.connect(self.snap)
-        menubar.setCornerWidget(cam_button, Qt.Corner.TopRightCorner)
 
     def on_downsample_changed(self, text):
         """Called whenever the text in the downsample input changes"""
@@ -3799,11 +4630,6 @@ class ImageViewerWindow(QMainWindow):
                 self.downsample_factor = 1
 
         self.throttle = self.shape[1] * self.shape[2] > 3000 * 3000 * self.downsample_factor
-        if self.machine_window is not None:
-            if self.throttle: #arbitrary throttle for large arrays.
-                self.machine_window.update_interval = 10
-            else:
-                self.machine_window.update_interval = 1  # Increased to 1s
         
         # Optional: Trigger display update if you want immediate effect
         if update:
@@ -4046,6 +4872,12 @@ class ImageViewerWindow(QMainWindow):
            # Create new table
            table = CustomTableView(self)
            table.setModel(PandasModel(df))
+
+           try:
+               first_column_name = table.model()._data.columns[0]
+               table.sort_table(first_column_name, ascending=True)
+           except:
+                pass
            
            # Add to tabbed widget
            if title is None:
@@ -4053,17 +4885,27 @@ class ImageViewerWindow(QMainWindow):
            else:
                self.tabbed_data.add_table(f"{title}", table)
            
+
+
            # Adjust column widths to content
            for column in range(table.model().columnCount(None)):
                table.resizeColumnToContents(column)
 
        except:
-           pass
+            pass
 
     def show_merge_node_id_dialog(self):
 
-        dialog = MergeNodeIdDialog(self)
-        dialog.exec()
+        if my_network.nodes is None:
+            QMessageBox.critical(
+                self,
+                "Error",
+                "Please load your segmented cells into 'Nodes' channel first"
+            )
+            return
+        else:
+            dialog = MergeNodeIdDialog(self)
+            dialog.exec()
 
     def show_gray_water_dialog(self):
         """Show the gray watershed parameter dialog."""
@@ -4157,6 +4999,10 @@ class ImageViewerWindow(QMainWindow):
                 if not self.confirm_calcbranch_dialog("Use of this feature will require additional use of the Nodes and Overlay 2 channels. Please save any data and return, or proceed if you do not need those channels' data"):
                     return
 
+            if my_network.edges is None and my_network.nodes is not None:
+                self.load_channel(1, my_network.nodes, data = True)
+                self.delete_channel(0, False)
+
             my_network.id_overlay = my_network.edges.copy()
 
             self.show_gennodes_dialog()
@@ -4188,6 +5034,10 @@ class ImageViewerWindow(QMainWindow):
             if self.channel_data[0] is not None:
                 if not self.confirm_calcbranch_dialog("Use of this feature will require additional use of the Nodes and Overlay 2 channels. Please save any data and return, or proceed if you do not need those channels' data"):
                     return
+
+            if my_network.edges is None and my_network.nodes is not None:
+                self.load_channel(1, my_network.nodes, data = True)
+                self.delete_channel(0, False)
 
             self.show_branch_dialog(called = True)
 
@@ -4291,18 +5141,7 @@ class ImageViewerWindow(QMainWindow):
 
         try:
 
-            if my_network.nodes is not None:
-                shape = my_network.nodes.shape
-            else:
-                shape = None
-
-            if my_network.node_centroids is None:
-                self.show_centroid_dialog()
-                if my_network.node_centroids is None:
-                    print("Node centroids must be set")
-                    return
-
-            array = pxt.create_voronoi_3d_kdtree(my_network.node_centroids, shape)
+            array = sdl.smart_dilate(self.channel_data[self.active_channel], dilate_xy = np.max(self.shape), dilate_z = np.max(self.shape), use_dt_dil_amount = np.max(self.shape), fast_dil = False)
             self.load_channel(3, array, True)
 
         except Exception as e:
@@ -4358,10 +5197,6 @@ class ImageViewerWindow(QMainWindow):
         dialog = ColorOverlayDialog(self)
         dialog.exec()
 
-    def show_search_dialog(self):
-        """Show the search dialog"""
-        dialog = SearchOverlayDialog(self)
-        dialog.exec()
 
     def show_shuffle_dialog(self):
         """Show the shuffle dialog"""
@@ -4437,29 +5272,6 @@ class ImageViewerWindow(QMainWindow):
                     if sort == 'Node Identities':
                         my_network.load_node_identities(file_path = filename)
 
-                        """
-                        first_value = list(my_network.node_identities.values())[0]  # Check that there are not multiple IDs
-                        if isinstance(first_value, (list, tuple)):
-                            trump_value, ok = QInputDialog.getText(
-                                self,
-                                'Multiple IDs Detected',
-                                'The node identities appear to contain multiple ids per node in a list.\n'
-                                'If you desire one node ID to trump all others, enter it here.\n'
-                                '(Enter "-" to have the first IDs trump all others)\n'
-                                '(Enter "/" to have multi-ID nodes be split into many nodes sharing a centroid)\n'
-                                '(Close this window to continue with multi-ID nodes)'
-                            )
-                            if not ok or trump_value.strip() == '':
-                                trump_value = None
-                            elif trump_value.upper() == '-':
-                                trump_value = '-'
-                            elif trump_value.upper() == "/":
-                                trump_value = '/'
-                            my_network.node_identities = uncork(my_network.node_identities, trump_value)
-                        else:
-                            trump_value = None
-                            my_network.node_identities = uncork(my_network.node_identities, trump_value)
-                        """
 
                         if hasattr(my_network, 'node_identities') and my_network.node_identities is not None:
                             try:
@@ -4508,6 +5320,14 @@ class ImageViewerWindow(QMainWindow):
         elif sort == 'Merge Nodes':
             try:
 
+                if my_network.nodes is None:
+                    QMessageBox.critical(
+                        self,
+                        "Error",
+                        "Please load your first set of nodes into the 'Nodes' channel first"
+                    )
+                    return
+
                 if len(np.unique(my_network.nodes)) < 3:
                     self.show_label_dialog()
 
@@ -4520,6 +5340,21 @@ class ImageViewerWindow(QMainWindow):
                 msg.addButton("Cancel", QMessageBox.ButtonRole.RejectRole)
 
                 msg.exec()
+
+                # Also if they want centroids:
+                msg2 = QMessageBox()
+                msg2.setWindowTitle("Selection Type")
+                msg2.setText("Would you like to compute node centroids for each image prior to merging?")
+                yes_button = msg2.addButton("Yes", QMessageBox.ButtonRole.AcceptRole)
+                no_button = msg2.addButton("No", QMessageBox.ButtonRole.AcceptRole)
+                msg2.addButton("Cancel", QMessageBox.ButtonRole.RejectRole)
+
+                msg2.exec()
+
+                if msg2.clickedButton() == yes_button:
+                    centroids = True
+                else:
+                    centroids = False
 
                 if msg.clickedButton() == tiff_button:
                     # Code for selecting TIFF files
@@ -4543,7 +5378,7 @@ class ImageViewerWindow(QMainWindow):
                     if dialog.exec() == QFileDialog.DialogCode.Accepted:
                         selected_path = dialog.directory().absolutePath()
 
-                my_network.merge_nodes(selected_path, root_id = self.node_name)
+                my_network.merge_nodes(selected_path, root_id = self.node_name, centroids = centroids)
                 self.load_channel(0, my_network.nodes, True)
 
 
@@ -4552,8 +5387,12 @@ class ImageViewerWindow(QMainWindow):
                         self.format_for_upperright_table(my_network.node_identities, 'NodeID', 'Identity', 'Node Identities')
                     except Exception as e:
                         print(f"Error loading node identity table: {e}")
+                if centroids:
+                    self.format_for_upperright_table(my_network.node_centroids, 'NodeID', ['Z', 'Y', 'X'], 'Node Centroids')
+
 
             except Exception as e:
+
                 QMessageBox.critical(
                     self,
                     "Error Merging",
@@ -4580,7 +5419,8 @@ class ImageViewerWindow(QMainWindow):
 
             if directory != "":
 
-                self.reset(network = True, xy_scale = 1, z_scale = 1, edges = True, network_overlay = True, id_overlay = True, update = False)
+                self.reset(network = True, xy_scale = 1, z_scale = 1, nodes = True, edges = True, network_overlay = True, id_overlay = True, update = False)
+
 
                 my_network.assemble(directory)
 
@@ -4607,7 +5447,7 @@ class ImageViewerWindow(QMainWindow):
                     if channel is not None:
                         self.slice_slider.setEnabled(True)
                         self.slice_slider.setMinimum(0)
-                        self.slice_slider.setMaximum(channel.shape[0] - 1)
+                        self.slice_slider.setMaximum(self.shape[0] - 1)
                         self.slice_slider.setValue(0)
                         self.current_slice = 0
                         break
@@ -4893,6 +5733,7 @@ class ImageViewerWindow(QMainWindow):
         """Load a channel and enable active channel selection if needed."""
 
         try:
+
             self.hold_update = True
             if not data:  # For solo loading
                 filename, _ = QFileDialog.getOpenFileName(
@@ -5051,12 +5892,8 @@ class ImageViewerWindow(QMainWindow):
             if all(not btn.isEnabled() for btn in self.channel_buttons[:channel_index]):
                 self.set_active_channel(channel_index)
 
-            if self.chan_load:
-                if not self.channel_buttons[channel_index].isChecked():
-                    self.channel_buttons[channel_index].click()
-            else:
-                if self.channel_buttons[channel_index].isChecked():
-                    self.channel_buttons[channel_index].click()
+            if not self.channel_buttons[channel_index].isChecked():
+                self.channel_buttons[channel_index].click()
 
             self.min_max[channel_index][0] = np.min(self.channel_data[channel_index])
             self.min_max[channel_index][1] = np.max(self.channel_data[channel_index])
@@ -5073,6 +5910,8 @@ class ImageViewerWindow(QMainWindow):
             except:
                 pass
 
+            if self.shape == self.channel_data[channel_index].shape:
+                preserve_zoom = (self.ax.get_xlim(), self.ax.get_ylim())
             self.shape = self.channel_data[channel_index].shape
             if self.shape[1] * self.shape[2] > 3000 * 3000 * self.downsample_factor:
                 self.throttle = True
@@ -5092,7 +5931,12 @@ class ImageViewerWindow(QMainWindow):
             self.current_operation = []
             self.current_operation_type = None
 
-            if not end_paint:
+            if self.pan_mode:
+                self.pan_button.click()
+                if self.show_channels:
+                    self.channel_buttons[channel_index].click()
+                    self.channel_buttons[channel_index].click()
+            elif not end_paint:
 
                 self.update_display(reset_resize = reset_resize, preserve_zoom = preserve_zoom)
 
@@ -5157,9 +6001,9 @@ class ImageViewerWindow(QMainWindow):
             
             if update:
                 # Update display
-                self.update_display()
+                self.update_display(preserve_zoom = (self.ax.get_xlim(), self.ax.get_ylim()))
 
-    def reset(self, nodes = False, network = False, xy_scale = 1, z_scale = 1, edges = False, search_region = False, network_overlay = False, id_overlay = False, update = True):
+    def reset(self, nodes = False, network = False, xy_scale = 1, z_scale = 1, edges = False, search_region = False, network_overlay = False, id_overlay = False, update = True, node_identities = False):
         """Method to flexibly reset certain fields to free up the RAM as desired"""
         
         # Set scales first before any clearing operations
@@ -5178,6 +6022,9 @@ class ImageViewerWindow(QMainWindow):
             
             # Clear selection table
             self.selection_table.setModel(PandasModel(empty_df))
+
+        if node_identities:
+            my_network.node_identities = None
 
         if nodes:
             self.delete_channel(0, False, update = update)
@@ -5289,6 +6136,9 @@ class ImageViewerWindow(QMainWindow):
     def toggle_channel(self, channel_index):
         """Toggle visibility of a channel."""
         # Store current zoom settings before toggling
+        if self.pan_mode:
+            self.pan_button.click()
+
         current_xlim = self.ax.get_xlim() if hasattr(self, 'ax') and self.ax.get_xlim() != (0, 1) else None
         current_ylim = self.ax.get_ylim() if hasattr(self, 'ax') and self.ax.get_ylim() != (0, 1) else None
 
@@ -5326,7 +6176,9 @@ class ImageViewerWindow(QMainWindow):
                 # Now convert to real data
                 self.pm.convert_virtual_strokes_to_data()
             self.current_slice = slice_value
-            if self.mini_overlay == True: #If we are rendering the highlight overlay for selected values one at a time.
+            if self.preview:
+                 self.create_highlight_overlay_slice(self.targs, bounds=self.bounds)
+            elif self.mini_overlay == True: #If we are rendering the highlight overlay for selected values one at a time.
                 self.create_mini_overlay(node_indices = self.clicked_values['nodes'], edge_indices = self.clicked_values['edges'])
             if not self.hold_update:
                 self.update_display(preserve_zoom=view_settings)
@@ -5334,6 +6186,8 @@ class ImageViewerWindow(QMainWindow):
                 self.hold_update = False
             #if self.machine_window is not None:
                 #self.machine_window.poke_segmenter()
+            if self.pan_mode:
+                self.pan_button.click()
             self.pending_slice = None
 
     def update_brightness(self, channel_index, values):
@@ -5359,18 +6213,15 @@ class ImageViewerWindow(QMainWindow):
                 self.measurement_artists = []
                 self.axes_initialized = False
                 self.original_dims = None
-            
+
             # Handle special states (pan, static background)
-            if self.pan_background_image is not None:
+            if self.pan_background_image is not None and not self.pan_mode:
                 self.channel_visible = self.pre_pan_channel_state.copy()
                 self.is_pan_preview = False
                 self.pan_background_image = None
                 if self.resume:
                     self.machine_window.segmentation_worker.resume()
                     self.resume = False
-                if self.prev_down != self.downsample_factor:
-                    self.validate_downsample_input(text = self.prev_down)
-                    return
            
             if self.static_background is not None:
                 # Your existing virtual strokes conversion logic
@@ -5389,17 +6240,6 @@ class ImageViewerWindow(QMainWindow):
                     pass
                 self.static_background = None
                 
-                # Your existing machine_window logic
-                if self.machine_window is None:
-                    try:
-                        self.channel_data[4][self.current_slice, :, :] = n3d.overlay_arrays_simple(
-                            self.channel_data[self.temp_chan][self.current_slice, :, :], 
-                            self.channel_data[4][self.current_slice, :, :])
-                        self.load_channel(self.temp_chan, self.channel_data[4], data=True, end_paint=True)
-                        self.channel_data[4] = None
-                        self.channel_visible[4] = False
-                    except:
-                        pass
 
             # Get dimensions
             active_channels = [i for i in range(4) if self.channel_data[i] is not None]
@@ -5438,8 +6278,6 @@ class ImageViewerWindow(QMainWindow):
                 for img in list(self.ax.get_images()):
                     img.remove()
                 # Clear measurement points
-                for artist in self.measurement_artists:
-                    artist.remove()
                 self.measurement_artists.clear()
 
             # Determine the current view bounds (either from preserve_zoom or current state)
@@ -5455,17 +6293,18 @@ class ImageViewerWindow(QMainWindow):
             y_min = max(0, int(np.floor(current_ylim[1] + 0.5)))  # Note: y is flipped
             y_max = min(min_height, int(np.ceil(current_ylim[0] + 0.5)))
 
-            if not self.pan_mode: # If using image pyramids
-                size = (x_max - x_min) * (y_max - y_min)
-                if size < (3000 * 3000): # Smaller window
-                    val = 1
-                elif size > (3000 * 3000) and size < (6000 * 6000): # Med window
-                    val = 2
-                elif size > (6000 * 6000) and size < (9000 * 9000): # Large window
-                    val = 3
-                elif size > (9000 * 9000): # Very large window
-                    val = 3
-                self.validate_downsample_input(text = val, update = False)
+            if self.pan_mode:
+                box_len = int((x_max - x_min)/2)
+                box_height = int((y_max - y_min)/2)
+                x_min = max(0, x_min - box_len)
+                x_max = min(self.shape[2], x_max + box_len)
+                y_min = max(0, y_min - box_height)
+                y_max = min(self.shape[1], y_max + box_height)
+
+            size = (x_max - x_min) * (y_max - y_min)
+            val = int(np.ceil(size/(3000 * 3000)))
+            self.validate_downsample_input(text = val, update = False)
+
             downsample_factor = self.downsample_factor
 
             # Add some padding to avoid edge artifacts during pan/zoom
@@ -5507,6 +6346,7 @@ class ImageViewerWindow(QMainWindow):
                     return cropped[::factor, ::factor, :]
                 else:
                     return cropped
+
             
             # Update channel images efficiently with cropping and downsampling
             for channel in range(4):
@@ -5583,8 +6423,8 @@ class ImageViewerWindow(QMainWindow):
                                               vmin=0, vmax=1, extent=crop_extent)
 
             # Handle preview, overlays, and measurements (apply cropping here too)
-            if self.preview and not called:
-                self.create_highlight_overlay_slice(self.targs, bounds=self.bounds)
+            #if self.preview and not called:
+             #   self.create_highlight_overlay_slice(self.targs, bounds=self.bounds)
 
             # Overlay handling (optimized with cropping and downsampling)
             if self.mini_overlay and self.highlight and self.machine_window is None:
@@ -5652,8 +6492,9 @@ class ImageViewerWindow(QMainWindow):
             if reset_resize:
                 self.resizing = False
             
-            # Use draw_idle for better performance
+            # draw_idle
             self.canvas.draw_idle()
+
 
         except Exception as e:
             pass
@@ -5791,12 +6632,13 @@ class ImageViewerWindow(QMainWindow):
         dialog = CodeDialog(self, sort = sort)
         dialog.exec()
 
-    def handle_umap(self):
+    def handle_centroid_umap(self):
 
         if my_network.node_centroids is None:
             self.show_centroid_dialog()
 
         my_network.centroid_umap()
+
 
     def closeEvent(self, event):
         """Override closeEvent to close all windows when main window closes"""
@@ -5812,6 +6654,8 @@ class ImageViewerWindow(QMainWindow):
         
         # Force quit the application
         QCoreApplication.quit()
+
+        exit()
 
 
 
@@ -5957,15 +6801,19 @@ class CustomTableView(QTableView):
                     desc_action.triggered.connect(lambda checked, c=col: self.sort_table(c, ascending=False))
             
             # Different menus for top and bottom tables
-            if self in self.parent.data_table:  # Top table
+            if self.is_top_table:  # Use the flag instead of checking membership
                 save_menu = context_menu.addMenu("Save As")
                 save_csv = save_menu.addAction("CSV")
                 save_excel = save_menu.addAction("Excel")
+                
+                if self.model() and len(self.model()._data.columns) == 2:
+                    thresh_action = context_menu.addAction("Use to Threshold Nodes")
+                    thresh_action.triggered.connect(lambda: self.thresh(self.create_threshold_dict()))
+                
                 close_action = context_menu.addAction("Close All")
-
                 close_action.triggered.connect(self.close_all)
                 
-                # Connect the actions
+                # Connect the save actions
                 save_csv.triggered.connect(lambda: self.save_table_as('csv'))
                 save_excel.triggered.connect(lambda: self.save_table_as('xlsx'))
             else:  # Bottom tables
@@ -6008,6 +6856,38 @@ class CustomTableView(QTableView):
             # Show the menu at cursor position
             cursor_pos = QCursor.pos()
             context_menu.exec(cursor_pos)
+
+
+
+    def thresh(self, special_dict):
+        try:
+            self.parent.special_dict = special_dict
+            thresh_window = ThresholdWindow(self.parent, 4)
+            thresh_window.show()
+        except:
+            pass
+
+    def create_threshold_dict(self):
+        try:
+            """Create a dictionary from the 2-column table data."""
+            if not self.model() or not hasattr(self.model(), '_data'):
+                return {}
+            
+            df = self.model()._data
+            if len(df.columns) != 2:
+                return {}
+            
+            # Create dictionary: {column_0_value: column_1_value}
+            threshold_dict = {}
+            for index, row in df.iterrows():
+                key = row.iloc[0]    # Column 0 value
+                value = row.iloc[1]  # Column 1 value
+                threshold_dict[int(key)] = float(value)
+            
+            return threshold_dict
+        except:
+            pass
+
 
     def sort_table(self, column, ascending=True):
         """Sort the table by the specified column."""
@@ -6055,11 +6935,7 @@ class CustomTableView(QTableView):
                 self.resizeColumnToContents(col)
                 
         except Exception as e:
-            QMessageBox.critical(
-                self,
-                "Error",
-                f"Error sorting table: {str(e)}"
-            )
+            pass
 
     def save_table_as(self, file_type):
         """Save the table data as either CSV or Excel file."""
@@ -6579,8 +7455,13 @@ class PropertiesDialog(QDialog):
         self.network.setChecked(self.check_checked(my_network.network))
         layout.addRow("Network Status", self.network)
 
+        self.node_identities = QPushButton("Node Identities")
+        self.node_identities.setCheckable(True)
+        self.node_identities.setChecked(self.check_checked(my_network.node_identities))
+        layout.addRow("Identities Status", self.node_identities)
+
         # Add Run button
-        run_button = QPushButton("Enter")
+        run_button = QPushButton("Enter (Erases Unchecked Properties)")
         run_button.clicked.connect(self.run_properties)
         layout.addWidget(run_button)
 
@@ -6617,8 +7498,9 @@ class PropertiesDialog(QDialog):
             id_overlay = not self.id_overlay.isChecked()
             search_region = not self.search_region.isChecked()
             network = not self.network.isChecked()
+            node_identities = not self.node_identities.isChecked()
 
-            self.parent().reset(nodes = nodes, edges = edges, search_region = search_region, network_overlay = network_overlay, id_overlay = id_overlay, network = network, xy_scale = xy_scale, z_scale = z_scale)
+            self.parent().reset(nodes = nodes, edges = edges, search_region = search_region, network_overlay = network_overlay, id_overlay = id_overlay, network = network, xy_scale = xy_scale, z_scale = z_scale, node_identities = node_identities)
             
             self.accept()
 
@@ -6707,7 +7589,7 @@ class BrightnessContrastDialog(QDialog):
             self.debounce_timer.setSingleShot(True)
             self.debounce_timer.timeout.connect(self._apply_pending_updates)
             self.pending_updates = {}
-            self.debounce_delay = 300  # 300ms delay
+            self.debounce_delay = 20  # 300ms delay
 
             # Connect signals
             slider.valueChanged.connect(lambda values, ch=i: self.on_slider_change(ch, values))
@@ -6826,7 +7708,7 @@ class ColorDialog(QDialog):
                 self.parent().base_colors[i] = new_color
         
         # Update the display
-        self.parent().update_display()
+        self.parent().update_display(preserve_zoom = (self.parent().ax.get_xlim(), self.parent().ax.get_ylim()))
         self.accept()
 
 class ArbitraryDialog(QDialog):
@@ -7046,71 +7928,252 @@ class ArbitraryDialog(QDialog):
         except Exception as e:
             QMessageBox.critical(self, "Error", f"Error processing selections: {str(e)}")
 
-class MergeNodeIdDialog(QDialog):
 
+class MergeNodeIdDialog(QDialog):
     def __init__(self, parent=None):
+
         super().__init__(parent)
+
         self.setWindowTitle("Merging Node Identities From Folder Dialog.\nNote that you should prelabel or prewatershed your current node objects before doing this. (See Process -> Image) It does not label them for you.")
         self.setModal(True)
         
         layout = QFormLayout(self)
-
         self.search = QLineEdit("")
         layout.addRow("Step-out distance (from current nodes image - ignore if you dilated them previously or don't want):", self.search)
-
         self.xy_scale = QLineEdit(f"{my_network.xy_scale}")
         layout.addRow("xy_scale:", self.xy_scale)
-
         self.z_scale = QLineEdit(f"{my_network.z_scale}")
         layout.addRow("z_scale:", self.z_scale)
+        self.mode_selector = QComboBox()
+        self.mode_selector.addItems(["Auto-Binarize(Otsu)/Presegmented", "Manual (Interactive Thresholder)"])
+        self.mode_selector.setCurrentIndex(1)  # Default to Mode 1
+        layout.addRow("Binarization Strategy:", self.mode_selector)
 
-        # Add Run button
+        self.umap = QPushButton("If using manual threshold: Also generate identity UMAP?")
+        self.umap.setCheckable(True)
+        self.umap.setChecked(True)
+        layout.addWidget(self.umap)
+        
+        self.include = QPushButton("Include When a Node is Negative for an ID?")
+        self.include.setCheckable(True)
+        self.include.setChecked(False)
+        layout.addWidget(self.include)
+        
         run_button = QPushButton("Get Directory")
         run_button.clicked.connect(self.run)
         layout.addWidget(run_button)
 
-    def run(self):
+    def wait_for_threshold_processing(self):
+        """
+        Opens ThresholdWindow and waits for user to process the image.
+        Returns True if completed, False if cancelled.
+        The thresholded image will be available in the main window after completion.
+        """
+        # Create event loop to wait for user
+        loop = QEventLoop()
+        result = {'completed': False}
+        
+        # Create the threshold window
+        thresh_window = ThresholdWindow(self.parent(), 4)
+        
+        # Connect signals
+        def on_processing_complete():
+            result['completed'] = True
+            loop.quit()
+            
+        def on_processing_cancelled():
+            result['completed'] = False
+            loop.quit()
+        
+        thresh_window.processing_complete.connect(on_processing_complete)
+        thresh_window.processing_cancelled.connect(on_processing_cancelled)
+        
+        # Show window and wait
+        thresh_window.show()
+        thresh_window.raise_()
+        thresh_window.activateWindow()
+        
+        # Block until user clicks "Apply Threshold & Continue" or "Cancel"
+        loop.exec()
+        
+        # Clean up
+        thresh_window.deleteLater()
+        
+        return result['completed']
 
+    def run(self):
         try:
 
             search = float(self.search.text()) if self.search.text().strip() else 0
             xy_scale = float(self.xy_scale.text()) if self.xy_scale.text().strip() else 1
             z_scale = float(self.z_scale.text()) if self.z_scale.text().strip() else 1
-
-
             data = self.parent().channel_data[0]
-
+            include = self.include.isChecked()
+            umap = self.umap.isChecked()
+            
             if data is None:
                 return
-
-
-
+                
             dialog = QFileDialog(self)
             dialog.setOption(QFileDialog.Option.DontUseNativeDialog)
             dialog.setOption(QFileDialog.Option.ReadOnly)
             dialog.setFileMode(QFileDialog.FileMode.Directory)
             dialog.setViewMode(QFileDialog.ViewMode.Detail)
-
+            
             if dialog.exec() == QFileDialog.DialogCode.Accepted:
                 selected_path = dialog.directory().absolutePath()
-
+            else:
+                return  # User cancelled directory selection
+                
             if search > 0:
-                data = sdl.smart_dilate(data, 1, 1, GPU = False, fast_dil = False, use_dt_dil_amount = search, xy_scale = xy_scale, z_scale = z_scale)
+                data = sdl.smart_dilate(data, 1, 1, GPU=False, fast_dil=False, 
+                                      use_dt_dil_amount=search, xy_scale=xy_scale, z_scale=z_scale)
+            
+            # Check if manual mode is selected
+            if self.mode_selector.currentIndex() == 1:  # Manual mode
 
-            my_network.merge_node_ids(selected_path, data)
+                if my_network.node_identities is None: # Prepare modular dict
 
-            self.parent().format_for_upperright_table(my_network.node_identities, 'NodeID', 'Identity')
+                    my_network.node_identities = {}
 
-            QMessageBox.information(
-                self,
-                "Success",
-                "Node Identities Merged. New IDs represent presence of corresponding img foreground with +, absence with -. Please save your new identities as csv, then use File -> Load -> Load From Excel Helper to bulk search and rename desired combinations. (Press Help [above] for more info)"
-            )
+                    nodes = list(np.unique(data))
+                    if 0 in nodes:
+                        del nodes[0]
+                    for node in nodes:
 
-            self.accept()
+                        my_network.node_identities[node] = [] # Assign to lists at first
+                else:
+                    for node, iden in my_network.node_identities.items():
+                        try:
+                            my_network.node_identities[node] = ast.literal_eval(iden)
+                        except:
+                            my_network.node_identities[node] = [iden]
+
+                id_dicts = my_network.get_merge_node_dictionaries(selected_path, data)
+
+                # For loop example - get threshold for multiple images/data
+                results = []
+
+                img_list = n3d.directory_info(selected_path)
+                data_backup = copy.deepcopy(data)
+                self.parent().load_channel(0, data, data = True)
+                self.hide()
+                self.parent().highlight_overlay = None
+
+                good_list = []
+                
+                for i, img in enumerate(img_list):
+
+                    if img.endswith('.tiff') or img.endswith('.tif'):
+
+                        print(f"Please threshold {img}")
+
+
+                        mask = tifffile.imread(f'{selected_path}/{img}')
+                        self.parent().load_channel(2, mask, data = True)
+
+                        # Wait for user to threshold this data
+                        self.parent().special_dict = id_dicts[i]
+                        processing_completed = self.wait_for_threshold_processing()
+                        
+                        if not processing_completed:
+                            # User cancelled, ask if they want to continue
+                            reply = QMessageBox.question(self, 'Continue?', 
+                                                       f'Threshold cancelled for item {i+1}. Continue with remaining items?',
+                                                       QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No)
+                            if reply == QMessageBox.StandardButton.No:
+                                break
+                            continue
+                        
+                        # At this point, the thresholded image is in the main window's memory
+                        # Get the processed/thresholded data from wherever ThresholdWindow stored it
+                        thresholded_vals = list(np.unique(self.parent().channel_data[0]))
+                        if 0 in thresholded_vals:
+                            del thresholded_vals[0]
+
+                        if img.endswith('.tiff'):
+                            base_name = img[:-5]
+                        elif img.endswith('.tif'):
+                            base_name = img[:-4]
+                        else:
+                            base_name = img
+
+                        assigned = {}
+
+                        for node in my_network.node_identities.keys():
+
+                            try:
+
+                                if int(node) in thresholded_vals:
+
+                                    my_network.node_identities[node].append(f'{base_name}+')
+
+                                elif include:
+
+                                    my_network.node_identities[node].append(f'{base_name}-')
+
+                            except:
+                                pass
+                        
+                        # Process the thresholded data
+                        self.parent().highlight_overlay = None
+                        self.parent().load_channel(0, data_backup, data = True)
+                        good_list.append(base_name)
+
+                modify_dict = copy.deepcopy(my_network.node_identities)
+
+                for node, iden in my_network.node_identities.items():
+
+                    try:
+
+                        if len(iden) == 1:
+
+                            modify_dict[node] = str(iden[0]) # Singleton lists become bare strings
+                        elif len(iden) == 0:
+                            del modify_dict[node]
+                        else:
+                            modify_dict[node] = str(iden) # We hold multi element lists as strings for compatibility
+
+                    except:
+                        pass
+
+                my_network.node_identities = modify_dict
+                
+                self.parent().format_for_upperright_table(my_network.node_identities, 'NodeID', 'Identity')
+
+                all_keys = id_dicts[0].keys()
+                result = {key: np.array([d[key] for d in id_dicts]) for key in all_keys}
+
+
+                self.parent().format_for_upperright_table(result, 'NodeID', good_list, 'Mean Intensity')
+                if umap:
+                    my_network.identity_umap(result)
+
+
+                QMessageBox.information(
+                    self,
+                    "Success",
+                    "Node Identities Merged. New IDs represent presence of corresponding img foreground with +, absence with -. Please save your new identities as csv, then use File -> Load -> Load From Excel Helper to bulk search and rename desired combinations. (Press Help [above] for more info)"
+                )
+
+                self.accept()
+            else:
+                my_network.merge_node_ids(selected_path, data, include)
+
+                self.parent().format_for_upperright_table(my_network.node_identities, 'NodeID', 'Identity')
+
+                QMessageBox.information(
+                    self,
+                    "Success",
+                    "Node Identities Merged. New IDs represent presence of corresponding img foreground with +, absence with -. Please save your new identities as csv, then use File -> Load -> Load From Excel Helper to bulk search and rename desired combinations. (Press Help [above] for more info)"
+                )
+
+                self.accept()
 
         except Exception as e:
-            print(f"Error: {e}")
+            import traceback
+            print(traceback.format_exc())
+            #print(f"Error: {e}")
 
 
 class Show3dDialog(QDialog):
@@ -7223,7 +8286,7 @@ class NetOverlayDialog(QDialog):
 
             my_network.network_overlay = my_network.draw_network()
 
-            self.parent().load_channel(2, channel_data = my_network.network_overlay, data = True)
+            self.parent().load_channel(2, channel_data = my_network.network_overlay, data = True, preserve_zoom = (self.parent().ax.get_xlim(), self.parent().ax.get_ylim()))
 
             self.accept()
 
@@ -7231,34 +8294,6 @@ class NetOverlayDialog(QDialog):
 
             print(f"Error with Overlay Generation: {e}")
 
-class SearchOverlayDialog(QDialog):
-
-    def __init__(self, parent=None):
-
-        super().__init__(parent)
-        self.setWindowTitle("Generate Search Region Overlay?")
-        self.setModal(True)
-
-        layout = QFormLayout(self)
-
-        # Add Run button
-        run_button = QPushButton("Generate (Will go to Overlay 2)")
-        run_button.clicked.connect(self.searchoverlay)
-        layout.addWidget(run_button)
-
-    def searchoverlay(self):
-
-        try:
-
-            my_network.id_overlay = my_network.search_region
-
-            self.parent().load_channel(3, channel_data = my_network.search_region, data = True)
-
-            self.accept()
-
-        except Exception as e:
-
-            print(f"Error with Overlay Generation: {e}")
 
 class IdOverlayDialog(QDialog):
 
@@ -7312,7 +8347,7 @@ class IdOverlayDialog(QDialog):
             my_network.id_overlay = my_network.draw_edge_indices()
 
 
-        self.parent().load_channel(3, channel_data = my_network.id_overlay, data = True)
+        self.parent().load_channel(3, channel_data = my_network.id_overlay, data = True, preserve_zoom = (self.parent().ax.get_xlim(), self.parent().ax.get_ylim()))
 
         self.accept()
 
@@ -7361,7 +8396,7 @@ class ColorOverlayDialog(QDialog):
             self.parent().format_for_upperright_table(legend, f'{self.sort} Id', f'Encoding Val: {self.sort}', 'Legend')
 
 
-            self.parent().load_channel(3, channel_data = result, data = True)
+            self.parent().load_channel(3, channel_data = result, data = True, preserve_zoom = (self.parent().ax.get_xlim(), self.parent().ax.get_ylim()))
 
             self.accept()
 
@@ -7429,7 +8464,7 @@ class ShuffleDialog(QDialog):
                     except:
                         self.parent().highlight_overay = None
                 else:
-                    self.parent().load_channel(accepted_mode, channel_data = target_data, data = True)
+                    self.parent().load_channel(accepted_mode, channel_data = target_data, data = True, preserve_zoom = (self.parent().ax.get_xlim(), self.parent().ax.get_ylim()))
             except:
                 pass
 
@@ -7441,14 +8476,14 @@ class ShuffleDialog(QDialog):
                     except:
                         self.parent().highlight_overlay = None
                 else:
-                    self.parent().load_channel(accepted_target, channel_data = active_data, data = True)
+                    self.parent().load_channel(accepted_target, channel_data = active_data, data = True, preserve_zoom = (self.parent().ax.get_xlim(), self.parent().ax.get_ylim()))
             except:
                 pass
 
 
 
 
-            self.parent().update_display()
+            self.parent().update_display(preserve_zoom = (self.parent().ax.get_xlim(), self.parent().ax.get_ylim()))
 
             self.accept()
 
@@ -8056,10 +9091,10 @@ class NearNeighDialog(QDialog):
                 avg, output, quant_overlay, pred = my_network.nearest_neighbors_avg(root, targ, my_network.xy_scale, my_network.z_scale, num = num, heatmap = heatmap, threed = threed, quant = quant, centroids = centroids)
             else:
                 avg, output, overlay, quant_overlay, pred = my_network.nearest_neighbors_avg(root, targ, my_network.xy_scale, my_network.z_scale, num = num, heatmap = heatmap, threed = threed, numpy = True, quant = quant, centroids = centroids)
-                self.parent().load_channel(3, overlay, data = True)
+                self.parent().load_channel(3, overlay, data = True, preserve_zoom = (self.parent().ax.get_xlim(), self.parent().ax.get_ylim()))
 
             if quant_overlay is not None:
-                self.parent().load_channel(2, quant_overlay, data = True)
+                self.parent().load_channel(2, quant_overlay, data = True, preserve_zoom = (self.parent().ax.get_xlim(), self.parent().ax.get_ylim()))
 
             avg = {header:avg}
 
@@ -8175,6 +9210,8 @@ class NeighborIdentityDialog(QDialog):
 
             self.accept()
         except Exception as e:
+            import traceback
+            print(traceback.format_exc())
             print(f"Error: {e}")
 
 
@@ -8406,7 +9443,7 @@ class HeatmapDialog(QDialog):
             else:
 
                 heat_dict, overlay = my_network.community_heatmap(num_nodes = nodecount, is3d = is3d, numpy = True)
-                self.parent().load_channel(3, overlay, data = True)
+                self.parent().load_channel(3, overlay, data = True, preserve_zoom = (self.parent().ax.get_xlim(), self.parent().ax.get_ylim()))
 
 
             self.parent().format_for_upperright_table(heat_dict, metric='Community', value='ln(Predicted Community Nodecount/Actual)', title="Community Heatmap")
@@ -8763,7 +9800,7 @@ class DegreeDialog(QDialog):
                 nodes = n3d.upsample_with_padding(nodes, down_factor, original_shape)
 
             if accepted_mode > 0:
-                self.parent().load_channel(3, channel_data = nodes, data = True)
+                self.parent().load_channel(3, channel_data = nodes, data = True, preserve_zoom = (self.parent().ax.get_xlim(), self.parent().ax.get_ylim()))
 
 
             self.accept()
@@ -8826,7 +9863,7 @@ class HubDialog(QDialog):
 
             if img is not None:
 
-                self.parent().load_channel(3, channel_data = img, data = True)
+                self.parent().load_channel(3, channel_data = img, data = True, preserve_zoom = (self.parent().ax.get_xlim(), self.parent().ax.get_ylim()))
 
 
             self.accept()
@@ -8885,7 +9922,7 @@ class MotherDialog(QDialog):
                 G = my_network.isolate_mothers(self, ret_nodes = True, called = True)
             else:
                 G, result = my_network.isolate_mothers(self, ret_nodes = False, called = True)
-                self.parent().load_channel(2, channel_data = result, data = True)
+                self.parent().load_channel(2, channel_data = result, data = True, preserve_zoom = (self.parent().ax.get_xlim(), self.parent().ax.get_ylim()))
 
             degree_dict = {}
 
@@ -8960,8 +9997,7 @@ class CodeDialog(QDialog):
 
             self.parent().format_for_upperright_table(output, f'{self.sort} Id', f'Encoding Val: {self.sort}', 'Legend')
 
-
-            self.parent().load_channel(3, image, True)
+            self.parent().load_channel(3, image, True, preserve_zoom = (self.parent().ax.get_xlim(), self.parent().ax.get_ylim()))
             self.accept()
 
         except Exception as e:
@@ -9374,7 +10410,7 @@ class BinarizeDialog(QDialog):
                 # Update the corresponding property in my_network
                 setattr(my_network, network_properties[self.parent().active_channel], result)
 
-                self.parent().update_display()
+                self.parent().update_display(preserve_zoom = (self.parent().ax.get_xlim(), self.parent().ax.get_ylim()))
                 self.accept()
                 
             except Exception as e:
@@ -9426,7 +10462,7 @@ class LabelDialog(QDialog):
                 # Update the corresponding property in my_network
                 setattr(my_network, network_properties[self.parent().active_channel], result)
 
-                self.parent().update_display()
+                self.parent().update_display(preserve_zoom = (self.parent().ax.get_xlim(), self.parent().ax.get_ylim()))
                 self.accept()
                 
             except Exception as e:
@@ -9509,7 +10545,7 @@ class SLabelDialog(QDialog):
 
                 binary_array = binary_array * label_array
 
-                self.parent().load_channel(accepted_target, binary_array, True)
+                self.parent().load_channel(accepted_target, binary_array, True, preserve_zoom = (self.parent().ax.get_xlim(), self.parent().ax.get_ylim()))
 
                 self.accept()
                 
@@ -9920,6 +10956,7 @@ class MachineWindow(QMainWindow):
 
             self.num_chunks = 0
 
+
         except:
             return
 
@@ -10130,6 +11167,8 @@ class MachineWindow(QMainWindow):
     def toggle_brush_mode(self):
         """Toggle brush mode on/off"""
         self.parent().brush_mode = self.brush_button.isChecked()
+        if self.parent().pan_mode:
+            self.parent().update_display(preserve_zoom=(self.parent().ax.get_xlim(), self.parent().ax.get_ylim()))
 
         if self.parent().brush_mode:
 
@@ -10191,6 +11230,10 @@ class MachineWindow(QMainWindow):
 
 
     def start_segmentation(self):
+
+        if self.parent().pan_mode:
+            self.parent().pan_button.click()
+
 
         self.parent().static_background = None
 
@@ -10382,9 +11425,8 @@ class MachineWindow(QMainWindow):
         print("Finished segmentation moved to Overlay 2. Use File -> Save(As) for disk saving.")
 
     def closeEvent(self, event):
-
         try:
-            if self.parent().isVisible():
+            if self.parent() and self.parent().isVisible():
                 if self.confirm_close_dialog():
                     # Clean up resources before closing
                     if self.brush_button.isChecked():
@@ -10397,7 +11439,6 @@ class MachineWindow(QMainWindow):
                     # Kill the segmentation thread and wait for it to finish
                     self.kill_segmentation()
                     time.sleep(0.2)  # Give additional time for cleanup
-
                     try:
                         self.parent().channel_data[0] = self.parent().reduce_rgb_dimension(self.parent().channel_data[0], 'weight')
                         self.update_display()
@@ -10405,10 +11446,20 @@ class MachineWindow(QMainWindow):
                         pass
                     
                     self.parent().machine_window = None
+                    event.accept()  # IMPORTANT: Accept the close event
                 else:
-                    event.ignore()
-        except:
-            pass
+                    event.ignore()  # User cancelled, ignore the close
+            else:
+                # Parent doesn't exist or isn't visible, just close
+                if hasattr(self, 'parent') and self.parent():
+                    self.parent().machine_window = None
+                event.accept()
+        except Exception as e:
+            print(f"Error in closeEvent: {e}")
+            # Even if there's an error, allow the window to close
+            if hasattr(self, 'parent') and self.parent():
+                self.parent().machine_window = None
+            event.accept()
 
 
 
@@ -10428,10 +11479,7 @@ class SegmentationWorker(QThread):
         self.mem_lock = mem_lock
         self._stop = False
         self._paused = False  # Add pause flag
-        if self.machine_window.parent().shape[1] * self.machine_window.parent().shape[2] > 3000 * 3000 * self.machine_window.parent().downsample_factor: #arbitrary throttle for large arrays.
-            self.update_interval = 10
-        else:
-            self.update_interval = 1  # Increased to 1s
+        self.update_interval = 2  # Increased to 2s
         self.chunks_since_update = 0
         self.chunks_per_update = 5  # Only update every 5 chunks
         self.poked = False # If it should wake up or not
@@ -10508,11 +11556,15 @@ class SegmentationWorker(QThread):
 
 
 class ThresholdWindow(QMainWindow):
+    processing_complete = pyqtSignal()  # Emitted when user finishes and images are modified
+    processing_cancelled = pyqtSignal()  # Emitted when user cancels
+
     def __init__(self, parent=None, accepted_mode=0):
         super().__init__(parent)
         self.setWindowTitle("Threshold")
 
         self.accepted_mode = accepted_mode
+        self.preview = True
         
         # Create central widget and layout
         central_widget = QWidget()
@@ -10542,6 +11594,10 @@ class ThresholdWindow(QMainWindow):
                     self.parent().degree_dict[int(node)] = 0
 
             self.histo_list = list(self.parent().degree_dict.values())
+            self.bounds = False
+            self.parent().bounds = False
+        elif accepted_mode == 4:
+            self.histo_list = list(self.parent().special_dict.values())
             self.bounds = False
             self.parent().bounds = False
 
@@ -10615,15 +11671,38 @@ class ThresholdWindow(QMainWindow):
         self.preview.clicked.connect(self.preview_mode)
         form_layout.addRow("Show Preview:", self.preview)
 
-        run_button = QPushButton("Apply Threshold")
-        run_button.clicked.connect(self.thresh)
-        form_layout.addRow(run_button)
+        button_layout = QHBoxLayout()
+
+
+        # Keep your existing Apply Threshold button, but modify its behavior
+        run_button = QPushButton("Apply Threshold/Continue")
+        run_button.clicked.connect(self.apply_and_continue)  # New method
+        button_layout.addWidget(run_button)
         
+        # Add Cancel button for external dialog use
+        cancel_button = QPushButton("Cancel/Skip")
+        cancel_button.clicked.connect(self.cancel_processing)
+        button_layout.addWidget(cancel_button)
+        
+        form_layout.addRow(button_layout)
         layout.addLayout(form_layout)
-        
+                
         # Set a reasonable default size
         self.setMinimumWidth(400)
         self.setMinimumHeight(400)
+
+    def apply_and_continue(self):
+        """Apply threshold, modify main window images, then signal completion"""
+        self.thresh()  # This should modify the main window images
+        
+        # Signal that processing is complete
+        self.processing_complete.emit()
+        self.close()
+    
+    def cancel_processing(self):
+        """Cancel without applying changes"""
+        self.processing_cancelled.emit()
+        self.close()
 
     def closeEvent(self, event):
         self.parent().preview = False
@@ -10676,6 +11755,10 @@ class ThresholdWindow(QMainWindow):
             for node, vol in self.parent().degree_dict.items():
                 if min_val <= vol <= max_val:
                     output.append(node)
+        elif self.accepted_mode == 4:
+            for node, vol in self.parent().special_dict.items():
+                if min_val <= vol <= max_val:
+                    output.append(node)
         return output
 
     def get_values_in_range(self, lst, min_val, max_val):
@@ -10693,11 +11776,18 @@ class ThresholdWindow(QMainWindow):
             for item in self.parent().degree_dict:
                 if self.parent().degree_dict[item] in values:
                     output.append(item)
+        elif self.accepted_mode == 4:
+            for item in self.parent().special_dict:
+                if self.parent().special_dict[item] in values:
+                    output.append(item)
+
         return output
 
 
     def min_value_changed(self):
         try:
+            if not self.preview.isChecked():
+                self.preview.click()
             text = self.min.text()
             if not text:  # If empty, ignore
                 return
@@ -10745,6 +11835,8 @@ class ThresholdWindow(QMainWindow):
 
     def max_value_changed(self):
         try:
+            if not self.preview.isChecked():
+                self.preview.click()
             text = self.max.text()
             if not text:  # If empty, ignore
                 return
@@ -10868,7 +11960,6 @@ class ThresholdWindow(QMainWindow):
                 f"Error running threshold: {str(e)}"
             )
 
-
 class SmartDilateDialog(QDialog):
     def __init__(self, parent, params):
         super().__init__(parent)
@@ -10910,7 +12001,7 @@ class SmartDilateDialog(QDialog):
 
         result = sdl.smart_dilate(active_data, dilate_xy, dilate_z, GPU = GPU, predownsample = down_factor, fast_dil = predt, use_dt_dil_amount = amount, xy_scale = xy_scale, z_scale = z_scale)
 
-        self.parent().load_channel(self.parent().active_channel, result, True)
+        self.parent().load_channel(self.parent().active_channel, result, True, preserve_zoom = (self.parent().ax.get_xlim(), self.parent().ax.get_ylim()))
         self.accept()
 
 
@@ -11051,7 +12142,7 @@ class ErodeDialog(QDialog):
 
         # Add mode selection dropdown
         self.mode_selector = QComboBox()
-        self.mode_selector.addItems(["Pseudo3D Binary Kernels (For Fast, small erosions)", "Distance Transform-Based (Slower but more accurate at larger dilations)"])
+        self.mode_selector.addItems(["Pseudo3D Binary Kernels (For Fast, small erosions)", "Distance Transform-Based (Slower but more accurate at larger dilations)", "Preserve Labels (Slower)"])
         self.mode_selector.setCurrentIndex(0)  # Default to Mode 1
         layout.addRow("Execution Mode:", self.mode_selector)
 
@@ -11087,6 +12178,12 @@ class ErodeDialog(QDialog):
                 z_scale = 1
 
             mode = self.mode_selector.currentIndex()
+
+            if mode == 2:
+                mode = 1
+                preserve_labels = True
+            else:
+                preserve_labels = False
             
             # Get the active channel data from parent
             active_data = self.parent().channel_data[self.parent().active_channel]
@@ -11099,14 +12196,13 @@ class ErodeDialog(QDialog):
                 amount,
                 xy_scale = xy_scale,
                 z_scale = z_scale,
-                mode = mode
+                mode = mode,
+                preserve_labels = preserve_labels
             )
 
 
-            self.parent().load_channel(self.parent().active_channel, result, True)
+            self.parent().load_channel(self.parent().active_channel, result, True, preserve_zoom = (self.parent().ax.get_xlim(), self.parent().ax.get_ylim()))
 
-
-            self.parent().update_display(preserve_zoom=(current_xlim, current_ylim))
             self.accept()
             
         except Exception as e:
@@ -11172,7 +12268,7 @@ class HoleDialog(QDialog):
                 self.parent().load_channel(3, active_data - result, True)
 
 
-            self.parent().update_display()
+            self.parent().update_display(preserve_zoom = (self.parent().ax.get_xlim(), self.parent().ax.get_ylim()))
             self.accept()
             
         except Exception as e:
@@ -11250,9 +12346,9 @@ class MaskDialog(QDialog):
 
 
                     # Update both the display data and the network object
-                    self.parent().load_channel(output_target, channel_data = result, data = True)
+                    self.parent().load_channel(output_target, channel_data = result, data = True,)
 
-                self.parent().update_display()
+                self.parent().update_display(preserve_zoom = (self.parent().ax.get_xlim(), self.parent().ax.get_ylim()))
 
                 self.accept()
 
@@ -11485,7 +12581,7 @@ class TypeDialog(QDialog):
 
                 active_data = active_data.astype(np.float64)
 
-            self.parent().load_channel(self.active_chan, active_data, True)
+            self.parent().load_channel(self.active_chan, active_data, True, preserve_zoom = (self.parent().ax.get_xlim(), self.parent().ax.get_ylim()))
 
 
             print(f"Channel {self.active_chan}) dtype now: {self.parent().channel_data[self.active_chan].dtype}")
@@ -11546,6 +12642,8 @@ class SkeletonizeDialog(QDialog):
 
             if remove > 0:
                 result = n3d.remove_branches_new(result, remove)
+                result = n3d.dilate_3D(result, 3, 3, 3)
+                result = n3d.skeletonize(result)
 
 
             # Update both the display data and the network object
@@ -11555,7 +12653,7 @@ class SkeletonizeDialog(QDialog):
             # Update the corresponding property in my_network
             setattr(my_network, network_properties[self.parent().active_channel], result)
 
-            self.parent().update_display()
+            self.parent().update_display(preserve_zoom = (self.parent().ax.get_xlim(), self.parent().ax.get_ylim()))
             self.accept()
             
         except Exception as e:
@@ -11586,7 +12684,7 @@ class DistanceDialog(QDialog):
 
             data = sdl.compute_distance_transform_distance(data, sampling = [my_network.z_scale, my_network.xy_scale, my_network.xy_scale])
 
-            self.parent().load_channel(self.parent().active_channel, data, data = True)
+            self.parent().load_channel(self.parent().active_channel, data, data = True, preserve_zoom = (self.parent().ax.get_xlim(), self.parent().ax.get_ylim()))
 
         except Exception as e:
 
@@ -11624,7 +12722,7 @@ class GrayWaterDialog(QDialog):
 
             data = n3d.gray_watershed(data, min_peak_distance, min_intensity)
 
-            self.parent().load_channel(self.parent().active_channel, data, data = True)
+            self.parent().load_channel(self.parent().active_channel, data, data = True, preserve_zoom = (self.parent().ax.get_xlim(), self.parent().ax.get_ylim()))
 
             self.accept()
 
@@ -11749,7 +12847,7 @@ class WatershedDialog(QDialog):
             # Update the corresponding property in my_network
             setattr(my_network, network_properties[self.parent().active_channel], result)
 
-            self.parent().update_display()
+            self.parent().update_display(preserve_zoom = (self.parent().ax.get_xlim(), self.parent().ax.get_ylim()))
             self.accept()
             
         except Exception as e:
@@ -11802,7 +12900,7 @@ class InvertDialog(QDialog):
                 # Update the corresponding property in my_network
                 setattr(my_network, network_properties[self.parent().active_channel], result)
 
-                self.parent().update_display()
+                self.parent().update_display(preserve_zoom = (self.parent().ax.get_xlim(), self.parent().ax.get_ylim()))
                 self.accept()
                 
             except Exception as e:
@@ -11846,7 +12944,7 @@ class ZDialog(QDialog):
         for i in range(len(self.parent().channel_data)):
             try:
                 self.parent().channel_data[i] = n3d.z_project(self.parent().channel_data[i], mode)
-                self.parent().load_channel(i, self.parent().channel_data[i], True)
+                self.parent().load_channel(i, self.parent().channel_data[i], True, preserve_zoom = (self.parent().ax.get_xlim(), self.parent().ax.get_ylim()))
             except:
                 pass
 
@@ -12051,6 +13149,10 @@ class GenNodesDialog(QDialog):
     def run_gennodes(self):
 
         try:
+
+            if my_network.edges is None and my_network.nodes is not None:
+                self.parent().load_channel(1, my_network.nodes, data = True)
+                self.parent().delete_channel(0, False)
             # Get directory (None if empty)
             #directory = self.directory.text() if self.directory.text() else None
             
@@ -12280,6 +13382,10 @@ class BranchDialog(QDialog):
             fix_val = float(self.fix_val.text()) if self.fix_val.text() else None
             seed = int(self.seed.text()) if self.seed.text() else None
 
+            if my_network.edges is None and my_network.nodes is not None:
+                self.parent().load_channel(1, my_network.nodes, data = True)
+                self.parent().delete_channel(0, False)
+
             original_shape = my_network.edges.shape
             original_array = copy.deepcopy(my_network.edges)
 
@@ -12341,7 +13447,7 @@ class BranchDialog(QDialog):
 
                 self.parent().load_channel(1, channel_data = output, data = True)
 
-            self.parent().update_display()
+            self.parent().update_display(preserve_zoom = (self.parent().ax.get_xlim(), self.parent().ax.get_ylim()))
             self.accept()
 
         except Exception as e:
@@ -12512,6 +13618,12 @@ class ModifyDialog(QDialog):
         self.revid.setChecked(False)
         layout.addRow("Remove Unassigned IDs from Centroid List?:", self.revid)
 
+        self.revdupeid = QPushButton("Make Singleton IDs")
+        self.revdupeid.setCheckable(True)
+        self.revdupeid.setChecked(False)
+        layout.addRow("Force Any Multiple IDs to Pick a Random Single ID?:", self.revdupeid)
+
+
         self.remove = QPushButton("Remove Missing")
         self.remove.setCheckable(True)
         self.remove.setChecked(False)
@@ -12590,6 +13702,7 @@ class ModifyDialog(QDialog):
         try:
 
             revid = self.revid.isChecked()
+            revdupeid = self.revdupeid.isChecked()
             trunk = self.trunk.isChecked()
             if not trunk:
                 trunknode = self.trunknode.isChecked()
@@ -12611,6 +13724,20 @@ class ModifyDialog(QDialog):
                 try:
                     my_network.remove_ids()
                     self.parent().format_for_upperright_table(my_network.node_centroids, 'NodeID', ['Z', 'Y', 'X'], 'Node Centroids')
+                except:
+                    pass
+
+            if revdupeid:
+                try:
+                    for node, iden in my_network.node_identities.items():
+                        try:
+                            import ast
+                            import random
+                            iden = ast.literal_eval(iden)
+                            my_network.node_identities[node] = random.choice(iden)
+                        except:
+                            pass
+                    self.parent().format_for_upperright_table(my_network.node_identities, 'NodeID', 'Identity', 'Node Identities')
                 except:
                     pass
 
@@ -12721,6 +13848,11 @@ class CentroidDialog(QDialog):
         self.mode_selector.setCurrentIndex(0)  # Default to Mode 1
         layout.addRow("Execution Mode:", self.mode_selector)
 
+        self.ignore_empty = QPushButton("Skip ID-less?")
+        self.ignore_empty.setCheckable(True)
+        self.ignore_empty.setChecked(False)
+        layout.addRow("Skip Node Centroids Without Identity Property?:", self.ignore_empty)
+
         # Add Run button
         run_button = QPushButton("Run Calculate Centroids")
         run_button.clicked.connect(self.run_centroids)
@@ -12733,6 +13865,7 @@ class CentroidDialog(QDialog):
             print("Calculating centroids...")
 
             chan = self.mode_selector.currentIndex()
+            ignore_empty = self.ignore_empty.isChecked()
 
             # Get directory (None if empty)
             directory = self.directory.text() if self.directory.text() else None
@@ -12793,6 +13926,12 @@ class CentroidDialog(QDialog):
                 except Exception as e:
                     print(f"Error loading edge centroid table: {e}")
 
+            if ignore_empty:
+                try:
+                    my_network.remove_ids()
+                    self.parent().format_for_upperright_table(my_network.node_centroids, 'NodeID', ['Z', 'Y', 'X'], 'Node Centroids')
+                except:
+                    pass
 
             self.parent().update_display()
             self.accept()

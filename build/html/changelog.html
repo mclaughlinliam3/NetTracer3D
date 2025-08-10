@@ -6,14 +6,14 @@
   <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
 
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Changelog &mdash; NetTracer3D 0.9.1 documentation</title>
+  <title>Changelog &mdash; NetTracer3D 1.0.0 documentation</title>
       <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=b86133f3" />
       <link rel="stylesheet" type="text/css" href="_static/css/theme.css?v=e59714d7" />
 
   
       <script src="_static/jquery.js?v=5d32c60e"></script>
       <script src="_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
-      <script src="_static/documentation_options.js?v=9dc39874"></script>
+      <script src="_static/documentation_options.js?v=8d563738"></script>
       <script src="_static/doctools.js?v=9bcbadda"></script>
       <script src="_static/sphinx_highlight.js?v=dc90522c"></script>
     <script src="_static/js/theme.js"></script>
@@ -46,7 +46,8 @@
               <p class="caption" role="heading"><span class="caption-text">User Guide:</span></p>
 <ul>
 <li class="toctree-l1"><a class="reference internal" href="installation.html">Installation</a></li>
-<li class="toctree-l1"><a class="reference internal" href="quickstart.html">Quickstart - Segmenting Data and Generating Networks</a></li>
+<li class="toctree-l1"><a class="reference internal" href="quickstart.html">Quickstart - Segmenting Data and Generating Connectivity Networks</a></li>
+<li class="toctree-l1"><a class="reference internal" href="proximity.html">Proximity Networks - Ideal for Cellular Data</a></li>
 <li class="toctree-l1"><a class="reference internal" href="branches.html">Labeling Branches and Branch Networks</a></li>
 <li class="toctree-l1"><a class="reference internal" href="properties.html">Properties of a Network3D Object</a></li>
 <li class="toctree-l1"><a class="reference internal" href="excel_helper.html">Using the Spreadsheet Loader</a></li>
@@ -218,6 +219,21 @@
 <li><p>The image display window now uses image pyramids and cropping for zoom ins so it should run a lot faster on bigger images.</p></li>
 <li><p>The community UMAP can now color them by neighborhood.</p></li>
 <li><p>No longer zooms all the way out by default with right click in zoom mode. Now user needs to Shift + Right Click.</p></li>
+</ul>
+</dd>
+<dt>Versions 0.9.2 - 1.0.0 Updates</dt><dd><ul class="simple">
+<li><p>Tables can now be opened to the rightside upper widget if they are the right format.</p></li>
+<li><p>Similarly, tables that have the format node id column:numerical values can now be used liberally to threshold the nodes, meaning most outputs of network analysis can be used to threshold nodes.</p></li>
+<li><p>The overlay 2 is now cyan by default.</p></li>
+<li><p>Moved some file menu options around.</p></li>
+<li><p>The ‘merge node id’ option now offers interactive support for assisted thresholding for any new identity channels the user is trying to merge with.</p></li>
+<li><p>The ‘merge nodes’ option now can provide centroids prior to the merge, since oftentimes objects end up on top of each other.</p></li>
+<li><p>Erode can now optionally preserve object labels.</p></li>
+<li><p>Added some compatibility for nodes being assigned ‘multiple identities’</p></li>
+<li><p>Image viewer canvas window can now be popped out into a separate window.</p></li>
+<li><p>Image pyramid calculation is more dynamic instead of using arbitrary size thresholds.</p></li>
+<li><p>The ‘network selection’ table is now auto-populated when using the multiple-identity selector, and when using the node thresholder.</p></li>
+<li><p>Bug Fixes</p></li>
 </ul>
 </dd>
 </dl>

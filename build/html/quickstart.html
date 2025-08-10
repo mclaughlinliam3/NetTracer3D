@@ -6,21 +6,21 @@
   <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
 
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Quickstart - Segmenting Data and Generating Networks &mdash; NetTracer3D 0.9.1 documentation</title>
+  <title>Quickstart - Segmenting Data and Generating Connectivity Networks &mdash; NetTracer3D 1.0.0 documentation</title>
       <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=b86133f3" />
       <link rel="stylesheet" type="text/css" href="_static/css/theme.css?v=e59714d7" />
 
   
       <script src="_static/jquery.js?v=5d32c60e"></script>
       <script src="_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
-      <script src="_static/documentation_options.js?v=9dc39874"></script>
+      <script src="_static/documentation_options.js?v=8d563738"></script>
       <script src="_static/doctools.js?v=9bcbadda"></script>
       <script src="_static/sphinx_highlight.js?v=dc90522c"></script>
     <script src="_static/js/theme.js"></script>
     <link rel="author" title="About these documents" href="about.html" />
     <link rel="index" title="Index" href="genindex.html" />
     <link rel="search" title="Search" href="search.html" />
-    <link rel="next" title="Labeling Branches and Branch Networks" href="branches.html" />
+    <link rel="next" title="Proximity Networks - Ideal for Cellular Data" href="proximity.html" />
     <link rel="prev" title="Installation" href="installation.html" /> 
 </head>
 
@@ -46,7 +46,7 @@
               <p class="caption" role="heading"><span class="caption-text">User Guide:</span></p>
 <ul class="current">
 <li class="toctree-l1"><a class="reference internal" href="installation.html">Installation</a></li>
-<li class="toctree-l1 current"><a class="current reference internal" href="#">Quickstart - Segmenting Data and Generating Networks</a><ul>
+<li class="toctree-l1 current"><a class="current reference internal" href="#">Quickstart - Segmenting Data and Generating Connectivity Networks</a><ul>
 <li class="toctree-l2"><a class="reference internal" href="#launch-nettracer3d">Launch NetTracer3D</a></li>
 <li class="toctree-l2"><a class="reference internal" href="#interface-overview">Interface Overview</a></li>
 <li class="toctree-l2"><a class="reference internal" href="#the-control-panel">The Control Panel</a></li>
@@ -57,8 +57,8 @@
 <li class="toctree-l3"><a class="reference internal" href="#denoising-the-segmentation">Denoising the Segmentation</a></li>
 </ul>
 </li>
-<li class="toctree-l2"><a class="reference internal" href="#generating-a-network-using-edges">Generating a Network Using Edges</a></li>
-<li class="toctree-l2"><a class="reference internal" href="#generating-a-network-based-on-proximity">Generating a Network Based on Proximity</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#introduction-to-types-of-networks">Introduction to Types of Networks</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#the-connectivity-network-generating-a-network-using-an-edge-image">The Connectivity Network - Generating a Network Using An Edge Image</a></li>
 <li class="toctree-l2"><a class="reference internal" href="#exporting-data">Exporting Data</a><ul>
 <li class="toctree-l3"><a class="reference internal" href="#using-network-and-or-image-data-in-python">Using Network (And/Or Image) data in python</a></li>
 </ul>
@@ -66,6 +66,7 @@
 <li class="toctree-l2"><a class="reference internal" href="#next-steps">Next Steps</a></li>
 </ul>
 </li>
+<li class="toctree-l1"><a class="reference internal" href="proximity.html">Proximity Networks - Ideal for Cellular Data</a></li>
 <li class="toctree-l1"><a class="reference internal" href="branches.html">Labeling Branches and Branch Networks</a></li>
 <li class="toctree-l1"><a class="reference internal" href="properties.html">Properties of a Network3D Object</a></li>
 <li class="toctree-l1"><a class="reference internal" href="excel_helper.html">Using the Spreadsheet Loader</a></li>
@@ -102,7 +103,7 @@
           <div role="navigation" aria-label="Page navigation">
   <ul class="wy-breadcrumbs">
       <li><a href="index.html" class="icon icon-home" aria-label="Home"></a></li>
-      <li class="breadcrumb-item active">Quickstart - Segmenting Data and Generating Networks</li>
+      <li class="breadcrumb-item active">Quickstart - Segmenting Data and Generating Connectivity Networks</li>
       <li class="wy-breadcrumbs-aside">
             <a href="_sources/quickstart.rst.txt" rel="nofollow"> View page source</a>
       </li>
@@ -112,8 +113,8 @@
           <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
            <div itemprop="articleBody">
              
-  <section id="quickstart-segmenting-data-and-generating-networks">
-<span id="quickstart"></span><h1>Quickstart - Segmenting Data and Generating Networks<a class="headerlink" href="#quickstart-segmenting-data-and-generating-networks" title="Link to this heading"></a></h1>
+  <section id="quickstart-segmenting-data-and-generating-connectivity-networks">
+<span id="quickstart"></span><h1>Quickstart - Segmenting Data and Generating Connectivity Networks<a class="headerlink" href="#quickstart-segmenting-data-and-generating-connectivity-networks" title="Link to this heading"></a></h1>
 <p>This guide will help you get started with NetTracer3D by walking through a simple example.</p>
 <section id="launch-nettracer3d">
 <h2>Launch NetTracer3D<a class="headerlink" href="#launch-nettracer3d" title="Link to this heading"></a></h2>
@@ -128,15 +129,20 @@
 <a class="reference internal image-reference" href="_images/interface_overview.png"><img alt="NetTracer3D Interface Overview" src="_images/interface_overview.png" style="width: 800px;" />
 </a>
 <p>The NetTracer3D interface consists of:</p>
-<ul class="simple">
-<li><p>(Left) Main Visualization Area: The image viewer window where the 3D stack is displayed as 2D slices.</p></li>
+<ul>
+<li><p>(Left) Canvas/Main Visualization Area: The image viewer window where the 3D stack is displayed as 2D slices.</p></li>
 <li><p>(Bottom) Control Panel: Widgets for quick interaction with the image viewer window.</p></li>
 <li><p>(Top Right) Tabulated Data: Where data tables from analysis will be placed.</p></li>
 <li><p>(Bottom Right) Network Data: Where paired nodes in your network will be organized.</p></li>
-<li><dl class="simple">
-<dt>(Top) Menu Bar: Options to load/export data and run analysis.</dt><dd><ul>
-<li><p>Including the camera widget (Top Right). Click this to save a 2D tiff of whatever is currently being displayed in the Image Viewer Window.</p></li>
+<li><dl>
+<dt>(Top) Menu Bar: Options to load/export data and run analysis.</dt><dd><ul class="simple">
+<li><p>There are a few buttons in the top right to note:</p></li>
 </ul>
+<ol class="arabic simple">
+<li><p>The button that says ‘⤴’ will eject the main canvas window, and the control panel, into a seperate window, in case the user wants them to be larger without the tables getting in the way.</p></li>
+<li><p>The button with the camera will save a 2D tiff of whatever is being displayed in the canvas.</p></li>
+<li><p>The button with the file will prompt the user to open a .xlsx/.CSV spreadsheet, to be loaded into the top right data tables. Some tables can be used to interact with the nodes, so being able to reload them may be desirable.</p></li>
+</ol>
 </dd>
 </dl>
 </li>
@@ -156,9 +162,10 @@
 </dd>
 </dl>
 </li>
+<li><p>The home widget; simply resets the view to default, in case you get stuck in a weird zoom state. (Shortcut - ‘Shift + Right Click’ while in zoom mode.)</p></li>
 <li><dl class="simple">
 <dt>The zoom widget (magnifying glass - Shortcut Z)</dt><dd><ul class="simple">
-<li><p>Press z or click the magnifying glass widget to enter the zoom mode. Clicking the Image Viewer Window in zoom mode will cause you to zoom in. Right clicking will cause you to zoom out.</p></li>
+<li><p>Press z or click the magnifying glass widget to enter the zoom mode. Clicking the Image Viewer Window in zoom mode will cause you to zoom in. Right clicking will cause you to zoom out. Dragging in zoom mode will zoom in on a specific area.</p></li>
 </ul>
 </dd>
 </dl>
@@ -209,13 +216,6 @@
 <li><dl class="simple">
 <dt>The channel widgets (Nodes, Edges, Overlay1, Overlay2)</dt><dd><ul class="simple">
 <li><p>Click the channel widgets to toggle whether the channel is visible. The ‘x’ widget located next to the channel buttons will prompt if you want to delete that channel or not.</p></li>
-</ul>
-</dd>
-</dl>
-</li>
-<li><dl class="simple">
-<dt>Blue Checkbox (Right of Channel Widgets)</dt><dd><ul class="simple">
-<li><p>By default, NetTracer3D will show any loaded images in the central Image Viewer Window. Unchecking this will stop it from being rendered by default, instead toggling off any channels that get loaded in. This is because very large 2D planes may lag the display window, but many of NetTracer3D’s functions do not require actual rendering, so this can avoid said lag if we don’t need to actually see the image.</p></li>
 </ul>
 </dd>
 </dl>
@@ -357,8 +357,46 @@ In this instance, we will be using volume thresholding to clean up noise.</p>
 </a>
 </section>
 </section>
-<section id="generating-a-network-using-edges">
-<h2>Generating a Network Using Edges<a class="headerlink" href="#generating-a-network-using-edges" title="Link to this heading"></a></h2>
+<section id="introduction-to-types-of-networks">
+<h2>Introduction to Types of Networks<a class="headerlink" href="#introduction-to-types-of-networks" title="Link to this heading"></a></h2>
+<p>NetTracer3D broadly can be used to create the four following flavors of networks. All of these convert a static image to an undirected network graph in some way.</p>
+<ol class="arabic simple">
+<li><dl class="simple">
+<dt>The Connectivity Network - Node objects are connected via a second image (The Edges Image).</dt><dd><ul class="simple">
+<li><p>Ideal for objects such as cells or functional tissue units (ie ganglions, glomerulus, liver lobule etc), that may be interconnected via a secondary structure (ie nerves, blood vessels, lymphatics).</p></li>
+<li><p>However it requires 2 images, each segmented.</p></li>
+</ul>
+</dd>
+</dl>
+</li>
+<li><dl class="simple">
+<dt>The proximity network - Nodes are connected based on distance to each other.</dt><dd><ul class="simple">
+<li><p>Ideal for evaluating general spatial arrangement of things, such as cells in an H&amp;E stain or imaged with a microscope, ie CODEX.</p></li>
+<li><p>Less useful at grouping things laid out chaotically (ie every cell in a poorly differentiated neuroendocrine tumor), although you could help reduce the chaos by only creating a network from a certain type of cell.</p></li>
+</ul>
+</dd>
+</dl>
+</li>
+<li><dl class="simple">
+<dt>The branchpoint network - Nodes are created at branch vertices and connected based on their adjacency in the branch.</dt><dd><ul class="simple">
+<li><p>Ideal for branched structures (ie nerves, vessels, lymphatics, roots). They should be segmented out in binary first - NetTracer3D will handle branch assignment.</p></li>
+<li><p>Quite good at describing how an object is branching, however loses morphological information.</p></li>
+</ul>
+</dd>
+</dl>
+</li>
+<li><dl class="simple">
+<dt>The branch adjacency network - Branches themselves become nodes.</dt><dd><ul class="simple">
+<li><p>Similar approach as above, however the connections are based on whether the entire branch is touching another branch.</p></li>
+<li><p>More useful than branchpoint network for interacting with branches directly, however the branchy structure is slightly obfuscated in the graph, as we don’t know what order the branches arise in as they branch off each other.</p></li>
+</ul>
+</dd>
+</dl>
+</li>
+</ol>
+</section>
+<section id="the-connectivity-network-generating-a-network-using-an-edge-image">
+<h2>The Connectivity Network - Generating a Network Using An Edge Image<a class="headerlink" href="#the-connectivity-network-generating-a-network-using-an-edge-image" title="Link to this heading"></a></h2>
 <p>Similar to the nodes, we segment the edges from the image (I did not show this process but it would be the same steps as above, just selecting the connection regions rather than the nodes). This is the image through which the nodes will be connected. (In imaging this will often be on a different channel, such as an overlapping image of nerves or vessels. In this demo, we use the same image for both).
 We load these in with ‘File -&gt; Load Edges’ and select ‘Process -&gt; Calculate -&gt; Calculate Connectivity Network’.</p>
 <a class="reference internal image-reference" href="_images/segment_prenetwork.png"><img alt="Slime Mold Prenetwork" src="_images/segment_prenetwork.png" style="width: 800px;" />
@@ -386,23 +424,16 @@ To elucidate the connectivity here, we can convert this central edge trunk into 
 This is where NetTracer3D shines! For example, the image below is one such usage where I created neural networks between groups of glomeruli in the human kidney from 3D lightsheet images I captured:</p>
 <a class="reference internal image-reference" href="_images/5x_mothergloms.png"><img alt="Example Network" src="_images/5x_mothergloms.png" style="width: 800px;" />
 </a>
-</section>
-<section id="generating-a-network-based-on-proximity">
-<h2>Generating a Network Based on Proximity<a class="headerlink" href="#generating-a-network-based-on-proximity" title="Link to this heading"></a></h2>
-<p>We will go over another simple example of creating networks. This one is even easier, as it only requires nodes to function, and simply groups nodes as connected pairs based on their distance to each other.
-Open a new instance of NetTracer3D and once more load in the binary segmentation of the nodes that was created above.
-First, use ‘Process -&gt; Image -&gt; Label Objects’ to assign each binary object a unique label.
-Next, select ‘Process -&gt; Calculate -&gt; Calculate Proximity Network’.</p>
-<a class="reference internal image-reference" href="_images/proximity_menu.png"><img alt="Proximity Network Menu" src="_images/proximity_menu.png" style="width: 800px;" />
+<p>There are lots of options for obtaining statistics on our network structure, but one of the simplest ways is to select ‘Analyze -&gt; Stats -&gt; Network Statistics Histograms’. Choosing this option will reveal the following menu.</p>
+<a class="reference internal image-reference" href="_images/histogram_example.png"><img alt="Example analysis" src="_images/histogram_example.png" style="width: 800px;" />
 </a>
-<p><em>Here we can see the menu to generate proximity networks. The search distance here is set to 300, which means nodes will look 300 pixels out for connections (although this will correspond to your scalings). Note there are two options available for searching, shown in the carrot dropdown next to ‘Execution Mode’. The first option searches from centroids and works quite well with big data as the data structure is far simpler. The second option searches from object borders and may be slower on large images by comparison. In this case, I use the second option since these objects are heterogenously sized. For more information on using this algorithm, see</em> <a class="reference internal" href="process_menu.html#proximity-network"><span class="std std-ref">‘Process -&gt; Calculate Network -&gt; Calculate Proximity Network…’</span></a></p>
-<p>And after algorithm execution:</p>
-<a class="reference internal image-reference" href="_images/proximity.png"><img alt="Proximity Network" src="_images/proximity.png" style="width: 800px;" />
+<p>Each of the green buttons will yield a different histogram for a nodal distribution of some network property, with each indicating some quality of the network. In this case, I generate the degree distribution for the nodes, which shows me how many connections each node is making. It generates a histogram for me, and places the underlying data in the top right table.
+NetTracer3D is designed to be highly interactable. Any upper right table that has the structure ‘{col 1 - integers : col 2 - numbers}’ can be used to threshold the nodes. This means I can use any of these network histograms, and more!</p>
+<a class="reference internal image-reference" href="_images/histogram_example2.png"><img alt="Example analysis2" src="_images/histogram_example2.png" style="width: 800px;" />
 </a>
-<a class="reference internal image-reference" href="_images/proximity2.png"><img alt="Proximity Network 2" src="_images/proximity2.png" style="width: 800px;" />
-</a>
-<p>Proximity networks are a generic way to group together objects in 3D space and are ideal, for example, for grouping together cellular neighborhoods.
-One use for such cellular neighborhoods is grouping them into communities and analyzing their composition!</p>
+<p>I simply right click my table and choose ‘Use to Threshold Nodes’. In the interactive thresholder, I select the region of the histogram I want to keep. If I press ‘Apply Threshold’, I then reduce my nodes channel to just that set of nodes (make sure to back up your original nodes). Doing this will not alter the underlying network data. However, if I instead wanted to keep this selection without eliminating any nodes, just closing the threshold window will leave the selection in the highlight overlay, which can be exported or used to do anything else the highlight overlay can do.
+Furthermore, if the nodes channel is set as my active channel, the subgraph of connections between my selected objects will be sent to my ‘selection’ table in the lower right, in case I want to pull out a specific subregion of the network.
+While right clicking in the upper-right table, other options include saving the table as a spreadsheet. I can also use the folder button in the top right can be used to load spreadsheets in the expected format (same as saved), in case I want to re-use something to threshold the nodes, for example.</p>
 </section>
 <section id="exporting-data">
 <h2>Exporting Data<a class="headerlink" href="#exporting-data" title="Link to this heading"></a></h2>
@@ -444,7 +475,7 @@ Regarding tables and networks, they all can be exported with right click as eith
 </section>
 <section id="next-steps">
 <h2>Next Steps<a class="headerlink" href="#next-steps" title="Link to this heading"></a></h2>
-<p>Once you have a hang on generating the default network types, proceed to the <a class="reference internal" href="branches.html"><span class="doc">Labeling Branches and Branch Networks</span></a> to learn about using NetTracer3D to label branches of objects and create branch networks.</p>
+<p>Once you have a hang on generating the ‘connectivity network’, proceed to <a class="reference internal" href="proximity.html"><span class="doc">Proximity Networks - Ideal for Cellular Data</span></a> to learn about using NetTracer3D to create networks based on proximity, which is useful for analyzing spatial arrangement of cells, for example.</p>
 </section>
 </section>
 
@@ -453,7 +484,7 @@ Regarding tables and networks, they all can be exported with right click as eith
           </div>
           <footer><div class="rst-footer-buttons" role="navigation" aria-label="Footer">
         <a href="installation.html" class="btn btn-neutral float-left" title="Installation" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left" aria-hidden="true"></span> Previous</a>
-        <a href="branches.html" class="btn btn-neutral float-right" title="Labeling Branches and Branch Networks" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right" aria-hidden="true"></span></a>
+        <a href="proximity.html" class="btn btn-neutral float-right" title="Proximity Networks - Ideal for Cellular Data" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right" aria-hidden="true"></span></a>
     </div>
 
   <hr/>

@@ -6,14 +6,14 @@
   <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
 
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Using the Spreadsheet Loader &mdash; NetTracer3D 0.9.1 documentation</title>
+  <title>Using the Spreadsheet Loader &mdash; NetTracer3D 1.0.0 documentation</title>
       <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=b86133f3" />
       <link rel="stylesheet" type="text/css" href="_static/css/theme.css?v=e59714d7" />
 
   
       <script src="_static/jquery.js?v=5d32c60e"></script>
       <script src="_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
-      <script src="_static/documentation_options.js?v=9dc39874"></script>
+      <script src="_static/documentation_options.js?v=8d563738"></script>
       <script src="_static/doctools.js?v=9bcbadda"></script>
       <script src="_static/sphinx_highlight.js?v=dc90522c"></script>
     <script src="_static/js/theme.js"></script>
@@ -179,10 +179,23 @@
 </dl>
 </li>
 <li><dl class="simple">
-<dt>Class assignment is hierarchal. The lower number classes are assigned first (ie any ‘original id’ that matches classifier 1 will be reassigned first and thereafter not be considered for later classifiers).</dt><dd><ul>
-<li><p>Because of this, categories with larger groups of specific markers (say that match multiple subphenotypes) would want to be assigned to lower number classifiers, while those more specific subphenotypes would want to be assigned later.</p></li>
+<dt>If the box that says ‘hierarchal’ is checked, then class assignment will be hierarchal. This means that the lower number classes will be assigned first (ie any ‘original id’ that matches classifier 1 will be reassigned first and thereafter not be considered for later classifiers).</dt><dd><ul>
+<li><dl class="simple">
+<dt>If using hierarchies, categories with larger groups of specific markers (say that match multiple subphenotypes) should be assigned to lower number classifiers, while those more specific subphenotypes would want to be assigned later.</dt><dd><ul>
 <li><p>Similarly, broad categories (with less specific matches) should be assigned later.</p></li>
+</ul>
+</dd>
+</dl>
+</li>
+<li><p>However if the hierarchy box is unchecked, nodes will be assigned multiple identities.</p></li>
 <li><p>Unmatched ‘Original IDs’ will be kicked out by default. To prevent this, an empty classifier at the end of the classifier lists can be used to catch anything that doesn’t match.</p></li>
+</ul>
+</dd>
+</dl>
+</li>
+<li><dl class="simple">
+<dt>Note that when assigning IDs, if no number column is dragged into the ‘Numerical IDs’ area, they will get assigned ascending labels starting from 1 by default. This will by default override any current node labels in the program.</dt><dd><ul>
+<li><p>However, if the little plus sign in the lower right corner next to the export button is checked, any auto-generated ascending labels will instead get tacked on to the current highest label, assuming nodes are already assigned labels.</p></li>
 </ul>
 </dd>
 </dl>

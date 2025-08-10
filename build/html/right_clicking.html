@@ -6,14 +6,14 @@
   <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
 
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Right Clicking - All Options Available by Right Clicking in the GUI &mdash; NetTracer3D 0.9.1 documentation</title>
+  <title>Right Clicking - All Options Available by Right Clicking in the GUI &mdash; NetTracer3D 1.0.0 documentation</title>
       <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=b86133f3" />
       <link rel="stylesheet" type="text/css" href="_static/css/theme.css?v=e59714d7" />
 
   
       <script src="_static/jquery.js?v=5d32c60e"></script>
       <script src="_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
-      <script src="_static/documentation_options.js?v=9dc39874"></script>
+      <script src="_static/documentation_options.js?v=8d563738"></script>
       <script src="_static/doctools.js?v=9bcbadda"></script>
       <script src="_static/sphinx_highlight.js?v=dc90522c"></script>
     <script src="_static/js/theme.js"></script>
@@ -46,7 +46,8 @@
               <p class="caption" role="heading"><span class="caption-text">User Guide:</span></p>
 <ul>
 <li class="toctree-l1"><a class="reference internal" href="installation.html">Installation</a></li>
-<li class="toctree-l1"><a class="reference internal" href="quickstart.html">Quickstart - Segmenting Data and Generating Networks</a></li>
+<li class="toctree-l1"><a class="reference internal" href="quickstart.html">Quickstart - Segmenting Data and Generating Connectivity Networks</a></li>
+<li class="toctree-l1"><a class="reference internal" href="proximity.html">Proximity Networks - Ideal for Cellular Data</a></li>
 <li class="toctree-l1"><a class="reference internal" href="branches.html">Labeling Branches and Branch Networks</a></li>
 <li class="toctree-l1"><a class="reference internal" href="properties.html">Properties of a Network3D Object</a></li>
 <li class="toctree-l1"><a class="reference internal" href="excel_helper.html">Using the Spreadsheet Loader</a></li>
@@ -79,6 +80,7 @@
 <li class="toctree-l3"><a class="reference internal" href="#id1">‘Ctrl + F’ keyboard shortcut</a></li>
 <li class="toctree-l3"><a class="reference internal" href="#id2">‘Sort’</a></li>
 <li class="toctree-l3"><a class="reference internal" href="#id3">‘Save As’</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#use-to-threshold-nodes">‘Use to Threshold Nodes’</a></li>
 <li class="toctree-l3"><a class="reference internal" href="#close-all">‘Close All’</a></li>
 </ul>
 </li>
@@ -480,6 +482,11 @@ The only exception is the following option:</p>
 </dl>
 </li>
 </ol>
+</section>
+<section id="use-to-threshold-nodes">
+<h3>‘Use to Threshold Nodes’<a class="headerlink" href="#use-to-threshold-nodes" title="Link to this heading"></a></h3>
+<p>If a table is of the structure {col 1 - Integers : col 2 - Numbers}, it can be used to try to threshold what is in the nodes channel (mainly, if this table was generated in reference to said nodes).
+This can be used to interactively sort out any set of data that was used to analyze the nodes.</p>
 </section>
 <section id="close-all">
 <h3>‘Close All’<a class="headerlink" href="#close-all" title="Link to this heading"></a></h3>

@@ -6,14 +6,14 @@
   <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
 
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>NetTracer3D documentation &mdash; NetTracer3D 0.9.1 documentation</title>
+  <title>NetTracer3D documentation &mdash; NetTracer3D 1.0.0 documentation</title>
       <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=b86133f3" />
       <link rel="stylesheet" type="text/css" href="_static/css/theme.css?v=e59714d7" />
 
   
       <script src="_static/jquery.js?v=5d32c60e"></script>
       <script src="_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
-      <script src="_static/documentation_options.js?v=9dc39874"></script>
+      <script src="_static/documentation_options.js?v=8d563738"></script>
       <script src="_static/doctools.js?v=9bcbadda"></script>
       <script src="_static/sphinx_highlight.js?v=dc90522c"></script>
     <script src="_static/js/theme.js"></script>
@@ -45,7 +45,8 @@
               <p class="caption" role="heading"><span class="caption-text">User Guide:</span></p>
 <ul>
 <li class="toctree-l1"><a class="reference internal" href="installation.html">Installation</a></li>
-<li class="toctree-l1"><a class="reference internal" href="quickstart.html">Quickstart - Segmenting Data and Generating Networks</a></li>
+<li class="toctree-l1"><a class="reference internal" href="quickstart.html">Quickstart - Segmenting Data and Generating Connectivity Networks</a></li>
+<li class="toctree-l1"><a class="reference internal" href="proximity.html">Proximity Networks - Ideal for Cellular Data</a></li>
 <li class="toctree-l1"><a class="reference internal" href="branches.html">Labeling Branches and Branch Networks</a></li>
 <li class="toctree-l1"><a class="reference internal" href="properties.html">Properties of a Network3D Object</a></li>
 <li class="toctree-l1"><a class="reference internal" href="excel_helper.html">Using the Spreadsheet Loader</a></li>
@@ -112,7 +113,7 @@
 </section>
 <section id="getting-started">
 <h2>Getting Started<a class="headerlink" href="#getting-started" title="Link to this heading"></a></h2>
-<p>To get started with NetTracer3D, check out the <a class="reference internal" href="installation.html"><span class="doc">Installation</span></a> guide and then proceed to the <a class="reference internal" href="quickstart.html"><span class="doc">Quickstart - Segmenting Data and Generating Networks</span></a> tutorial.</p>
+<p>To get started with NetTracer3D, check out the <a class="reference internal" href="installation.html"><span class="doc">Installation</span></a> guide and then proceed to the <a class="reference internal" href="quickstart.html"><span class="doc">Quickstart - Segmenting Data and Generating Connectivity Networks</span></a> tutorial.</p>
 <div class="toctree-wrapper compound">
 <p class="caption" role="heading"><span class="caption-text">User Guide:</span></p>
 <ul>
@@ -124,17 +125,23 @@
 <li class="toctree-l2"><a class="reference internal" href="installation.html#next-steps">Next Steps</a></li>
 </ul>
 </li>
-<li class="toctree-l1"><a class="reference internal" href="quickstart.html">Quickstart - Segmenting Data and Generating Networks</a><ul>
+<li class="toctree-l1"><a class="reference internal" href="quickstart.html">Quickstart - Segmenting Data and Generating Connectivity Networks</a><ul>
 <li class="toctree-l2"><a class="reference internal" href="quickstart.html#launch-nettracer3d">Launch NetTracer3D</a></li>
 <li class="toctree-l2"><a class="reference internal" href="quickstart.html#interface-overview">Interface Overview</a></li>
 <li class="toctree-l2"><a class="reference internal" href="quickstart.html#the-control-panel">The Control Panel</a></li>
 <li class="toctree-l2"><a class="reference internal" href="quickstart.html#loading-an-image">Loading an Image</a></li>
 <li class="toctree-l2"><a class="reference internal" href="quickstart.html#basic-navigation-of-the-image-viewer-window">Basic Navigation of the Image Viewer Window</a></li>
 <li class="toctree-l2"><a class="reference internal" href="quickstart.html#segmenting-data">Segmenting Data</a></li>
-<li class="toctree-l2"><a class="reference internal" href="quickstart.html#generating-a-network-using-edges">Generating a Network Using Edges</a></li>
-<li class="toctree-l2"><a class="reference internal" href="quickstart.html#generating-a-network-based-on-proximity">Generating a Network Based on Proximity</a></li>
+<li class="toctree-l2"><a class="reference internal" href="quickstart.html#introduction-to-types-of-networks">Introduction to Types of Networks</a></li>
+<li class="toctree-l2"><a class="reference internal" href="quickstart.html#the-connectivity-network-generating-a-network-using-an-edge-image">The Connectivity Network - Generating a Network Using An Edge Image</a></li>
 <li class="toctree-l2"><a class="reference internal" href="quickstart.html#exporting-data">Exporting Data</a></li>
 <li class="toctree-l2"><a class="reference internal" href="quickstart.html#next-steps">Next Steps</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="proximity.html">Proximity Networks - Ideal for Cellular Data</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="proximity.html#generating-a-network-based-on-proximity">Generating a Network Based on Proximity</a></li>
+<li class="toctree-l2"><a class="reference internal" href="proximity.html#using-proximity-networks-for-advanced-cellular-neighborhood-analysis-example-analysis-of-codex-sample">Using Proximity Networks for Advanced Cellular Neighborhood Analysis - Example Analysis of CODEX sample</a></li>
+<li class="toctree-l2"><a class="reference internal" href="proximity.html#next-steps">Next Steps</a></li>
 </ul>
 </li>
 <li class="toctree-l1"><a class="reference internal" href="branches.html">Labeling Branches and Branch Networks</a><ul>
@@ -182,6 +189,7 @@
 <li class="toctree-l2"><a class="reference internal" href="file_menu.html#save">Save</a></li>
 <li class="toctree-l2"><a class="reference internal" href="file_menu.html#save-as">Save As</a></li>
 <li class="toctree-l2"><a class="reference internal" href="file_menu.html#load">Load</a></li>
+<li class="toctree-l2"><a class="reference internal" href="file_menu.html#images-node-identities">Images -&gt; Node Identities</a></li>
 <li class="toctree-l2"><a class="reference internal" href="file_menu.html#next-steps">Next Steps</a></li>
 </ul>
 </li>
@@ -239,7 +247,7 @@
 <li class="toctree-l2"><a class="reference internal" href="process_menu.html#process-generate-generate-nodes-from-edge-vertices">‘Process -&gt; Generate -&gt; Generate Nodes (From ‘Edge’ Vertices)’</a></li>
 <li class="toctree-l2"><a class="reference internal" href="process_menu.html#process-generate-label-branches">‘Process -&gt; Generate -&gt; Label Branches’</a></li>
 <li class="toctree-l2"><a class="reference internal" href="process_menu.html#process-generate-generate-voronoi-diagram">‘Process -&gt; Generate -&gt; Generate Voronoi Diagram’</a></li>
-<li class="toctree-l2"><a class="reference internal" href="process_menu.html#process-modify-network">‘Process -&gt; Modify Network’</a></li>
+<li class="toctree-l2"><a class="reference internal" href="process_menu.html#process-modify-network-properties">‘Process -&gt; Modify Network/Properties’</a></li>
 <li class="toctree-l2"><a class="reference internal" href="process_menu.html#next-steps">Next Steps</a></li>
 </ul>
 </li>

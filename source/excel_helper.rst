@@ -51,10 +51,13 @@ Opening the Excel Helper
     * The substring search is inclusive for all substrings that the user adds. Any 'original ID' that contains (anywhere in its text) that exact group of substrings (in whatever order) will be assigned a new ID by the classifier.
 * For any 'original ID' deemed a match by a classifier, enter the new ID you want it to be assigned in the 'New ID' text window.
     * In this case, I'm assigning any 'original IDs' that contain 'CD45 pos' and 'CD20 neg' to 'Class 1', while the reverse is being assigned to 'Class 2'
-* Class assignment is hierarchal. The lower number classes are assigned first (ie any 'original id' that matches classifier 1 will be reassigned first and thereafter not be considered for later classifiers).
-    * Because of this, categories with larger groups of specific markers (say that match multiple subphenotypes) would want to be assigned to lower number classifiers, while those more specific subphenotypes would want to be assigned later.
-    * Similarly, broad categories (with less specific matches) should be assigned later.
-    * Unmatched 'Original IDs' will be kicked out by default. To prevent this, an empty classifier at the end of the classifier lists can be used to catch anything that doesn't match.
+* If the box that says 'hierarchal' is checked, then class assignment will be hierarchal. This means that the lower number classes will be assigned first (ie any 'original id' that matches classifier 1 will be reassigned first and thereafter not be considered for later classifiers).
+     * If using hierarchies, categories with larger groups of specific markers (say that match multiple subphenotypes) should be assigned to lower number classifiers, while those more specific subphenotypes would want to be assigned later.
+         * Similarly, broad categories (with less specific matches) should be assigned later.
+     * However if the hierarchy box is unchecked, nodes will be assigned multiple identities.
+     * Unmatched 'Original IDs' will be kicked out by default. To prevent this, an empty classifier at the end of the classifier lists can be used to catch anything that doesn't match.
+* Note that when assigning IDs, if no number column is dragged into the 'Numerical IDs' area, they will get assigned ascending labels starting from 1 by default. This will by default override any current node labels in the program.
+     * However, if the little plus sign in the lower right corner next to the export button is checked, any auto-generated ascending labels will instead get tacked on to the current highest label, assuming nodes are already assigned labels.
 * Within a classifier, the up and down arrow buttons can be used to change its order in the hierarchy. Additionally, the green copy button will duplicate a classifier (say to make a more stringent version).
 * Press 'Preview Classification' to use the classifiers to label all the 'Original IDs' in the 'Identity Remapping' window.
 * Afterwards, we can press 'Identity Remapping' to see how the 'Original IDs' have been auto-assigned 'New IDs'. (Reload your data to the identity column to start over):
