@@ -579,8 +579,10 @@ Parameter Explanation
 Algorithm Explanation
 ~~~~~~~~~~~~~~~~~~~~
 
-1. For both violin-plot producing methods, the aforementioned data table is first normalized in a Z-score-like fashion. Essentially, for all nodes belonging to each unique identity, the median of those nodes is obtained. The data table values are then normalized using a Z-score, but centered around the median for each identity (as it corresponds to each channel, i.e. a CD31 channel will be centered about the median of nodes with the CD41 identity).
+1. For both violin-plot producing methods, the aforementioned data table is first normalized in a Z-score-like fashion. Essentially, for all nodes belonging to each unique identity, the minimum of those nodes is obtained. The data table values are then normalized using a Z-score, but centered around the minimum valid intensity for each identity (as it corresponds to each channel, i.e. a CD31 channel will be centered about the min of nodes with the CD31 identity).
     * This purpose of this normalization is so that the values in the data table reflect how far the nodes in that channel deviate from what the user designated as a true example of a node bearing that identity.
+    * Pretty much, if evaluating channel identity overlap, any other channels that have violin values greater than 0 represent some amount of 'valid' overlap. If evaluating communities/neighborhoods, violins with values greater than 0 mean that neighborhood has nodes expressing the corresponding 'valid' amount of that marker.
+    * If a column cannot be matched to an identity, the program will just take the median of the entire column to be the normalizing point, rather than the minimum value of the 'valid' points.
 2. The normalized data table is then masked to contain only the nodes of the specified identity/neighborhood/community.
 3. These resultant data are used to yield violin plots, with the channels corresponding to a violin, and the normalized node intensities within the masked data for that channel creating the violin.
 

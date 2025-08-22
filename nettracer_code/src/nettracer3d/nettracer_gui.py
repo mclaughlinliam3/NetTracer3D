@@ -10087,7 +10087,7 @@ class ViolinDialog(QDialog):
         # Convert all remaining columns to float type (batch conversion)
         df_copy = df_copy.astype(float)
         
-        # First, calculate the centerpoint for each column by finding the median across all identity groups
+        # First, calculate the centerpoint for each column by finding the min across all identity groups
         column_centerpoints = {}
         
         for column in df_copy.columns:
@@ -10098,7 +10098,7 @@ class ViolinDialog(QDialog):
                 valid_nodes = [node for node in node_list if node in df_copy.index]
                 if valid_nodes and ((str(identity) == str(column)) or str(identity) == f'{str(column)}+'):
                     # Get the median value for this identity in this column
-                    identity_min = df_copy.loc[valid_nodes, column].median()
+                    identity_min = df_copy.loc[valid_nodes, column].min()
                     centerpoint = identity_min
                     break  # Found the match, no need to continue
             
@@ -10107,6 +10107,7 @@ class ViolinDialog(QDialog):
                 column_centerpoints[column] = centerpoint
             else:
                 # Fallback: if no matching identity, use column median
+                print(f"Could not find {str(column)} in node identities. As a fallback, using the median of all values in this channel rather than the minimum of user-designated valid values.")
                 column_centerpoints[column] = df_copy[column].median()
         
         # Now normalize each column using Z-score-like calculation with identity centerpoint

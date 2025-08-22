@@ -108,3 +108,6 @@ Versions 1.0.1 - 1.0.4 Updates
 	* Heatmap theoretical distances can now be calculated based on an area constrained within a binary mask.
 	* Added ability to generate violin plots using the table generated from merging node identities, showing the relative expression of markers for multiple channels for the nodes belonging to some channel or community/neighborhood
 	* Other bug fixes, improvements.
+
+Version 1.0.5 Update
+	* Minor change to how the violin plots are normalized

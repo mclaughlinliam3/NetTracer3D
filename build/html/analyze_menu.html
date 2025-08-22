@@ -6,14 +6,14 @@
   <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
 
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>All Analyze Menu Options &mdash; NetTracer3D 1.0.4 documentation</title>
+  <title>All Analyze Menu Options &mdash; NetTracer3D 1.0.5 documentation</title>
       <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=b86133f3" />
       <link rel="stylesheet" type="text/css" href="_static/css/theme.css?v=e59714d7" />
 
   
       <script src="_static/jquery.js?v=5d32c60e"></script>
       <script src="_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
-      <script src="_static/documentation_options.js?v=71272d9f"></script>
+      <script src="_static/documentation_options.js?v=d55fa986"></script>
       <script src="_static/doctools.js?v=9bcbadda"></script>
       <script src="_static/sphinx_highlight.js?v=dc90522c"></script>
     <script src="_static/js/theme.js"></script>
@@ -1222,8 +1222,10 @@
 <h3>Algorithm Explanation<a class="headerlink" href="#id17" title="Link to this heading"></a></h3>
 <ol class="arabic simple">
 <li><dl class="simple">
-<dt>For both violin-plot producing methods, the aforementioned data table is first normalized in a Z-score-like fashion. Essentially, for all nodes belonging to each unique identity, the median of those nodes is obtained. The data table values are then normalized using a Z-score, but centered around the median for each identity (as it corresponds to each channel, i.e. a CD31 channel will be centered about the median of nodes with the CD41 identity).</dt><dd><ul class="simple">
+<dt>For both violin-plot producing methods, the aforementioned data table is first normalized in a Z-score-like fashion. Essentially, for all nodes belonging to each unique identity, the minimum of those nodes is obtained. The data table values are then normalized using a Z-score, but centered around the minimum valid intensity for each identity (as it corresponds to each channel, i.e. a CD31 channel will be centered about the min of nodes with the CD31 identity).</dt><dd><ul class="simple">
 <li><p>This purpose of this normalization is so that the values in the data table reflect how far the nodes in that channel deviate from what the user designated as a true example of a node bearing that identity.</p></li>
+<li><p>Pretty much, if evaluating channel identity overlap, any other channels that have violin values greater than 0 represent some amount of ‘valid’ overlap. If evaluating communities/neighborhoods, violins with values greater than 0 mean that neighborhood has nodes expressing the corresponding ‘valid’ amount of that marker.</p></li>
+<li><p>If a column cannot be matched to an identity, the program will just take the median of the entire column to be the normalizing point, rather than the minimum value of the ‘valid’ points.</p></li>
 </ul>
 </dd>
 </dl>

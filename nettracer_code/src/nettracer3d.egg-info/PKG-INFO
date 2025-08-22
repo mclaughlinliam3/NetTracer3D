@@ -1,6 +1,6 @@
 Metadata-Version: 2.4
 Name: nettracer3d
-Version: 1.0.4
+Version: 1.0.5
 Summary: Scripts for intializing and analyzing networks from segmentations of three dimensional images.
 Author-email: Liam McLaughlin <liamm@wustl.edu>
 Project-URL: Documentation, https://nettracer3d.readthedocs.io/en/latest/
