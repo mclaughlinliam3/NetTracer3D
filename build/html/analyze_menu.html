@@ -6,14 +6,14 @@
   <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
 
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>All Analyze Menu Options &mdash; NetTracer3D 1.0.0 documentation</title>
+  <title>All Analyze Menu Options &mdash; NetTracer3D 1.0.4 documentation</title>
       <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=b86133f3" />
       <link rel="stylesheet" type="text/css" href="_static/css/theme.css?v=e59714d7" />
 
   
       <script src="_static/jquery.js?v=5d32c60e"></script>
       <script src="_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
-      <script src="_static/documentation_options.js?v=8d563738"></script>
+      <script src="_static/documentation_options.js?v=71272d9f"></script>
       <script src="_static/doctools.js?v=9bcbadda"></script>
       <script src="_static/sphinx_highlight.js?v=dc90522c"></script>
     <script src="_static/js/theme.js"></script>
@@ -46,7 +46,8 @@
               <p class="caption" role="heading"><span class="caption-text">User Guide:</span></p>
 <ul>
 <li class="toctree-l1"><a class="reference internal" href="installation.html">Installation</a></li>
-<li class="toctree-l1"><a class="reference internal" href="quickstart.html">Quickstart - Segmenting Data and Generating Networks</a></li>
+<li class="toctree-l1"><a class="reference internal" href="quickstart.html">Quickstart - Segmenting Data and Generating Connectivity Networks</a></li>
+<li class="toctree-l1"><a class="reference internal" href="proximity.html">Proximity Networks - Ideal for Cellular Data</a></li>
 <li class="toctree-l1"><a class="reference internal" href="branches.html">Labeling Branches and Branch Networks</a></li>
 <li class="toctree-l1"><a class="reference internal" href="properties.html">Properties of a Network3D Object</a></li>
 <li class="toctree-l1"><a class="reference internal" href="excel_helper.html">Using the Spreadsheet Loader</a></li>
@@ -115,29 +116,32 @@
 <li class="toctree-l3"><a class="reference internal" href="#id15">Algorithm Explanation</a></li>
 </ul>
 </li>
-<li class="toctree-l2"><a class="reference internal" href="#analyze-stats-calculate-node-edge-interactions">‘Analyze -&gt; Stats -&gt; Calculate Node &lt; &gt; Edge Interactions’</a><ul>
-<li class="toctree-l3"><a class="reference internal" href="#id16">Parameter Explanations</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#analyze-stats-calculate-node-edge-interactions">‘Analyze -&gt; Stats -&gt; Calculate Node &lt; &gt; Edge Interactions’</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#analyze-stats-show-identities-violin-umap">‘Analyze -&gt; Stats -&gt; Show Identities Violin/UMAP’</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#id16">Parameter Explanation</a></li>
 <li class="toctree-l3"><a class="reference internal" href="#id17">Algorithm Explanation</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#id18">Parameter Explanations</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#id19">Algorithm Explanation</a></li>
 </ul>
 </li>
 <li class="toctree-l2"><a class="reference internal" href="#analyze-data-overlays-get-degree-information">‘Analyze -&gt; Data/Overlays -&gt; Get Degree Information’</a><ul>
-<li class="toctree-l3"><a class="reference internal" href="#id18">Parameter Explanations</a></li>
-</ul>
-</li>
-<li class="toctree-l2"><a class="reference internal" href="#analyze-data-overlays-get-hub-information">‘Analyze -&gt; Data/Overlays -&gt; Get Hub Information’</a><ul>
-<li class="toctree-l3"><a class="reference internal" href="#id19">Parameter Explanations</a></li>
-</ul>
-</li>
-<li class="toctree-l2"><a class="reference internal" href="#analyze-data-overlays-get-mother-nodes">‘Analyze -&gt; Data/Overlays -&gt; Get Mother Nodes’</a><ul>
 <li class="toctree-l3"><a class="reference internal" href="#id20">Parameter Explanations</a></li>
 </ul>
 </li>
-<li class="toctree-l2"><a class="reference internal" href="#analyze-data-overlays-code-communities">‘Analyze -&gt; Data/Overlays -&gt; Code Communities’</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="#analyze-data-overlays-get-hub-information">‘Analyze -&gt; Data/Overlays -&gt; Get Hub Information’</a><ul>
 <li class="toctree-l3"><a class="reference internal" href="#id21">Parameter Explanations</a></li>
 </ul>
 </li>
-<li class="toctree-l2"><a class="reference internal" href="#analyze-data-overlays-code-identities">‘Analyze -&gt; Data/Overlays -&gt; Code Identities’</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="#analyze-data-overlays-get-mother-nodes">‘Analyze -&gt; Data/Overlays -&gt; Get Mother Nodes’</a><ul>
 <li class="toctree-l3"><a class="reference internal" href="#id22">Parameter Explanations</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="#analyze-data-overlays-code-communities">‘Analyze -&gt; Data/Overlays -&gt; Code Communities’</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#id23">Parameter Explanations</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="#analyze-data-overlays-code-identities">‘Analyze -&gt; Data/Overlays -&gt; Code Identities’</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#id24">Parameter Explanations</a></li>
 </ul>
 </li>
 <li class="toctree-l2"><a class="reference internal" href="#analyze-data-overlays-centroid-umap">‘Analyze -&gt; Data/Overlays -&gt; Centroid UMAP’</a></li>
@@ -976,20 +980,38 @@
 </dl>
 </li>
 <li><dl class="simple">
-<dt>Use Border Correction…</dt><dd><ul class="simple">
-<li><p>As mentioned in param 4, search regions near the border will result in reduced appraisal.</p></li>
-<li><p>Activating this method has NetTracer3D approximate how much of the search region is in-bounds and extrapolate how many extra clustered neighbors it’d inspect in the full search region. Note that this will increase computation time.</p></li>
-<li><p>In short, this will increase the clustering appraisal at higher r values, however it is not an exact calculation. Additionally, edge effects will become extreme with very narrow dimensions, for example a short z-stack.</p></li>
-<li><p>In such a situation, try z-projecting to force a 2D calculation instead.</p></li>
+<dt>Exclude Root Nodes Near Borders?</dt><dd><ul class="simple">
+<li><p>For border safety, the user can enable this to optionally have the nodes near the image boundaries not search for neighbors. The degree to which the border nodes are excluded is set with the following param.</p></li>
 </ul>
 </dd>
 </dl>
 </li>
 <li><dl class="simple">
-<dt>Exclude Root Nodes Near Borders?</dt><dd><ul class="simple">
-<li><p>As an alternative to param 5, enabling this method will avoid searching from any nodes within 25% of your image borders.</p></li>
-<li><p>This avoids requiring as much extrapolation, however keep in mind that search regions can still get clipped if param 4 &gt; 0.25.</p></li>
-<li><p>Params 5 and 6 can be combined, which can result in even stronger border-corrections.</p></li>
+<dt>Proportion of most internal nodes to use…?</dt><dd><ul class="simple">
+<li><p>If the above param is enabled, this value will tell it what degree of internal nodes to use.</p></li>
+<li><p>This should be a float between 0 and 1. It represents the proportion of most internal nodes, so higher vals exclude more of the border.</p></li>
+<li><p>As an example, setting this to 0.9 would have it include only the 10% most internal space of the array to find nodes to search from. If no nodes can be found within these bounds, the analysis will not be performed.</p></li>
+</ul>
+</dd>
+</dl>
+</li>
+<li><dl class="simple">
+<dt>Define boundaries how?</dt><dd><ul class="simple">
+<li><p>If restricting analysis to be within borders, this dropdown menu can be used to tell the program what to consider as ‘boundaries’. By default, it will use the boundaries of the entire array. However, if your image is, for example, a piece of tissue with background space, and you want the search to be restricted to stay within the actual tissue volume, you will need to first create a binary mask for your foreground. Then, place that mask in any of the other channels (besides nodes). Lastly, use the dropdown menu to select the channel containing the mask. The easiest way to yield a foreground mask is to first threshold via intensity, then to run ‘Process -&gt; Image -&gt; Fill Holes’ if desired. If the tissue is 2D, the user may also trace the foreground with the pen tool, then run Fill Holes.</p></li>
+</ul>
+</dd>
+</dl>
+</li>
+<li><dl class="simple">
+<dt>Keep search radii within border…?</dt><dd><ul class="simple">
+<li><p>If restricting analysis to be within borders, and you want the nodes to also be forced to keep their search radii within those borders, this setting can be enabled. It will automatically calculate the minimum distance from the most external nodes being considered to the borders, and use that distance for the search radii. Generally speaking, this setting should be enabled if masking within tissue boundaries, or rather if not masking but also not using param 9. Note that this will override param 4.</p></li>
+</ul>
+</dd>
+</dl>
+</li>
+<li><dl class="simple">
+<dt>Use Border Correction…</dt><dd><ul class="simple">
+<li><p>This param can be enabled if the user is not masking the root nodes, but also wants to use search radii that extend beyond the image borders. To compensate for edge artifacts, it will have the program clone centroids by reflecting them over the borders of the array, essentially forcing the space beyond the array to mimic the space within the array (an extrapolation). As mentioned, this does not really work if the user is forcing the analysis to stay within a tissue mask, as the reflection is designed for the boundaries of the rectanguloid image, not a weird mask shape.</p></li>
 </ul>
 </dd>
 </dl>
@@ -1013,33 +1035,6 @@
 <li><p>We calculate the volume/area of the study region</p></li>
 <li><p>We compute the intensity (λ) as number of reference points divided by volume</p></li>
 <li><p>For each root point at each distance in our bucketed r_values, we find Neighbors using KDTree and record how many target points are within this radius</p></li>
-<li><dl class="simple">
-<dt>Edge Correction (if enabled), if the point is near a boundary:</dt><dd><ul class="simple">
-<li><dl class="simple">
-<dt>For 2D:</dt><dd><ul>
-<li><p>Check distance to all four boundaries (left, right, top, bottom)</p></li>
-<li><p>For each boundary closer than r, apply a correction factor</p></li>
-<li><p>The correction reduces the “proportion_in” (percentage of the circle that falls inside the study area)</p></li>
-<li><p>The reduction follows a simple linear approximation: 0.5 * (1 - distance/r)</p></li>
-<li><p>Add a small boost if the point is near a corner (where two boundaries are close)</p></li>
-</ul>
-</dd>
-</dl>
-</li>
-<li><dl class="simple">
-<dt>For 3D:</dt><dd><ul>
-<li><p>Same concept, but check all six boundaries (±x, ±y, ±z)</p></li>
-<li><p>Each boundary reduces proportion_in by 0.25 * (1 - distance/r)</p></li>
-<li><p>Count how many boundaries are close, apply stronger corner correction for points near multiple boundaries</p></li>
-</ul>
-</dd>
-</dl>
-</li>
-</ul>
-</dd>
-</dl>
-</li>
-<li><p>Calculate weight as 1.0 / proportion_in (Weights only exist for border correction). Multiply the neighbor count by this weight. This adjusts for the “missing” area/volume outside the boundaries</p></li>
 <li><p>If we’re comparing a set to itself, remove self-counts to avoid counting points as their own neighbors.</p></li>
 <li><dl class="simple">
 <dt>Sum all the weighted counts and normalize by:</dt><dd><ul class="simple">
@@ -1052,6 +1047,28 @@
 <li><p>Return the array of K values for each radius value</p></li>
 <li><p>K values can then be normalized to H values by ‘h_values = np.sqrt(k_values / np.pi) - r_values’ (in 2D), or ‘h_values = np.cbrt(k_values / (4/3 * np.pi)) - r_values’ (in 3D)</p></li>
 <li><p>These are plotted versus the theoretical functions ‘theo_k = np.pi * r_values**2’ (2D) or ‘theo_k = (4/3) * np.pi * r_values**3’ (3D), while theoretical H values are just 0.</p></li>
+</ol>
+<ul class="simple">
+<li><p>For border correction:</p></li>
+</ul>
+<ol class="arabic simple">
+<li><p>Restricting to internal nodes for the whole image is done by just checking if the nodes are beyond the requested distance to the border.</p></li>
+<li><p>If the user asks internal nodes to remain within a masked space, the distance transform to the background of the mask is obtained. This dt mask is thresholded to only contain the internal proportion the user desired. Finally, the root nodes within that volume are considered valid.</p></li>
+<li><dl class="simple">
+<dt>If the user is using the node reflection option:</dt><dd><ul class="simple">
+<li><p>For 2D: Creates 8 potential mirror regions (4 edges + 4 corners)</p></li>
+<li><p>For 3D: Creates 26 potential mirror regions (all adjacent cubes minus center)</p></li>
+<li><p>Each region defined by direction vectors (-1, 0, +1 for each dimension)</p></li>
+<li><p>For each mirror region, finds points within max_r distance of relevant boundaries</p></li>
+<li><p>A point needs mirroring if it’s close enough to a boundary that analysis might miss neighbors</p></li>
+<li><p>For qualifying points, creates copies using reflection formula: new_coord = 2 × boundary - old_coord</p></li>
+<li><p>Applies this transformation only to dimensions where mirroring is needed</p></li>
+<li><p>Preserves other coordinates unchanged</p></li>
+<li><p>Returns original points plus all mirrored copies</p></li>
+</ul>
+</dd>
+</dl>
+</li>
 </ol>
 </section>
 </section>
@@ -1122,10 +1139,12 @@
 <li><p>Heatmap - Enabling this will cause a heatmap to be generated. Red nodes will be closer on average to their nearest neighbor, while blue nodes will be further.</p></li>
 <li><p>3D - If generating a matplotlib heatmap, enabling this will make the graph 3D. Disabling it will make it 2D.</p></li>
 <li><p>Overlay - If enabled, the heatmap will be created as an image overlay in Overlay2 channel instead of a graph.</p></li>
+<li><p>For heatmap, measure theoretical point distribution how? - When generating the heatmap, nodes are colored based on an approximate estimate of the distance between points, if they were evenly (note - not randomly) distributed throughout the array. By default, this dropdown menu is set to ‘Anywhere’, which tells the program to consider how the distances would be if the points were uniformly distributed throughout the entire image. However, if your image contains background, and you want it to consider only distribution throughout the foreground (i.e. an actual tissue), you will need to first create a binary mask for your foreground. Then, place that mask in any of the other channels (besides nodes). Lastly, use the dropdown menu to select the channel containing the mask. The easiest way to yield a foreground mask is to first threshold via intensity, then to run ‘Process -&gt; Image -&gt; Fill Holes’ if desired. If the tissue is 2D, the user may also trace the foreground with the pen tool, then run Fill Holes.</p></li>
+<li><p>Quantifiable Overlay - If enabled, will generate a grayscale image with each node being assigned a val equal to its calculated nearest neighbor distance, which will go in Overlay1.</p></li>
 </ol>
 <ul class="simple">
-<li><p>Pressing ‘Get Distribution’ will yield a table of every ‘root’ node paired to its average distance to the desired number of nearest neighbors. It will also create a heatmap if selected.</p></li>
-<li><p>(If node identities property exists) - Pressing ‘Get All Averages’ will yield a table of the average nearest neighbor distance (for the desired number of nearest neighbor) across all nodes for every identity vs identity combination available. This can be a fast way to query the dataset, but it does not yield distributions and heatmaps, which need to be individually obtained.</p></li>
+<li><p>Pressing ‘Get Average Nearest Neighbor…’ will yield a table of every ‘root’ node paired to its average distance to the desired number of nearest neighbors. It will also create a heatmap or ‘quantifiable overlay’ if selected.</p></li>
+<li><p>(If node identities property exists) - Pressing ‘Get All Averages’ will yield a table of the average nearest neighbor distance (for the desired number of nearest neighbor) across all nodes for every identity vs identity combination available. This can be a fast way to query the dataset, but it does not yield distributions and heatmaps, which need to be individually obtained. However, note that this should not be used if the number of identities would make this cumbersome.</p></li>
 <li><p>Note that this method automatically applies the xy_scale and z_scale set in the current properties. To ensure property distances, please make sure those are correct in Image -&gt; Properties. By default, they are 1.</p></li>
 </ul>
 </section>
@@ -1136,6 +1155,7 @@
 <li><p>The centroids (or if not using centroids, assesses entire object borders obtained from skimage find_boundaries method) of the neighbor set are used to build a KDTree, which is a points-based data structure good for querying distance relationships. <a class="reference external" href="https://docs.scipy.org/doc/scipy/reference/generated/scipy.spatial.KDTree.html">https://docs.scipy.org/doc/scipy/reference/generated/scipy.spatial.KDTree.html</a></p></li>
 <li><p>For each point in the root set, the desired number of nearest neighbors are obtained by querying the KDTree. These values are averaged per point and returned. The total average for the set is also returned.</p></li>
 <li><p>When generating the heatmap, color intensity is based on whether the object is closer than would be expected in a uniform distribution, with ln(approx expected dist in a uniform distribution / actual dist of point) being used to create the color scale.</p></li>
+<li><p>To measure the theoretical distance in a uniform distrubition, the image is cloned as a numpy array, and all the ‘target points’ are uniformly distrubted throughout it (or throughout the masked area, if that is set up). The most central of these points is selected and used with the same KDTree method to search for neighbors with the same parameters as the actual analysis. Because one of the target points is used to search, it will be skipped (since distance to itself is 0), and therefore if the number of nearest neighbors searched for is equal to the number of available target points, the program will approximate the most furthest distance by just assuming it to be equal to the second-furthest-distance.</p></li>
 </ol>
 </section>
 </section>
@@ -1181,8 +1201,42 @@
 </ul>
 <a class="reference internal image-reference" href="_images/analyze5.png"><img alt="edgenode Menu" src="_images/analyze5.png" style="width: 800px;" />
 </a>
+</section>
+<section id="analyze-stats-show-identities-violin-umap">
+<h2>‘Analyze -&gt; Stats -&gt; Show Identities Violin/UMAP’<a class="headerlink" href="#analyze-stats-show-identities-violin-umap" title="Link to this heading"></a></h2>
+<ul class="simple">
+<li><p>This method can be used to visualize normalized violin plots and UMAPs for nodes that were assigned identities via multiple channel markers (via ‘File -&gt; Images -&gt; Node Identities -&gt; Assign Node Identities from Overlap with Other Images’)</p></li>
+<li><p>The aforementioned identity assignment funtion produces a table that shows the average intensity of each node for each marker. Please save this table from the upper-right data tables for use in this function. This data is the only one natively compatible with this function.</p></li>
+<li><p>Upon running, the user will be prompted to retrieve this data table as a .csv or .xlsx file. Note that this table would ideally be the one created during the aforementioned node assignment, with the node identities themselves also derived from that function.</p></li>
+</ul>
 <section id="id16">
-<h3>Parameter Explanations<a class="headerlink" href="#id16" title="Link to this heading"></a></h3>
+<h3>Parameter Explanation<a class="headerlink" href="#id16" title="Link to this heading"></a></h3>
+<ol class="arabic simple">
+<li><p>‘Return Identity Violin Plots?’ - ‘None’ by default, but the dropdown menu can be used to select one of the current node_identities in the session, which informs the program to yield a violin plot displaying the normalized intensity expression for each channel of all nodes belonging to the aforementioned identity. This is useful for seeing what other channels a particular identity is generally positive in.</p></li>
+</ol>
+<p>2. ‘Return Neighborhood/Community Violin Plots?’ - ‘None’ by default, but the dropdown menu can be used to select one of the current communities (or rather neighborhoods, if communities have been grouped into neighborhoods) in the session, which informs the program to yield a violin plot displaying the normalized intensity expression for each channel of all nodes belonging to the aforementioned community/neighborhood. This is useful for seeing what channels constitute a particular community/neighborhood.
+* To view any designated violin plots, press ‘Show-Z-score-like Violin’. The plot will be shown, and the corresponding data will populate the upper right data tables.
+* Alternatively, “Show Z-score UMAP” may be pressed to show a UMAP of the intensity Z-score for each node relative to the identity of each channel. (This is the same UMAP that can be displayed at the end of ‘File -&gt; Images -&gt; Node Identities -&gt; Assign Node Identities from Overlap with Other Images’)</p>
+</section>
+<section id="id17">
+<h3>Algorithm Explanation<a class="headerlink" href="#id17" title="Link to this heading"></a></h3>
+<ol class="arabic simple">
+<li><dl class="simple">
+<dt>For both violin-plot producing methods, the aforementioned data table is first normalized in a Z-score-like fashion. Essentially, for all nodes belonging to each unique identity, the median of those nodes is obtained. The data table values are then normalized using a Z-score, but centered around the median for each identity (as it corresponds to each channel, i.e. a CD31 channel will be centered about the median of nodes with the CD41 identity).</dt><dd><ul class="simple">
+<li><p>This purpose of this normalization is so that the values in the data table reflect how far the nodes in that channel deviate from what the user designated as a true example of a node bearing that identity.</p></li>
+</ul>
+</dd>
+</dl>
+</li>
+<li><p>The normalized data table is then masked to contain only the nodes of the specified identity/neighborhood/community.</p></li>
+<li><p>These resultant data are used to yield violin plots, with the channels corresponding to a violin, and the normalized node intensities within the masked data for that channel creating the violin.</p></li>
+</ol>
+<ul class="simple">
+<li><p>UMAP generation instead utilizes standard Z-scores, as the altered normalization is not relevant when comparing nodes in this manner. The UMAP itself is created with the Python umap module.</p></li>
+</ul>
+</section>
+<section id="id18">
+<h3>Parameter Explanations<a class="headerlink" href="#id18" title="Link to this heading"></a></h3>
 <ol class="arabic simple">
 <li><dl class="simple">
 <dt>node_search:</dt><dd><ul class="simple">
@@ -1219,8 +1273,8 @@
 <li><p>Press Calculate to run the method with the desired parameters. The output data will be used to create a new table in the tabulated data widget.</p></li>
 </ul>
 </section>
-<section id="id17">
-<h3>Algorithm Explanation<a class="headerlink" href="#id17" title="Link to this heading"></a></h3>
+<section id="id19">
+<h3>Algorithm Explanation<a class="headerlink" href="#id19" title="Link to this heading"></a></h3>
 <ol class="arabic simple">
 <li><p>The scipy.ndimage.find_objects() method is used to get bounding boxes around all the labeled objects in the nodes channel.</p></li>
 <li><p>For each object, a subarray is cut out around it using its bounding box, that includes the object plus any additional space that it will need to perform a search/dilation.</p></li>
@@ -1245,8 +1299,8 @@
 </ul>
 <a class="reference internal image-reference" href="_images/analyze6.png"><img alt="edgenode Menu" src="_images/analyze6.png" style="width: 800px;" />
 </a>
-<section id="id18">
-<h3>Parameter Explanations<a class="headerlink" href="#id18" title="Link to this heading"></a></h3>
+<section id="id20">
+<h3>Parameter Explanations<a class="headerlink" href="#id20" title="Link to this heading"></a></h3>
 <ol class="arabic simple">
 <li><dl class="simple">
 <dt>Execution Mode</dt><dd><ul class="simple">
@@ -1295,8 +1349,8 @@
 <ul class="simple">
 <li><p>This method can be used to extract information about hub nodes, which are the nodes that are the fewest degrees of seperation from any other node.</p></li>
 </ul>
-<section id="id19">
-<h3>Parameter Explanations<a class="headerlink" href="#id19" title="Link to this heading"></a></h3>
+<section id="id21">
+<h3>Parameter Explanations<a class="headerlink" href="#id21" title="Link to this heading"></a></h3>
 <ul class="simple">
 <li><p>This method only has two parameters.</p></li>
 </ul>
@@ -1328,8 +1382,8 @@
 <li><p>This method can be used to extract information about ‘mother nodes’, which are we define as those nodes that contain connections between one community and another.</p></li>
 <li><p>This method would be used to identify what nodes enable interaction between seperate communities.</p></li>
 </ul>
-<section id="id20">
-<h3>Parameter Explanations<a class="headerlink" href="#id20" title="Link to this heading"></a></h3>
+<section id="id22">
+<h3>Parameter Explanations<a class="headerlink" href="#id22" title="Link to this heading"></a></h3>
 <ul class="simple">
 <li><p>This method only has one parameter.</p></li>
 </ul>
@@ -1352,8 +1406,8 @@
 <ul class="simple">
 <li><p>This method can be used to generate an overlay that shows what nodes belong to which community.</p></li>
 </ul>
-<section id="id21">
-<h3>Parameter Explanations<a class="headerlink" href="#id21" title="Link to this heading"></a></h3>
+<section id="id23">
+<h3>Parameter Explanations<a class="headerlink" href="#id23" title="Link to this heading"></a></h3>
 <ul class="simple">
 <li><p>This method only has two parameters.</p></li>
 </ul>
@@ -1390,8 +1444,8 @@
 <ul class="simple">
 <li><p>This method can be used to generate an overlay that shows what nodes belong to which identity.</p></li>
 </ul>
-<section id="id22">
-<h3>Parameter Explanations<a class="headerlink" href="#id22" title="Link to this heading"></a></h3>
+<section id="id24">
+<h3>Parameter Explanations<a class="headerlink" href="#id24" title="Link to this heading"></a></h3>
 <ul class="simple">
 <li><p>This method only has two parameters.</p></li>
 </ul>

@@ -410,15 +410,18 @@ Parameter Explanations
     * A 0-1 float representing the proportion of the image to search from each node.
     * A value of 1 will have each node try to evaluate the clustering of every other node in the image, while values closer to 0 will restrict the function calculation to just the immediate neighborhood.
     * Note that higher values will increase border artifacts (Since the method can't 'see' nodes beyond the image borders so it presumes those regions to be empty, decreasing clustering appraisal).
-#. Use Border Correction...
-    * As mentioned in param 4, search regions near the border will result in reduced appraisal. 
-    * Activating this method has NetTracer3D approximate how much of the search region is in-bounds and extrapolate how many extra clustered neighbors it'd inspect in the full search region. Note that this will increase computation time.
-    * In short, this will increase the clustering appraisal at higher r values, however it is not an exact calculation. Additionally, edge effects will become extreme with very narrow dimensions, for example a short z-stack.
-    * In such a situation, try z-projecting to force a 2D calculation instead.
 #. Exclude Root Nodes Near Borders?
-    * As an alternative to param 5, enabling this method will avoid searching from any nodes within 25% of your image borders.
-    * This avoids requiring as much extrapolation, however keep in mind that search regions can still get clipped if param 4 > 0.25.
-    * Params 5 and 6 can be combined, which can result in even stronger border-corrections.
+    * For border safety, the user can enable this to optionally have the nodes near the image boundaries not search for neighbors. The degree to which the border nodes are excluded is set with the following param.
+#. Proportion of most internal nodes to use...?
+    * If the above param is enabled, this value will tell it what degree of internal nodes to use.
+    * This should be a float between 0 and 1. It represents the proportion of most internal nodes, so higher vals exclude more of the border.
+    * As an example, setting this to 0.9 would have it include only the 10% most internal space of the array to find nodes to search from. If no nodes can be found within these bounds, the analysis will not be performed.
+#. Define boundaries how?
+    * If restricting analysis to be within borders, this dropdown menu can be used to tell the program what to consider as 'boundaries'. By default, it will use the boundaries of the entire array. However, if your image is, for example, a piece of tissue with background space, and you want the search to be restricted to stay within the actual tissue volume, you will need to first create a binary mask for your foreground. Then, place that mask in any of the other channels (besides nodes). Lastly, use the dropdown menu to select the channel containing the mask. The easiest way to yield a foreground mask is to first threshold via intensity, then to run 'Process -> Image -> Fill Holes' if desired. If the tissue is 2D, the user may also trace the foreground with the pen tool, then run Fill Holes.
+#. Keep search radii within border...?
+    * If restricting analysis to be within borders, and you want the nodes to also be forced to keep their search radii within those borders, this setting can be enabled. It will automatically calculate the minimum distance from the most external nodes being considered to the borders, and use that distance for the search radii. Generally speaking, this setting should be enabled if masking within tissue boundaries, or rather if not masking but also not using param 9. Note that this will override param 4.
+#. Use Border Correction...
+    * This param can be enabled if the user is not masking the root nodes, but also wants to use search radii that extend beyond the image borders. To compensate for edge artifacts, it will have the program clone centroids by reflecting them over the borders of the array, essentially forcing the space beyond the array to mimic the space within the array (an extrapolation). As mentioned, this does not really work if the user is forcing the analysis to stay within a tissue mask, as the reflection is designed for the boundaries of the rectanguloid image, not a weird mask shape.
 
 * Press "Get Ripley's H" to have the program calculate both the Ripley's K function and Ripley's H function for your dataset. Tables for each will populate the tabulated data widget, while some form of the following graph will appear:
 
@@ -435,18 +438,6 @@ Algorithm Explanations
 #. We calculate the volume/area of the study region
 #. We compute the intensity (λ) as number of reference points divided by volume
 #. For each root point at each distance in our bucketed r_values, we find Neighbors using KDTree and record how many target points are within this radius
-#. Edge Correction (if enabled), if the point is near a boundary:
-    * For 2D:
-        * Check distance to all four boundaries (left, right, top, bottom)
-        * For each boundary closer than r, apply a correction factor
-        * The correction reduces the "proportion_in" (percentage of the circle that falls inside the study area)
-        * The reduction follows a simple linear approximation: 0.5 * (1 - distance/r)
-        * Add a small boost if the point is near a corner (where two boundaries are close)
-    * For 3D:
-        * Same concept, but check all six boundaries (±x, ±y, ±z)
-        * Each boundary reduces proportion_in by 0.25 * (1 - distance/r)
-        * Count how many boundaries are close, apply stronger corner correction for points near multiple boundaries
-#. Calculate weight as 1.0 / proportion_in (Weights only exist for border correction). Multiply the neighbor count by this weight. This adjusts for the "missing" area/volume outside the boundaries
 #. If we're comparing a set to itself, remove self-counts to avoid counting points as their own neighbors.
 #. Sum all the weighted counts and normalize by:
     * Number of subset points (n_subset)
@@ -454,6 +445,20 @@ Algorithm Explanations
 #. Return the array of K values for each radius value
 #. K values can then be normalized to H values by 'h_values = np.sqrt(k_values / np.pi) - r_values' (in 2D), or 'h_values = np.cbrt(k_values / (4/3 * np.pi)) - r_values' (in 3D)
 #. These are plotted versus the theoretical functions 'theo_k = np.pi * r_values**2' (2D) or 'theo_k = (4/3) * np.pi * r_values**3' (3D), while theoretical H values are just 0.
+
+* For border correction:
+#. Restricting to internal nodes for the whole image is done by just checking if the nodes are beyond the requested distance to the border.
+#. If the user asks internal nodes to remain within a masked space, the distance transform to the background of the mask is obtained. This dt mask is thresholded to only contain the internal proportion the user desired. Finally, the root nodes within that volume are considered valid.
+#. If the user is using the node reflection option:
+    * For 2D: Creates 8 potential mirror regions (4 edges + 4 corners)
+    * For 3D: Creates 26 potential mirror regions (all adjacent cubes minus center)
+    * Each region defined by direction vectors (-1, 0, +1 for each dimension)
+    * For each mirror region, finds points within max_r distance of relevant boundaries
+    * A point needs mirroring if it's close enough to a boundary that analysis might miss neighbors
+    * For qualifying points, creates copies using reflection formula: new_coord = 2 × boundary - old_coord
+    * Applies this transformation only to dimensions where mirroring is needed
+    * Preserves other coordinates unchanged
+    * Returns original points plus all mirrored copies
 
 'Analyze -> Stats -> Community Cluster Heatmap'
 -----------------------------------------
@@ -503,9 +508,13 @@ Parameter Explanations
 #. Heatmap - Enabling this will cause a heatmap to be generated. Red nodes will be closer on average to their nearest neighbor, while blue nodes will be further.
 #. 3D - If generating a matplotlib heatmap, enabling this will make the graph 3D. Disabling it will make it 2D.
 #. Overlay - If enabled, the heatmap will be created as an image overlay in Overlay2 channel instead of a graph.
+#. For heatmap, measure theoretical point distribution how? - When generating the heatmap, nodes are colored based on an approximate estimate of the distance between points, if they were evenly (note - not randomly) distributed throughout the array. By default, this dropdown menu is set to 'Anywhere', which tells the program to consider how the distances would be if the points were uniformly distributed throughout the entire image. However, if your image contains background, and you want it to consider only distribution throughout the foreground (i.e. an actual tissue), you will need to first create a binary mask for your foreground. Then, place that mask in any of the other channels (besides nodes). Lastly, use the dropdown menu to select the channel containing the mask. The easiest way to yield a foreground mask is to first threshold via intensity, then to run 'Process -> Image -> Fill Holes' if desired. If the tissue is 2D, the user may also trace the foreground with the pen tool, then run Fill Holes.
+#. Quantifiable Overlay - If enabled, will generate a grayscale image with each node being assigned a val equal to its calculated nearest neighbor distance, which will go in Overlay1.
 
-* Pressing 'Get Distribution' will yield a table of every 'root' node paired to its average distance to the desired number of nearest neighbors. It will also create a heatmap if selected.
-* (If node identities property exists) - Pressing 'Get All Averages' will yield a table of the average nearest neighbor distance (for the desired number of nearest neighbor) across all nodes for every identity vs identity combination available. This can be a fast way to query the dataset, but it does not yield distributions and heatmaps, which need to be individually obtained.
+
+
+* Pressing 'Get Average Nearest Neighbor...' will yield a table of every 'root' node paired to its average distance to the desired number of nearest neighbors. It will also create a heatmap or 'quantifiable overlay' if selected.
+* (If node identities property exists) - Pressing 'Get All Averages' will yield a table of the average nearest neighbor distance (for the desired number of nearest neighbor) across all nodes for every identity vs identity combination available. This can be a fast way to query the dataset, but it does not yield distributions and heatmaps, which need to be individually obtained. However, note that this should not be used if the number of identities would make this cumbersome.
 * Note that this method automatically applies the xy_scale and z_scale set in the current properties. To ensure property distances, please make sure those are correct in Image -> Properties. By default, they are 1. 
 
 Algorithm Explanations:
@@ -515,7 +524,7 @@ Algorithm Explanations:
 2. The centroids (or if not using centroids, assesses entire object borders obtained from skimage find_boundaries method) of the neighbor set are used to build a KDTree, which is a points-based data structure good for querying distance relationships. https://docs.scipy.org/doc/scipy/reference/generated/scipy.spatial.KDTree.html
 3. For each point in the root set, the desired number of nearest neighbors are obtained by querying the KDTree. These values are averaged per point and returned. The total average for the set is also returned.
 4. When generating the heatmap, color intensity is based on whether the object is closer than would be expected in a uniform distribution, with ln(approx expected dist in a uniform distribution / actual dist of point) being used to create the color scale.
-
+5. To measure the theoretical distance in a uniform distrubition, the image is cloned as a numpy array, and all the 'target points' are uniformly distrubted throughout it (or throughout the masked area, if that is set up). The most central of these points is selected and used with the same KDTree method to search for neighbors with the same parameters as the actual analysis. Because one of the target points is used to search, it will be skipped (since distance to itself is 0), and therefore if the number of nearest neighbors searched for is equal to the number of available target points, the program will approximate the most furthest distance by just assuming it to be equal to the second-furthest-distance.
 
 'Analyze -> Stats -> Calculate Volumes'
 -----------------------------------------
@@ -552,6 +561,30 @@ Algorithm Explanation
 .. image:: _static/analyze5.png
    :width: 800px
    :alt: edgenode Menu
+
+'Analyze -> Stats -> Show Identities Violin/UMAP'
+-----------------------------------------
+* This method can be used to visualize normalized violin plots and UMAPs for nodes that were assigned identities via multiple channel markers (via 'File -> Images -> Node Identities -> Assign Node Identities from Overlap with Other Images')
+* The aforementioned identity assignment funtion produces a table that shows the average intensity of each node for each marker. Please save this table from the upper-right data tables for use in this function. This data is the only one natively compatible with this function.
+* Upon running, the user will be prompted to retrieve this data table as a .csv or .xlsx file. Note that this table would ideally be the one created during the aforementioned node assignment, with the node identities themselves also derived from that function.
+
+Parameter Explanation
+~~~~~~~~~~~~~~~~~~~~
+
+1. 'Return Identity Violin Plots?' - 'None' by default, but the dropdown menu can be used to select one of the current node_identities in the session, which informs the program to yield a violin plot displaying the normalized intensity expression for each channel of all nodes belonging to the aforementioned identity. This is useful for seeing what other channels a particular identity is generally positive in.
+2. 'Return Neighborhood/Community Violin Plots?' - 'None' by default, but the dropdown menu can be used to select one of the current communities (or rather neighborhoods, if communities have been grouped into neighborhoods) in the session, which informs the program to yield a violin plot displaying the normalized intensity expression for each channel of all nodes belonging to the aforementioned community/neighborhood. This is useful for seeing what channels constitute a particular community/neighborhood.
+* To view any designated violin plots, press 'Show-Z-score-like Violin'. The plot will be shown, and the corresponding data will populate the upper right data tables.
+* Alternatively, "Show Z-score UMAP" may be pressed to show a UMAP of the intensity Z-score for each node relative to the identity of each channel. (This is the same UMAP that can be displayed at the end of 'File -> Images -> Node Identities -> Assign Node Identities from Overlap with Other Images')
+
+Algorithm Explanation
+~~~~~~~~~~~~~~~~~~~~
+
+1. For both violin-plot producing methods, the aforementioned data table is first normalized in a Z-score-like fashion. Essentially, for all nodes belonging to each unique identity, the median of those nodes is obtained. The data table values are then normalized using a Z-score, but centered around the median for each identity (as it corresponds to each channel, i.e. a CD31 channel will be centered about the median of nodes with the CD41 identity).
+    * This purpose of this normalization is so that the values in the data table reflect how far the nodes in that channel deviate from what the user designated as a true example of a node bearing that identity.
+2. The normalized data table is then masked to contain only the nodes of the specified identity/neighborhood/community.
+3. These resultant data are used to yield violin plots, with the channels corresponding to a violin, and the normalized node intensities within the masked data for that channel creating the violin.
+
+* UMAP generation instead utilizes standard Z-scores, as the altered normalization is not relevant when comparing nodes in this manner. The UMAP itself is created with the Python umap module.
 
 Parameter Explanations
 ~~~~~~~~~~~~~~~

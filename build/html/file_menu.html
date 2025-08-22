@@ -6,14 +6,14 @@
   <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
 
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>All File Menu Options &mdash; NetTracer3D 1.0.0 documentation</title>
+  <title>All File Menu Options &mdash; NetTracer3D 1.0.4 documentation</title>
       <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=b86133f3" />
       <link rel="stylesheet" type="text/css" href="_static/css/theme.css?v=e59714d7" />
 
   
       <script src="_static/jquery.js?v=5d32c60e"></script>
       <script src="_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
-      <script src="_static/documentation_options.js?v=8d563738"></script>
+      <script src="_static/documentation_options.js?v=71272d9f"></script>
       <script src="_static/doctools.js?v=9bcbadda"></script>
       <script src="_static/sphinx_highlight.js?v=dc90522c"></script>
     <script src="_static/js/theme.js"></script>
@@ -282,7 +282,7 @@
 <li><p>Prompts the user to find a .tif/.tiff file corresponding to an additional labeled nodes image they would like to merge with the current nodes channel (Alternatively, the user can select a directory containing a set of .tif/.tiff images if they would like to merge many nodes images at once).</p></li>
 <li><p>The point of this function is to allow nodes from several types of images to be compared, for example, heterogenous structures or cell types.</p></li>
 <li><p>Note that at this point in time, these labels cannot overlap as they are being combined into one image.</p></li>
-<li><p>However, to address the above, the user is prompted to generate the centroids for each image prior to merging. Please select this if you want the image’s true centroid to enter NetTracer3D, regardless of what the merged output looks like.</p></li>
+<li><p>However, to address the above, the user is prompted to generate the centroids for each image prior to merging. Please select this if you want the image’s true centroid to enter NetTracer3D, regardless of what the merged output looks like. An optional downsample factor may also be entered, which finds centroids on a downsampled image before transposing the result, however note that this risks losing nodes that are especially small.</p></li>
 <li><p>Generally one would segment the images and label them individually before trying to merge them.</p></li>
 <li><p>Merging nodes auto-assigns the nodes IDs based on the name of the .tif/.tiff that is being merged, while the original nodes aquire the name ‘root_nodes’.</p></li>
 <li><p>These IDs cannot be changed in NetTracer3D. To change them, please save the Node IDs as described above, then reassign the names with the excel helper, or edit the names directly in a spreadsheet-editing software like Microsoft Excel, then reload the Node IDs with ‘Load -&gt; Load Misc Properties -&gt; Load Node IDs’</p></li>
@@ -306,7 +306,7 @@
 </dd>
 </dl>
 </li>
-<li><p>If using manual threshold: Also generate identity UMAP? - If selected, after the manual identity assignment, shows a UMAP of the Z-score for each node relative to the identity of each channel.</p></li>
+<li><p>If using manual threshold: Also generate identity UMAP? - If selected, after the manual identity assignment, shows a UMAP of the intensity Z-score for each node relative to the identity of each channel.</p></li>
 <li><p>Include when a node is negative… - If unchecked, nodes missing an ID for a channel will simply not receive any marker from that channel. If checked, they will be assigned a negative marker. Note that this can yield a lot more permutations of identities if checked.</p></li>
 </ol>
 </dd>

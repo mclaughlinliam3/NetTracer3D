@@ -733,17 +733,33 @@ def assign_node_colors(node_list: List[int], labeled_array: np.ndarray) -> Tuple
     return rgba_array, node_to_color_names
 
 def assign_community_colors(community_dict: Dict[int, int], labeled_array: np.ndarray) -> Tuple[np.ndarray, Dict[int, str]]:
-    """fast version using lookup table approach."""
+    """Fast version using lookup table approach with brown outliers for community 0."""
     
-    # Same setup as before
-    communities = set(community_dict.values())
-    community_sizes = Counter(community_dict.values())
-    sorted_communities = sorted(communities, key=lambda x: community_sizes[x], reverse=True)
+    # Separate outliers (community 0) from regular communities
+    outliers = {node: comm for node, comm in community_dict.items() if comm == 0}
+    non_outlier_dict = {node: comm for node, comm in community_dict.items() if comm != 0}
     
-    colors = generate_distinct_colors(len(communities))
+    # Get communities excluding outliers
+    communities = set(non_outlier_dict.values()) if non_outlier_dict else set()
+    
+    # Generate colors for non-outlier communities only
+    colors = generate_distinct_colors(len(communities)) if communities else []
     colors_rgba = np.array([(r, g, b, 255) for r, g, b in colors], dtype=np.uint8)
     
-    community_to_color = {comm: colors_rgba[i] for i, comm in enumerate(sorted_communities)}
+    # Sort communities by size for consistent color assignment
+    if non_outlier_dict:
+        community_sizes = Counter(non_outlier_dict.values())
+        sorted_communities = sorted(communities, key=lambda x: (-community_sizes[x], x))
+        community_to_color = {comm: colors_rgba[i] for i, comm in enumerate(sorted_communities)}
+    else:
+        community_to_color = {}
+    
+    # Add brown color for outliers (community 0)
+    brown_rgba = np.array([139, 69, 19, 255], dtype=np.uint8)  # Brown color
+    if outliers:
+        community_to_color[0] = brown_rgba
+    
+    # Create node to color mapping using original community_dict
     node_to_color = {node: community_to_color[comm] for node, comm in community_dict.items()}
     
     # Create lookup table - this is the key optimization
@@ -756,7 +772,7 @@ def assign_community_colors(community_dict: Dict[int, int], labeled_array: np.nd
     # Single vectorized operation - this is much faster!
     rgba_array = color_lut[labeled_array]
     
-    # Rest remains the same
+    # Convert to RGB for color names (including brown for outliers)
     community_to_color_rgb = {k: tuple(v[:3]) for k, v in community_to_color.items()}
     node_to_color_names = convert_node_colors_to_names(community_to_color_rgb)
     

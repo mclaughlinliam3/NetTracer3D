@@ -64,6 +64,8 @@ Necessary Structures to Properties stored in CSVs
 | 3      | [Value]  |
 +--------+----------+
 
+* Note that node identities typically pair a node to a single identity value, however nodes can also be assigned multiple identities. In such a case, the identity value is assigned as a list of all corresponding identities. This list is stored as a string in memory, for compatibility with other methods, however it is returned to a list in relevant functions using ast.literal_eval().
+
 3. node_communities:
 
 * This property has the same structure as node_identities.

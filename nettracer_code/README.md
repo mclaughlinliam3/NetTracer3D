@@ -65,7 +65,7 @@ McLaughlin, L., Zhang, B., Sharma, S. et al. Three dimensional multiscalar neuro
 
 NetTracer3D was developed by Liam McLaughlin while working under Dr. Sanjay Jain at Washington University School of Medicine.
 
--- Version 1.0.0 Updates --
+-- Version 1.0.4 Updates --
 
-	* The 'network selection' table is now auto-populated when using the multiple-identity selector, and when using the node thresholder.
-	* And other minor adjustments/bug fixes
+	* Some small bug fixes and adjustments
+	* Heatmap theoretical distances can now be calculated based on an area constrained within a binary mask.

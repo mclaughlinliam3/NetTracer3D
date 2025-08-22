@@ -4,7 +4,7 @@ from PyQt6.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout, QG
                             QHBoxLayout, QSlider, QMenuBar, QMenu, QDialog, 
                             QFormLayout, QLineEdit, QPushButton, QFileDialog,
                             QLabel, QComboBox, QMessageBox, QTableView, QInputDialog,
-                            QMenu, QTabWidget, QGroupBox)
+                            QMenu, QTabWidget, QGroupBox, QCheckBox)
 from PyQt6.QtCore import (QPoint, Qt, QAbstractTableModel, QTimer,  QThread, pyqtSignal, QObject, QCoreApplication, QEvent, QEventLoop)
 import numpy as np
 import time
@@ -511,12 +511,8 @@ class ImageViewerWindow(QMainWindow):
                 data = df.iloc[:, 0].tolist()  # First column as list
                 value = None
                 
-                self.format_for_upperright_table(
-                    data=data,
-                    metric=metric,
-                    value=value,
-                    title=title
-                )
+                df = self.format_for_upperright_table(data=data, metric=metric, value=value, title=title)
+                return df
             else:
                 # Multiple columns: create dictionary as before
                 # First column header (for metric parameter)
@@ -542,12 +538,8 @@ class ImageViewerWindow(QMainWindow):
                     value = value[0]
                 
                 # Call the parent method
-                self.format_for_upperright_table(
-                    data=data_dict,
-                    metric=metric,
-                    value=value,
-                    title=title
-                )
+                df = self.format_for_upperright_table(data=data_dict, metric=metric, value=value, title=title)
+                return df
             
             QMessageBox.information(
                 self,
@@ -1288,7 +1280,9 @@ class ImageViewerWindow(QMainWindow):
 
                 if my_network.node_identities is not None:
                     identity_menu = QMenu("Show Identity", self)
-                    for item in set(my_network.node_identities.values()):
+                    idens = list(set(my_network.node_identities.values()))
+                    idens.sort()
+                    for item in idens:
                         show_identity = identity_menu.addAction(f"ID: {item}")
                         show_identity.triggered.connect(lambda checked, item=item: self.handle_show_identities(sort=item))
                     context_menu.addMenu(identity_menu)
@@ -1320,31 +1314,39 @@ class ImageViewerWindow(QMainWindow):
                 # Create measurement submenu
                 measure_menu = context_menu.addMenu("Measurements")
                 
-                # Distance measurement options
                 distance_menu = measure_menu.addMenu("Distance")
                 if self.current_point is None:
                     show_point_menu = distance_menu.addAction("Place First Point")
                     show_point_menu.triggered.connect(
                         lambda: self.place_distance_point(x_idx, y_idx, self.current_slice))
-                else:
+                elif (self.current_point is not None and 
+                      hasattr(self, 'measurement_mode') and 
+                      self.measurement_mode == "distance"):
                     show_point_menu = distance_menu.addAction("Place Second Point")
                     show_point_menu.triggered.connect(
                         lambda: self.place_distance_point(x_idx, y_idx, self.current_slice))
-                
+
                 # Angle measurement options
                 angle_menu = measure_menu.addMenu("Angle")
                 if self.current_point is None:
                     angle_first = angle_menu.addAction("Place First Point (A)")
                     angle_first.triggered.connect(
                         lambda: self.place_angle_point(x_idx, y_idx, self.current_slice))
-                elif self.current_second_point is None:
+                elif (self.current_point is not None and 
+                      self.current_second_point is None and 
+                      hasattr(self, 'measurement_mode') and 
+                      self.measurement_mode == "angle"):
                     angle_second = angle_menu.addAction("Place Second Point (B - Vertex)")
                     angle_second.triggered.connect(
                         lambda: self.place_angle_point(x_idx, y_idx, self.current_slice))
-                else:
+                elif (self.current_point is not None and 
+                      self.current_second_point is not None and 
+                      hasattr(self, 'measurement_mode') and 
+                      self.measurement_mode == "angle"):
                     angle_third = angle_menu.addAction("Place Third Point (C)")
                     angle_third.triggered.connect(
                         lambda: self.place_angle_point(x_idx, y_idx, self.current_slice))
+                
                 
                 show_remove_menu = measure_menu.addAction("Remove All Measurements")
                 show_remove_menu.triggered.connect(self.handle_remove_all_measurements)
@@ -1373,15 +1375,22 @@ class ImageViewerWindow(QMainWindow):
             except IndexError:
                 pass
 
-
     def place_distance_point(self, x, y, z):
         """Place a measurement point for distance measurement."""
         if self.current_point is None:
             # This is the first point
             self.current_point = (x, y, z)
-            self.ax.plot(x, y, 'yo', markersize=8)
-            self.ax.text(x, y+5, f"D{self.current_pair_index}", 
+            
+            # Create and store the artists
+            pt = self.ax.plot(x, y, 'yo', markersize=8)[0]
+            txt = self.ax.text(x, y+5, f"D{self.current_pair_index}", 
                         color='yellow', ha='center', va='bottom')
+            
+            # Add to measurement_artists so they can be managed by update_display
+            if not hasattr(self, 'measurement_artists'):
+                self.measurement_artists = []
+            self.measurement_artists.extend([pt, txt])
+            
             self.canvas.draw()
             self.measurement_mode = "distance"
         else:
@@ -1395,21 +1404,28 @@ class ImageViewerWindow(QMainWindow):
                               ((z2-z1)*my_network.z_scale)**2)
             distance2 = np.sqrt(((x2-x1))**2 + ((y2-y1))**2 + ((z2-z1))**2)
             
-            # Store the point pair
+            # Store the point pair with type indicator
             self.measurement_points.append({
                 'pair_index': self.current_pair_index,
                 'point1': self.current_point,
                 'point2': (x2, y2, z2),
                 'distance': distance,
-                'distance2': distance2
+                'distance2': distance2,
+                'type': 'distance'  # Added type tracking
             })
             
-            # Draw second point and line
-            self.ax.plot(x2, y2, 'yo', markersize=8)
-            self.ax.text(x2, y2+5, f"D{self.current_pair_index}", 
+            # Draw second point and line, storing the artists
+            pt2 = self.ax.plot(x2, y2, 'yo', markersize=8)[0]
+            txt2 = self.ax.text(x2, y2+5, f"D{self.current_pair_index}", 
                         color='yellow', ha='center', va='bottom')
+            
+            # Add to measurement_artists
+            self.measurement_artists.extend([pt2, txt2])
+            
             if z1 == z2:  # Only draw line if points are on same slice
-                self.ax.plot([x1, x2], [y1, y2], 'r--', alpha=0.5)
+                line = self.ax.plot([x1, x2], [y1, y2], 'r--', alpha=0.5)[0]
+                self.measurement_artists.append(line)
+                
             self.canvas.draw()
             
             # Update measurement display
@@ -1422,12 +1438,19 @@ class ImageViewerWindow(QMainWindow):
 
     def place_angle_point(self, x, y, z):
         """Place a measurement point for angle measurement."""
+        if not hasattr(self, 'measurement_artists'):
+            self.measurement_artists = []
+            
         if self.current_point is None:
             # First point (A)
             self.current_point = (x, y, z)
-            self.ax.plot(x, y, 'go', markersize=8)
-            self.ax.text(x, y+5, f"A{self.current_trio_index}", 
+            
+            # Create and store artists
+            pt = self.ax.plot(x, y, 'go', markersize=8)[0]
+            txt = self.ax.text(x, y+5, f"A{self.current_trio_index}", 
                         color='green', ha='center', va='bottom')
+            self.measurement_artists.extend([pt, txt])
+            
             self.canvas.draw()
             self.measurement_mode = "angle"
             
@@ -1436,13 +1459,16 @@ class ImageViewerWindow(QMainWindow):
             self.current_second_point = (x, y, z)
             x1, y1, z1 = self.current_point
             
-            self.ax.plot(x, y, 'go', markersize=8)
-            self.ax.text(x, y+5, f"B{self.current_trio_index}", 
+            # Create and store artists
+            pt = self.ax.plot(x, y, 'go', markersize=8)[0]
+            txt = self.ax.text(x, y+5, f"B{self.current_trio_index}", 
                         color='green', ha='center', va='bottom')
+            self.measurement_artists.extend([pt, txt])
             
             # Draw line from A to B
             if z1 == z:
-                self.ax.plot([x1, x], [y1, y], 'g--', alpha=0.7)
+                line = self.ax.plot([x1, x], [y1, y], 'g--', alpha=0.7)[0]
+                self.measurement_artists.append(line)
             self.canvas.draw()
             
         else:
@@ -1465,7 +1491,7 @@ class ImageViewerWindow(QMainWindow):
                 **angle_data
             })
             
-            # Also add the two distances as separate pairs
+            # Also add the two distances as separate pairs with type indicator
             dist_ab = np.sqrt(((x2-x1)*my_network.xy_scale)**2 + 
                              ((y2-y1)*my_network.xy_scale)**2 + 
                              ((z2-z1)*my_network.z_scale)**2)
@@ -1482,24 +1508,28 @@ class ImageViewerWindow(QMainWindow):
                     'point1': (x1, y1, z1),
                     'point2': (x2, y2, z2),
                     'distance': dist_ab,
-                    'distance2': dist_ab_voxel
+                    'distance2': dist_ab_voxel,
+                    'type': 'angle'  # Added type tracking
                 },
                 {
                     'pair_index': f"B{self.current_trio_index}-C{self.current_trio_index}",
                     'point1': (x2, y2, z2),
                     'point2': (x3, y3, z3),
                     'distance': dist_bc,
-                    'distance2': dist_bc_voxel
+                    'distance2': dist_bc_voxel,
+                    'type': 'angle'  # Added type tracking
                 }
             ])
             
-            # Draw third point and line
-            self.ax.plot(x3, y3, 'go', markersize=8)
-            self.ax.text(x3, y3+5, f"C{self.current_trio_index}", 
+            # Draw third point and line, storing artists
+            pt3 = self.ax.plot(x3, y3, 'go', markersize=8)[0]
+            txt3 = self.ax.text(x3, y3+5, f"C{self.current_trio_index}", 
                         color='green', ha='center', va='bottom')
+            self.measurement_artists.extend([pt3, txt3])
             
             if z2 == z3:  # Draw line from B to C if on same slice
-                self.ax.plot([x2, x3], [y2, y3], 'g--', alpha=0.7)
+                line = self.ax.plot([x2, x3], [y2, y3], 'g--', alpha=0.7)[0]
+                self.measurement_artists.append(line)
             self.canvas.draw()
             
             # Update measurement display
@@ -1510,6 +1540,7 @@ class ImageViewerWindow(QMainWindow):
             self.current_second_point = None
             self.current_trio_index += 1
             self.measurement_mode = "angle"
+
 
     def calculate_3d_angle(self, point_a, point_b, point_c):
         """Calculate 3D angle at vertex B between points A-B-C."""
@@ -1825,23 +1856,27 @@ class ImageViewerWindow(QMainWindow):
 
                 nodes = list(set(nodes))
 
-                # Get the existing DataFrame from the model
-                original_df = self.network_table.model()._data
+                try:
 
-                # Create mask for rows for nodes in question
-                mask = (
-                    (original_df.iloc[:, 0].isin(nodes) & original_df.iloc[:, 1].isin(nodes))
-                    )
-                
-                # Filter the DataFrame to only include direct connections
-                filtered_df = original_df[mask].copy()
-                
-                # Create new model with filtered DataFrame and update selection table
-                new_model = PandasModel(filtered_df)
-                self.selection_table.setModel(new_model)
-                
-                # Switch to selection table
-                self.selection_button.click()
+                    # Get the existing DataFrame from the model
+                    original_df = self.network_table.model()._data
+
+                    # Create mask for rows for nodes in question
+                    mask = (
+                        (original_df.iloc[:, 0].isin(nodes) & original_df.iloc[:, 1].isin(nodes))
+                        )
+                    
+                    # Filter the DataFrame to only include direct connections
+                    filtered_df = original_df[mask].copy()
+                    
+                    # Create new model with filtered DataFrame and update selection table
+                    new_model = PandasModel(filtered_df)
+                    self.selection_table.setModel(new_model)
+                    
+                    # Switch to selection table
+                    self.selection_button.click()
+                except:
+                    pass
 
                 if edges:
                     edge_indices = filtered_df.iloc[:, 2].unique().tolist()
@@ -3778,6 +3813,12 @@ class ImageViewerWindow(QMainWindow):
             self.ax.clear()
             self.ax.set_facecolor('black')
             
+            # Reset measurement artists since we cleared the axes
+            if not hasattr(self, 'measurement_artists'):
+                self.measurement_artists = []
+            else:
+                self.measurement_artists = []  # Reset since ax.clear() removed all artists
+            
             # Get original dimensions (before downsampling)
             if hasattr(self, 'original_dims') and self.original_dims:
                 height, width = self.original_dims
@@ -3859,23 +3900,129 @@ class ImageViewerWindow(QMainWindow):
             for spine in self.ax.spines.values():
                 spine.set_color('black')
                 
-            # Add measurement points if they exist (coordinates remain in original space)
-            for point in self.measurement_points:
-                x1, y1, z1 = point['point1']
-                x2, y2, z2 = point['point2']
-                pair_idx = point['pair_index']
-                
-                if z1 == self.current_slice:
-                    self.ax.plot(x1, y1, 'yo', markersize=8)
-                    self.ax.text(x1, y1+5, str(pair_idx), 
-                                color='white', ha='center', va='bottom')
-                if z2 == self.current_slice:
-                    self.ax.plot(x2, y2, 'yo', markersize=8)
-                    self.ax.text(x2, y2+5, str(pair_idx), 
-                                color='white', ha='center', va='bottom')
+            # Add measurement points if they exist (using the same logic as main update_display)
+            if hasattr(self, 'measurement_points') and self.measurement_points:
+                for point in self.measurement_points:
+                    x1, y1, z1 = point['point1']
+                    x2, y2, z2 = point['point2']
+                    pair_idx = point['pair_index']
+                    point_type = point.get('type', 'distance')  # Default to distance for backward compatibility
+                    
+                    # Determine colors based on type
+                    if point_type == 'angle':
+                        marker_color = 'go'
+                        text_color = 'green'
+                        line_color = 'g--'
+                    else:  # distance
+                        marker_color = 'yo'
+                        text_color = 'yellow'
+                        line_color = 'r--'
+                    
+                    # Check if points are in visible region and on current slice
+                    point1_visible = (z1 == self.current_slice and 
+                                    current_xlim[0] <= x1 <= current_xlim[1] and 
+                                    current_ylim[1] <= y1 <= current_ylim[0])
+                    point2_visible = (z2 == self.current_slice and 
+                                    current_xlim[0] <= x2 <= current_xlim[1] and 
+                                    current_ylim[1] <= y2 <= current_ylim[0])
+                    
+                    # Draw individual points if they're on the current slice
+                    if point1_visible:
+                        pt1 = self.ax.plot(x1, y1, marker_color, markersize=8)[0]
+                        txt1 = self.ax.text(x1, y1+5, str(pair_idx), color=text_color, ha='center', va='bottom')
+                        self.measurement_artists.extend([pt1, txt1])
                         
-                if z1 == z2 == self.current_slice:
-                    self.ax.plot([x1, x2], [y1, y2], 'r--', alpha=0.5)
+                    if point2_visible:
+                        pt2 = self.ax.plot(x2, y2, marker_color, markersize=8)[0]
+                        txt2 = self.ax.text(x2, y2+5, str(pair_idx), color=text_color, ha='center', va='bottom')
+                        self.measurement_artists.extend([pt2, txt2])
+                        
+                    # Draw connecting line if both points are on the same slice
+                    if z1 == z2 == self.current_slice and (point1_visible or point2_visible):
+                        line = self.ax.plot([x1, x2], [y1, y2], line_color, alpha=0.5)[0]
+                        self.measurement_artists.append(line)
+
+            # Handle angle measurements if they exist
+            if hasattr(self, 'angle_measurements') and self.angle_measurements:
+                for angle in self.angle_measurements:
+                    xa, ya, za = angle['point_a']
+                    xb, yb, zb = angle['point_b']  # vertex
+                    xc, yc, zc = angle['point_c']
+                    trio_idx = angle['trio_index']
+                    
+                    # Check if points are on current slice and visible
+                    point_a_visible = (za == self.current_slice and 
+                                     current_xlim[0] <= xa <= current_xlim[1] and 
+                                     current_ylim[1] <= ya <= current_ylim[0])
+                    point_b_visible = (zb == self.current_slice and 
+                                     current_xlim[0] <= xb <= current_xlim[1] and 
+                                     current_ylim[1] <= yb <= current_ylim[0])
+                    point_c_visible = (zc == self.current_slice and 
+                                     current_xlim[0] <= xc <= current_xlim[1] and 
+                                     current_ylim[1] <= yc <= current_ylim[0])
+                    
+                    # Draw points
+                    if point_a_visible:
+                        pt_a = self.ax.plot(xa, ya, 'go', markersize=8)[0]
+                        txt_a = self.ax.text(xa, ya+5, f"A{trio_idx}", color='green', ha='center', va='bottom')
+                        self.measurement_artists.extend([pt_a, txt_a])
+                        
+                    if point_b_visible:
+                        pt_b = self.ax.plot(xb, yb, 'go', markersize=8)[0]
+                        txt_b = self.ax.text(xb, yb+5, f"B{trio_idx}", color='green', ha='center', va='bottom')
+                        self.measurement_artists.extend([pt_b, txt_b])
+                        
+                    if point_c_visible:
+                        pt_c = self.ax.plot(xc, yc, 'go', markersize=8)[0]
+                        txt_c = self.ax.text(xc, yc+5, f"C{trio_idx}", color='green', ha='center', va='bottom')
+                        self.measurement_artists.extend([pt_c, txt_c])
+                    
+                    # Draw lines only if points are on current slice
+                    if za == zb == self.current_slice and (point_a_visible or point_b_visible):
+                        line_ab = self.ax.plot([xa, xb], [ya, yb], 'g--', alpha=0.7)[0]
+                        self.measurement_artists.append(line_ab)
+                        
+                    if zb == zc == self.current_slice and (point_b_visible or point_c_visible):
+                        line_bc = self.ax.plot([xb, xc], [yb, yc], 'g--', alpha=0.7)[0]
+                        self.measurement_artists.append(line_bc)
+
+            # Handle any partial measurements in progress (individual points without pairs yet)
+            if hasattr(self, 'current_point') and self.current_point is not None:
+                x, y, z = self.current_point
+                if z == self.current_slice:
+                    if hasattr(self, 'measurement_mode') and self.measurement_mode == "angle":
+                        # Show green for angle mode
+                        pt = self.ax.plot(x, y, 'go', markersize=8)[0]
+                        if hasattr(self, 'current_trio_index'):
+                            txt = self.ax.text(x, y+5, f"A{self.current_trio_index}", color='green', ha='center', va='bottom')
+                        else:
+                            txt = self.ax.text(x, y+5, "A", color='green', ha='center', va='bottom')
+                    else:
+                        # Show yellow for distance mode (default)
+                        pt = self.ax.plot(x, y, 'yo', markersize=8)[0]
+                        if hasattr(self, 'current_pair_index'):
+                            txt = self.ax.text(x, y+5, f"D{self.current_pair_index}", color='yellow', ha='center', va='bottom')
+                        else:
+                            txt = self.ax.text(x, y+5, "D", color='yellow', ha='center', va='bottom')
+                    self.measurement_artists.extend([pt, txt])
+
+            # Handle second point in angle measurements
+            if hasattr(self, 'current_second_point') and self.current_second_point is not None:
+                x, y, z = self.current_second_point
+                if z == self.current_slice:
+                    pt = self.ax.plot(x, y, 'go', markersize=8)[0]
+                    if hasattr(self, 'current_trio_index'):
+                        txt = self.ax.text(x, y+5, f"B{self.current_trio_index}", color='green', ha='center', va='bottom')
+                    else:
+                        txt = self.ax.text(x, y+5, "B", color='green', ha='center', va='bottom')
+                    self.measurement_artists.extend([pt, txt])
+                    
+                    # Draw line from A to B if both are on current slice
+                    if (hasattr(self, 'current_point') and self.current_point is not None and 
+                        self.current_point[2] == self.current_slice):
+                        x1, y1, z1 = self.current_point
+                        line = self.ax.plot([x1, x], [y1, y], 'g--', alpha=0.7)[0]
+                        self.measurement_artists.append(line)
             
             #self.canvas.setCursor(Qt.CursorShape.ClosedHandCursor)
 
@@ -3992,30 +4139,33 @@ class ImageViewerWindow(QMainWindow):
                             self.highlight_value_in_tables(self.clicked_values['edges'][-1])
                             self.handle_info('edge')
 
-                    if len(self.clicked_values['nodes']) > 0 or len(self.clicked_values['edges']) > 0:  # Check if we have any nodes selected
+                    try:
+                        if len(self.clicked_values['nodes']) > 0 or len(self.clicked_values['edges']) > 0:  # Check if we have any nodes selected
 
-                        old_nodes = copy.deepcopy(self.clicked_values['nodes']) 
+                            old_nodes = copy.deepcopy(self.clicked_values['nodes']) 
 
-                        # Get the existing DataFrame from the model
-                        original_df = self.network_table.model()._data
-                        
-                        # Create mask for rows where one column is any original node AND the other column is any neighbor
-                        mask = (
-                            ((original_df.iloc[:, 0].isin(self.clicked_values['nodes'])) &
-                            (original_df.iloc[:, 1].isin(self.clicked_values['nodes']))) |
-                            (original_df.iloc[:, 2].isin(self.clicked_values['edges']))
-                            )
-                        
-                        # Filter the DataFrame to only include direct connections
-                        filtered_df = original_df[mask].copy()
-                        
-                        # Create new model with filtered DataFrame and update selection table
-                        new_model = PandasModel(filtered_df)
-                        self.selection_table.setModel(new_model)
-                        
-                        # Switch to selection table
-                        self.selection_button.click()
-            
+                            # Get the existing DataFrame from the model
+                            original_df = self.network_table.model()._data
+                            
+                            # Create mask for rows where one column is any original node AND the other column is any neighbor
+                            mask = (
+                                ((original_df.iloc[:, 0].isin(self.clicked_values['nodes'])) &
+                                (original_df.iloc[:, 1].isin(self.clicked_values['nodes']))) |
+                                (original_df.iloc[:, 2].isin(self.clicked_values['edges']))
+                                )
+                            
+                            # Filter the DataFrame to only include direct connections
+                            filtered_df = original_df[mask].copy()
+                            
+                            # Create new model with filtered DataFrame and update selection table
+                            new_model = PandasModel(filtered_df)
+                            self.selection_table.setModel(new_model)
+                            
+                            # Switch to selection table
+                            self.selection_button.click()
+                    except:
+                        pass
+                
             elif not self.selecting and self.selection_start:  # If we had a click but never started selection
                 # Handle as a normal click
                 self.on_mouse_click(event)
@@ -4436,6 +4586,8 @@ class ImageViewerWindow(QMainWindow):
         rad_action.triggered.connect(self.show_rad_dialog)
         inter_action = stats_menu.addAction("Calculate Node < > Edge Interaction")
         inter_action.triggered.connect(self.show_interaction_dialog)
+        violin_action = stats_menu.addAction("Show Identity Violins/UMAP")
+        violin_action.triggered.connect(self.show_violin_dialog)
         overlay_menu = analysis_menu.addMenu("Data/Overlays")
         degree_action = overlay_menu.addAction("Get Degree Information")
         degree_action.triggered.connect(self.show_degree_dialog)
@@ -4891,6 +5043,8 @@ class ImageViewerWindow(QMainWindow):
            for column in range(table.model().columnCount(None)):
                table.resizeColumnToContents(column)
 
+           return df
+
        except:
             pass
 
@@ -5319,7 +5473,6 @@ class ImageViewerWindow(QMainWindow):
 
         elif sort == 'Merge Nodes':
             try:
-
                 if my_network.nodes is None:
                     QMessageBox.critical(
                         self,
@@ -5327,72 +5480,118 @@ class ImageViewerWindow(QMainWindow):
                         "Please load your first set of nodes into the 'Nodes' channel first"
                     )
                     return
-
                 if len(np.unique(my_network.nodes)) < 3:
                     self.show_label_dialog()
-
-                # First ask user what they want to select
-                msg = QMessageBox()
-                msg.setWindowTitle("Selection Type")
-                msg.setText("Would you like to select a TIFF file or a directory?")
-                tiff_button = msg.addButton("TIFF File", QMessageBox.ButtonRole.AcceptRole)
-                dir_button = msg.addButton("Directory", QMessageBox.ButtonRole.AcceptRole)
-                msg.addButton("Cancel", QMessageBox.ButtonRole.RejectRole)
-
-                msg.exec()
-
-                # Also if they want centroids:
-                msg2 = QMessageBox()
-                msg2.setWindowTitle("Selection Type")
-                msg2.setText("Would you like to compute node centroids for each image prior to merging?")
-                yes_button = msg2.addButton("Yes", QMessageBox.ButtonRole.AcceptRole)
-                no_button = msg2.addButton("No", QMessageBox.ButtonRole.AcceptRole)
-                msg2.addButton("Cancel", QMessageBox.ButtonRole.RejectRole)
-
-                msg2.exec()
-
-                if msg2.clickedButton() == yes_button:
-                    centroids = True
-                else:
-                    centroids = False
-
-                if msg.clickedButton() == tiff_button:
-                    # Code for selecting TIFF files
-                    filename, _ = QFileDialog.getOpenFileName(
-                        self,
-                        "Select TIFF file",
-                        "",
-                        "TIFF files (*.tiff *.tif)"
-                    )
-                    if filename:
-                        selected_path = filename
-
-                elif msg.clickedButton() == dir_button:
-                    # Code for selecting directories
-                    dialog = QFileDialog(self)
-                    dialog.setOption(QFileDialog.Option.DontUseNativeDialog)
-                    dialog.setOption(QFileDialog.Option.ReadOnly)
-                    dialog.setFileMode(QFileDialog.FileMode.Directory)
-                    dialog.setViewMode(QFileDialog.ViewMode.Detail)
-
-                    if dialog.exec() == QFileDialog.DialogCode.Accepted:
-                        selected_path = dialog.directory().absolutePath()
-
-                my_network.merge_nodes(selected_path, root_id = self.node_name, centroids = centroids)
-                self.load_channel(0, my_network.nodes, True)
-
-
-                if hasattr(my_network, 'node_identities') and my_network.node_identities is not None:
+                
+                # Create custom dialog
+                dialog = QDialog(self)
+                dialog.setWindowTitle("Merge Nodes Configuration")
+                dialog.setModal(True)
+                dialog.resize(400, 200)
+                
+                layout = QVBoxLayout(dialog)
+                
+                # Selection type
+                type_layout = QHBoxLayout()
+                type_label = QLabel("Selection Type:")
+                type_combo = QComboBox()
+                type_combo.addItems(["TIFF File", "Directory"])
+                type_layout.addWidget(type_label)
+                type_layout.addWidget(type_combo)
+                layout.addLayout(type_layout)
+                
+                # Centroids checkbox
+                centroids_layout = QHBoxLayout()
+                centroids_check = QCheckBox("Compute node centroids for each image prior to merging")
+                centroids_layout.addWidget(centroids_check)
+                layout.addLayout(centroids_layout)
+                
+                # Down factor for centroid calculation
+                down_factor_layout = QHBoxLayout()
+                down_factor_label = QLabel("Down Factor (for centroid calculation downsampling):")
+                down_factor_edit = QLineEdit()
+                down_factor_edit.setText("1")  # Default value
+                down_factor_edit.setPlaceholderText("Enter down factor (e.g., 1, 2, 4)")
+                down_factor_layout.addWidget(down_factor_label)
+                down_factor_layout.addWidget(down_factor_edit)
+                layout.addLayout(down_factor_layout)
+                
+                # Buttons
+                button_layout = QHBoxLayout()
+                accept_button = QPushButton("Accept")
+                cancel_button = QPushButton("Cancel")
+                button_layout.addWidget(accept_button)
+                button_layout.addWidget(cancel_button)
+                layout.addLayout(button_layout)
+                
+                # Connect buttons
+                accept_button.clicked.connect(dialog.accept)
+                cancel_button.clicked.connect(dialog.reject)
+                
+                # Execute dialog
+                if dialog.exec() == QDialog.DialogCode.Accepted:
+                    # Get values from dialog
+                    selection_type = type_combo.currentText()
+                    centroids = centroids_check.isChecked()
+                    
+                    # Validate and get down_factor
                     try:
-                        self.format_for_upperright_table(my_network.node_identities, 'NodeID', 'Identity', 'Node Identities')
-                    except Exception as e:
-                        print(f"Error loading node identity table: {e}")
-                if centroids:
-                    self.format_for_upperright_table(my_network.node_centroids, 'NodeID', ['Z', 'Y', 'X'], 'Node Centroids')
-
-
+                        down_factor = int(down_factor_edit.text())
+                        if down_factor <= 0:
+                            raise ValueError("Down factor must be positive")
+                    except ValueError as e:
+                        QMessageBox.critical(
+                            self,
+                            "Invalid Input",
+                            f"Invalid down factor: {str(e)}"
+                        )
+                        return
+                    
+                    # Handle file/directory selection based on combo box choice
+                    if selection_type == "TIFF File":
+                        filename, _ = QFileDialog.getOpenFileName(
+                            self,
+                            "Select TIFF file",
+                            "",
+                            "TIFF files (*.tiff *.tif)"
+                        )
+                        if filename:
+                            selected_path = filename
+                        else:
+                            return  # User cancelled file selection
+                    else:  # Directory
+                        file_dialog = QFileDialog(self)
+                        file_dialog.setOption(QFileDialog.Option.DontUseNativeDialog)
+                        file_dialog.setOption(QFileDialog.Option.ReadOnly)
+                        file_dialog.setFileMode(QFileDialog.FileMode.Directory)
+                        file_dialog.setViewMode(QFileDialog.ViewMode.Detail)
+                        if file_dialog.exec() == QFileDialog.DialogCode.Accepted:
+                            selected_path = file_dialog.directory().absolutePath()
+                        else:
+                            return  # User cancelled directory selection
+                    
+                    if down_factor == 1:
+                        down_factor = None
+                    # Call merge_nodes with all parameters
+                    my_network.merge_nodes(
+                        selected_path, 
+                        root_id=self.node_name, 
+                        centroids=centroids,
+                        down_factor=down_factor
+                    )
+                    
+                    self.load_channel(0, my_network.nodes, True)
+                    
+                    if hasattr(my_network, 'node_identities') and my_network.node_identities is not None:
+                        try:
+                            self.format_for_upperright_table(my_network.node_identities, 'NodeID', 'Identity', 'Node Identities')
+                        except Exception as e:
+                            print(f"Error loading node identity table: {e}")
+                    
+                    if centroids:
+                        self.format_for_upperright_table(my_network.node_centroids, 'NodeID', ['Z', 'Y', 'X'], 'Node Centroids')
+                
             except Exception as e:
-
                 QMessageBox.critical(
                     self,
                     "Error Merging",
@@ -5415,7 +5614,8 @@ class ImageViewerWindow(QMainWindow):
                     )
 
             self.last_load = directory
-            
+            self.last_saved = os.path.dirname(directory)
+            self.last_save_name = directory            
 
             if directory != "":
 
@@ -5496,8 +5696,6 @@ class ImageViewerWindow(QMainWindow):
                 "Error Loading Network 3D Object",
                 f"Failed to load Network 3D Object: {str(e)}"
             )
-
-
 
     def load_network(self):
         """Load in the network from a .xlsx (need to add .csv support)"""
@@ -5912,7 +6110,7 @@ class ImageViewerWindow(QMainWindow):
 
             if self.shape == self.channel_data[channel_index].shape:
                 preserve_zoom = (self.ax.get_xlim(), self.ax.get_ylim())
-            self.shape = self.channel_data[channel_index].shape
+            self.shape = (self.channel_data[channel_index].shape[0], self.channel_data[channel_index].shape[1], self.channel_data[channel_index].shape[2])
             if self.shape[1] * self.shape[2] > 3000 * 3000 * self.downsample_factor:
                 self.throttle = True
             else:
@@ -6278,8 +6476,13 @@ class ImageViewerWindow(QMainWindow):
                 for img in list(self.ax.get_images()):
                     img.remove()
                 # Clear measurement points
-                self.measurement_artists.clear()
-
+                if hasattr(self, 'measurement_artists'):
+                    for artist in self.measurement_artists:
+                        try:
+                            artist.remove()
+                        except:
+                            pass  # Artist might already be removed
+                self.measurement_artists = []  # Reset the list
             # Determine the current view bounds (either from preserve_zoom or current state)
             if preserve_zoom:
                 current_xlim, current_ylim = preserve_zoom
@@ -6346,7 +6549,6 @@ class ImageViewerWindow(QMainWindow):
                     return cropped[::factor, ::factor, :]
                 else:
                     return cropped
-
             
             # Update channel images efficiently with cropping and downsampling
             for channel in range(4):
@@ -6421,10 +6623,7 @@ class ImageViewerWindow(QMainWindow):
                             
                             im = self.ax.imshow(normalized_image, alpha=0.7, cmap=custom_cmap,
                                               vmin=0, vmax=1, extent=crop_extent)
-
             # Handle preview, overlays, and measurements (apply cropping here too)
-            #if self.preview and not called:
-             #   self.create_highlight_overlay_slice(self.targs, bounds=self.bounds)
 
             # Overlay handling (optimized with cropping and downsampling)
             if self.mini_overlay and self.highlight and self.machine_window is None:
@@ -6446,34 +6645,88 @@ class ImageViewerWindow(QMainWindow):
                         [(0, 0, 0, 0), (1, 1, 0, 1), (0, 0.7, 1, 1)])
                     self.ax.imshow(display_highlight, cmap=highlight_cmap, vmin=0, vmax=2, alpha=0.3, extent=crop_extent)
 
-            # Redraw measurement points efficiently (no cropping needed - these are vector graphics)
+            # Redraw measurement points efficiently
             # Only draw points that are within the visible region for additional performance
-            for point in self.measurement_points:
-                x1, y1, z1 = point['point1']
-                x2, y2, z2 = point['point2']
-                pair_idx = point['pair_index']
-                
-                # Check if points are in visible region
-                point1_visible = (z1 == self.current_slice and 
-                                current_xlim[0] <= x1 <= current_xlim[1] and 
-                                current_ylim[1] <= y1 <= current_ylim[0])
-                point2_visible = (z2 == self.current_slice and 
-                                current_xlim[0] <= x2 <= current_xlim[1] and 
-                                current_ylim[1] <= y2 <= current_ylim[0])
-                
-                if point1_visible:
-                    pt1 = self.ax.plot(x1, y1, 'yo', markersize=8)[0]
-                    txt1 = self.ax.text(x1, y1+5, str(pair_idx), color='white', ha='center', va='bottom')
-                    self.measurement_artists.extend([pt1, txt1])
+
+            if hasattr(self, 'measurement_points') and self.measurement_points:
+                for point in self.measurement_points:
+                    x1, y1, z1 = point['point1']
+                    x2, y2, z2 = point['point2']
+                    pair_idx = point['pair_index']
+                    point_type = point.get('type', 'distance')  # Default to distance for backward compatibility
                     
-                if point2_visible:
-                    pt2 = self.ax.plot(x2, y2, 'yo', markersize=8)[0]
-                    txt2 = self.ax.text(x2, y2+5, str(pair_idx), color='white', ha='center', va='bottom')
-                    self.measurement_artists.extend([pt2, txt2])
+                    # Determine colors based on type
+                    if point_type == 'angle':
+                        marker_color = 'go'
+                        text_color = 'green'
+                        line_color = 'g--'
+                    else:  # distance
+                        marker_color = 'yo'
+                        text_color = 'yellow'
+                        line_color = 'r--'
                     
-                if z1 == z2 == self.current_slice and (point1_visible or point2_visible):
-                    line = self.ax.plot([x1, x2], [y1, y2], 'r--', alpha=0.5)[0]
-                    self.measurement_artists.append(line)
+                    # Check if points are in visible region and on current slice
+                    point1_visible = (z1 == self.current_slice and 
+                                    current_xlim[0] <= x1 <= current_xlim[1] and 
+                                    current_ylim[1] <= y1 <= current_ylim[0])
+                    point2_visible = (z2 == self.current_slice and 
+                                    current_xlim[0] <= x2 <= current_xlim[1] and 
+                                    current_ylim[1] <= y2 <= current_ylim[0])
+                    
+                    # Always draw individual points if they're on the current slice (even without lines)
+                    if point1_visible:
+                        pt1 = self.ax.plot(x1, y1, marker_color, markersize=8)[0]
+                        txt1 = self.ax.text(x1, y1+5, str(pair_idx), color=text_color, ha='center', va='bottom')
+                        self.measurement_artists.extend([pt1, txt1])
+                        
+                    if point2_visible:
+                        pt2 = self.ax.plot(x2, y2, marker_color, markersize=8)[0]
+                        txt2 = self.ax.text(x2, y2+5, str(pair_idx), color=text_color, ha='center', va='bottom')
+                        self.measurement_artists.extend([pt2, txt2])
+                        
+                    # Only draw connecting line if both points are on the same slice AND visible
+                    if z1 == z2 == self.current_slice and (point1_visible or point2_visible):
+                        line = self.ax.plot([x1, x2], [y1, y2], line_color, alpha=0.5)[0]
+                        self.measurement_artists.append(line)
+
+            # Also handle any partial measurements in progress (individual points without pairs yet)
+            # This shows individual points even when a measurement isn't complete
+            if hasattr(self, 'current_point') and self.current_point is not None:
+                x, y, z = self.current_point
+                if z == self.current_slice:
+                    if hasattr(self, 'measurement_mode') and self.measurement_mode == "angle":
+                        # Show green for angle mode
+                        pt = self.ax.plot(x, y, 'go', markersize=8)[0]
+                        if hasattr(self, 'current_trio_index'):
+                            txt = self.ax.text(x, y+5, f"A{self.current_trio_index}", color='green', ha='center', va='bottom')
+                        else:
+                            txt = self.ax.text(x, y+5, "A", color='green', ha='center', va='bottom')
+                    else:
+                        # Show yellow for distance mode (default)
+                        pt = self.ax.plot(x, y, 'yo', markersize=8)[0]
+                        if hasattr(self, 'current_pair_index'):
+                            txt = self.ax.text(x, y+5, f"D{self.current_pair_index}", color='yellow', ha='center', va='bottom')
+                        else:
+                            txt = self.ax.text(x, y+5, "D", color='yellow', ha='center', va='bottom')
+                    self.measurement_artists.extend([pt, txt])
+
+            # Handle second point in angle measurements
+            if hasattr(self, 'current_second_point') and self.current_second_point is not None:
+                x, y, z = self.current_second_point
+                if z == self.current_slice:
+                    pt = self.ax.plot(x, y, 'go', markersize=8)[0]
+                    if hasattr(self, 'current_trio_index'):
+                        txt = self.ax.text(x, y+5, f"B{self.current_trio_index}", color='green', ha='center', va='bottom')
+                    else:
+                        txt = self.ax.text(x, y+5, "B", color='green', ha='center', va='bottom')
+                    self.measurement_artists.extend([pt, txt])
+                    
+                    # Draw line from A to B if both are on current slice
+                    if (hasattr(self, 'current_point') and self.current_point is not None and 
+                        self.current_point[2] == self.current_slice):
+                        x1, y1, z1 = self.current_point
+                        line = self.ax.plot([x1, x], [y1, y], 'g--', alpha=0.7)[0]
+                        self.measurement_artists.append(line)
 
             # Store current view limits for next update
             self.ax._current_xlim = current_xlim
@@ -6614,6 +6867,10 @@ class ImageViewerWindow(QMainWindow):
     def show_interaction_dialog(self):
         dialog = InteractionDialog(self)
         dialog.exec()
+
+    def show_violin_dialog(self):
+        dialog = ViolinDialog(self)
+        dialog.show()
 
     def show_degree_dialog(self):
         dialog = DegreeDialog(self)
@@ -8145,7 +8402,7 @@ class MergeNodeIdDialog(QDialog):
                 result = {key: np.array([d[key] for d in id_dicts]) for key in all_keys}
 
 
-                self.parent().format_for_upperright_table(result, 'NodeID', good_list, 'Mean Intensity')
+                self.parent().format_for_upperright_table(result, 'NodeID', good_list, 'Mean Intensity (Save this Table for "Analyze -> Stats -> Show Violins")')
                 if umap:
                     my_network.identity_umap(result)
 
@@ -8153,7 +8410,7 @@ class MergeNodeIdDialog(QDialog):
                 QMessageBox.information(
                     self,
                     "Success",
-                    "Node Identities Merged. New IDs represent presence of corresponding img foreground with +, absence with -. Please save your new identities as csv, then use File -> Load -> Load From Excel Helper to bulk search and rename desired combinations. (Press Help [above] for more info)"
+                    "Node Identities Merged. New IDs represent presence of corresponding img foreground with +, absence with -. If desired, please save your new identities as csv, then use File -> Load -> Load From Excel Helper to bulk search and rename desired combinations. If desired, please save the outputted mean intensity table to use with 'Analyze -> Stats -> Show Violins'. (Press Help [above] for more info)"
                 )
 
                 self.accept()
@@ -8782,7 +9039,7 @@ class ComNeighborDialog(QDialog):
 
             mode = self.mode.currentIndex()
 
-            seed = float(self.seed.text()) if self.seed.text().strip() else 42
+            seed = int(self.seed.text()) if self.seed.text().strip() else 42
 
             limit = int(self.limit.text()) if self.limit.text().strip() else None
 
@@ -8932,12 +9189,16 @@ class NearNeighDialog(QDialog):
         if my_network.node_identities is not None:
 
             self.root = QComboBox()
-            self.root.addItems(list(set(my_network.node_identities.values())))  
+            roots = list(set(my_network.node_identities.values()))
+            roots.sort()
+            roots.append("All (Excluding Targets)")
+            self.root.addItems(roots)  
             self.root.setCurrentIndex(0)
             identities_layout.addRow("Root Identity to Search for Neighbor's IDs?", self.root)
             
             self.targ = QComboBox()
             neighs = list(set(my_network.node_identities.values()))
+            neighs.sort()
             neighs.append("All Others (Excluding Self)")
             self.targ.addItems(neighs)  
             self.targ.setCurrentIndex(0)
@@ -8975,6 +9236,11 @@ class NearNeighDialog(QDialog):
         self.numpy.setChecked(False)
         self.numpy.clicked.connect(self.toggle_map)
         heatmap_layout.addRow("Overlay:", self.numpy)
+
+        self.mode = QComboBox()
+        self.mode.addItems(["Anywhere", "Within Masked Bounds of Edges", "Within Masked Bounds of Overlay1", "Within Masked Bounds of Overlay2"])
+        self.mode.setCurrentIndex(0)
+        heatmap_layout.addRow("For heatmap, measure theoretical point distribution how?", self.mode)
         
         main_layout.addWidget(heatmap_group)
 
@@ -9062,35 +9328,52 @@ class NearNeighDialog(QDialog):
             except:
                 targ = None
 
+            if root == "All (Excluding Targets)" and targ == 'All Others (Excluding Self)':
+                root = None
+                targ = None
+
+            mode = self.mode.currentIndex()
+
+            if mode == 0:
+                mask = None
+            else:
+                try:
+                    mask = self.parent().channel_data[mode] != 0
+                except:
+                    print("Could not binarize mask")
+                    mask = None
+
             heatmap = self.map.isChecked()
             threed = self.threed.isChecked()
             numpy = self.numpy.isChecked()
             num = int(self.num.text()) if self.num.text().strip() else 1
             quant = self.quant.isChecked()
             centroids = self.centroids.isChecked()
+
             if not centroids:
+                print("Using 1 nearest neighbor due to not using centroids")
                 num = 1
 
             if root is not None and targ is not None:
                 title = f"Nearest {num} Neighbor(s) Distance of {targ} from {root}"
-                header = f"Shortest Distance to Closest {num} {targ}(s)"
+                header = f"Avg Shortest Distance to Closest {num} {targ}(s)"
                 header2 = f"{root} Node ID"
                 header3 = f'Theoretical Uniform Distance to Closest {num} {targ}(s)'
             else:
                 title = f"Nearest {num} Neighbor(s) Distance Between Nodes"
-                header = f"Shortest Distance to Closest {num} Nodes"
+                header = f"Avg Shortest Distance to Closest {num} Nodes"
                 header2 = "Root Node ID"
                 header3 = f'Simulated Theoretical Uniform Distance to Closest {num} Nodes'
 
-            if centroids and my_network.node_centroids is None:
+            if my_network.node_centroids is None:
                 self.parent().show_centroid_dialog()
                 if my_network.node_centroids is None:
                     return
 
             if not numpy:
-                avg, output, quant_overlay, pred = my_network.nearest_neighbors_avg(root, targ, my_network.xy_scale, my_network.z_scale, num = num, heatmap = heatmap, threed = threed, quant = quant, centroids = centroids)
+                avg, output, quant_overlay, pred = my_network.nearest_neighbors_avg(root, targ, my_network.xy_scale, my_network.z_scale, num = num, heatmap = heatmap, threed = threed, quant = quant, centroids = centroids, mask = mask)
             else:
-                avg, output, overlay, quant_overlay, pred = my_network.nearest_neighbors_avg(root, targ, my_network.xy_scale, my_network.z_scale, num = num, heatmap = heatmap, threed = threed, numpy = True, quant = quant, centroids = centroids)
+                avg, output, overlay, quant_overlay, pred = my_network.nearest_neighbors_avg(root, targ, my_network.xy_scale, my_network.z_scale, num = num, heatmap = heatmap, threed = threed, numpy = True, quant = quant, centroids = centroids, mask = mask)
                 self.parent().load_channel(3, overlay, data = True, preserve_zoom = (self.parent().ax.get_xlim(), self.parent().ax.get_ylim()))
 
             if quant_overlay is not None:
@@ -9679,6 +9962,294 @@ class InteractionDialog(QDialog):
             print(traceback.format_exc())
 
             print(f"Error finding interactions: {e}")
+
+
+class ViolinDialog(QDialog):
+
+    def __init__(self, parent=None):
+
+        super().__init__(parent)
+
+        QMessageBox.critical(
+            self,
+            "Notice",
+            "Please select spreadsheet (Should be table output of 'File -> Images -> Node Identities -> Assign Node Identities from Overlap with Other Images'. Make sure to save that table as .csv/.xlsx and then load it here to use this.)"
+        )
+
+        try:
+            try:
+                self.df = self.parent().load_file()
+            except:
+                return
+
+            self.backup_df = copy.deepcopy(self.df)
+            # Get all identity lists and normalize the dataframe
+            identity_lists = self.get_all_identity_lists()
+            self.df = self.normalize_df_with_identity_centerpoints(self.df, identity_lists)
+
+            self.setWindowTitle("Violin Parameters")
+            self.setModal(False)
+
+            layout = QFormLayout(self)
+
+            if my_network.node_identities is not None:
+
+                self.idens = QComboBox()
+                all_idens = list(set(my_network.node_identities.values()))
+                idens = []
+                for iden in all_idens:
+                    if '[' not in iden:
+                        idens.append(iden)
+                idens.sort()
+                idens.insert(0, "None")
+                self.idens.addItems(idens)  
+                self.idens.setCurrentIndex(0)
+                layout.addRow("Return Identity Violin Plots?", self.idens)
+            
+            if my_network.communities is not None:
+                self.coms = QComboBox()
+                coms = list(set(my_network.communities.values()))
+                coms.sort()
+                coms.insert(0, "None")
+                coms = [str(x) for x in coms]
+                self.coms.addItems(coms)  
+                self.coms.setCurrentIndex(0)
+                layout.addRow("Return Neighborhood/Community Violin Plots?", self.coms)
+
+            # Add Run button
+            run_button = QPushButton("Show Z-score-like Violin")
+            run_button.clicked.connect(self.run)
+            layout.addWidget(run_button)
+
+            run_button2 = QPushButton("Show Z-score UMAP")
+            run_button2.clicked.connect(self.run2)
+            layout.addWidget(run_button2)
+        except:
+            QTimer.singleShot(0, self.close)
+
+    def get_all_identity_lists(self):
+        """
+        Get all identity lists for normalization purposes.
+        
+        Returns:
+        dict: Dictionary where keys are identity names and values are lists of node IDs
+        """
+        identity_lists = {}
+        
+        # Get all unique identities
+        all_identities = set()
+        import ast
+        for item in my_network.node_identities:
+            try:
+                parse = ast.literal_eval(my_network.node_identities[item])
+                if isinstance(parse, (list, tuple, set)):
+                    all_identities.update(parse)
+                else:
+                    all_identities.add(str(parse))
+            except:
+                all_identities.add(str(my_network.node_identities[item]))
+        
+        # For each identity, get the list of nodes that have it
+        for identity in all_identities:
+            iden_list = []
+            for item in my_network.node_identities:
+                try:
+                    parse = ast.literal_eval(my_network.node_identities[item])
+                    if identity in parse:
+                        iden_list.append(item)
+                except:
+                    if identity == str(my_network.node_identities[item]):
+                        iden_list.append(item)
+            
+            if iden_list:  # Only add if we found nodes
+                identity_lists[identity] = iden_list
+        
+        return identity_lists
+
+    def normalize_df_with_identity_centerpoints(self, df, identity_lists):
+        """
+        Normalize the entire dataframe using identity-specific centerpoints.
+        Uses Z-score-like normalization with identity centerpoint as the "mean".
+        
+        Parameters:
+        df (pd.DataFrame): Original dataframe
+        identity_lists (dict): Dictionary where keys are identity names and values are lists of node IDs
+        
+        Returns:
+        pd.DataFrame: Normalized dataframe
+        """
+        # Make a copy to avoid modifying the original dataframe
+        df_copy = df.copy()
+        
+        # Set the first column as the index (row headers)
+        df_copy = df_copy.set_index(df_copy.columns[0])
+        
+        # Convert all remaining columns to float type (batch conversion)
+        df_copy = df_copy.astype(float)
+        
+        # First, calculate the centerpoint for each column by finding the median across all identity groups
+        column_centerpoints = {}
+        
+        for column in df_copy.columns:
+            centerpoint = None
+            
+            for identity, node_list in identity_lists.items():
+                # Get nodes that exist in both the identity list and the dataframe
+                valid_nodes = [node for node in node_list if node in df_copy.index]
+                if valid_nodes and ((str(identity) == str(column)) or str(identity) == f'{str(column)}+'):
+                    # Get the median value for this identity in this column
+                    identity_min = df_copy.loc[valid_nodes, column].median()
+                    centerpoint = identity_min
+                    break  # Found the match, no need to continue
+            
+            if centerpoint is not None:
+                # Use the identity-specific centerpoint
+                column_centerpoints[column] = centerpoint
+            else:
+                # Fallback: if no matching identity, use column median
+                column_centerpoints[column] = df_copy[column].median()
+        
+        # Now normalize each column using Z-score-like calculation with identity centerpoint
+        df_normalized = df_copy.copy()
+        for column in df_copy.columns:
+            centerpoint = column_centerpoints[column]
+            # Calculate standard deviation of the column
+            std_dev = df_copy[column].std()
+            
+            if std_dev > 0:  # Avoid division by zero
+                # Z-score-like: (value - centerpoint) / std_dev
+                df_normalized[column] = (df_copy[column] - centerpoint) / std_dev
+            else:
+                # If std_dev is 0, just subtract centerpoint
+                df_normalized[column] = df_copy[column] - centerpoint
+        
+        # Convert back to original format with first column as regular column
+        df_normalized = df_normalized.reset_index()
+        
+        return df_normalized
+
+    def show_in_table(self, df, metric, title):
+
+        # Create new table
+        table = CustomTableView(self.parent())
+        table.setModel(PandasModel(df))
+
+        try:
+            first_column_name = table.model()._data.columns[0]
+            table.sort_table(first_column_name, ascending=True)
+        except:
+             pass
+        
+        # Add to tabbed widget
+        if title is None:
+            self.parent().tabbed_data.add_table(f"{metric} Analysis", table)
+        else:
+            self.parent().tabbed_data.add_table(f"{title}", table)
+        
+
+
+        # Adjust column widths to content
+        for column in range(table.model().columnCount(None)):
+            table.resizeColumnToContents(column)
+
+    def run(self):
+
+        def df_to_dict_by_rows(df, row_indices, title):
+            """
+            Convert a pandas DataFrame to a dictionary by selecting specific rows.
+            No normalization - dataframe is already normalized.
+            
+            Parameters:
+            df (pd.DataFrame): DataFrame with first column as row headers, remaining columns contain floats
+            row_indices (list): List of values from the first column representing rows to include
+            
+            Returns:
+            dict: Dictionary where keys are column headers and values are lists of column values (as floats)
+                  for the specified rows
+            """
+            # Make a copy to avoid modifying the original dataframe
+            df_copy = df.copy()
+            
+            # Set the first column as the index (row headers)
+            df_copy = df_copy.set_index(df_copy.columns[0])
+            
+            # Mask the dataframe to include only the specified rows
+            masked_df = df_copy.loc[row_indices]
+            
+            # Create empty dictionary
+            result_dict = {}
+            
+            # For each column, add the column header as key and column values as list
+            for column in masked_df.columns:
+                result_dict[column] = masked_df[column].tolist()
+            
+            masked_df.insert(0, "NodeIDs", row_indices)
+            self.show_in_table(masked_df, metric = "NodeID", title = title)
+
+
+            return result_dict
+
+        from . import neighborhoods
+
+        if self.idens.currentIndex() != 0:
+
+            iden = self.idens.currentText()
+            iden_list = []
+            import ast
+
+            for item in my_network.node_identities:
+
+                try:
+                    parse = ast.literal_eval(my_network.node_identities[item])
+                    if iden in parse:
+                        iden_list.append(item)
+                except:
+                    if (iden == my_network.node_identities[item]):
+                        iden_list.append(item)
+
+            violin_dict = df_to_dict_by_rows(self.df, iden_list, f"Z-Score-like Channel Intensities of Identity {iden}, {len(iden_list)} Nodes")
+
+            neighborhoods.create_violin_plots(violin_dict, graph_title=f"Z-Score-like Channel Intensities of Identity {iden}, {len(iden_list)} Nodes")
+
+
+        if self.coms.currentIndex() != 0:
+
+            com = self.coms.currentText()
+
+            com_dict = n3d.invert_dict(my_network.communities)
+
+            com_list = com_dict[int(com)]
+
+            violin_dict = df_to_dict_by_rows(self.df, com_list, f"Z-Score-like Channel Intensities of Community/Neighborhood {com}, {len(com_list)} Nodes")
+
+            neighborhoods.create_violin_plots(violin_dict, graph_title=f"Z-Score-like Channel Intensities of Community/Neighborhood {com}, {len(com_list)} Nodes")
+
+
+    def run2(self):
+        def df_to_dict(df):
+            # Make a copy to avoid modifying the original dataframe
+            df_copy = df.copy()
+            
+            # Set the first column as the index (row headers)
+            df_copy = df_copy.set_index(df_copy.columns[0])
+            
+            # Convert all remaining columns to float type (batch conversion)
+            df_copy = df_copy.astype(float)
+            
+            # Create the result dictionary
+            result_dict = {}
+            for row_idx in df_copy.index:
+                result_dict[row_idx] = df_copy.loc[row_idx].tolist()
+            
+            return result_dict
+        
+        try:
+            umap_dict = df_to_dict(self.backup_df)
+            my_network.identity_umap(umap_dict)
+        except:
+            pass
+
+
 
 
 class DegreeDialog(QDialog):
@@ -12254,13 +12825,23 @@ class HoleDialog(QDialog):
             borders = self.borders.isChecked()
             headon = self.headon.isChecked()
             sep_holes = self.sep_holes.isChecked()
+
+            if borders:
             
-            # Call dilate method with parameters
-            result = n3d.fill_holes_3d(
-                active_data,
-                head_on = headon,
-                fill_borders = borders
-            )
+                # Call dilate method with parameters
+                result = n3d.fill_holes_3d_old(
+                    active_data,
+                    head_on = headon,
+                    fill_borders = borders
+                )
+
+            else:
+                # Call dilate method with parameters
+                result = n3d.fill_holes_3d(
+                    active_data,
+                    head_on = headon,
+                    fill_borders = borders
+                )
 
             if not sep_holes:
                 self.parent().load_channel(self.parent().active_channel, result, True)
@@ -12710,15 +13291,57 @@ class GrayWaterDialog(QDialog):
         run_button.clicked.connect(self.run_watershed)
         layout.addRow(run_button)
 
+    def wait_for_threshold_processing(self):
+        """
+        Opens ThresholdWindow and waits for user to process the image.
+        Returns True if completed, False if cancelled.
+        The thresholded image will be available in the main window after completion.
+        """
+        # Create event loop to wait for user
+        loop = QEventLoop()
+        result = {'completed': False}
+        
+        # Create the threshold window
+        thresh_window = ThresholdWindow(self.parent(), 0)
+
+        
+        # Connect signals
+        def on_processing_complete():
+            result['completed'] = True
+            loop.quit()
+            
+        def on_processing_cancelled():
+            result['completed'] = False
+            loop.quit()
+        
+        thresh_window.processing_complete.connect(on_processing_complete)
+        thresh_window.processing_cancelled.connect(on_processing_cancelled)
+        
+        # Show window and wait
+        thresh_window.show()
+        thresh_window.raise_()
+        thresh_window.activateWindow()
+        
+        # Block until user clicks "Apply Threshold & Continue" or "Cancel"
+        loop.exec()
+        
+        # Clean up
+        thresh_window.deleteLater()
+        
+        return result['completed']
+
     def run_watershed(self):
 
         try:
 
+            self.accept()
+            print("Please threshold foreground, or press cancel/skip if not desired:")
+            self.wait_for_threshold_processing()
+            data = self.parent().channel_data[self.parent().active_channel]
+
             min_intensity = float(self.min_intensity.text()) if self.min_intensity.text().strip() else None
 
             min_peak_distance = int(self.min_peak_distance.text()) if self.min_peak_distance.text().strip() else 1
-
-            data = self.parent().channel_data[self.parent().active_channel]
 
             data = n3d.gray_watershed(data, min_peak_distance, min_intensity)
 

@@ -8,7 +8,8 @@ from matplotlib.colors import LinearSegmentedColormap
 from sklearn.cluster import DBSCAN
 from sklearn.neighbors import NearestNeighbors
 import matplotlib.colors as mcolors
-
+from collections import Counter
+from . import community_extractor
 
 
 import os
@@ -347,7 +348,8 @@ def visualize_cluster_composition_umap(cluster_data: Dict[int, np.ndarray],
                                      id_dictionary: Optional[Dict[int, str]] = None, 
                                      graph_label = "Community ID",
                                      title = 'UMAP Visualization of Community Compositions',
-                                     neighborhoods: Optional[Dict[int, int]] = None):
+                                     neighborhoods: Optional[Dict[int, int]] = None,
+                                     original_communities = None):
     """
     Convert cluster composition data to UMAP visualization.
     
@@ -394,37 +396,50 @@ def visualize_cluster_composition_umap(cluster_data: Dict[int, np.ndarray],
     embedding = reducer.fit_transform(compositions)
     
     # Determine coloring scheme based on parameters
-    if neighborhoods is not None:
+    if neighborhoods is not None and original_communities is not None:
         # Use neighborhood coloring - import the community extractor methods
         from . import community_extractor
+        from collections import Counter
         
-        # Filter neighborhoods to only include cluster_ids that exist in our data
-        filtered_neighborhoods = {node_id: neighborhood_id 
-                                for node_id, neighborhood_id in neighborhoods.items() 
-                                if node_id in cluster_ids}
+        # Use original_communities (which is {node: neighborhood}) for color generation
+        # This ensures we use the proper node counts for sorting
         
-        # Create a dummy labeled array just for the coloring function
-        # We only need the coloring logic, not actual clustering
-        dummy_array = np.array(cluster_ids)
+        # Separate outliers (neighborhood 0) from regular neighborhoods in ORIGINAL structure
+        outlier_neighborhoods = {node: neighborhood for node, neighborhood in original_communities.items() if neighborhood == 0}
+        non_outlier_neighborhoods = {node: neighborhood for node, neighborhood in original_communities.items() if neighborhood != 0}
         
-        # Get colors using the community coloration method
-        _, neighborhood_color_names = community_extractor.assign_community_colors(
-            filtered_neighborhoods, dummy_array
-        )
+        # Get neighborhoods excluding outliers
+        unique_neighborhoods = set(non_outlier_neighborhoods.values()) if non_outlier_neighborhoods else set()
         
-        # Create color mapping for our points
-        unique_neighborhoods = sorted(list(set(filtered_neighborhoods.values())))
-        colors = community_extractor.generate_distinct_colors(len(unique_neighborhoods))
-        neighborhood_to_color = {neighborhood: colors[i] for i, neighborhood in enumerate(unique_neighborhoods)}
+        # Generate colors for non-outlier neighborhoods only (same as assign_community_colors)
+        colors = community_extractor.generate_distinct_colors(len(unique_neighborhoods)) if unique_neighborhoods else []
         
-        # Map each cluster to its neighborhood color
+        # Sort neighborhoods by size for consistent color assignment (same logic as assign_community_colors)
+        # Use the ORIGINAL node counts from original_communities
+        if non_outlier_neighborhoods:
+            neighborhood_sizes = Counter(non_outlier_neighborhoods.values())
+            sorted_neighborhoods = sorted(unique_neighborhoods, key=lambda x: (-neighborhood_sizes[x], x))
+            neighborhood_to_color = {neighborhood: colors[i] for i, neighborhood in enumerate(sorted_neighborhoods)}
+        else:
+            neighborhood_to_color = {}
+        
+        # Add brown color for outliers (neighborhood 0) - same as assign_community_colors
+        if outlier_neighborhoods:
+            neighborhood_to_color[0] = (139, 69, 19)  # Brown color (RGB, not RGBA here)
+        
+        # Map each cluster to its neighborhood color using 'neighborhoods' ({community: neighborhood}) for assignment
         point_colors = []
         neighborhood_labels = []
         for cluster_id in cluster_ids:
-            if cluster_id in filtered_neighborhoods:
-                neighborhood_id = filtered_neighborhoods[cluster_id]
-                point_colors.append(neighborhood_to_color[neighborhood_id])
-                neighborhood_labels.append(neighborhood_id)
+            if cluster_id in neighborhoods:
+                neighborhood_id = neighborhoods[cluster_id]  # This is {community: neighborhood}
+                if neighborhood_id in neighborhood_to_color:
+                    point_colors.append(neighborhood_to_color[neighborhood_id])
+                    neighborhood_labels.append(neighborhood_id)
+                else:
+                    # Default color for neighborhoods not found
+                    point_colors.append((128, 128, 128))  # Gray
+                    neighborhood_labels.append("Unknown")
             else:
                 # Default color for nodes not in any neighborhood
                 point_colors.append((128, 128, 128))  # Gray
@@ -432,6 +447,10 @@ def visualize_cluster_composition_umap(cluster_data: Dict[int, np.ndarray],
         
         # Normalize RGB values for matplotlib (0-1 range)
         point_colors = [(r/255.0, g/255.0, b/255.0) for r, g, b in point_colors]
+        
+        # Get unique neighborhoods for legend
+        unique_neighborhoods_for_legend = sorted(list(set(neighborhood_to_color.keys())))
+        
         use_neighborhood_coloring = True
         
     elif id_dictionary is not None:
@@ -467,8 +486,8 @@ def visualize_cluster_composition_umap(cluster_data: Dict[int, np.ndarray],
             # Add cluster ID labels
             for i, cluster_id in enumerate(cluster_ids):
                 display_label = f'{cluster_id}'
-                if use_neighborhood_coloring and cluster_id in filtered_neighborhoods:
-                    neighborhood_id = filtered_neighborhoods[cluster_id]
+                if use_neighborhood_coloring and cluster_id in neighborhoods:
+                    neighborhood_id = neighborhoods[cluster_id]
                     display_label = f'{cluster_id}\n(N{neighborhood_id})'
                 elif id_dictionary is not None:
                     identity = id_dictionary.get(cluster_id, "Unknown")
@@ -483,7 +502,7 @@ def visualize_cluster_composition_umap(cluster_data: Dict[int, np.ndarray],
         if use_neighborhood_coloring:
             # Create custom legend for neighborhoods
             legend_elements = []
-            for neighborhood_id in unique_neighborhoods:
+            for neighborhood_id in unique_neighborhoods_for_legend:
                 color = neighborhood_to_color[neighborhood_id]
                 norm_color = (color[0]/255.0, color[1]/255.0, color[2]/255.0)
                 legend_elements.append(
@@ -530,8 +549,8 @@ def visualize_cluster_composition_umap(cluster_data: Dict[int, np.ndarray],
             # Add cluster ID labels
             for i, cluster_id in enumerate(cluster_ids):
                 display_label = f'C{cluster_id}'
-                if use_neighborhood_coloring and cluster_id in filtered_neighborhoods:
-                    neighborhood_id = filtered_neighborhoods[cluster_id]
+                if use_neighborhood_coloring and cluster_id in neighborhoods:
+                    neighborhood_id = neighborhoods[cluster_id]
                     display_label = f'C{cluster_id}\n(N{neighborhood_id})'
                 elif id_dictionary is not None:
                     identity = id_dictionary.get(cluster_id, "Unknown")
@@ -554,7 +573,7 @@ def visualize_cluster_composition_umap(cluster_data: Dict[int, np.ndarray],
         if use_neighborhood_coloring:
             # Create custom legend for neighborhoods
             legend_elements = []
-            for neighborhood_id in unique_neighborhoods:
+            for neighborhood_id in unique_neighborhoods_for_legend:
                 color = neighborhood_to_color[neighborhood_id]
                 norm_color = (color[0]/255.0, color[1]/255.0, color[2]/255.0)
                 legend_elements.append(
@@ -585,8 +604,8 @@ def visualize_cluster_composition_umap(cluster_data: Dict[int, np.ndarray],
         for i, cluster_id in enumerate(cluster_ids):
             composition = compositions[i]
             additional_info = ""
-            if use_neighborhood_coloring and cluster_id in filtered_neighborhoods:
-                neighborhood_id = filtered_neighborhoods[cluster_id]
+            if use_neighborhood_coloring and cluster_id in neighborhoods:
+                neighborhood_id = neighborhoods[cluster_id]
                 additional_info = f" (Neighborhood: {neighborhood_id})"
             elif id_dictionary is not None:
                 identity = id_dictionary.get(cluster_id, "Unknown")
@@ -974,60 +993,63 @@ def create_node_heatmap(node_intensity, node_centroids, shape=None, is_3d=True,
                 node_to_intensity[node_id] = node_intensity_clean[node_id]
         
         # Create colormap function (RdBu_r - red for high, blue for low, yellow/white for middle)
-        def intensity_to_rgb(intensity, min_val, max_val):
-            """Convert intensity value to RGB using RdBu_r colormap logic, centered at 0"""
+        def intensity_to_rgba(intensity, min_val, max_val):
+            """Convert intensity value to RGBA using RdBu_r colormap logic, centered at 0"""
             
             # Handle edge case where all values are the same
             if max_val == min_val:
                 if intensity == 0:
-                    return np.array([255, 255, 255], dtype=np.uint8)  # White for 0
+                    return np.array([255, 255, 255, 0], dtype=np.uint8)  # Transparent white for 0
                 elif intensity > 0:
-                    return np.array([255, 200, 200], dtype=np.uint8)  # Light red for positive
+                    return np.array([255, 200, 200, 255], dtype=np.uint8)  # Opaque light red for positive
                 else:
-                    return np.array([200, 200, 255], dtype=np.uint8)  # Light blue for negative
+                    return np.array([200, 200, 255, 255], dtype=np.uint8)  # Opaque light blue for negative
             
             # Find the maximum absolute value for symmetric scaling around 0
             max_abs = max(abs(min_val), abs(max_val))
             
-            # If max_abs is 0, everything is 0, so return white
+            # If max_abs is 0, everything is 0, so return transparent
             if max_abs == 0:
-                return np.array([255, 255, 255], dtype=np.uint8)  # White
+                return np.array([255, 255, 255, 0], dtype=np.uint8)  # Transparent white
             
             # Normalize intensity to -1 to 1 range, centered at 0
             normalized = intensity / max_abs
             normalized = np.clip(normalized, -1, 1)
             
             if normalized > 0:
-                # Positive values: white to red (intensity 0 = white, max positive = red)
+                # Positive values: white to red (intensity 0 = transparent, max positive = red)
                 r = 255
                 g = int(255 * (1 - normalized))
                 b = int(255 * (1 - normalized))
+                alpha = 255  # Fully opaque for all non-zero values
             elif normalized < 0:
-                # Negative values: white to blue (intensity 0 = white, max negative = blue)  
+                # Negative values: white to blue (intensity 0 = transparent, max negative = blue)  
                 r = int(255 * (1 + normalized))
                 g = int(255 * (1 + normalized))
                 b = 255
+                alpha = 255  # Fully opaque for all non-zero values
             else:
-                # Exactly 0: white
-                r, g, b = 255, 255, 255
+                # Exactly 0: transparent
+                r, g, b, alpha = 255, 255, 255, 0
             
-            return np.array([r, g, b], dtype=np.uint8)
-        
-        # Create lookup table for RGB colors
+            return np.array([r, g, b, alpha], dtype=np.uint8)
+
+        # Modified usage in your main function:
+        # Create lookup table for RGBA colors (note the 4 channels now)
         max_label = max(max(labeled_array.flat), max(node_to_intensity.keys()) if node_to_intensity else 0)
-        color_lut = np.zeros((max_label + 1, 3), dtype=np.uint8)  # Default to black (0,0,0)
-        
-        # Fill lookup table with RGB colors based on intensity
+        color_lut = np.zeros((max_label + 1, 4), dtype=np.uint8)  # Default to transparent (0,0,0,0)
+
+        # Fill lookup table with RGBA colors based on intensity
         for node_id, intensity in node_to_intensity.items():
-            rgb_color = intensity_to_rgb(intensity, min_intensity, max_intensity)
-            color_lut[int(node_id)] = rgb_color
-        
+            rgba_color = intensity_to_rgba(intensity, min_intensity, max_intensity)
+            color_lut[int(node_id)] = rgba_color
+
         # Apply lookup table to labeled array - single vectorized operation
         if is_3d:
-            # Return full 3D RGB array [Z, Y, X, 3]
+            # Return full 3D RGBA array [Z, Y, X, 4]
             heatmap_array = color_lut[labeled_array]
         else:
-            # Return 2D RGB array
+            # Return 2D RGBA array
             if labeled_array.ndim == 3:
                 # Take middle slice for 2D representation
                 middle_slice = labeled_array.shape[0] // 2
@@ -1035,7 +1057,7 @@ def create_node_heatmap(node_intensity, node_centroids, shape=None, is_3d=True,
             else:
                 # Already 2D
                 heatmap_array = color_lut[labeled_array]
-        
+
         return heatmap_array
     
     else:
@@ -1104,19 +1126,124 @@ def create_node_heatmap(node_intensity, node_centroids, shape=None, is_3d=True,
         plt.tight_layout()
         plt.show()
 
-# Example usage:
-if __name__ == "__main__":
-    # Sample data for demonstration
-    sample_dict = {
-        'category_A': np.array([0.1, 0.5, 0.8, 0.3, 0.9]),
-        'category_B': np.array([0.7, 0.2, 0.6, 0.4, 0.1]),
-        'category_C': np.array([0.9, 0.8, 0.2, 0.7, 0.5])
-    }
+def create_violin_plots(data_dict, graph_title="Violin Plots"):
+    """
+    Create violin plots from dictionary data with distinct colors.
     
-    sample_id_set = ['feature_1', 'feature_2', 'feature_3', 'feature_4', 'feature_5']
+    Parameters:
+    data_dict (dict): Dictionary where keys are column headers (strings) and 
+                     values are lists of floats
+    graph_title (str): Title for the overall plot
+    """
+    if not data_dict:
+        print("No data to plot")
+        return
     
-    # Create the heatmap
-    fig, ax = plot_dict_heatmap(sample_dict, sample_id_set, 
-                               title="Sample Heatmap Visualization")
+    # Prepare data
+    labels = list(data_dict.keys())
+    data_lists = list(data_dict.values())
     
+    # Generate colors using the community color strategy
+    try:
+        # Create a mock community dict for color generation
+        mock_community_dict = {i: i+1 for i in range(len(labels))}  # No outliers for simplicity
+        
+        # Get distinct colors
+        n_colors = len(labels)
+        colors_rgb = community_extractor.generate_distinct_colors(n_colors)
+        
+        # Sort by data size for consistent color assignment (like community sizes)
+        data_sizes = [(i, len(data_lists[i])) for i in range(len(data_lists))]
+        sorted_indices = sorted(data_sizes, key=lambda x: (-x[1], x[0]))
+        
+        # Create color mapping
+        colors = []
+        for i, _ in sorted_indices:
+            color_idx = sorted_indices.index((i, _))
+            if color_idx < len(colors_rgb):
+                # Convert RGB (0-255) to matplotlib format (0-1)
+                rgb_normalized = tuple(c/255.0 for c in colors_rgb[color_idx])
+                colors.append(rgb_normalized)
+            else:
+                colors.append('gray')  # Fallback color
+        
+        # Reorder colors to match original label order
+        final_colors = ['gray'] * len(labels)
+        for idx, (original_idx, _) in enumerate(sorted_indices):
+            final_colors[original_idx] = colors[idx]
+            
+    except Exception as e:
+        print(f"Color generation failed, using default colors: {e}")
+        # Fallback to default matplotlib colors
+        final_colors = plt.cm.Set3(np.linspace(0, 1, len(labels)))
+    
+    # Create the plot
+    fig, ax = plt.subplots(figsize=(max(8, len(labels) * 1.5), 6))
+    
+    # Create violin plots
+    violin_parts = ax.violinplot(data_lists, positions=range(len(labels)), 
+                                showmeans=False, showmedians=True, showextrema=True)
+    
+    # Color the violins
+    for i, pc in enumerate(violin_parts['bodies']):
+        if i < len(final_colors):
+            pc.set_facecolor(final_colors[i])
+            pc.set_alpha(0.7)
+    
+    # Color the other violin elements
+    for partname in ('cbars', 'cmins', 'cmaxes', 'cmedians'):
+        if partname in violin_parts:
+            violin_parts[partname].set_edgecolor('black')
+            violin_parts[partname].set_linewidth(1)
+            
+    # Add data points as scatter plot overlay with much lower transparency
+    """
+    for i, data in enumerate(data_lists):
+        y = data
+        # Add some jitter to x positions for better visibility
+        x = np.random.normal(i, 0.04, size=len(y))
+        ax.scatter(x, y, alpha=0.2, s=15, color='black', edgecolors='none', zorder=3)  # No borders, more transparent
+    """
+    
+    # Calculate reasonable y-axis limits to focus on the bulk of the data
+    all_data = [val for sublist in data_lists for val in sublist]
+    if all_data:
+        # Use percentiles to exclude extreme outliers from the view
+        y_min = np.percentile(all_data, 5)   # 5th percentile
+        y_max = np.percentile(all_data, 95)  # 95th percentile
+        
+        # Add some padding
+        y_range = y_max - y_min
+        y_padding = y_range * 0.15
+        ax.set_ylim(y_min - y_padding, y_max + y_padding)
+    
+    # Add IQR and median text annotations BELOW the violins
+    for i, data in enumerate(data_lists):
+        if len(data) > 0:
+            q1, median, q3 = np.percentile(data, [25, 50, 75])
+            iqr = q3 - q1
+            
+            # Position text below the violin (using current y-axis limits)
+            y_min_current = ax.get_ylim()[0]
+            y_text = y_min_current - (ax.get_ylim()[1] - ax.get_ylim()[0]) * 0.15
+            
+            ax.text(i, y_text, f'Median: {median:.2f}\nIQR: {iqr:.2f}', 
+                   horizontalalignment='center', fontsize=8, 
+                   bbox=dict(boxstyle='round,pad=0.3', facecolor='white', alpha=0.8))
+    
+    # Customize the plot
+    ax.set_xticks(range(len(labels)))
+    ax.set_xticklabels(labels, rotation=45, ha='right')
+    ax.set_title(graph_title, fontsize=14, fontweight='bold')
+    ax.set_ylabel('Normalized Values (Z-score-like)', fontsize=12)
+    ax.grid(True, alpha=0.3)
+    
+    # Add a horizontal line at y=0 (the identity centerpoint)
+    ax.axhline(y=0, color='red', linestyle='--', alpha=0.5, linewidth=1, 
+               label='Identity Centerpoint')
+    ax.legend(loc='upper right')
+    
+    # Adjust layout to prevent label cutoff and accommodate bottom text
+    plt.subplots_adjust(bottom=0.2)  # Extra space for bottom text
+    plt.tight_layout()
     plt.show()

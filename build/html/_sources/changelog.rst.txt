@@ -103,3 +103,8 @@ Versions 0.9.2 - 1.0.0 Updates
 	* Image pyramid calculation is more dynamic instead of using arbitrary size thresholds.
 	* The 'network selection' table is now auto-populated when using the multiple-identity selector, and when using the node thresholder.
 	* Bug Fixes
+
+Versions 1.0.1 - 1.0.4 Updates
+	* Heatmap theoretical distances can now be calculated based on an area constrained within a binary mask.
+	* Added ability to generate violin plots using the table generated from merging node identities, showing the relative expression of markers for multiple channels for the nodes belonging to some channel or community/neighborhood
+	* Other bug fixes, improvements.

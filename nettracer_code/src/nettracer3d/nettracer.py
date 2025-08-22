@@ -35,6 +35,7 @@ from . import proximity
 from skimage.segmentation import watershed as water
 
 
+
 #These next several methods relate to searching with 3D objects by dilating each one in a subarray around their neighborhood although I don't explicitly use this anywhere... can call them deprecated although I may want to use them later again so I have them still written out here.
 
 
@@ -992,6 +993,61 @@ def z_project(array3d, method='max'):
         raise ValueError("Method must be one of: 'max', 'mean', 'min', 'sum', 'std'")
 
 def fill_holes_3d(array, head_on = False, fill_borders = True):
+    def process_slice(slice_2d, border_threshold=0.08, fill_borders = True):
+        """
+        Process a 2D slice, considering components that touch less than border_threshold
+        of any border length as potential holes.
+        
+        Args:
+            slice_2d: 2D binary array
+            border_threshold: proportion of border that must be touched to be considered background
+        """
+        from scipy.ndimage import binary_fill_holes
+        
+        slice_2d = slice_2d.astype(np.uint8)
+
+        # Apply scipy's binary_fill_holes to the result
+        slice_2d = binary_fill_holes(slice_2d)
+        
+        return slice_2d
+        
+    print("Filling Holes...")
+    
+    array = binarize(array)
+    #inv_array = invert_array(array)
+    
+    # Create arrays for all three planes
+    array_xy = np.zeros_like(array, dtype=np.uint8)
+    array_xz = np.zeros_like(array, dtype=np.uint8)
+    array_yz = np.zeros_like(array, dtype=np.uint8)
+    
+    # Process XY plane
+    for z in range(array.shape[0]):
+        array_xy[z] = process_slice(array[z], fill_borders = fill_borders)
+        
+    if (array.shape[0] > 3) and not head_on: #only use these dimensions for sufficiently large zstacks
+        
+        # Process XZ plane    
+        for y in range(array.shape[1]):
+            slice_xz = array[:, y, :]
+            array_xz[:, y, :] = process_slice(slice_xz, fill_borders = fill_borders)
+            
+        # Process YZ plane
+        for x in range(array.shape[2]):
+            slice_yz = array[:, :, x]
+            array_yz[:, :, x] = process_slice(slice_yz, fill_borders = fill_borders)
+        
+        # Combine results from all three planes
+        filled = (array_xy | array_xz | array_yz) * 255
+        return array + filled
+    else:
+        # Apply scipy's binary_fill_holes to each XY slice
+        from scipy.ndimage import binary_fill_holes
+        for z in range(array_xy.shape[0]):
+            array_xy[z] = binary_fill_holes(array_xy[z])
+        return array_xy * 255
+
+def fill_holes_3d_old(array, head_on = False, fill_borders = True):
 
     def process_slice(slice_2d, border_threshold=0.08, fill_borders = True):
         """
@@ -1847,6 +1903,7 @@ def mirror_points_for_edge_correction(points_array, bounds, max_r, dim=3):
             all_points = np.vstack([all_points, mirrored_points])
     
     return all_points
+    
 def get_max_r_from_proportion(bounds, proportion):
     """
     Calculate max_r based on bounds and proportion, matching your generate_r_values logic.
@@ -3877,7 +3934,7 @@ class Network_3D:
         """
         self._nodes, num_nodes = label_objects(nodes, structure_3d)
 
-    def combine_nodes(self, root_nodes, other_nodes, other_ID, identity_dict, root_ID = None, centroids = False):
+    def combine_nodes(self, root_nodes, other_nodes, other_ID, identity_dict, root_ID = None, centroids = False, down_factor = None):
 
         """Internal method to merge two labelled node arrays into one"""
 
@@ -3888,7 +3945,10 @@ class Network_3D:
             max_val = np.max(root_nodes)
             other_nodes[:] = np.where(mask, other_nodes + max_val, 0)
         if centroids:
-            new_dict = network_analysis._find_centroids(other_nodes)
+            new_dict = network_analysis._find_centroids(other_nodes, down_factor = down_factor)
+            if down_factor is not None:
+                for item in new_dict:
+                    new_dict[item] = down_factor * new_dict[item]
             self.node_centroids.update(new_dict)
 
         if root_ID is not None:
@@ -3928,7 +3988,7 @@ class Network_3D:
 
         return nodes, identity_dict
 
-    def merge_nodes(self, addn_nodes_name, label_nodes = True, root_id = "Root_Nodes", centroids = False):
+    def merge_nodes(self, addn_nodes_name, label_nodes = True, root_id = "Root_Nodes", centroids = False, down_factor = None):
         """
         Merges the self._nodes attribute with alternate labelled node images. The alternate nodes can be inputted as a string for a filepath to a tif,
         or as a directory address containing only tif images, which will merge the _nodes attribute with all tifs in the folder. The _node_identities attribute
@@ -3949,19 +4009,21 @@ class Network_3D:
         identity_dict = {} #A dictionary to deliniate the node identities
 
         if centroids:
-            self.node_centroids = network_analysis._find_centroids(self._nodes)
-
+            self.node_centroids = network_analysis._find_centroids(self._nodes, down_factor = down_factor)
+            if down_factor is not None:
+                for item in self.node_centroids:
+                    self.node_centroids[item] = down_factor * self.node_centroids[item]
 
         try: #Try presumes the input is a tif
             addn_nodes = tifffile.imread(addn_nodes_name) #If not this will fail and activate the except block
 
             if label_nodes is True:
                 addn_nodes, num_nodes2 = label_objects(addn_nodes) # Label the node objects. Note this presumes no overlap between node masks.
-                node_labels, identity_dict = self.combine_nodes(self._nodes, addn_nodes, addn_nodes_name, identity_dict, nodes_name, centroids = centroids) #This method stacks labelled arrays
+                node_labels, identity_dict = self.combine_nodes(self._nodes, addn_nodes, addn_nodes_name, identity_dict, nodes_name, centroids = centroids, down_factor = down_factor) #This method stacks labelled arrays
                 num_nodes = np.max(node_labels)
 
             else: #If nodes already labelled
-                node_labels, identity_dict = self.combine_nodes(self._nodes, addn_nodes, addn_nodes_name, identity_dict, nodes_name, centroids = centroids)
+                node_labels, identity_dict = self.combine_nodes(self._nodes, addn_nodes, addn_nodes_name, identity_dict, nodes_name, centroids = centroids, down_factor = down_factor)
                 num_nodes = int(np.max(node_labels))
 
         except: #Exception presumes the input is a directory containing multiple tifs, to allow multi-node stackage.
@@ -3979,15 +4041,15 @@ class Network_3D:
                     if label_nodes is True:
                         addn_nodes, num_nodes2 = label_objects(addn_nodes)  # Label the node objects. Note this presumes no overlap between node masks.
                         if i == 0:
-                            node_labels, identity_dict = self.combine_nodes(self._nodes, addn_nodes, addn_nodes_ID, identity_dict, nodes_name, centroids = centroids)
+                            node_labels, identity_dict = self.combine_nodes(self._nodes, addn_nodes, addn_nodes_ID, identity_dict, nodes_name, centroids = centroids, down_factor = down_factor)
                         else:
-                            node_labels, identity_dict = self.combine_nodes(node_labels, addn_nodes, addn_nodes_ID, identity_dict, centroids = centroids)
+                            node_labels, identity_dict = self.combine_nodes(node_labels, addn_nodes, addn_nodes_ID, identity_dict, centroids = centroids, down_factor = down_factor)
 
                     else:
                         if i == 0:
-                            node_labels, identity_dict = self.combine_nodes(self._nodes, addn_nodes, addn_nodes_ID, identity_dict, nodes_name, centroids = centroids)
+                            node_labels, identity_dict = self.combine_nodes(self._nodes, addn_nodes, addn_nodes_ID, identity_dict, nodes_name, centroids = centroids, down_factor = down_factor)
                         else:
-                            node_labels, identity_dict = self.combine_nodes(node_labels, addn_nodes, addn_nodes_ID, identity_dict, centroids = centroids)
+                            node_labels, identity_dict = self.combine_nodes(node_labels, addn_nodes, addn_nodes_ID, identity_dict, centroids = centroids, down_factor = down_factor)
                 except Exception as e:
                     print("Could not open additional nodes, verify they are being inputted correctly...")
 
@@ -5659,7 +5721,8 @@ class Network_3D:
                         neighbor_group[com] = neighbors[node]
                     except:
                         neighbor_group[com] = 0
-                neighborhoods.visualize_cluster_composition_umap(umap_dict, id_set, neighborhoods = neighbor_group)
+                print(neighbors)
+                neighborhoods.visualize_cluster_composition_umap(umap_dict, id_set, neighborhoods = neighbor_group, original_communities = neighbors)
             elif label == 1:
                 neighborhoods.visualize_cluster_composition_umap(umap_dict, id_set, label = True) 
             else:
@@ -5992,56 +6055,93 @@ class Network_3D:
         self.node_identities = modify_dict
 
 
-    def nearest_neighbors_avg(self, root, targ, xy_scale = 1, z_scale = 1, num = 1, heatmap = False, threed = True, numpy = False, quant = False, centroids = True):
+    def nearest_neighbors_avg(self, root, targ, xy_scale = 1, z_scale = 1, num = 1, heatmap = False, threed = True, numpy = False, quant = False, centroids = True, mask = None):
 
-        def distribute_points_uniformly(n, shape, z_scale, xy_scale, num, is_2d=False):
-
+        def distribute_points_uniformly(n, shape, z_scale, xy_scale, num, is_2d=False, mask=None):
             from scipy.spatial import KDTree
-
             if n <= 1:
                 return 0
-                        
-            # Calculate total positions and sampling step
-            total_positions = np.prod(shape)
-            if n >= total_positions:
-                # If we want more points than positions, just return scaled unit distance
-                return xy_scale if is_2d else min(z_scale, xy_scale)
             
-            # Create uniformly spaced indices
-            indices = np.linspace(0, total_positions - 1, n, dtype=int)
-            
-            # Convert flat indices to coordinates
-            coords = []
-            for idx in indices:
-                coord = np.unravel_index(idx, shape)
+            if mask is not None:
+                # Handle mask-based distribution
+                # Find all valid positions where mask is True
+                valid_positions = np.where(mask)
+                total_valid_positions = len(valid_positions[0])
+                
+                if total_valid_positions == 0:
+                    raise ValueError("No valid positions found in mask")
+                
+                if n >= total_valid_positions:
+                    # If we want more points than valid positions, return scaled unit distance
+                    return xy_scale if is_2d else min(z_scale, xy_scale)
+                
+                # Create uniformly spaced indices within valid positions
+                valid_indices = np.linspace(0, total_valid_positions - 1, n, dtype=int)
+                
+                # Convert to coordinates and apply scaling
+                coords = []
+                for idx in valid_indices:
+                    if len(shape) == 3:
+                        coord = (valid_positions[0][idx], valid_positions[1][idx], valid_positions[2][idx])
+                        scaled_coord = [coord[0] * z_scale, coord[1] * xy_scale, coord[2] * xy_scale]
+                    elif len(shape) == 2:
+                        coord = (valid_positions[0][idx], valid_positions[1][idx])
+                        scaled_coord = [coord[0] * xy_scale, coord[1] * xy_scale]
+                    coords.append(scaled_coord)
+                
+                coords = np.array(coords)
+                
+                # Find a good query point (closest to center of valid region)
                 if len(shape) == 3:
-                    # Apply scaling: [z, y, x] with respective scales
-                    scaled_coord = [coord[0] * z_scale, coord[1] * xy_scale, coord[2] * xy_scale]
-                elif len(shape) == 2:
-                    # Apply scaling: [y, x] with xy_scale
-                    scaled_coord = [coord[0] * xy_scale, coord[1] * xy_scale]
-                coords.append(scaled_coord)
-            
-            coords = np.array(coords)
+                    center_pos = [np.mean(valid_positions[0]) * z_scale, 
+                                 np.mean(valid_positions[1]) * xy_scale,
+                                 np.mean(valid_positions[2]) * xy_scale]
+                else:
+                    center_pos = [np.mean(valid_positions[0]) * xy_scale,
+                                 np.mean(valid_positions[1]) * xy_scale]
+                
+                # Find point closest to center of valid region
+                center_distances = np.sum((coords - center_pos)**2, axis=1)
+                middle_idx = np.argmin(center_distances)
+                query_point = coords[middle_idx]
+                
+            else:
+                # Original behavior when no mask is provided
+                total_positions = np.prod(shape)
+                if n >= total_positions:
+                    return xy_scale if is_2d else min(z_scale, xy_scale)
+                
+                # Create uniformly spaced indices
+                indices = np.linspace(0, total_positions - 1, n, dtype=int)
+                
+                # Convert flat indices to coordinates
+                coords = []
+                for idx in indices:
+                    coord = np.unravel_index(idx, shape)
+                    if len(shape) == 3:
+                        scaled_coord = [coord[0] * z_scale, coord[1] * xy_scale, coord[2] * xy_scale]
+                    elif len(shape) == 2:
+                        scaled_coord = [coord[0] * xy_scale, coord[1] * xy_scale]
+                    coords.append(scaled_coord)
+                
+                coords = np.array(coords)
+                
+                # Pick a point near the middle of the array
+                middle_idx = len(coords) // 2
+                query_point = coords[middle_idx]
             
             # Build KDTree
             tree = KDTree(coords)
-            
-            # Pick a point near the middle of the array
-            middle_idx = len(coords) // 2
-            query_point = coords[middle_idx]
             
             # Find the num+1 nearest neighbors (including the point itself)
             distances, indices = tree.query(query_point, k=num+1)
             
             # Exclude the point itself (distance 0) and get the actual neighbors
             neighbor_distances = distances[1:num+1]
-
             if num == n:
                 neighbor_distances[-1] = neighbor_distances[-2]
             
             avg_distance = np.mean(neighbor_distances)
-            
             
             return avg_distance
 
@@ -6064,13 +6164,24 @@ class Network_3D:
 
                 for node, iden in self.node_identities.items():
 
-                    if iden == root:
+                    if iden == root: # Standard behavior
 
                         root_set.append(node)
 
-                    elif (iden == targ) or (targ == 'All Others (Excluding Self)'):
+                    elif '[' in iden and root != "All (Excluding Targets)": # For multiple nodes
+                        if root in iden:
+                            root_set.append(node)
+
+                    elif (iden == targ) or (targ == 'All Others (Excluding Self)'): # The other group
 
                         compare_set.append(node)
+
+                    elif '[' in iden: # The other group, for multiple nodes
+                        if targ in iden:
+                            compare_set.append(node)
+
+                    elif root == "All (Excluding Targets)": # If not assigned to the other group but the comprehensive root option is used
+                        root_set.append(node)
 
             if root == targ:
 
@@ -6094,11 +6205,11 @@ class Network_3D:
             if heatmap:
                 root_set = []
                 compare_set = []
-                if root is None:
-
-                    root_set = list(self.node_centroids.keys())
+                if root is None and not do_borders:
                     compare_set = root_set
-                else:
+                    if not do_borders:
+                        root_set = list(self.node_centroids.keys())
+                elif self.node_identities is not None:
                     for node, iden in self.node_identities.items():
 
                         if iden == root:
@@ -6126,7 +6237,8 @@ class Network_3D:
                     targ = [targ]
 
                 compare_set_neigh = approx_boundaries(self.nodes, targ, self.node_identities, keep_labels = False)
-                avg, output = proximity.average_nearest_neighbor_distances(self.node_centroids, root_set_neigh, compare_set_neigh, xy_scale=self.xy_scale, z_scale=self.z_scale, num = num, do_borders = do_borders)
+
+            avg, output = proximity.average_nearest_neighbor_distances(self.node_centroids, root_set_neigh, compare_set_neigh, xy_scale=self.xy_scale, z_scale=self.z_scale, num = num, do_borders = do_borders)
 
         if quant:
             try:
@@ -6168,7 +6280,15 @@ class Network_3D:
             else:
                 is_2d = False
 
-            pred = distribute_points_uniformly(len(compare_set), bounds, self.z_scale, self.xy_scale, num = num, is_2d = is_2d)
+            if root_set == []:
+                avail_nodes = np.unique(self.nodes)
+                compare_set = list(avail_nodes)
+                if 0 in compare_set:
+                    del compare_set[0]
+                root_set = compare_set
+            elif compare_set == []:
+                compare_set = root_set
+            pred = distribute_points_uniformly(len(compare_set), bounds, self.z_scale, self.xy_scale, num = num, is_2d = is_2d, mask = mask)
 
             node_intensity = {}
             import math
@@ -6176,7 +6296,6 @@ class Network_3D:
 
             for node in root_set:
                 node_intensity[node] = math.log(pred/output[node])
-                #print(output[node])
                 node_centroids[node] = self.node_centroids[node]
 
             if numpy:
