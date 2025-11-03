@@ -317,6 +317,17 @@ Parameter Explanations
     * Identifies edges whose removal would disconnect network components.
     * Use to find critical connections essential for network cohesion.
 
+
+'Analyze -> Stats -> Significance Testing'
+-----------------------------------------
+* Opens a new gui to help the user do significance testing, for example from any data obtained in NetTracer3D.
+* To use the gui, first arrange desired data into an excel file in a columnar basis.
+* Drag the excel file into the 'Data Staging Area'. Python will show the file's contents in the 'Data Display'.
+* Drag the headers of desired columns to the 'Data Selection Area'. In short, each column dragged over here should individually represent some kind of distribution. The contents of each column is what will be compared via significance test.
+* Under 'Statistical Test Selection', use the dropdown menu to select the desired test to run on the above data. Options include paired/unpaired Student's t tests, paired/unpaired Welch's t tests, one-way ANOVA, Mann-Whittney U (ranksums) test, Pearson test, Shapiro-Wilk normality test, and a Chi-squared test.
+* Press 'execute statistical test' to run the desired test on the datasets. The 'Test Results' window will display a variety of output info, including p-values and test statistic values.
+* All of these tests are simply obtained by running their respective scipy.stats function on the inputted data. See https://docs.scipy.org/doc/scipy/reference/stats.html for more info.
+
 'Analyze -> Stats -> Radial Distribution Analysis'
 -----------------------------------------
 * This method creates a graph showing the average number of neighboring nodes (of any given node) on the y axis and the distance from any given node in the x axis.
@@ -562,6 +573,34 @@ Algorithm Explanation
    :width: 800px
    :alt: edgenode Menu
 
+Parameter Explanation
+~~~~~~~~~~~~~~~~~~~~
+
+#. Node Search
+    * The distance nodes should search outward for to consider for quantifying nearby edge amounts.
+#. Execution Mode
+    * Dropdown menu has 2 options:
+        1. Include Regions Inside Node - Edgesd that pass directly through the node will be quantified together with those in the search space.
+        2. Exclude Regions Inside Node - Only edges in the search space will be considered.
+#. Return lengths
+    * By default, nodes will return the 'volume' of adjacent edge.
+    * If this is enabled, they will return the lengths of nearby edges instead. Volume and Length calculations are scaled based on the 'xy_scale' and 'z_scale' properties, as set in 'Image -> Properties'.
+#. (If Above): Attempt to correct skeleton looping.
+    * This is enabled by default and is essentially an extra algorithmic step to improve skeletonization of thick objects in 3D. See the section on skeletonization for more information.
+#. Use Fast Dilation...
+    * Uses 'Pseuedo 3D Binary Kernels' instead of distance transformations to find the search region if enabled. 
+    * Note this may be faster for small dilations but also will give slightly incorrect data so it is disabled by default.
+
+Algorithm Explanation
+~~~~~~~~~~~~~~~~~~~~
+1. The scipy.ndimage.find_objects() method is used to get bounding boxes around all the labeled nodes.
+2. For each object, a subarray is cut out around it using its bounding box, with padding on all sides proportional to the desired search region.
+3. The search region is then calculated for each node in parallel using dilation (see the section on dilation for more information).
+4. The edges in the desired search regions are obtained via boolean indexing for each node.
+5. Edge and Search region volumes are obtained by counting pixels and scaling them by the scaling parameters.
+6. If lengths are used instead, the edges are skeletonized as specified, then coordinates of the skeletons are obtained, followed by usage of the distance formula between each adjacent coordinate (scaled by the scaling parameters).
+
+
 'Analyze -> Stats -> Show Identities Violin/UMAP'
 -----------------------------------------
 * This method can be used to visualize normalized violin plots and UMAPs for nodes that were assigned identities via multiple channel markers (via 'File -> Images -> Node Identities -> Assign Node Identities from Overlap with Other Images')
@@ -635,7 +674,7 @@ Parameter Explanations
 1. Execution Mode
     * This dropdown menu has three options:
         1. 'Just make table' - places a table with the ID of each node and its degree in the tabulated data widget, without generating any overlays.
-        2. 'Draw Degree of Node as Overlay...' - This method creates an overlay where the degree value of each node is literally drawn onto its centroid as an overlay (ie, a node of degree 5 has a 5 drawn at its centroid). This can be used to quickly eyeball node connectivity.
+        2. 'Draw Degree of Node as Overlay...' - This method creates an overlay where the degree value of each node is literally drawn onto its centroid as an overlay (ie, a node of degree 5 has a 5 drawn at its centroid). This can be used to quickly eyeball node connectivity. Note that entering a downsample into the corresponding param will actually enlarge the rendered numbers.
         3. 'Label Nodes by Degree...' - This method takes each node label and reassigns its label to its degree. The idea would be to export the image and do downstream analysis elsewhere while thresholding for specific degree values.
             * Note this thresholding can be done in NetTracer3D by using the intensity thresholder.
         4. Create Heatmap of Degrees - Places in Overlay 2 an RGB heatmap of degrees. Degrees higher than average are more red while those lower than average are more blue.

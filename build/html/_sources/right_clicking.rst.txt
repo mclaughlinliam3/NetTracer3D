@@ -67,6 +67,13 @@ Clicking 'Select All' reveals the following options:
     * Selects and adds all nodes and edges to the highlight display.
 3. 'Edges'
     * Selects and adds all edges to the highlight display.
+4. 'Node in Network'
+    * Selects and adds all nodes participating in the current network property to the highlight display.
+5. 'Nodes + Edges in Network'
+    * Selects and adds all nodes and edges participating in the current network property to the highlight display.
+6. 'Edges in Network'
+    * Selects and adds all edges participating in the current network property to the highlight display.
+
 
 'Selection'
 ~~~~~~~~~~~~~~~

@@ -46,6 +46,7 @@ Parameter Explanations
     * Warning: for any downsample on an image containing small nodes, if those nodes' smallest dimension is smaller than this down factor, they run the risk of being kicked out of the downsampled image, which means their centroid will not be found.
         * Please use downsampling that corresponds to your node sizes.
     * (For larger images, I would generally set this param to something assuming your nodes are big enough.)
+    * As a side note, the value here will also essentially enlarge the overlays from this method (assuming you opt to use them). Larger overlays may be desired for visualization purposes. Note that smaller overlays can still be generated from 'Image -> Overlays...' if this behavior is not desired.
 #. Downsample for Distance Transform (GPU) (int):
     * Currently this param only applies if both fast dilation and GPU is enabled. (Non fast-dilation allows calculates a full distance transform).
     * This param temporarily downsamples the image in all three dimensions by the downsample factor while calculating the distance transform on GPU.
@@ -271,6 +272,25 @@ Algorithm Explanations
 
 * Press 'Run Resize' to run the method with the desired parameters. (Although pressing params 5, 6, or 7 above will also execute the function as described above).
 * Note that because NetTracer3D does not really support different sized images in its channels, this method will run on all channels/images currently in use.
+
+'Process -> Image -> Clean Segmentation'
+-------------------------------------------------------
+* This method is just a small window that pulls up some methods that are helpful for cleaning up segmentations.
+
+Parameter Explanations
+~~~~~~~~~~~~~~~~~~~~~~~
+#. Close
+    * This method calls the dilation algorithm followed by the erosion algorithm (see their respective sections for more information). 
+    * It is useful for filling small gaps in an image that may not be literal holes in a mask.
+    * This is at the downside of potentially creating false connections and disfiguring the image if used with very large params.
+#. Open
+    * This method is the reverse of the above, eroding before dilating.
+    * It is useful for eliminating noise, smoothing borders of objects, and severing small connections between objects that may not exist.
+    * This is at the downside of potentially eliminating true small objects and disfiguring the image if used with very large params.
+#. Fill Holes
+    * This just calls the fill holes method. Holes are gaps completely enveloped by a mask from the perspective of the 2D stack. Please reference the fill holes algorithm section for more info.
+#. Threshold Noise by Volume
+    * This just brings up the threshold window to filter out objects of a desired volume range, ie to remove small noise. Please see the thresholding section for more info.
 
 .. _dilation:
 
@@ -769,6 +789,23 @@ Algorithm Explanations
 
 Parameter Explanations
 ~~~~~~~~~~~~~~~~~~~~~~~
+
+#. Auto-Correct Branches by Collapsing Busy Neighbors
+    * If enabled, thick branches that get wrongly split up due to the skeletonization not handling them well (Usually due to messy segmentations) get handled by an additional algorithm that attempts to fix them by merging labeled branches in crowded regions. Somewhat unpredictable and so is not enabled by default.
+#. Avg Degree of Nearby Branch Communities to Merge...
+    * If param 1 is enabled, this dictates its behavior. Essentially, after the branches are labeled, they will be organized into network communities. Those communities with nodes with many neighbors can be collapsed back to one object. The threshold for average neighbors to collapse the communities is this param.
+    * Essentially lower vals are more aggressive and more likely to collapse communities.
+#. Random Seed For Auto Correction...
+    * Sets the random seed for the branch grouping method from param 1 to use (since the starting point effects the outcome). You should use the same seed each time for reproducibility, or vary the seed to see how it effects grouping. Leaving the seed empty will just use the seed of the rand (and numpy random) modules, which is initialized at program start.
+#. Auto-Correct Branches by Collapsing Internal Labels
+    * If enabled, thick branches that get wrongly split up due to the skeletonization not handling them well (Usually due to messy segmentations) get handled by an additional algorithm that attempts to fix them by merging any branches not touching the background with nearby branch regions that are touching the background.
+#. Split Nontouching Branches...?
+    * Branches essentially get labeled by splitting up their skeleton at the branchpoints and assigning the skeleton pieces labels. The larger branch regions are then labeled just based on what internal filament each nonzero voxel is closest to. What this means is that a very thick branch that has small branches next to it may inadvertently assume the wrong label in its outer regions. I should note this is generally rather uncommon but it can happen. This option is a correction that takes any labels that are not physically joined in space and breaks them into new labels, so that anything that has this issue does not misrepresent a branch's actual location in space. 
+#. Internal downsample...
+    * Temporarily downsamples the image to speed up calculation. Downsampling is done in all three dimensions by the inputed factor.
+    * Note that for branch-related functions, downsampling doesn't just speed up calculation, but may also be useful in simplifying the skeletonization of thick objects. The trade off is losing resolution of thin objects, which should be considered if using the downsample to alter skeletonization specifically.
+#. (if downsampling): Use cubic downsample?:
+    * Enable this to use the cubic resample algorithm, which is slower but may better preserve shapes. Cubic may be useful for branch downsamples specifically, because it can protect small branches from being evicted from the image.
 #. Generate Nodes from edges?
     * This method actually forks 'Process -> Generate -> Generate Nodes (From 'Edge' Vertices)' (above), and relies on the nodes it generates for its labeling scheme.
     * Usually when you run this you would leave this enabled (which will let it populate its own nodes), but in the instance you already ran 'Process -> Generate -> Generate Nodes (From 'Edge' Vertices)', and were satisfied with the result that was placed in the nodes channel, you could skip running it again by disabling this.
@@ -776,20 +813,8 @@ Parameter Explanations
     * Whether or not to try to use the GPU (only possible with a working CUDA toolkit).
     * Note that this method will always fall back to CPU if the GPU fails.
     * This method will additionally attempt to downsample your image if the GPU runs out of memory - see below for more information.
-#. Attempt to auto-correct branch labels:
-    * If enabled, thick branches that get wrongly split up due to the skeletonization not handling them well get handled by an additional algorithm that attempts to fix them.
-#. Avg Degree of Nearby Branch Communities to Merge...
-    * If param 3 is enabled, this dictates its behavior. Essentially, after the branches are labeled, they will be organized into network communities. Those communities with nodes with many neighbors can be collapsed back to one object. The threshold for average neighbors to collapse the communities is this param.
-    * Essentially lower vals are more aggressive and more likely to collapse communities.
-#. Random Seed For Auto Correction...
-    * Sets the random seed for the branch grouping method to use (since the starting point effects the outcome). You should use the same seed each time for reproducibility, or vary the seed to see how it effects grouping. Leaving the seed empty will just use the seed of the rand (and numpy random) modules, which is initialized at program start.
-#. Internal downsample...
-    * Temporarily downsamples the image to speed up calculation. Downsampling is done in all three dimensions by the inputed factor.
-    * Note that for branch-related functions, downsampling doesn't just speed up calculation, but may also be useful in simplifying the skeletonization of thick objects. The trade off is losing resolution of thin objects, which should be considered if using the downsample to alter skeletonization specifically.
-#. (if downsampling): Use cubic downsample?:
-    * Enable this to use the cubic resample algorithm, which is slower but may better preserve shapes. Cubic may be useful for branch downsamples specifically, because it can protect small branches from being evicted from the image.
 
-* Unless param 1 is disabled, selecting 'Run Branch Label' will call the 'Process -> Generate -> Generate Nodes (From 'Edge' Vertices)' window, meaning all its corrections can additionally be applied. Please see the above section for info on 'Process -> Generate -> Generate Nodes (From 'Edge' Vertices)'.
+* Selecting 'Run Branch Label' will call the 'Process -> Generate -> Generate Nodes (From 'Edge' Vertices)' window, meaning all its corrections can additionally be applied. Please see the above section for info on 'Process -> Generate -> Generate Nodes (From 'Edge' Vertices)'.
 * Select 'Run Node Generation' to run this method with the desired parameters. The edges will be branch-labeled, while the new nodes (branchpoints) will load into the nodes channel.
 
 Algorithm Explanations

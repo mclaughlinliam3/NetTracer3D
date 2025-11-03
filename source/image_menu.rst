@@ -57,11 +57,13 @@ All Image Menu Options
 * If a network is present with node_centroids (the user will be prompted if no centroids), then this method draws 1-voxel thick white lines between all node centroids.
 * This line-based network overlay is placed in Overlay1 and provides a convenient way to visualize network structure, especially in 3D.
 * Note that the lines tend to be somewhat thin by default, so for larger images, the user may want to dilate the overlay a small amount to better see it.
+* There is a param to optionally downsample while generating this, which essentially just enlarges rendered the output by the magnitude of the entered downsample.
 
 'Image -> Overlays -> Create ID Overlay'
 --------------------------
 * If a network is present with node_centroids (the user will be prompted if no centroids), then this method will literally write the numerical ID of each node over its centroid.
 * This ID overlay is placed in Overlay2 and provides a convenient way to visualize node labels.
+* There is a param to optionally downsample while generating this, which essentially just enlarges rendered the output by the magnitude of the entered downsample.
 
 'Image -> Overlays -> Color Nodes (or edges)'
 --------------------------

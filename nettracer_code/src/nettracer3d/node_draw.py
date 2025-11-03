@@ -3,7 +3,7 @@ import tifffile
 from scipy import ndimage
 from PIL import Image, ImageDraw, ImageFont
 from scipy.ndimage import zoom
-
+import cv2
 
 def downsample(data, factor, directory=None, order=0):
     """
@@ -121,83 +121,62 @@ def draw_nodes(nodes, num_nodes):
     # Save the draw_array as a 3D TIFF file
     tifffile.imwrite("labelled_nodes.tif", draw_array)
 
-def draw_from_centroids(nodes, num_nodes, centroids, twod_bool, directory = None):
-    """Presumes a centroid dictionary has been obtained"""
-    print("Drawing node IDs. (Must find all centroids. Network lattice itself may be drawn from network_draw script with fewer centroids)")
-    # Create a new 3D array to draw on with the same dimensions as the original array
+def draw_from_centroids(nodes, num_nodes, centroids, twod_bool, directory=None):
+    """Optimized version using OpenCV"""
+    print("Drawing node IDs...")
     draw_array = np.zeros_like(nodes, dtype=np.uint8)
-
-    # Use the default font from ImageFont
-
-    # Iterate through each centroid
+    
+    # Draw text using OpenCV (no PIL conversions needed)
     for idx in centroids.keys():
         centroid = centroids[idx]
         z, y, x = centroid.astype(int)
-
-        try:
-            draw_array = _draw_at_plane(z, y, x, draw_array, idx)
-        except IndexError:
-            pass
-
-        try:
-            draw_array = _draw_at_plane(z + 1, y, x, draw_array, idx)
-        except IndexError:
-            pass
-
-        try:
-            draw_array = _draw_at_plane(z - 1, y, x, draw_array, idx)
-        except IndexError:
-            pass
-
+        
+        for z_offset in [0, 1, -1]:
+            z_target = z + z_offset
+            if 0 <= z_target < draw_array.shape[0]:
+                cv2.putText(draw_array[z_target], str(idx), (x, y), 
+                           cv2.FONT_HERSHEY_SIMPLEX, 0.4, 255, 1, cv2.LINE_AA)
+    
     if twod_bool:
         draw_array = draw_array[0,:,:] | draw_array[1,:,:]
-
-
-    if directory is None:
-        filename = 'labelled_node_indices.tif'
-    else:
-        filename = f'{directory}/labelled_node_indices.tif'
-
+    
+    filename = f'{directory}/labelled_node_indices.tif' if directory else 'labelled_node_indices.tif'
     try:
-
-        # Save the draw_array as a 3D TIFF file
         tifffile.imwrite(filename, draw_array)
-
     except Exception as e:
         print(f"Could not save node indices to {filename}")
-
+    
     return draw_array
 
 def degree_draw(degree_dict, centroid_dict, nodes):
+    """Draw node degrees at centroid locations using OpenCV"""
     # Create a new 3D array to draw on with the same dimensions as the original array
     draw_array = np.zeros_like(nodes, dtype=np.uint8)
-    #font_size = 24
-
+    
     for node in centroid_dict:
-
-        try:
-            degree = degree_dict[node]
-        except:
+        # Skip if node not in degree_dict
+        if node not in degree_dict:
             continue
             
+        degree = degree_dict[node]
         z, y, x = centroid_dict[node].astype(int)
-
-        try:
-            draw_array = _draw_at_plane(z, y, x, draw_array, degree)
-        except IndexError:
-            pass
-
-        try:
-            draw_array = _draw_at_plane(z + 1, y, x, draw_array, degree)
-        except IndexError:
-            pass
-
-        try:
-            draw_array = _draw_at_plane(z - 1, y, x, draw_array, degree)
-        except IndexError:
-            pass
-
-
+        
+        # Draw on current z-plane and adjacent planes
+        for z_offset in [0, 1, -1]:
+            z_target = z + z_offset
+            # Check bounds
+            if 0 <= z_target < draw_array.shape[0]:
+                cv2.putText(
+                    draw_array[z_target],  # Image to draw on
+                    str(degree),            # Text to draw
+                    (x, y),                 # Position (x, y)
+                    cv2.FONT_HERSHEY_SIMPLEX,  # Font
+                    0.4,                    # Font scale
+                    255,                    # Color (white)
+                    1,                      # Thickness
+                    cv2.LINE_AA             # Anti-aliasing
+                )
+    
     return draw_array
 
 def degree_infect(degree_dict, nodes, make_floats = False):

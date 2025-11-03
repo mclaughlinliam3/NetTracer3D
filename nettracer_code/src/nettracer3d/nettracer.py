@@ -738,7 +738,7 @@ def estimate_object_radii(labeled_array, gpu=False, n_jobs=None, xy_scale = 1, z
         return morphology.estimate_object_radii_cpu(labeled_array, n_jobs, xy_scale = xy_scale, z_scale = z_scale)
 
 
-def break_and_label_skeleton(skeleton, peaks = 1, branch_removal = 0, comp_dil = 0, max_vol = 0, directory = None, return_skele = False, nodes = None):
+def break_and_label_skeleton(skeleton, peaks = 1, branch_removal = 0, comp_dil = 0, max_vol = 0, directory = None, return_skele = False, nodes = None, compute = True, xy_scale = 1, z_scale = 1):
     """Internal method to break open a skeleton at its branchpoints and label the remaining components, for an 8bit binary array"""
 
     if type(skeleton) == str:
@@ -747,18 +747,28 @@ def break_and_label_skeleton(skeleton, peaks = 1, branch_removal = 0, comp_dil =
     else:
         broken_skele = None
 
-    #old_skeleton = copy.deepcopy(skeleton) # The skeleton might get modified in label_vertices so we can make a preserved copy of it to use later
-
     if nodes is None:
 
-        verts = label_vertices(skeleton, peaks = peaks, branch_removal = branch_removal, comp_dil = comp_dil, max_vol = max_vol, return_skele = return_skele)
+        verts = label_vertices(skeleton, peaks = peaks, branch_removal = branch_removal, comp_dil = comp_dil, max_vol = max_vol, return_skele = return_skele, compute = compute)
 
     else:
         verts = nodes
 
     verts = invert_array(verts)
 
-    #skeleton = old_skeleton
+    """
+    if compute: # We are interested in the endpoints if we are doing the optional computation later
+        endpoints = []
+        image_copy = np.pad(skeleton, pad_width=1, mode='constant', constant_values=0)
+        nonzero_coords = np.transpose(np.nonzero(image_copy))
+        for x, y, z in nonzero_coords:
+            mini = image_copy[x-1:x+2, y-1:y+2, z-1:z+2]
+            nearby_sum = np.sum(mini)
+            threshold = 2 * image_copy[x, y, z]
+            
+            if nearby_sum <= threshold:
+                endpoints.append((x, y, z))
+    """
 
     image_copy = skeleton * verts
 
@@ -776,9 +786,137 @@ def break_and_label_skeleton(skeleton, peaks = 1, branch_removal = 0, comp_dil =
         tifffile.imwrite(filename, labeled_image, photometric='minisblack')
         print(f"Broken skeleton saved to {filename}")
 
-    return labeled_image
+    if compute:
 
+        return labeled_image, None, skeleton, None
 
+    return labeled_image, None, None, None
+
+def compute_optional_branchstats(verts, labeled_array, endpoints, xy_scale = 1, z_scale = 1):
+
+    #Lengths:
+    # Get all non-background coordinates and their labels in one pass
+    z, y, x = np.where(labeled_array != 0)
+    labels = labeled_array[z, y, x]
+
+    # Sort by label
+    sort_idx = np.argsort(labels)
+    labels_sorted = labels[sort_idx]
+    z_sorted = z[sort_idx]
+    y_sorted = y[sort_idx]
+    x_sorted = x[sort_idx]
+
+    # Find where each label starts
+    unique_labels, split_idx = np.unique(labels_sorted, return_index=True)
+    split_idx = split_idx[1:]  # Remove first index for np.split
+
+    # Split into groups
+    z_split = np.split(z_sorted, split_idx)
+    y_split = np.split(y_sorted, split_idx)
+    x_split = np.split(x_sorted, split_idx)
+
+    # Build dict
+    coords_dict = {label: np.column_stack([z, y, x]) 
+                   for label, z, y, x in zip(unique_labels, z_split, y_split, x_split)}
+
+    from sklearn.neighbors import NearestNeighbors
+    from scipy.spatial.distance import pdist, squareform
+    len_dict = {}
+    tortuosity_dict = {}
+    angle_dict = {}
+    for label, coords in coords_dict.items():
+        len_dict[label] = morphology.calculate_skeleton_lengths(labeled_array.shape, xy_scale=xy_scale, z_scale=z_scale, skeleton_coords=coords)
+        
+        # Find neighbors for all points at once
+        nbrs = NearestNeighbors(radius=1.74, algorithm='kd_tree').fit(coords)
+        neighbor_counts = nbrs.radius_neighbors(coords, return_distance=False)
+        neighbor_counts = np.array([len(n) - 1 for n in neighbor_counts])  # -1 to exclude self
+        
+        # Endpoints have exactly 1 neighbor
+        endpoints = coords[neighbor_counts == 1]
+        
+        if len(endpoints) > 1:
+            # Scale endpoints
+            scaled_endpoints = endpoints.copy().astype(float)
+            scaled_endpoints[:, 0] *= z_scale  # z dimension
+            scaled_endpoints[:, 1] *= xy_scale  # y dimension
+            scaled_endpoints[:, 2] *= xy_scale  # x dimension
+            
+            # calculate distances on scaled coordinates
+            distances = pdist(scaled_endpoints, metric='euclidean')
+            max_distance = distances.max()
+            
+            tortuosity_dict[label] = len_dict[label]/max_distance
+
+    """
+    verts = invert_array(verts)
+    for x, y, z in endpoints:
+        try:
+            verts[z,y,x] = 1
+        except IndexError:
+            print(x, y, z)
+
+    temp_network = Network_3D(nodes = verts, edges = labeled_array, xy_scale = xy_scale, z_scale = z_scale)
+    temp_network.calculate_all(temp_network.nodes, temp_network.edges, xy_scale = temp_network.xy_scale, z_scale = temp_network.z_scale, search = None, diledge = None, inners = False, remove_trunk = 0, ignore_search_region = True, other_nodes = None, label_nodes = True, directory = None, GPU = False, fast_dil = False, skeletonize = False, GPU_downsample = None)
+    temp_network.calculate_node_centroids()
+    from itertools import combinations
+    for node in temp_network.network.nodes:
+        neighbors = list(temp_network.network.neighbors(node))
+        
+        # Skip if fewer than 2 neighbors (endpoints or isolated nodes)
+        if len(neighbors) < 2:
+            continue
+        
+        # Get all unique pairs of neighbors
+        neighbor_pairs = combinations(neighbors, 2)
+        
+        angles = []
+        for neighbor1, neighbor2 in neighbor_pairs:
+            # Get coordinates from centroids
+            point_a = temp_network.node_centroids[neighbor1]
+            point_b = temp_network.node_centroids[node]  # vertex
+            point_c = temp_network.node_centroids[neighbor2]
+            
+            # Calculate angle
+            angle_result = calculate_3d_angle(point_a, point_b, point_c, xy_scale = xy_scale, z_scale = z_scale)
+            angles.append(angle_result)
+        
+        angle_dict[node] = angles
+    """
+
+    return len_dict, tortuosity_dict, angle_dict
+
+def calculate_3d_angle(point_a, point_b, point_c, xy_scale = 1, z_scale = 1):
+    """Calculate 3D angle at vertex B between points A-B-C."""
+    z1, y1, x1 = point_a
+    z2, y2, x2 = point_b  # vertex
+    z3, y3, x3 = point_c
+    
+    # Apply scaling
+    scaled_a = np.array([x1 * xy_scale, y1 * xy_scale, z1 * z_scale])
+    scaled_b = np.array([x2 * xy_scale, y2 * xy_scale, z2 * z_scale])
+    scaled_c = np.array([x3 * xy_scale, y3 * xy_scale, z3 * z_scale])
+    
+    # Create vectors from vertex B
+    vec_ba = scaled_a - scaled_b
+    vec_bc = scaled_c - scaled_b
+    
+    # Calculate angle using dot product
+    dot_product = np.dot(vec_ba, vec_bc)
+    magnitude_ba = np.linalg.norm(vec_ba)
+    magnitude_bc = np.linalg.norm(vec_bc)
+    
+    # Avoid division by zero
+    if magnitude_ba == 0 or magnitude_bc == 0:
+        return {'angle_degrees': 0}
+    
+    cos_angle = dot_product / (magnitude_ba * magnitude_bc)
+    cos_angle = np.clip(cos_angle, -1.0, 1.0)  # Handle numerical errors
+    
+    angle_radians = np.arccos(cos_angle)
+    angle_degrees = np.degrees(angle_radians)
+
+    return angle_degrees
 
 def threshold(arr, proportion, custom_rad = None):
 
@@ -804,7 +942,7 @@ def threshold(arr, proportion, custom_rad = None):
 
         threshold_index = int(len(sorted_values) * proportion)
         threshold_value = sorted_values[threshold_index]
-        print(f"Thresholding as if smallest_radius as assigned {threshold_value}")
+        print(f"Thresholding as if smallest_radius was assigned {threshold_value}")
 
 
     mask = arr > threshold_value
@@ -2129,7 +2267,7 @@ def erode(arrayimage, amount, xy_scale = 1, z_scale = 1, mode = 0, preserve_labe
         arrayimage = binarize(arrayimage)
     erode_xy, erode_z = dilation_length_to_pixels(xy_scale, z_scale, amount, amount)
 
-    if mode == 0:
+    if mode == 2:
         arrayimage = (erode_3D(arrayimage, erode_xy, erode_xy, erode_z)) * 255
     else:
         arrayimage = erode_3D_dt(arrayimage, amount, xy_scaling=xy_scale, z_scaling=z_scale, preserve_labels = preserve_labels)
@@ -2184,7 +2322,7 @@ def skeletonize(arrayimage, directory = None):
 
     return arrayimage
 
-def label_branches(array, peaks = 0, branch_removal = 0, comp_dil = 0, max_vol = 0, down_factor = None, directory = None, nodes = None, bonus_array = None, GPU = True, arrayshape = None):
+def label_branches(array, peaks = 0, branch_removal = 0, comp_dil = 0, max_vol = 0, down_factor = None, directory = None, nodes = None, bonus_array = None, GPU = True, arrayshape = None, compute = False, xy_scale = 1, z_scale = 1):
     """
     Can be used to label branches a binary image. Labelled output will be saved to the active directory if none is specified. Note this works better on already thin filaments and may over-divide larger trunkish objects.
     :param array: (Mandatory, string or ndarray) - If string, a path to a tif file to label. Note that the ndarray alternative is for internal use mainly and will not save its output.
@@ -2215,10 +2353,10 @@ def label_branches(array, peaks = 0, branch_removal = 0, comp_dil = 0, max_vol =
 
         other_array = skeletonize(array)
 
-        other_array = break_and_label_skeleton(other_array, peaks = peaks, branch_removal = branch_removal, comp_dil = comp_dil, max_vol = max_vol, nodes = nodes)
+        other_array, verts, skele, endpoints = break_and_label_skeleton(other_array, peaks = peaks, branch_removal = branch_removal, comp_dil = comp_dil, max_vol = max_vol, nodes = nodes, compute = compute, xy_scale = xy_scale, z_scale = z_scale)
 
     else:
-        array = break_and_label_skeleton(array, peaks = peaks, branch_removal = branch_removal, comp_dil = comp_dil, max_vol = max_vol, nodes = nodes)
+        array, verts, skele, endpoints = break_and_label_skeleton(array, peaks = peaks, branch_removal = branch_removal, comp_dil = comp_dil, max_vol = max_vol, nodes = nodes, compute = compute, xy_scale = xy_scale, z_scale = z_scale)
 
     if nodes is not None and down_factor is not None:
         array = upsample_with_padding(array, down_factor, arrayshape)
@@ -2257,7 +2395,7 @@ def label_branches(array, peaks = 0, branch_removal = 0, comp_dil = 0, max_vol =
         print("Branches labelled")
 
 
-    return array
+    return array, verts, skele, endpoints
 
 def fix_branches_network(array, G, communities, fix_val = None):
 
@@ -3143,6 +3281,15 @@ class Network_3D:
         Can be called on a Network_3D object to save the nodes property to hard mem as a tif. It will save to the active directory if none is specified.
         :param directory: (Optional - Val = None; String). The path to an indended directory to save the nodes to.
         """
+        if self._nodes is not None:
+            imagej_metadata = {
+                'spacing': self.z_scale,
+                'slices': self._nodes.shape[0],
+                'channels': 1,
+                'axes': 'ZYX'
+            }
+            resolution_value = 1.0 / self.xy_scale if self.xy_scale != 0 else 1
+
         if filename is None:
             filename = "labelled_nodes.tif"
         elif not filename.endswith(('.tif', '.tiff')):
@@ -3151,13 +3298,19 @@ class Network_3D:
         if self._nodes is not None:
             if directory is None:
                 try:
-                    tifffile.imwrite(f"{filename}", self._nodes)
+                    if len(self._nodes.shape) == 3:
+                        tifffile.imwrite(f"{filename}", self._nodes, imagej=True, metadata=imagej_metadata, resolution=(resolution_value, resolution_value))
+                    else:
+                        tifffile.imwrite(f"{filename}", self._nodes)
                     print(f"Nodes saved to {filename}")
                 except Exception as e:
                     print("Could not save nodes")
             if directory is not None:
                 try:
-                    tifffile.imwrite(f"{directory}/{filename}", self._nodes)
+                    if len(self._nodes.shape) == 3:
+                        tifffile.imwrite(f"{directory}/{filename}", self._nodes, imagej=True, metadata=imagej_metadata, resolution=(resolution_value, resolution_value))
+                    else:
+                        tifffile.imwrite(f"{directory}/{filename}")
                     print(f"Nodes saved to {directory}/{filename}")
                 except Exception as e:
                     print(f"Could not save nodes to {directory}")
@@ -3170,6 +3323,16 @@ class Network_3D:
         :param directory: (Optional - Val = None; String). The path to an indended directory to save the edges to.
         """
 
+        if self._edges is not None:
+            imagej_metadata = {
+                'spacing': self.z_scale,
+                'slices': self._edges.shape[0],
+                'channels': 1,
+                'axes': 'ZYX'
+            }
+
+            resolution_value = 1.0 / self.xy_scale if self.xy_scale != 0 else 1
+
         if filename is None:
             filename = "labelled_edges.tif"
         elif not filename.endswith(('.tif', '.tiff')):
@@ -3177,11 +3340,11 @@ class Network_3D:
 
         if self._edges is not None:
             if directory is None:
-                tifffile.imwrite(f"{filename}", self._edges)
+                tifffile.imwrite(f"{filename}", self._edges, imagej=True, metadata=imagej_metadata, resolution=(resolution_value, resolution_value))
                 print(f"Edges saved to {filename}")
 
             if directory is not None:
-                tifffile.imwrite(f"{directory}/{filename}", self._edges)
+                tifffile.imwrite(f"{directory}/{filename}", self._edges, imagej=True, metadata=imagej_metadata, resolution=(resolution_value, resolution_value))
                 print(f"Edges saved to {directory}/{filename}")
 
         if self._edges is None:
@@ -3337,6 +3500,14 @@ class Network_3D:
 
     def save_network_overlay(self, directory = None, filename = None):
 
+        if self._network_overlay is not None:
+            imagej_metadata = {
+                'spacing': self.z_scale,
+                'slices': self._network_overlay.shape[0],
+                'channels': 1,
+                'axes': 'ZYX'
+            }
+            resolution_value = 1.0 / self.xy_scale if self.xy_scale != 0 else 1
 
         if filename is None:
             filename = "overlay_1.tif"
@@ -3345,14 +3516,29 @@ class Network_3D:
 
         if self._network_overlay is not None:
             if directory is None:
-                tifffile.imwrite(f"{filename}", self._network_overlay)
+                if len(self._network_overlay.shape) == 3:
+                    tifffile.imwrite(f"{filename}", self._network_overlay, imagej=True, metadata=imagej_metadata, resolution=(resolution_value, resolution_value))
+                else:
+                    tifffile.imwrite(f"{filename}", self._network_overlay)
                 print(f"Network overlay saved to {filename}")
 
             if directory is not None:
-                tifffile.imwrite(f"{directory}/{filename}", self._network_overlay)
+                if len(self._network_overlay.shape) == 3:
+                    tifffile.imwrite(f"{directory}/{filename}", self._network_overlay, imagej=True, metadata=imagej_metadata, resolution=(resolution_value, resolution_value))
+                else:
+                    tifffile.imwrite(f"{directory}/{filename}", self._network_overlay)
                 print(f"Network overlay saved to {directory}/{filename}")
 
     def save_id_overlay(self, directory = None, filename = None):
+
+        if self._id_overlay is not None:
+            imagej_metadata = {
+                'spacing': self.z_scale,
+                'slices': self._id_overlay.shape[0],
+                'channels': 1,
+                'axes': 'ZYX'
+            }
+            resolution_value = 1.0 / self.xy_scale if self.xy_scale != 0 else 1
 
         if filename is None:
             filename = "overlay_2.tif"
@@ -3361,11 +3547,17 @@ class Network_3D:
 
         if self._id_overlay is not None:
             if directory is None:
-                tifffile.imwrite(f"{filename}", self._id_overlay)
+                if len(self._id_overlay.shape) == 3:
+                    tifffile.imwrite(f"{filename}", self._id_overlay, imagej=True, metadata=imagej_metadata, resolution=(resolution_value, resolution_value))
+                else:
+                    tifffile.imwrite(f"{filename}", self._id_overlay, imagej=True)
                 print(f"Network overlay saved to {filename}")
 
             if directory is not None:
-                tifffile.imwrite(f"{directory}/{filename}", self._id_overlay)
+                if len(self._id_overlay.shape) == 3:
+                    tifffile.imwrite(f"{directory}/{filename}", self._id_overlay, imagej=True, metadata=imagej_metadata, resolution=(resolution_value, resolution_value))
+                else:
+                    tifffile.imwrite(f"{directory}/{filename}", self._id_overlay)
                 print(f"ID overlay saved to {directory}/{filename}")
 
 
@@ -3488,7 +3680,7 @@ class Network_3D:
 
         if file_path is not None:
             self._xy_scale, self_z_scale = read_scalings(file_path)
-            print("Succesfully loaded voxel_scalings")
+            print(f"Succesfully loaded voxel_scalings; values overriden to xy_scale: {self.xy_scale}, z_scale: {self.z_scale}")
             return
 
         items = directory_info(directory)
@@ -3497,11 +3689,11 @@ class Network_3D:
             if item == 'voxel_scalings.txt':
                 if directory is not None:
                     self._xy_scale, self._z_scale = read_scalings(f"{directory}/{item}")
-                    print("Succesfully loaded voxel_scalings")
+                    print(f"Succesfully loaded voxel_scalings; values overriden to xy_scale: {self.xy_scale}, z_scale: {self.z_scale}")
                     return
                 else:
                     self._xy_scale, self._z_scale = read_scalings(item)
-                    print("Succesfully loaded voxel_scalings")
+                    print(f"Succesfully loaded voxel_scaling; values overriden to xy_scale: {self.xy_scale}, z_scale: {self.z_scale}s")
                     return
 
         print("Could not find voxel scalings. They must be in the specified directory and named 'voxel_scalings.txt'")
@@ -5294,32 +5486,35 @@ class Network_3D:
                             new_list.append(centroid)
 
             else:
-
                 if mode == 1:
-
                     legal = self.edges != 0
-
                 elif mode == 2:
-
                     legal = self.network_overlay != 0
-
                 elif mode == 3:
-
                     legal = self.id_overlay != 0
-
                 if self.nodes is None:
-
                     temp_array = proximity.populate_array(self.node_centroids, shape = legal.shape)
                 else:
                     temp_array = self.nodes
-
                 if dim == 2:
                     volume = np.count_nonzero(legal) * self.xy_scale**2
+                    # Pad in x and y dimensions (assuming shape is [y, x])
+                    legal = np.pad(legal, pad_width=1, mode='constant', constant_values=0)
                 else:
                     volume = np.count_nonzero(legal) * self.z_scale * self.xy_scale**2
+                    # Pad in x, y, and z dimensions (assuming shape is [z, y, x])
+                    legal = np.pad(legal, pad_width=1, mode='constant', constant_values=0)
+                
                 print(f"Using {volume} for the volume measurement (Volume of provided mask as scaled by xy and z scaling)")
-
-                legal = smart_dilate.compute_distance_transform_distance(legal, sampling = [self.z_scale, self.xy_scale, self.xy_scale]) # Get true distances
+                
+                # Compute distance transform on padded array
+                legal = smart_dilate.compute_distance_transform_distance(legal, sampling = [self.z_scale, self.xy_scale, self.xy_scale])
+                
+                # Remove padding after distance transform
+                if dim == 2:
+                    legal = legal[1:-1, 1:-1]  # Remove padding from x and y dimensions
+                else:
+                    legal = legal[1:-1, 1:-1, 1:-1]  # Remove padding from x, y, and z dimensions
                 
                 max_avail = np.max(legal) # Most internal point
                 min_legal = factor * max_avail # Values of stuff 25% within the tissue
@@ -5400,9 +5595,9 @@ class Network_3D:
 
 
 
-    def interactions(self, search = 0, cores = 0, resize = None, save = False, skele = False, fastdil = False):
+    def interactions(self, search = 0, cores = 0, resize = None, save = False, skele = False, length = False, auto = True, fastdil = False):
 
-        return morphology.quantify_edge_node(self._nodes, self._edges, search = search, xy_scale = self._xy_scale, z_scale = self._z_scale, cores = cores, resize = resize, save = save, skele = skele, fastdil = fastdil)
+        return morphology.quantify_edge_node(self._nodes, self._edges, search = search, xy_scale = self._xy_scale, z_scale = self._z_scale, cores = cores, resize = resize, save = save, skele = skele, length = length, auto = auto, fastdil = fastdil)
 
 
 

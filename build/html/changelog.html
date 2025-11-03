@@ -6,14 +6,14 @@
   <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
 
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Changelog &mdash; NetTracer3D 1.0.5 documentation</title>
+  <title>Changelog &mdash; NetTracer3D 1.1.3 documentation</title>
       <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=b86133f3" />
       <link rel="stylesheet" type="text/css" href="_static/css/theme.css?v=e59714d7" />
 
   
       <script src="_static/jquery.js?v=5d32c60e"></script>
       <script src="_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
-      <script src="_static/documentation_options.js?v=d55fa986"></script>
+      <script src="_static/documentation_options.js?v=cb7bf70b"></script>
       <script src="_static/doctools.js?v=9bcbadda"></script>
       <script src="_static/sphinx_highlight.js?v=dc90522c"></script>
     <script src="_static/js/theme.js"></script>
@@ -244,6 +244,18 @@
 </dd>
 <dt>Version 1.0.5 Update</dt><dd><ul class="simple">
 <li><p>Minor change to how the violin plots are normalized</p></li>
+</ul>
+</dd>
+<dt>Versions 1.0.6 - 1.1.3 Updates</dt><dd><ul class="simple">
+<li><p>Added handling if the user tries to load in a multichannel 3dimensional image (note this will not detect if you have a multi-channel image of 2d planes, it will think those are 3d. For now those can be split up with other software, or you can use the crop function to just isolate the channel you want as if it were a z-plane).</p></li>
+<li><p>Added significance testing menu</p></li>
+<li><p>Added ability to load a full sized highlight overlay from the file menu (in case you need it for a picture - on big images the highlight overlay is computed by slice so if you reload the channel its trying to highlight, it will alter the highlight overlay, but loading in the entire highlight overlay directly will stop this behavior until a new highlight is generated).</p></li>
+<li><p>For the ‘calculate edge &lt; &gt; node interaction’ method - now can compute the length of nearby edges as an alternative option to just the volumes.</p></li>
+<li><p>Added ability to select all nodes/edges participating in the network.</p></li>
+<li><p>Can now intermittently downsample while making the network and id overlays now to make their relevant elements larger in the actual rendered output.</p></li>
+<li><p>Added option when calculating branches to get some stats about them (lengths, tortuosity).</p></li>
+<li><p>Added ‘Clean Segmentation’ function which just shows a menu grouping together some functions useful for cleaning up a segmentation.</p></li>
+<li><p>Bug fixes and minor adjustments.</p></li>
 </ul>
 </dd>
 </dl>

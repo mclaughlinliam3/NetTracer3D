@@ -111,3 +111,14 @@ Versions 1.0.1 - 1.0.4 Updates
 
 Version 1.0.5 Update
 	* Minor change to how the violin plots are normalized
+
+Versions 1.0.6 - 1.1.3 Updates
+	* Added handling if the user tries to load in a multichannel 3dimensional image (note this will not detect if you have a multi-channel image of 2d planes, it will think those are 3d. For now those can be split up with other software, or you can use the crop function to just isolate the channel you want as if it were a z-plane).
+	* Added significance testing menu
+	* Added ability to load a full sized highlight overlay from the file menu (in case you need it for a picture - on big images the highlight overlay is computed by slice so if you reload the channel its trying to highlight, it will alter the highlight overlay, but loading in the entire highlight overlay directly will stop this behavior until a new highlight is generated).
+	* For the 'calculate edge < > node interaction' method - now can compute the length of nearby edges as an alternative option to just the volumes.
+	* Added ability to select all nodes/edges participating in the network.
+	* Can now intermittently downsample while making the network and id overlays now to make their relevant elements larger in the actual rendered output.
+	* Added option when calculating branches to get some stats about them (lengths, tortuosity).
+	* Added 'Clean Segmentation' function which just shows a menu grouping together some functions useful for cleaning up a segmentation.
+	* Bug fixes and minor adjustments.

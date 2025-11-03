@@ -36,6 +36,7 @@ from threading import Lock
 from scipy import ndimage
 import os
 from . import painting
+from . import stats as net_stats
 
 
 
@@ -181,6 +182,12 @@ class ImageViewerWindow(QMainWindow):
             1: None,
             2: None,
             3: None
+        }
+
+        self.branch_dict = {
+            0: None,
+            1: None
+
         }
 
         self.original_shape = None #For undoing resamples
@@ -425,8 +432,6 @@ class ImageViewerWindow(QMainWindow):
         self.canvas.mpl_connect('button_release_event', self.on_mouse_release)
         self.canvas.mpl_connect('motion_notify_event', self.on_mouse_move)
 
-        #self.canvas.mpl_connect('button_press_event', self.on_mouse_click)
-
         # Initialize measurement tracking
         self.measurement_points = []  # List to store point pairs
         self.angle_measurements = []  # NEW: List to store angle trios
@@ -462,9 +467,8 @@ class ImageViewerWindow(QMainWindow):
         self.last_paint_pos = None
 
         self.resume = False
-
-        self.hold_update = False
         self._first_pan_done = False
+        self.thresh_window_ref = None
 
 
     def load_file(self):
@@ -879,6 +883,21 @@ class ImageViewerWindow(QMainWindow):
         elif self.scroll_direction > 0 and new_value <= self.slice_slider.maximum():
             self.slice_slider.setValue(new_value)
 
+
+    def confirm_mini_thresh(self):
+
+        if self.shape[0] * self.shape[1] * self.shape[2] > self.mini_thresh:
+            self.mini_overlay = True
+            return True
+        else:
+            return False
+
+    def evaluate_mini(self, mode = 'nodes'):
+        if self.confirm_mini_thresh():
+            self.create_mini_overlay(node_indices = self.clicked_values['nodes'], edge_indices = self.clicked_values['edges'])
+        else:
+            self.create_highlight_overlay(node_indices=self.clicked_values['nodes'], edge_indices = self.clicked_values['edges'])
+
     def create_highlight_overlay(self, node_indices=None, edge_indices=None, overlay1_indices = None, overlay2_indices = None, bounds = False):
         """
         Create a binary overlay highlighting specific nodes and/or edges using parallel processing.
@@ -1004,13 +1023,13 @@ class ImageViewerWindow(QMainWindow):
             
         # Combine results
         if node_overlay is not None:
-            self.highlight_overlay = np.maximum(self.highlight_overlay, node_overlay)
+            self.highlight_overlay = np.maximum(self.highlight_overlay, node_overlay).astype(np.uint8)
         if edge_overlay is not None:
-            self.highlight_overlay = np.maximum(self.highlight_overlay, edge_overlay)
+            self.highlight_overlay = np.maximum(self.highlight_overlay, edge_overlay).astype(np.uint8)
         if overlay1_overlay is not None:
-            self.highlight_overlay = np.maximum(self.highlight_overlay, overlay1_overlay)
+            self.highlight_overlay = np.maximum(self.highlight_overlay, overlay1_overlay).astype(np.uint8)
         if overlay2_overlay is not None:
-            self.highlight_overlay = np.maximum(self.highlight_overlay, overlay2_overlay)
+            self.highlight_overlay = np.maximum(self.highlight_overlay, overlay2_overlay).astype(np.uint8)
         
         # Update display
         self.update_display(preserve_zoom=(current_xlim, current_ylim))
@@ -1018,6 +1037,9 @@ class ImageViewerWindow(QMainWindow):
     def create_highlight_overlay_slice(self, indices, bounds = False):
 
         """Highlight overlay generation method specific for the segmenter interactive mode"""
+
+        self.mini_overlay_data = None
+        self.highlight_overlay = None
 
         def process_chunk_bounds(chunk_data, indices_to_check):
             """Process a single chunk of the array to create highlight mask"""
@@ -1291,6 +1313,9 @@ class ImageViewerWindow(QMainWindow):
                 select_nodes = select_all_menu.addAction("Nodes")
                 select_both = select_all_menu.addAction("Nodes + Edges")
                 select_edges = select_all_menu.addAction("Edges")
+                select_net_nodes = select_all_menu.addAction("Nodes in Network")
+                select_net_both = select_all_menu.addAction("Nodes + Edges in Network")
+                select_net_edges = select_all_menu.addAction("Edges in Network")
                 context_menu.addMenu(select_all_menu)
 
                 if len(self.clicked_values['nodes']) > 0 or len(self.clicked_values['edges']) > 0:
@@ -1365,6 +1390,9 @@ class ImageViewerWindow(QMainWindow):
                 select_nodes.triggered.connect(lambda: self.handle_select_all(edges = False, nodes = True))
                 select_both.triggered.connect(lambda: self.handle_select_all(edges = True))
                 select_edges.triggered.connect(lambda: self.handle_select_all(edges = True, nodes = False))
+                select_net_nodes.triggered.connect(lambda: self.handle_select_all(edges = False, nodes = True, network = True))
+                select_net_both.triggered.connect(lambda: self.handle_select_all(edges = True, network = True))
+                select_net_edges.triggered.connect(lambda: self.handle_select_all(edges = True, nodes = False, network = True))
                 if self.highlight_overlay is not None or self.mini_overlay_data is not None:
                     highlight_select = context_menu.addAction("Add highlight in network selection")
                     highlight_select.triggered.connect(self.handle_highlight_select)
@@ -1705,28 +1733,12 @@ class ImageViewerWindow(QMainWindow):
                 if edges:
                     edge_indices = filtered_df.iloc[:, 2].unique().tolist()
                     self.clicked_values['edges'] = edge_indices
-
-                    if self.channel_data[1].shape[0] * self.channel_data[1].shape[1] * self.channel_data[1].shape[2] > self.mini_thresh:
-                        self.mini_overlay = True
-                        self.create_mini_overlay(node_indices = self.clicked_values['nodes'], edge_indices = self.clicked_values['edges'])
-                    else:
-                        self.create_highlight_overlay(
-                            node_indices=self.clicked_values['nodes'], 
-                            edge_indices=self.clicked_values['edges']
-                        )
+                    self.evaluate_mini(mode = 'edges')
                 else:
-                    if self.channel_data[0].shape[0] * self.channel_data[0].shape[1] * self.channel_data[0].shape[2] > self.mini_thresh:
-                        self.mini_overlay = True
-                        self.create_mini_overlay(node_indices = self.clicked_values['nodes'], edge_indices = self.clicked_values['edges'])
-                    else:
-                        self.create_highlight_overlay(
-                            node_indices=self.clicked_values['nodes'],
-                            edge_indices = self.clicked_values['edges']
-                    )
-            
+                    self.evaluate_mini()
                 
         except Exception as e:
-            print(f"Error processing neighbors: {e}")
+            print(f"Error showing neighbors: {e}")
 
     
     def handle_show_component(self, edges = False, nodes = True):
@@ -1797,23 +1809,10 @@ class ImageViewerWindow(QMainWindow):
             if edges:
                 edge_indices = filtered_df.iloc[:, 2].unique().tolist()
                 self.clicked_values['edges'] = edge_indices
-                if self.channel_data[1].shape[0] * self.channel_data[1].shape[1] * self.channel_data[1].shape[2] > self.mini_thresh:
-                    self.mini_overlay = True
-                    self.create_mini_overlay(node_indices = self.clicked_values['nodes'], edge_indices = self.clicked_values['edges'])
-                else:
-                    self.create_highlight_overlay(
-                        node_indices=self.clicked_values['nodes'],
-                        edge_indices=edge_indices
-                    )
+                self.evaluate_mini(mode = 'edges')
             else:
-                if self.channel_data[0].shape[0] * self.channel_data[0].shape[1] * self.channel_data[0].shape[2] > self.mini_thresh:
-                    self.mini_overlay = True
-                    self.create_mini_overlay(node_indices = self.clicked_values['nodes'], edge_indices = self.clicked_values['edges'])
-                else:
-                    self.create_highlight_overlay(
-                        node_indices = self.clicked_values['nodes'],
-                        edge_indices = self.clicked_values['edges']
-                )
+                self.evaluate_mini()
+
 
         except Exception as e:
 
@@ -2009,7 +2008,7 @@ class ImageViewerWindow(QMainWindow):
                                 self.parent().toggle_channel(1)
                             # Navigate to the Z-slice
                             self.parent().slice_slider.setValue(int(centroid[0]))
-                            print(f"Found edge {value} at Z-slice {centroid[0]}")
+                            print(f"Found edge {value} at [Z,Y,X] -> {centroid}")
 
                         else:
                             print(f"Edge {value} not found in centroids dictionary")
@@ -2045,9 +2044,9 @@ class ImageViewerWindow(QMainWindow):
                             # Navigate to the Z-slice
                             self.parent().slice_slider.setValue(int(centroid[0]))
                             if mode == 0:
-                                print(f"Found node {value} at Z-slice {centroid[0]}")
+                                print(f"Found node {value} at [Z,Y,X] -> {centroid}")
                             elif mode == 2:
-                                print(f"Found node {value} from community {com} at Z-slice {centroid[0]}")
+                                print(f"Found node {value} from community {com} at [Z,Y,X] -> {centroid}")
 
                             
                         else:
@@ -2078,12 +2077,15 @@ class ImageViewerWindow(QMainWindow):
 
 
 
-    def handle_select_all(self, nodes = True, edges = False):
+    def handle_select_all(self, nodes = True, edges = False, network = False):
 
         try:
 
             if nodes:
-                nodes = list(np.unique(my_network.nodes))
+                if not network:
+                    nodes = list(np.unique(my_network.nodes))
+                else:
+                    nodes = list(set(my_network.network_lists[0] + my_network.network_lists[1]))
                 if nodes[0] == 0:
                     del nodes[0]
                 num = (self.channel_data[0].shape[0] * self.channel_data[0].shape[1] * self.channel_data[0].shape[2])
@@ -2091,7 +2093,10 @@ class ImageViewerWindow(QMainWindow):
             else:
                 nodes = []
             if edges:
-                edges = list(np.unique(my_network.edges))
+                if not network:
+                    edges = list(np.unique(my_network.edges))
+                else:
+                    edges = my_network.network_lists[2]
                 num = (self.channel_data[1].shape[0] * self.channel_data[1].shape[1] * self.channel_data[1].shape[2])
                 if edges[0] == 0:
                     del edges[0]
@@ -2169,6 +2174,16 @@ class ImageViewerWindow(QMainWindow):
                     except:
                         pass
 
+                if self.branch_dict[0] is not None:
+                    try:
+                        info_dict['Branch Length'] = self.branch_dict[0][0][label]
+                    except:
+                        pass
+                    try:
+                        info_dict['Branch Tortuosity'] = self.branch_dict[0][1][label]
+                    except:
+                        pass
+
 
             elif sort == 'edge':
 
@@ -2214,7 +2229,17 @@ class ImageViewerWindow(QMainWindow):
                     except:
                         pass
 
-            self.format_for_upperright_table(info_dict, title = f'Info on Object')
+                if self.branch_dict[1] is not None:
+                    try:
+                        info_dict['Branch Length'] = self.branch_dict[1][0][label]
+                    except:
+                        pass
+                    try:
+                        info_dict['Branch Tortuosity'] = self.branch_dict[1][1][label]
+                    except:
+                        pass
+
+            self.format_for_upperright_table(info_dict, title = f'Info on Object', sort = False)
 
         except:
             pass
@@ -2332,7 +2357,7 @@ class ImageViewerWindow(QMainWindow):
         unique_labels = np.unique(input_array[binary_mask])
         print(f"Processing {len(unique_labels)} unique labels")
         
-        # Get all bounding boxes at once - this is very fast
+        # Get all bounding boxes at once
         bounding_boxes = ndimage.find_objects(input_array)
         
         # Prepare work items - just check if bounding box exists for each label
@@ -2348,7 +2373,7 @@ class ImageViewerWindow(QMainWindow):
                 bbox = bounding_boxes[bbox_index]
                 work_items.append((orig_label, bbox))
         
-        print(f"Created {len(work_items)} work items")
+        #print(f"Created {len(work_items)} work items")
         
         # If we have work items, process them
         if len(work_items) == 0:
@@ -2368,7 +2393,7 @@ class ImageViewerWindow(QMainWindow):
                 return orig_label, bbox, labeled_sub, num_cc
                 
             except Exception as e:
-                print(f"Error processing label {orig_label}: {e}")
+                #print(f"Error processing label {orig_label}: {e}")
                 return orig_label, bbox, None, 0
         
         # Execute in parallel
@@ -2384,7 +2409,7 @@ class ImageViewerWindow(QMainWindow):
         
         for orig_label, bbox, labeled_sub, num_cc in results:
             if num_cc > 0 and labeled_sub is not None:
-                print(f"Label {orig_label}: {num_cc} components")
+                #print(f"Label {orig_label}: {num_cc} components")
                 # Remap labels and place in output
                 for cc_id in range(1, num_cc + 1):
                     mask = labeled_sub == cc_id
@@ -2397,7 +2422,7 @@ class ImageViewerWindow(QMainWindow):
 
     def handle_seperate(self):
         """
-        Fixed version with proper mask handling and debugging
+        Seperate objects in an array that share a label but do not touch
         """
         try:
             # Handle nodes
@@ -2406,7 +2431,6 @@ class ImageViewerWindow(QMainWindow):
                 # Create highlight overlay (this should preserve original label values)
                 self.create_highlight_overlay(node_indices=self.clicked_values['nodes'])
                                 
-                # DON'T convert to boolean yet - we need the original labels!
                 # Create a boolean mask for where we have highlighted values
                 highlight_mask = self.highlight_overlay != 0
                 
@@ -2416,7 +2440,7 @@ class ImageViewerWindow(QMainWindow):
                 # Get non-highlighted part of the array
                 non_highlighted = np.where(highlight_mask, 0, my_network.nodes)
                 
-                # Calculate max_val properly
+                # Calculate max_val
                 max_val = np.max(non_highlighted) if np.any(non_highlighted) else 0
                                 
                 # Process highlighted part
@@ -2641,9 +2665,9 @@ class ImageViewerWindow(QMainWindow):
                     self.create_mini_overlay(node_indices = self.clicked_values['nodes'], edge_indices = self.clicked_values['edges'])
                     self.needs_mini = False
                 else:
-                    self.create_highlight_overlay(node_indices = self.clicked_values['nodes'], edge_indices = self.clicked_values['edges'])
+                    self.evaluate_mini()
             else:
-                self.create_highlight_overlay(node_indices = self.clicked_values['nodes'], edge_indices = self.clicked_values['edges'])
+                self.evaluate_mini()
 
         
         self.update_display(preserve_zoom=(current_xlim, current_ylim))
@@ -3708,17 +3732,23 @@ class ImageViewerWindow(QMainWindow):
         
         # Add highlight overlays if they exist (with downsampling)
         if self.mini_overlay and self.highlight and self.machine_window is None:
-            display_overlay = crop_and_downsample_image(self.mini_overlay_data, y_min_padded, y_max_padded, x_min_padded, x_max_padded, downsample_factor)
-            highlight_rgba = self.create_highlight_rgba(display_overlay, yellow=True)
-            composite = self.blend_layers(composite, highlight_rgba)
+            try:
+                display_overlay = crop_and_downsample_image(self.mini_overlay_data, y_min_padded, y_max_padded, x_min_padded, x_max_padded, downsample_factor)
+                highlight_rgba = self.create_highlight_rgba(display_overlay, yellow=True)
+                composite = self.blend_layers(composite, highlight_rgba)
+            except:
+                pass
         elif self.highlight_overlay is not None and self.highlight:
-            highlight_slice = self.highlight_overlay[self.current_slice]
-            display_highlight = crop_and_downsample_image(highlight_slice, y_min_padded, y_max_padded, x_min_padded, x_max_padded, downsample_factor)
-            if self.machine_window is None:
-                highlight_rgba = self.create_highlight_rgba(display_highlight, yellow=True)
-            else:
-                highlight_rgba = self.create_highlight_rgba(display_highlight, yellow=False)
-            composite = self.blend_layers(composite, highlight_rgba)
+            try:
+                highlight_slice = self.highlight_overlay[self.current_slice]
+                display_highlight = crop_and_downsample_image(highlight_slice, y_min_padded, y_max_padded, x_min_padded, x_max_padded, downsample_factor)
+                if self.machine_window is None:
+                    highlight_rgba = self.create_highlight_rgba(display_highlight, yellow=True)
+                else:
+                    highlight_rgba = self.create_highlight_rgba(display_highlight, yellow=False)
+                composite = self.blend_layers(composite, highlight_rgba)
+            except:
+                pass
         
         # Convert to 0-255 range for display
         return (composite * 255).astype(np.uint8)
@@ -4188,10 +4218,8 @@ class ImageViewerWindow(QMainWindow):
         elif self.zoom_mode:
             # Handle zoom mode press
             if self.original_xlim is None:
-                self.original_xlim = self.ax.get_xlim()
-                #print(self.original_xlim)
-                self.original_ylim = self.ax.get_ylim()
-                #print(self.original_ylim)
+                self.original_xlim = (-0.5, self.shape[2] - 0.5)
+                self.original_ylim = (self.shape[1] + 0.5, -0.5)
             
             current_xlim = self.ax.get_xlim()
             current_ylim = self.ax.get_ylim()
@@ -4353,8 +4381,8 @@ class ImageViewerWindow(QMainWindow):
         if self.zoom_mode:
             # Existing zoom functionality
             if self.original_xlim is None:
-                self.original_xlim = self.ax.get_xlim()
-                self.original_ylim = self.ax.get_ylim()
+                self.original_xlim = (-0.5, self.shape[2] - 0.5)
+                self.original_ylim = (self.shape[1] + 0.5, -0.5)
             
             current_xlim = self.ax.get_xlim()
             current_ylim = self.ax.get_ylim()
@@ -4530,6 +4558,8 @@ class ImageViewerWindow(QMainWindow):
         for i in range(4):
             load_action = load_menu.addAction(f"Load {self.channel_names[i]}")
             load_action.triggered.connect(lambda checked, ch=i: self.load_channel(ch))
+        load_action = load_menu.addAction("Load Full-Sized Highlight Overlay")
+        load_action.triggered.connect(lambda: self.load_channel(channel_index = 4, load_highlight = True))
         load_action = load_menu.addAction("Load Network")
         load_action.triggered.connect(self.load_network)
         load_action = load_menu.addAction("Load From Excel Helper")
@@ -4570,6 +4600,8 @@ class ImageViewerWindow(QMainWindow):
         allstats_action.triggered.connect(self.stats)
         histos_action = stats_menu.addAction("Network Statistic Histograms")
         histos_action.triggered.connect(self.histos)
+        sig_action = stats_menu.addAction("Significance Testing")
+        sig_action.triggered.connect(self.sig_test)
         radial_action = stats_menu.addAction("Radial Distribution Analysis")
         radial_action.triggered.connect(self.show_radial_dialog)
         neighbor_id_action = stats_menu.addAction("Identity Distribution of Neighbors")
@@ -4627,6 +4659,8 @@ class ImageViewerWindow(QMainWindow):
         image_menu = process_menu.addMenu("Image")
         resize_action = image_menu.addAction("Resize (Up/Downsample)")
         resize_action.triggered.connect(self.show_resize_dialog)
+        clean_action = image_menu.addAction("Clean Segmentation")
+        clean_action.triggered.connect(self.show_clean_dialog)
         dilate_action = image_menu.addAction("Dilate")
         dilate_action.triggered.connect(self.show_dilate_dialog)
         erode_action = image_menu.addAction("Erode")
@@ -4781,7 +4815,10 @@ class ImageViewerWindow(QMainWindow):
                 # Invalid input - reset to default
                 self.downsample_factor = 1
 
-        self.throttle = self.shape[1] * self.shape[2] > 3000 * 3000 * self.downsample_factor
+        try:
+            self.throttle = self.shape[1] * self.shape[2] > 3000 * 3000 * self.downsample_factor
+        except:
+            self.throttle = False
         
         # Optional: Trigger display update if you want immediate effect
         if update:
@@ -4866,8 +4903,11 @@ class ImageViewerWindow(QMainWindow):
             self.cellpose_launcher.launch_cellpose_gui(use_3d = use_3d)
 
         except:
-            import traceback
-            print(traceback.format_exc())
+            QMessageBox.critical(
+                self,
+                "Error",
+                f"Error starting cellpose: {str(e)}\nNote: You may need to install cellpose with corresponding torch first - in your environment, please call 'pip install cellpose'. Please see: 'https://pytorch.org/get-started/locally/' to see what torch install command corresponds to your NVIDIA GPU"
+            )
             pass
 
 
@@ -4914,6 +4954,16 @@ class ImageViewerWindow(QMainWindow):
         except Exception as e:
             print(f"Error creating histogram selector: {e}")
 
+    def sig_test(self):
+        # Get the existing QApplication instance
+        app = QApplication.instance()
+        
+        # Create the statistical GUI window without starting a new event loop
+        stats_window = net_stats.main(app)
+        
+        # Keep a reference so it doesn't get garbage collected
+        self.stats_window = stats_window
+
     def volumes(self):
 
 
@@ -4939,7 +4989,7 @@ class ImageViewerWindow(QMainWindow):
 
         
 
-    def format_for_upperright_table(self, data, metric='Metric', value='Value', title=None):
+    def format_for_upperright_table(self, data, metric='Metric', value='Value', title=None, sort = True):
        """
        Format dictionary or list data for display in upper right table.
        
@@ -5025,11 +5075,12 @@ class ImageViewerWindow(QMainWindow):
            table = CustomTableView(self)
            table.setModel(PandasModel(df))
 
-           try:
-               first_column_name = table.model()._data.columns[0]
-               table.sort_table(first_column_name, ascending=True)
-           except:
-                pass
+           if sort:
+               try:
+                   first_column_name = table.model()._data.columns[0]
+                   table.sort_table(first_column_name, ascending=True)
+               except:
+                    pass
            
            # Add to tabbed widget
            if title is None:
@@ -5060,6 +5111,10 @@ class ImageViewerWindow(QMainWindow):
         else:
             dialog = MergeNodeIdDialog(self)
             dialog.exec()
+
+    def show_multichan_dialog(self, data):
+        dialog = MultiChanDialog(self, data)
+        dialog.show()
 
     def show_gray_water_dialog(self):
         """Show the gray watershed parameter dialog."""
@@ -5163,7 +5218,7 @@ class ImageViewerWindow(QMainWindow):
 
             my_network.edges = (my_network.nodes == 0) * my_network.edges
 
-            my_network.calculate_all(my_network.nodes, my_network.edges, xy_scale = my_network.xy_scale, z_scale = my_network.z_scale, search = None, diledge = None, inners = False, hash_inners = False, remove_trunk = 0, ignore_search_region = True, other_nodes = None, label_nodes = True, directory = None, GPU = False, fast_dil = False, skeletonize = False, GPU_downsample = None)
+            my_network.calculate_all(my_network.nodes, my_network.edges, xy_scale = my_network.xy_scale, z_scale = my_network.z_scale, search = None, diledge = None, inners = False, remove_trunk = 0, ignore_search_region = True, other_nodes = None, label_nodes = True, directory = None, GPU = False, fast_dil = False, skeletonize = False, GPU_downsample = None)
 
             self.load_channel(1, my_network.edges, data = True)
             self.load_channel(0, my_network.nodes, data = True)
@@ -5197,6 +5252,12 @@ class ImageViewerWindow(QMainWindow):
 
             self.load_channel(0, my_network.edges, data = True)
 
+            try:
+                self.branch_dict[0] = self.branch_dict[1]
+                self.branch_dict[1] = None
+            except:
+                pass
+
             self.delete_channel(1, False)
 
             my_network.morph_proximity(search = [3,3], fastdil = True)
@@ -5213,14 +5274,14 @@ class ImageViewerWindow(QMainWindow):
         dialog = CentroidDialog(self)
         dialog.exec()
 
-    def show_dilate_dialog(self):
+    def show_dilate_dialog(self, args = None):
         """show the dilate dialog"""
-        dialog = DilateDialog(self)
+        dialog = DilateDialog(self, args)
         dialog.exec()
 
-    def show_erode_dialog(self):
+    def show_erode_dialog(self, args = None):
         """show the erode dialog"""
-        dialog = ErodeDialog(self)
+        dialog = ErodeDialog(self, args)
         dialog.exec()
 
     def show_hole_dialog(self):
@@ -5319,6 +5380,9 @@ class ImageViewerWindow(QMainWindow):
         dialog = ResizeDialog(self)
         dialog.exec()
 
+    def show_clean_dialog(self):
+        dialog = CleanDialog(self)
+        dialog.show()
 
     def show_properties_dialog(self):
         """Show the properties dialog"""
@@ -5617,6 +5681,7 @@ class ImageViewerWindow(QMainWindow):
             self.last_saved = os.path.dirname(directory)
             self.last_save_name = directory            
 
+            self.channel_data = [None] * 5
             if directory != "":
 
                 self.reset(network = True, xy_scale = 1, z_scale = 1, nodes = True, edges = True, network_overlay = True, id_overlay = True, update = False)
@@ -5696,6 +5761,8 @@ class ImageViewerWindow(QMainWindow):
                 "Error Loading Network 3D Object",
                 f"Failed to load Network 3D Object: {str(e)}"
             )
+
+
 
     def load_network(self):
         """Load in the network from a .xlsx (need to add .csv support)"""
@@ -5917,6 +5984,16 @@ class ImageViewerWindow(QMainWindow):
         msg.setStandardButtons(QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No)
         return msg.exec() == QMessageBox.StandardButton.Yes
 
+    def confirm_multichan_dialog(self):
+        """Shows a dialog asking user to confirm if image is multichan"""
+        msg = QMessageBox()
+        msg.setIcon(QMessageBox.Icon.Question)
+        msg.setText("Image Format Alert")
+        msg.setInformativeText("Is this a Multi-Channel (4D) image?")
+        msg.setWindowTitle("Confirm Image Format")
+        msg.setStandardButtons(QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No)
+        return msg.exec() == QMessageBox.StandardButton.Yes
+
     def confirm_resize_dialog(self):
         """Shows a dialog asking user to resize image"""
         msg = QMessageBox()
@@ -5927,12 +6004,41 @@ class ImageViewerWindow(QMainWindow):
         msg.setStandardButtons(QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No)
         return msg.exec() == QMessageBox.StandardButton.Yes
 
-    def load_channel(self, channel_index, channel_data=None, data=False, assign_shape = True, preserve_zoom = None, end_paint = False, begin_paint = False, color = False):
+    def get_scaling_metadata_only(self, filename):
+        # This only reads headers/metadata, not image data
+        with tifffile.TiffFile(filename) as tif:
+            x_scale = y_scale = z_scale = unit = None
+            
+            # ImageJ metadata (very lightweight)
+            if hasattr(tif, 'imagej_metadata') and tif.imagej_metadata:
+                metadata = tif.imagej_metadata
+                z_scale = metadata.get('spacing')
+                unit = metadata.get('unit')
+            
+            # TIFF tags (also lightweight - just header info)
+            page = tif.pages[0]  # This doesn't load image data
+            tags = page.tags
+            
+            if 'XResolution' in tags:
+                x_res = tags['XResolution'].value
+                x_scale = x_res[1] / x_res[0] if isinstance(x_res, tuple) else 1.0 / x_res
+                
+            if 'YResolution' in tags:
+                y_res = tags['YResolution'].value
+                y_scale = y_res[1] / y_res[0] if isinstance(y_res, tuple) else 1.0 / y_res
+        
+        if x_scale is None:
+            x_scale = 1
+        if z_scale is None:
+            z_scale = 1
+
+        return x_scale, z_scale
+
+    def load_channel(self, channel_index, channel_data=None, data=False, assign_shape = True, preserve_zoom = None, end_paint = False, begin_paint = False, color = False, load_highlight = False):
         """Load a channel and enable active channel selection if needed."""
 
         try:
 
-            self.hold_update = True
             if not data:  # For solo loading
                 filename, _ = QFileDialog.getOpenFileName(
                     self,
@@ -5952,7 +6058,18 @@ class ImageViewerWindow(QMainWindow):
                 try:
                     if file_extension in ['tif', 'tiff']:
                         import tifffile
-                        self.channel_data[channel_index] = tifffile.imread(filename)
+                        self.channel_data[channel_index] = None
+                        if (self.channel_data[0] is None and self.channel_data[1] is None) and (channel_index == 0 or channel_index == 1):
+                            try:
+                                my_network.xy_scale, my_network.z_scale = self.get_scaling_metadata_only(filename)
+                                print(f"xy_scale property set to {my_network.xy_scale}; z_scale property set to {my_network.z_scale}")
+                            except:
+                                pass
+                        test_channel_data = tifffile.imread(filename)
+                        if len(test_channel_data.shape) not in (2, 3, 4):
+                            print("Invalid Shape")
+                            return 
+                        self.channel_data[channel_index] = test_channel_data
 
                     elif file_extension == 'nii':
                         import nibabel as nib
@@ -6000,7 +6117,7 @@ class ImageViewerWindow(QMainWindow):
             try:
                 if len(self.channel_data[channel_index].shape) == 3:  # potentially 2D RGB
                     if self.channel_data[channel_index].shape[-1] in (3, 4):  # last dim is 3 or 4
-                        if not data and self.shape is None:
+                        if not data:
                             if self.confirm_rgb_dialog():
                                 # User confirmed it's 2D RGB, expand to 4D
                                 self.channel_data[channel_index] = np.expand_dims(self.channel_data[channel_index], axis=0)
@@ -6010,12 +6127,18 @@ class ImageViewerWindow(QMainWindow):
             except:
                 pass
 
-            if not color:
-                try:
-                    if len(self.channel_data[channel_index].shape) == 4 and (channel_index == 0 or channel_index == 1):
+            if len(self.channel_data[channel_index].shape) == 4:
+                if not self.channel_data[channel_index].shape[-1] in (3, 4):
+                    if self.confirm_multichan_dialog(): # User is trying to load 4D channel stack:
+                        my_data = copy.deepcopy(self.channel_data[channel_index])
+                        self.channel_data[channel_index] = None 
+                        self.show_multichan_dialog(data = my_data)
+                        return
+                elif not color and (channel_index == 0 or channel_index == 1):
+                    try:
                         self.channel_data[channel_index] = self.reduce_rgb_dimension(self.channel_data[channel_index], 'weight')
-                except:
-                    pass
+                    except:
+                        pass
 
             reset_resize = False
 
@@ -6051,51 +6174,52 @@ class ImageViewerWindow(QMainWindow):
                     my_network.id_overlay = self.channel_data[channel_index]
             
             # Enable the channel button
-            self.channel_buttons[channel_index].setEnabled(True)
-            self.delete_buttons[channel_index].setEnabled(True) 
+            if channel_index != 4:
+                self.channel_buttons[channel_index].setEnabled(True)
+                self.delete_buttons[channel_index].setEnabled(True) 
 
             
-            # Enable active channel selector if this is the first channel loaded
-            if not self.active_channel_combo.isEnabled():
-                self.active_channel_combo.setEnabled(True)
+                # Enable active channel selector if this is the first channel loaded
+                if not self.active_channel_combo.isEnabled():
+                    self.active_channel_combo.setEnabled(True)
             
-            # Update slider range if this is the first channel loaded
-            try:
-                if len(self.channel_data[channel_index].shape) == 3 or len(self.channel_data[channel_index].shape) == 4:
-                    if not self.slice_slider.isEnabled():
-                        self.slice_slider.setEnabled(True)
-                        self.slice_slider.setMinimum(0)
-                        self.slice_slider.setMaximum(self.channel_data[channel_index].shape[0] - 1)
-                        if self.slice_slider.value() < self.channel_data[channel_index].shape[0] - 1:
-                            self.current_slice = self.slice_slider.value()
+                # Update slider range if this is the first channel loaded
+                try:
+                    if len(self.channel_data[channel_index].shape) == 3 or len(self.channel_data[channel_index].shape) == 4:
+                        if not self.slice_slider.isEnabled():
+                            self.slice_slider.setEnabled(True)
+                            self.slice_slider.setMinimum(0)
+                            self.slice_slider.setMaximum(self.channel_data[channel_index].shape[0] - 1)
+                            if self.slice_slider.value() < self.channel_data[channel_index].shape[0] - 1:
+                                self.current_slice = self.slice_slider.value()
+                            else:
+                                self.slice_slider.setValue(0)
+                                self.current_slice = 0
                         else:
-                            self.slice_slider.setValue(0)
-                            self.current_slice = 0
+                            self.slice_slider.setEnabled(True)
+                            self.slice_slider.setMinimum(0)
+                            self.slice_slider.setMaximum(self.channel_data[channel_index].shape[0] - 1)
+                            if self.slice_slider.value() < self.channel_data[channel_index].shape[0] - 1:
+                                self.current_slice = self.slice_slider.value()
+                            else:
+                                self.current_slice = 0
+                                self.slice_slider.setValue(0)
                     else:
-                        self.slice_slider.setEnabled(True)
-                        self.slice_slider.setMinimum(0)
-                        self.slice_slider.setMaximum(self.channel_data[channel_index].shape[0] - 1)
-                        if self.slice_slider.value() < self.channel_data[channel_index].shape[0] - 1:
-                            self.current_slice = self.slice_slider.value()
-                        else:
-                            self.current_slice = 0
-                            self.slice_slider.setValue(0)
-                else:
-                    self.slice_slider.setEnabled(False)
-            except:
-                pass
+                        self.slice_slider.setEnabled(False)
+                except:
+                    pass
 
-            
-            # If this is the first channel loaded, make it active
-            if all(not btn.isEnabled() for btn in self.channel_buttons[:channel_index]):
-                self.set_active_channel(channel_index)
+                
+                # If this is the first channel loaded, make it active
+                if all(not btn.isEnabled() for btn in self.channel_buttons[:channel_index]):
+                    self.set_active_channel(channel_index)
 
-            if not self.channel_buttons[channel_index].isChecked():
-                self.channel_buttons[channel_index].click()
+                if not self.channel_buttons[channel_index].isChecked():
+                    self.channel_buttons[channel_index].click()
 
-            self.min_max[channel_index][0] = np.min(self.channel_data[channel_index])
-            self.min_max[channel_index][1] = np.max(self.channel_data[channel_index])
-            self.volume_dict[channel_index] = None #reset volumes
+                self.min_max[channel_index][0] = np.min(self.channel_data[channel_index])
+                self.min_max[channel_index][1] = np.max(self.channel_data[channel_index])
+                self.volume_dict[channel_index] = None #reset volumes
 
             try:
                 if assign_shape: #keep original shape tracked to undo resampling.
@@ -6110,7 +6234,11 @@ class ImageViewerWindow(QMainWindow):
 
             if self.shape == self.channel_data[channel_index].shape:
                 preserve_zoom = (self.ax.get_xlim(), self.ax.get_ylim())
-            self.shape = (self.channel_data[channel_index].shape[0], self.channel_data[channel_index].shape[1], self.channel_data[channel_index].shape[2])
+                self.shape = (self.channel_data[channel_index].shape[0], self.channel_data[channel_index].shape[1], self.channel_data[channel_index].shape[2])
+            else:
+                self.shape = (self.channel_data[channel_index].shape[0], self.channel_data[channel_index].shape[1], self.channel_data[channel_index].shape[2])
+                ylim, xlim = (self.shape[1] + 0.5, -0.5), (-0.5, self.shape[2] - 0.5)
+                preserve_zoom = (xlim, ylim)
             if self.shape[1] * self.shape[2] > 3000 * 3000 * self.downsample_factor:
                 self.throttle = True
             else:
@@ -6118,8 +6246,6 @@ class ImageViewerWindow(QMainWindow):
 
 
             self.img_height, self.img_width = self.shape[1], self.shape[2]
-            self.original_ylim, self.original_xlim = (self.shape[1] + 0.5, -0.5), (-0.5, self.shape[2] - 0.5)
-            #print(self.original_xlim)
 
             self.completed_paint_strokes = [] #Reset pending paint operations
             self.current_stroke_points = []
@@ -6129,6 +6255,12 @@ class ImageViewerWindow(QMainWindow):
             self.current_operation = []
             self.current_operation_type = None
 
+            if load_highlight:
+                self.highlight_overlay = n3d.binarize(self.channel_data[4].astype(np.uint8))
+                self.mini_overlay_data = None
+                self.mini_overlay = False
+                self.channel_data[4] = None
+
             if self.pan_mode:
                 self.pan_button.click()
                 if self.show_channels:
@@ -6137,7 +6269,6 @@ class ImageViewerWindow(QMainWindow):
             elif not end_paint:
 
                 self.update_display(reset_resize = reset_resize, preserve_zoom = preserve_zoom)
-
                 
         except Exception as e:
 
@@ -6146,7 +6277,7 @@ class ImageViewerWindow(QMainWindow):
                 QMessageBox.critical(
                     self,
                     "Error Loading File",
-                    f"Failed to load tiff file: {str(e)}"
+                    f"Failed to load file: {str(e)}"
                 )
 
     def delete_channel(self, channel_index, called = True, update = True):
@@ -6375,15 +6506,13 @@ class ImageViewerWindow(QMainWindow):
                 self.pm.convert_virtual_strokes_to_data()
             self.current_slice = slice_value
             if self.preview:
+                 self.highlight_overlay = None
+                 self.mini_overlay_data = None
+                 self.mini_overlay = False
                  self.create_highlight_overlay_slice(self.targs, bounds=self.bounds)
             elif self.mini_overlay == True: #If we are rendering the highlight overlay for selected values one at a time.
                 self.create_mini_overlay(node_indices = self.clicked_values['nodes'], edge_indices = self.clicked_values['edges'])
-            if not self.hold_update:
-                self.update_display(preserve_zoom=view_settings)
-            else:
-                self.hold_update = False
-            #if self.machine_window is not None:
-                #self.machine_window.poke_segmenter()
+            self.update_display(preserve_zoom=view_settings)
             if self.pan_mode:
                 self.pan_button.click()
             self.pending_slice = None
@@ -6399,7 +6528,6 @@ class ImageViewerWindow(QMainWindow):
         self.channel_brightness[channel_index]['min'] = min_val / 65535 
         self.channel_brightness[channel_index]['max'] = max_val / 65535
         self.update_display(preserve_zoom = (current_xlim, current_ylim))
-
 
     def update_display(self, preserve_zoom=None, dims=None, called=False, reset_resize=False, skip=False):
         """Optimized display update with view-based cropping for performance."""
@@ -6626,7 +6754,7 @@ class ImageViewerWindow(QMainWindow):
             # Handle preview, overlays, and measurements (apply cropping here too)
 
             # Overlay handling (optimized with cropping and downsampling)
-            if self.mini_overlay and self.highlight and self.machine_window is None:
+            if self.mini_overlay and self.highlight and self.machine_window is None and not self.preview:
                 highlight_cmap = LinearSegmentedColormap.from_list('highlight', [(0, 0, 0, 0), (1, 1, 0, 1)])
                 display_overlay = crop_and_downsample_image(
                     self.mini_overlay_data, y_min_padded, y_max_padded, 
@@ -6751,10 +6879,6 @@ class ImageViewerWindow(QMainWindow):
 
         except Exception as e:
             pass
-            #import traceback
-            #print(traceback.format_exc())
-
-
 
 
     def get_channel_image(self, channel):
@@ -8432,6 +8556,89 @@ class MergeNodeIdDialog(QDialog):
             print(traceback.format_exc())
             #print(f"Error: {e}")
 
+class MultiChanDialog(QDialog):
+
+    def __init__(self, parent=None, data = None):
+
+        super().__init__(parent)
+        self.setWindowTitle("Channel Loading")
+        self.setModal(False)
+        
+        layout = QFormLayout(self)
+
+        self.data = data
+
+        self.nodes = QComboBox()
+        self.edges = QComboBox()
+        self.overlay1 = QComboBox()
+        self.overlay2 = QComboBox()
+        options = ["None"]
+        for i in range(self.data.shape[0]):
+            options.append(str(i))
+        self.nodes.addItems(options)
+        self.edges.addItems(options)
+        self.overlay1.addItems(options)
+        self.overlay2.addItems(options)
+        self.nodes.setCurrentIndex(0)
+        self.edges.setCurrentIndex(0)
+        self.overlay1.setCurrentIndex(0)
+        self.overlay2.setCurrentIndex(0)
+        layout.addRow("Load this channel into nodes?", self.nodes)
+        layout.addRow("Load this channel into edges?", self.edges)
+        layout.addRow("Load this channel into overlay1?", self.overlay1)
+        layout.addRow("Load this channel into overlay2?", self.overlay2)
+
+        run_button = QPushButton("Load Channels")
+        run_button.clicked.connect(self.run)
+        layout.addWidget(run_button)
+
+        run_button2 = QPushButton("Save Channels to Directory")
+        run_button2.clicked.connect(self.run2)
+        layout.addWidget(run_button2)
+
+
+    def run(self):
+
+        try:
+            node_chan = int(self.nodes.currentText())
+            self.parent().load_channel(0, self.data[node_chan, :, :, :], data = True)
+        except:
+            pass
+        try:
+            edge_chan = int(self.edges.currentText())
+            self.parent().load_channel(1, self.data[edge_chan, :, :, :], data = True)
+        except:
+            pass
+        try:
+            overlay1_chan = int(self.overlay1.currentText())
+            self.parent().load_channel(2, self.data[overlay1_chan, :, :, :], data = True)
+        except:
+            pass
+        try:
+            overlay2_chan = int(self.overlay2.currentText())
+            self.parent().load_channel(3, self.data[overlay2_chan, :, :, :], data = True)
+        except:
+            pass
+
+    def run2(self):
+
+        try:
+            # First let user select parent directory
+            parent_dir = QFileDialog.getExistingDirectory(
+                self,
+                "Select Location to Save Channels",
+                "",
+                QFileDialog.Option.ShowDirsOnly
+            )
+
+            for i in range(self.data.shape[0]):
+                try:
+                    tifffile.imwrite(f'{parent_dir}/C{i}.tif', self.data[i, :, :, :])
+                except:
+                    continue
+        except:
+            pass
+
 
 class Show3dDialog(QDialog):
     def __init__(self, parent=None):
@@ -8499,6 +8706,9 @@ class Show3dDialog(QDialog):
                         if visible:
                             arrays_4d.append(channel)
 
+            if self.parent().thresh_window_ref is not None:
+                self.parent().thresh_window_ref.make_full_highlight()
+
             if self.parent().highlight_overlay is not None or self.parent().mini_overlay_data is not None:
                 if self.parent().mini_overlay == True:
                     self.parent().create_highlight_overlay(node_indices = self.parent().clicked_values['nodes'], edge_indices = self.parent().clicked_values['edges'])
@@ -8510,6 +8720,11 @@ class Show3dDialog(QDialog):
             self.accept()
 
         except Exception as e:
+            QMessageBox.critical(
+                self,
+                "Error",
+                f"Error showing 3D: {str(e)}\nNote: You may need to install napari first - in your environment, please call 'pip install napari'"
+            )
             print(f"Error: {e}")
             import traceback
             print(traceback.format_exc())
@@ -8524,6 +8739,9 @@ class NetOverlayDialog(QDialog):
         self.setModal(True)
 
         layout = QFormLayout(self)
+
+        self.downsample = QLineEdit("")
+        layout.addRow("Downsample Factor While Drawing? (Int - Makes the outputted lines larger):", self.downsample)
 
         # Add Run button
         run_button = QPushButton("Generate (Will go to Overlay 1)")
@@ -8541,7 +8759,16 @@ class NetOverlayDialog(QDialog):
             if my_network.node_centroids is None:
                 return
 
-            my_network.network_overlay = my_network.draw_network()
+            try:
+                downsample = float(self.downsample.text()) if self.downsample.text() else None
+            except ValueError:
+                downsample = None
+
+            my_network.network_overlay = my_network.draw_network(down_factor = downsample)
+
+            if downsample is not None: 
+                my_network.network_overlay = n3d.upsample_with_padding(my_network.network_overlay, original_shape = self.parent().shape)
+
 
             self.parent().load_channel(2, channel_data = my_network.network_overlay, data = True, preserve_zoom = (self.parent().ax.get_xlim(), self.parent().ax.get_ylim()))
 
@@ -8568,6 +8795,9 @@ class IdOverlayDialog(QDialog):
         self.mode_selector.setCurrentIndex(0)  # Default to Mode 1
         layout.addRow("Execution Mode:", self.mode_selector)
 
+        self.downsample = QLineEdit("")
+        layout.addRow("Downsample Factor While Drawing? (Int - Makes the outputted numbers larger):", self.downsample)
+
         # Add Run button
         run_button = QPushButton("Generate (Will go to Overlay 2)")
         run_button.clicked.connect(self.idoverlay)
@@ -8577,6 +8807,11 @@ class IdOverlayDialog(QDialog):
 
         accepted_mode = self.mode_selector.currentIndex()
 
+        try:
+            downsample = float(self.downsample.text()) if self.downsample.text() else None
+        except ValueError:
+            downsample = None
+
         if accepted_mode == 0:
 
             if my_network.node_centroids is None:
@@ -8597,12 +8832,14 @@ class IdOverlayDialog(QDialog):
 
         if accepted_mode == 0:
 
-            my_network.id_overlay = my_network.draw_node_indices()
+            my_network.id_overlay = my_network.draw_node_indices(down_factor = downsample)
 
         elif accepted_mode == 1:
 
-            my_network.id_overlay = my_network.draw_edge_indices()
+            my_network.id_overlay = my_network.draw_edge_indices(down_factor = downsample)
 
+        if downsample is not None:
+            my_network.id_overlay = n3d.upsample_with_padding(my_network.id_overlay, original_shape = self.parent().shape)
 
         self.parent().load_channel(3, channel_data = my_network.id_overlay, data = True, preserve_zoom = (self.parent().ax.get_xlim(), self.parent().ax.get_ylim()))
 
@@ -8628,7 +8865,7 @@ class ColorOverlayDialog(QDialog):
         layout.addRow("Execution Mode:", self.mode_selector)
 
         self.down_factor = QLineEdit("")
-        layout.addRow("down_factor (for speeding up overlay generation - optional):", self.down_factor)
+        layout.addRow("down_factor (int - for speeding up overlay generation - optional):", self.down_factor)
 
         # Add Run button
         run_button = QPushButton("Generate (Will go to Overlay 2)")
@@ -9926,6 +10163,22 @@ class InteractionDialog(QDialog):
         self.mode_selector.setCurrentIndex(0)  # Default to Mode 1
         layout.addRow("Execution Mode:", self.mode_selector)
 
+        self.length = QPushButton("Return Lengths")
+        self.length.setCheckable(True)
+        self.length.setChecked(False)
+        layout.addRow("(Will Skeletonize the Edge Mirror and use that to calculate adjacent length of edges, as opposed to default volumes):", self.length)
+
+        self.auto = QPushButton("Auto")
+        self.auto.setCheckable(True)
+        try:
+            if self.parent().shape[0] == 1:
+                self.auto.setChecked(False)
+            else:
+                self.auto.setChecked(True)
+        except:
+            self.auto.setChecked(False)
+        layout.addRow("(If Above): Attempt to Auto Correct Skeleton Looping:", self.auto)
+
         self.fastdil = QPushButton("Fast Dilate")
         self.fastdil.setCheckable(True)
         self.fastdil.setChecked(False)
@@ -9949,10 +10202,16 @@ class InteractionDialog(QDialog):
                 
 
             fastdil = self.fastdil.isChecked()
+            length = self.length.isChecked()
+            auto = self.auto.isChecked()
 
-            result = my_network.interactions(search = node_search, cores = accepted_mode, fastdil = fastdil)
+            result = my_network.interactions(search = node_search, cores = accepted_mode, skele = length, length = length, auto = auto, fastdil = fastdil)
 
-            self.parent().format_for_upperright_table(result, 'Node ID', ['Volume of Nearby Edge (Scaled)', 'Volume of Search Region'], title = 'Node/Edge Interactions')
+            if not length:
+                self.parent().format_for_upperright_table(result, 'Node ID', ['Volume of Nearby Edge (Scaled)', 'Volume of Search Region (Scaled)'], title = 'Node/Edge Interactions')
+            else:
+                self.parent().format_for_upperright_table(result, 'Node ID', ['~Length of Nearby Edge (Scaled)', 'Volume of Search Region (Scaled)'], title = 'Node/Edge Interactions')
+
 
             self.accept()
 
@@ -10192,38 +10451,44 @@ class ViolinDialog(QDialog):
 
         from . import neighborhoods
 
-        if self.idens.currentIndex() != 0:
+        try:
 
-            iden = self.idens.currentText()
-            iden_list = []
-            import ast
+            if self.idens.currentIndex() != 0:
 
-            for item in my_network.node_identities:
+                iden = self.idens.currentText()
+                iden_list = []
+                import ast
 
-                try:
-                    parse = ast.literal_eval(my_network.node_identities[item])
-                    if iden in parse:
-                        iden_list.append(item)
-                except:
-                    if (iden == my_network.node_identities[item]):
-                        iden_list.append(item)
+                for item in my_network.node_identities:
 
-            violin_dict = df_to_dict_by_rows(self.df, iden_list, f"Z-Score-like Channel Intensities of Identity {iden}, {len(iden_list)} Nodes")
+                    try:
+                        parse = ast.literal_eval(my_network.node_identities[item])
+                        if iden in parse:
+                            iden_list.append(item)
+                    except:
+                        if (iden == my_network.node_identities[item]):
+                            iden_list.append(item)
 
-            neighborhoods.create_violin_plots(violin_dict, graph_title=f"Z-Score-like Channel Intensities of Identity {iden}, {len(iden_list)} Nodes")
+                violin_dict = df_to_dict_by_rows(self.df, iden_list, f"Z-Score-like Channel Intensities of Identity {iden}, {len(iden_list)} Nodes")
 
+                neighborhoods.create_violin_plots(violin_dict, graph_title=f"Z-Score-like Channel Intensities of Identity {iden}, {len(iden_list)} Nodes")
+        except:
+            pass
 
-        if self.coms.currentIndex() != 0:
+        try:
+            if self.coms.currentIndex() != 0:
 
-            com = self.coms.currentText()
+                com = self.coms.currentText()
 
-            com_dict = n3d.invert_dict(my_network.communities)
+                com_dict = n3d.invert_dict(my_network.communities)
 
-            com_list = com_dict[int(com)]
+                com_list = com_dict[int(com)]
 
-            violin_dict = df_to_dict_by_rows(self.df, com_list, f"Z-Score-like Channel Intensities of Community/Neighborhood {com}, {len(com_list)} Nodes")
+                violin_dict = df_to_dict_by_rows(self.df, com_list, f"Z-Score-like Channel Intensities of Community/Neighborhood {com}, {len(com_list)} Nodes")
 
-            neighborhoods.create_violin_plots(violin_dict, graph_title=f"Z-Score-like Channel Intensities of Community/Neighborhood {com}, {len(com_list)} Nodes")
+                neighborhoods.create_violin_plots(violin_dict, graph_title=f"Z-Score-like Channel Intensities of Community/Neighborhood {com}, {len(com_list)} Nodes")
+        except:
+            pass
 
 
     def run2(self):
@@ -10507,6 +10772,9 @@ class MotherDialog(QDialog):
             self.accept()
 
         except Exception as e:
+
+            import traceback
+            print(traceback.format_exc())
 
             print(f"Error finding mothers: {e}")
 
@@ -10821,6 +11089,79 @@ class ResizeDialog(QDialog):
             import traceback
             print(traceback.format_exc())
             QMessageBox.critical(self, "Error", f"Failed to resize: {str(e)}")
+
+class CleanDialog(QDialog):
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle("Some options for cleaning segmentation")
+        self.setModal(False)
+
+        layout = QFormLayout(self)
+
+        # Add Run button
+        run_button = QPushButton("Close")
+        run_button.clicked.connect(self.close)
+        layout.addRow("Close (Fill Small Gaps - Dilate then Erode by same amount):", run_button)
+
+        # Add Run button
+        run_button = QPushButton("Open")
+        run_button.clicked.connect(self.open)
+        layout.addRow("Open (Eliminate Noise, Jagged Borders, and Small Connections Between Objects - Erode then Dilate by same amount):", run_button)
+
+        # Add Run button
+        run_button = QPushButton("Fill Holes")
+        run_button.clicked.connect(self.holes)
+        layout.addRow("Call the fill holes function:", run_button)
+
+        # Add Run button
+        run_button = QPushButton("Threshold Noise")
+        run_button.clicked.connect(self.thresh)
+        layout.addRow("Threshold Noise By Volume:", run_button)
+
+    def close(self):
+
+        try:
+            self.parent().show_dilate_dialog(args = [1])
+            self.parent().show_erode_dialog(args = [self.parent().last_dil])
+        except:
+            pass
+
+    def open(self):
+
+        try:
+            self.parent().show_erode_dialog(args = [1])
+            self.parent().show_dilate_dialog(args = [self.parent().last_ero])
+        except:
+            pass
+
+    def holes(self):
+
+        try:
+            self.parent().show_hole_dialog()
+        except:
+            pass
+
+    def thresh(self):
+        try:
+            if len(np.unique(self.parent().channel_data[self.parent().active_channel])) < 3:
+                self.parent().show_label_dialog()
+
+            if self.parent().volume_dict[self.parent().active_channel] is None:
+                self.parent().volumes()
+
+            thresh_window = ThresholdWindow(self.parent(), 1)
+            thresh_window.show()  # Non-modal window
+            self.parent().highlight_overlay = None
+            #self.mini_overlay = False
+            self.parent().mini_overlay_data = None
+        except:
+            import traceback
+            print(traceback.format_exc())
+            pass
+
+
+
+
 
 
 class OverrideDialog(QDialog):
@@ -11195,12 +11536,11 @@ class ThresholdDialog(QDialog):
                     print("Error - please calculate network first")
                     return
 
-            if self.parent().mini_overlay_data is not None:
-                self.parent().mini_overlay_data = None
-
             thresh_window = ThresholdWindow(self.parent(), accepted_mode)
             thresh_window.show()  # Non-modal window
             self.highlight_overlay = None
+            #self.mini_overlay = False
+            self.mini_overlay_data = None
             self.accept()
         except:
             import traceback
@@ -12133,6 +12473,7 @@ class ThresholdWindow(QMainWindow):
 
     def __init__(self, parent=None, accepted_mode=0):
         super().__init__(parent)
+        self.parent().thresh_window_ref = self
         self.setWindowTitle("Threshold")
 
         self.accepted_mode = accepted_mode
@@ -12174,16 +12515,23 @@ class ThresholdWindow(QMainWindow):
             self.parent().bounds = False
 
         elif accepted_mode == 0:
-            targ_shape = self.parent().channel_data[self.parent().active_channel].shape
-            if (targ_shape[0] + targ_shape[1] + targ_shape[2]) > 2500: #Take a simpler histogram on big arrays
-                temp_max = np.max(self.parent().channel_data[self.parent().active_channel])
-                temp_min = np.min(self.parent().channel_data[self.parent().active_channel])
-                temp_array = n3d.downsample(self.parent().channel_data[self.parent().active_channel], 5)
-                self.histo_list = temp_array.flatten().tolist()
-                self.histo_list.append(temp_min)
-                self.histo_list.append(temp_max)
-            else: #Otherwise just use full array data
-                self.histo_list = self.parent().channel_data[self.parent().active_channel].flatten().tolist()
+            data = self.parent().channel_data[self.parent().active_channel]
+            nonzero_data = data[data != 0]
+
+            if nonzero_data.size > 578009537:
+                # For large arrays, use numpy histogram directly
+                counts, bin_edges = np.histogram(nonzero_data, bins= min(int(np.sqrt(nonzero_data.size)), 500), density=False)
+                # Store min/max separately if needed elsewhere
+                self.data_min = np.min(nonzero_data)
+                self.data_max = np.max(nonzero_data)
+                self.histo_list = [self.data_min, self.data_max]
+            else:
+                # For smaller arrays, can still use histogram method for consistency
+                counts, bin_edges = np.histogram(nonzero_data, bins='auto', density=False)
+                self.data_min = np.min(nonzero_data)
+                self.data_max = np.max(nonzero_data)
+                self.histo_list = [self.data_min, self.data_max]
+            
             self.bounds = True
             self.parent().bounds = True
 
@@ -12196,16 +12544,26 @@ class ThresholdWindow(QMainWindow):
         layout.addWidget(self.canvas)
         
         # Pre-compute histogram with numpy
-        counts, bin_edges = np.histogram(self.histo_list, bins=50)
-        bin_centers = (bin_edges[:-1] + bin_edges[1:]) / 2
+        if accepted_mode != 0:
+            counts, bin_edges = np.histogram(self.histo_list, bins=50)
+            bin_centers = (bin_edges[:-1] + bin_edges[1:]) / 2
+                    # Store histogram bounds
+            if self.bounds:
+                self.data_min = 0
+            else:
+                self.data_min = min(self.histo_list)
+            self.data_max = max(self.histo_list)
+        else:
+            bin_centers = (bin_edges[:-1] + bin_edges[1:]) / 2
+            bin_width = bin_edges[1] - bin_edges[0]
         
         # Plot pre-computed histogram
         self.ax = fig.add_subplot(111)
         self.ax.bar(bin_centers, counts, width=bin_edges[1] - bin_edges[0], alpha=0.5)
         
         # Add vertical lines for thresholds
-        self.min_line = self.ax.axvline(min(self.histo_list), color='r')
-        self.max_line = self.ax.axvline(max(self.histo_list), color='b')
+        self.min_line = self.ax.axvline(self.data_min, color='r')
+        self.max_line = self.ax.axvline(self.data_max, color='b')
         
         # Connect events for dragging
         self.canvas.mpl_connect('button_press_event', self.on_press)
@@ -12213,13 +12571,6 @@ class ThresholdWindow(QMainWindow):
         self.canvas.mpl_connect('button_release_event', self.on_release)
         
         self.dragging = None
-        
-        # Store histogram bounds
-        if self.bounds:
-            self.data_min = 0
-        else:
-            self.data_min = min(self.histo_list)
-        self.data_max = max(self.histo_list)
 
         # Create form layout for inputs
         form_layout = QFormLayout()
@@ -12252,7 +12603,7 @@ class ThresholdWindow(QMainWindow):
         button_layout.addWidget(run_button)
         
         # Add Cancel button for external dialog use
-        cancel_button = QPushButton("Cancel/Skip")
+        cancel_button = QPushButton("Cancel/Skip (Retains Selection)")
         cancel_button.clicked.connect(self.cancel_processing)
         button_layout.addWidget(cancel_button)
         
@@ -12276,10 +12627,8 @@ class ThresholdWindow(QMainWindow):
         self.processing_cancelled.emit()
         self.close()
 
-    def closeEvent(self, event):
-        self.parent().preview = False
-        self.parent().targs = None
-        self.parent().bounds = False
+    def make_full_highlight(self):
+
         try: # could probably be refactored but this just handles keeping the highlight elements if the user presses X
             if self.chan == 0:
                 if not self.bounds:
@@ -12311,6 +12660,14 @@ class ThresholdWindow(QMainWindow):
                     )
         except:
             pass
+
+
+    def closeEvent(self, event):
+        self.parent().preview = False
+        self.parent().targs = None
+        self.parent().bounds = False
+        self.parent().thresh_window_ref = None
+        self.make_full_highlight()
 
 
     def get_values_in_range_all_vols(self, chan, min_val, max_val):
@@ -12579,14 +12936,21 @@ class SmartDilateDialog(QDialog):
 
 
 class DilateDialog(QDialog):
-    def __init__(self, parent=None):
+    def __init__(self, parent=None, args = None):
         super().__init__(parent)
         self.setWindowTitle("Dilate Parameters")
         self.setModal(True)
         
         layout = QFormLayout(self)
 
-        self.amount = QLineEdit("1")
+        if args:
+            self.parent().last_dil = args[0]
+            self.index = 1
+        else:
+            self.parent().last_dil = 1
+            self.index = 0
+
+        self.amount = QLineEdit(f"{self.parent().last_dil}")
         layout.addRow("Dilation Radius:", self.amount)
 
         if my_network.xy_scale is not None:
@@ -12607,8 +12971,8 @@ class DilateDialog(QDialog):
 
         # Add mode selection dropdown
         self.mode_selector = QComboBox()
-        self.mode_selector.addItems(["Pseudo3D Binary Kernels (For Fast, small dilations)", "Preserve Labels (slower)", "Distance Transform-Based (Slower but more accurate at larger dilations)"])
-        self.mode_selector.setCurrentIndex(0)  # Default to Mode 1
+        self.mode_selector.addItems(["Distance Transform-Based (Slower but more accurate at larger dilations)", "Preserve Labels (slower)", "Pseudo3D Binary Kernels (For Fast, small dilations)"])
+        self.mode_selector.setCurrentIndex(self.index)  # Default to Mode 1
         layout.addRow("Execution Mode:", self.mode_selector)
 
        # Add Run button
@@ -12650,13 +13014,15 @@ class DilateDialog(QDialog):
             if active_data is None:
                 raise ValueError("No active image selected")
 
+            self.parent().last_dil = amount
+
             if accepted_mode == 1:
                 dialog = SmartDilateDialog(self.parent(), [active_data, amount, xy_scale, z_scale])
                 dialog.exec()
                 self.accept()
                 return
 
-            if accepted_mode == 2:
+            if accepted_mode == 0:
                 result = n3d.dilate_3D_dt(active_data, amount, xy_scaling = xy_scale, z_scaling = z_scale)
             else:
 
@@ -12686,14 +13052,21 @@ class DilateDialog(QDialog):
             )
 
 class ErodeDialog(QDialog):
-    def __init__(self, parent=None):
+    def __init__(self, parent=None, args = None):
         super().__init__(parent)
         self.setWindowTitle("Erosion Parameters")
         self.setModal(True)
         
         layout = QFormLayout(self)
 
-        self.amount = QLineEdit("1")
+        if args:
+            self.parent().last_ero = args[0]
+            self.index = 1
+        else:
+            self.parent().last_ero = 1
+            self.index = 0
+
+        self.amount = QLineEdit(f"{self.parent().last_ero}")
         layout.addRow("Erosion Radius:", self.amount)
 
         if my_network.xy_scale is not None:
@@ -12714,8 +13087,8 @@ class ErodeDialog(QDialog):
 
         # Add mode selection dropdown
         self.mode_selector = QComboBox()
-        self.mode_selector.addItems(["Pseudo3D Binary Kernels (For Fast, small erosions)", "Distance Transform-Based (Slower but more accurate at larger dilations)", "Preserve Labels (Slower)"])
-        self.mode_selector.setCurrentIndex(0)  # Default to Mode 1
+        self.mode_selector.addItems(["Distance Transform-Based (Slower but more accurate at larger erosions)", "Preserve Labels (Slower)", "Pseudo3D Binary Kernels (For Fast, small erosions)"])
+        self.mode_selector.setCurrentIndex(self.index)  # Default to Mode 1
         layout.addRow("Execution Mode:", self.mode_selector)
 
        # Add Run button
@@ -12751,8 +13124,7 @@ class ErodeDialog(QDialog):
 
             mode = self.mode_selector.currentIndex()
 
-            if mode == 2:
-                mode = 1
+            if mode == 1:
                 preserve_labels = True
             else:
                 preserve_labels = False
@@ -12774,7 +13146,7 @@ class ErodeDialog(QDialog):
 
 
             self.parent().load_channel(self.parent().active_channel, result, True, preserve_zoom = (self.parent().ax.get_xlim(), self.parent().ax.get_ylim()))
-
+            self.parent().last_ero = amount
             self.accept()
             
         except Exception as e:
@@ -12804,6 +13176,11 @@ class HoleDialog(QDialog):
         self.borders.setChecked(False)
         layout.addRow("Fill Small Holes Along Borders:", self.borders)
 
+        self.preserve_labels = QPushButton("Preserve Labels")
+        self.preserve_labels.setCheckable(True)
+        self.preserve_labels.setChecked(False)
+        layout.addRow("Preserve Labels (Slower):", self.preserve_labels)
+
         self.sep_holes = QPushButton("Seperate Hole Mask")
         self.sep_holes.setCheckable(True)
         self.sep_holes.setChecked(False)
@@ -12826,6 +13203,9 @@ class HoleDialog(QDialog):
             borders = self.borders.isChecked()
             headon = self.headon.isChecked()
             sep_holes = self.sep_holes.isChecked()
+            preserve_labels = self.preserve_labels.isChecked()
+            if preserve_labels:
+                label_copy = np.copy(active_data)
 
             if borders:
             
@@ -12844,7 +13224,11 @@ class HoleDialog(QDialog):
                     fill_borders = borders
                 )
 
+
             if not sep_holes:
+                if preserve_labels:
+                    result = sdl.smart_label(result, label_copy, directory = None, GPU = False, remove_template = True)
+
                 self.parent().load_channel(self.parent().active_channel, result, True)
             else:
                 self.parent().load_channel(3, active_data - result, True)
@@ -13838,7 +14222,6 @@ class GenNodesDialog(QDialog):
                 order = order,
                 return_skele = True,
                 fastdil = fastdil
-
             )
 
             if down_factor > 0 and not self.called:
@@ -13930,7 +14313,7 @@ class BranchDialog(QDialog):
             self.fix3.setChecked(True)
         else:
             self.fix3.setChecked(False)
-        correction_layout.addWidget(QLabel("Split Nontouching Branches? (Useful if branch pruning - may want to threshold out small, split branches after): "), 4, 0)
+        correction_layout.addWidget(QLabel("Split Nontouching Branches?: "), 4, 0)
         correction_layout.addWidget(self.fix3, 4, 1)
         
         correction_group.setLayout(correction_layout)
@@ -13958,20 +14341,27 @@ class BranchDialog(QDialog):
         # --- Misc Options Group ---
         misc_group = QGroupBox("Misc Options")
         misc_layout = QGridLayout()
+
+        # optional computation checkbox
+        self.compute = QPushButton("Branch Stats")
+        self.compute.setCheckable(True)
+        self.compute.setChecked(True)
+        misc_layout.addWidget(QLabel("Compute Branch Stats (Branch Lengths, Tortuosity. Set xy_scale and z_scale in properties first if real distances are desired.):"), 0, 0)
+        misc_layout.addWidget(self.compute, 0, 1)
         
         # Nodes checkbox
         self.nodes = QPushButton("Generate Nodes")
         self.nodes.setCheckable(True)
         self.nodes.setChecked(True)
-        misc_layout.addWidget(QLabel("Generate nodes from edges? (Skip if already completed):"), 0, 0)
-        misc_layout.addWidget(self.nodes, 0, 1)
+        misc_layout.addWidget(QLabel("Generate nodes from edges? (Skip if already completed):"), 1, 0)
+        misc_layout.addWidget(self.nodes, 1, 1)
         
         # GPU checkbox
         self.GPU = QPushButton("GPU")
         self.GPU.setCheckable(True)
         self.GPU.setChecked(False)
-        misc_layout.addWidget(QLabel("Use GPU (May downsample large images):"), 1, 0)
-        misc_layout.addWidget(self.GPU, 1, 1)
+        misc_layout.addWidget(QLabel("Use GPU (May downsample large images):"), 2, 0)
+        misc_layout.addWidget(self.GPU, 2, 1)
         
         misc_group.setLayout(misc_layout)
         main_layout.addWidget(misc_group)
@@ -14005,6 +14395,7 @@ class BranchDialog(QDialog):
             fix3 = self.fix3.isChecked()
             fix_val = float(self.fix_val.text()) if self.fix_val.text() else None
             seed = int(self.seed.text()) if self.seed.text() else None
+            compute = self.compute.isChecked()
 
             if my_network.edges is None and my_network.nodes is not None:
                 self.parent().load_channel(1, my_network.nodes, data = True)
@@ -14021,7 +14412,7 @@ class BranchDialog(QDialog):
 
             if my_network.edges is not None and my_network.nodes is not None and my_network.id_overlay is not None:
 
-                output = n3d.label_branches(my_network.edges, nodes = my_network.nodes, bonus_array = original_array, GPU = GPU, down_factor = down_factor, arrayshape = original_shape)
+                output, verts, skeleton, endpoints = n3d.label_branches(my_network.edges, nodes = my_network.nodes, bonus_array = original_array, GPU = GPU, down_factor = down_factor, arrayshape = original_shape, compute = compute, xy_scale = my_network.xy_scale, z_scale = my_network.z_scale)
 
                 if fix2:
 
@@ -14059,6 +14450,19 @@ class BranchDialog(QDialog):
                 if fix3:
 
                     output = self.parent().separate_nontouching_objects(output, max_val=np.max(output))
+
+                if compute:
+                    labeled_image = (skeleton != 0) * output
+                    len_dict, tortuosity_dict, angle_dict = n3d.compute_optional_branchstats(verts, labeled_image, endpoints, xy_scale = my_network.xy_scale, z_scale = my_network.z_scale)
+                    self.parent().branch_dict[1] = [len_dict, tortuosity_dict]
+                    #max_length = max(len(v) for v in angle_dict.values())
+                    #title = [str(i+1) if i < 2 else i+1 for i in range(max_length)]
+
+                    #del labeled_image
+
+                    self.parent().format_for_upperright_table(len_dict, 'BranchID', 'Length (Scaled)', 'Branch Lengths')
+                    self.parent().format_for_upperright_table(tortuosity_dict, 'BranchID', 'Tortuosity', 'Branch Tortuosities')
+                    #self.parent().format_for_upperright_table(angle_dict, 'Vertex ID', title, 'Branch Angles')
 
 
                 if down_factor is not None:
@@ -14645,7 +15049,7 @@ class CalcAllDialog(QDialog):
         
         self.down_factor = QLineEdit(self.prev_down_factor)
         self.down_factor.setPlaceholderText("Leave empty for None")
-        speedup_layout.addRow("Downsample for Centroids (int):", self.down_factor)
+        speedup_layout.addRow("Downsample for Centroids/Overlays (int):", self.down_factor)
         
         self.GPU_downsample = QLineEdit(self.prev_GPU_downsample)
         self.GPU_downsample.setPlaceholderText("Leave empty for None")
@@ -14803,8 +15207,12 @@ class CalcAllDialog(QDialog):
                     directory = 'my_network'
                 
                 # Generate and update overlays
-                my_network.network_overlay = my_network.draw_network(directory=directory)
-                my_network.id_overlay = my_network.draw_node_indices(directory=directory)
+                my_network.network_overlay = my_network.draw_network(directory=directory, down_factor = down_factor)
+                my_network.id_overlay = my_network.draw_node_indices(directory=directory, down_factor = down_factor)
+
+                if down_factor is not None:
+                    my_network.id_overlay = n3d.upsample_with_padding(my_network.id_overlay, original_shape = self.parent().shape)
+                    my_network.network_overlay = n3d.upsample_with_padding(my_network.network_overlay, original_shape = self.parent().shape)
                 
                 # Update channel data
                 self.parent().load_channel(2, my_network.network_overlay, True)
@@ -14925,6 +15333,9 @@ class ProxDialog(QDialog):
         self.overlays.setCheckable(True)
         self.overlays.setChecked(True)
         output_layout.addRow("Generate Overlays:", self.overlays)
+
+        self.downsample = QLineEdit()
+        output_layout.addRow("(If above): Downsample factor for drawing overlays (Int - Makes Overlay Elements Larger):", self.downsample)
         
         self.populate = QPushButton("Populate Nodes from Centroids?")
         self.populate.setCheckable(True)
@@ -14996,6 +15407,12 @@ class ProxDialog(QDialog):
             except:
                 max_neighbors = None
 
+
+            try:
+                downsample = int(self.downsample.text()) if self.downsample.text() else None
+            except:
+                downsample = None
+
             overlays = self.overlays.isChecked()  
             fastdil = self.fastdil.isChecked()
 
@@ -15051,8 +15468,12 @@ class ProxDialog(QDialog):
                         directory = 'my_network'
                     
                     # Generate and update overlays
-                    my_network.network_overlay = my_network.draw_network(directory=directory)
-                    my_network.id_overlay = my_network.draw_node_indices(directory=directory)
+                    my_network.network_overlay = my_network.draw_network(directory=directory, down_factor = downsample)
+                    my_network.id_overlay = my_network.draw_node_indices(directory=directory, down_factor = downsample)
+
+                    if downsample is not None:
+                        my_network.id_overlay = n3d.upsample_with_padding(my_network.id_overlay, original_shape = self.parent().shape)
+                        my_network.network_overlay = n3d.upsample_with_padding(my_network.network_overlay, original_shape = self.parent().shape)
                     
                     # Update channel data
                     self.parent().load_channel(2, channel_data = my_network.network_overlay, data = True)
@@ -15174,31 +15595,81 @@ class HistogramSelector(QWidget):
         """)
         layout.addWidget(button)
 
+
     def shortest_path_histogram(self):
         try:
-            shortest_path_lengths = dict(nx.all_pairs_shortest_path_length(self.G))
-            diameter = max(nx.eccentricity(self.G, sp=shortest_path_lengths).values())
-            path_lengths = np.zeros(diameter + 1, dtype=int)
-
-            for pls in shortest_path_lengths.values():
-                pl, cnts = np.unique(list(pls.values()), return_counts=True)
+            # Check if graph has multiple disconnected components
+            components = list(nx.connected_components(self.G))
+            
+            if len(components) > 1:
+                print(f"Warning: Graph has {len(components)} disconnected components. Computing shortest paths within each component separately.")
+                
+                # Initialize variables to collect data from all components
+                all_path_lengths = []
+                max_diameter = 0
+                
+                # Process each component separately
+                for i, component in enumerate(components):
+                    subgraph = self.G.subgraph(component)
+                    
+                    if len(component) < 2:
+                        # Skip single-node components (no paths to compute)
+                        continue
+                    
+                    # Compute shortest paths for this component
+                    shortest_path_lengths = dict(nx.all_pairs_shortest_path_length(subgraph))
+                    component_diameter = max(nx.eccentricity(subgraph, sp=shortest_path_lengths).values())
+                    max_diameter = max(max_diameter, component_diameter)
+                    
+                    # Collect path lengths from this component
+                    for pls in shortest_path_lengths.values():
+                        all_path_lengths.extend(list(pls.values()))
+                
+                # Remove self-paths (length 0) and create histogram
+                all_path_lengths = [pl for pl in all_path_lengths if pl > 0]
+                
+                if not all_path_lengths:
+                    print("No paths found across components (only single-node components)")
+                    return
+                    
+                # Create combined histogram
+                path_lengths = np.zeros(max_diameter + 1, dtype=int)
+                pl, cnts = np.unique(all_path_lengths, return_counts=True)
                 path_lengths[pl] += cnts
-
+                
+                title_suffix = f" (across {len(components)} components)"
+                
+            else:
+                # Single component
+                shortest_path_lengths = dict(nx.all_pairs_shortest_path_length(self.G))
+                diameter = max(nx.eccentricity(self.G, sp=shortest_path_lengths).values())
+                path_lengths = np.zeros(diameter + 1, dtype=int)
+                for pls in shortest_path_lengths.values():
+                    pl, cnts = np.unique(list(pls.values()), return_counts=True)
+                    path_lengths[pl] += cnts
+                max_diameter = diameter
+                title_suffix = ""
+            
+            # Generate visualization and results (same for both cases)
             freq_percent = 100 * path_lengths[1:] / path_lengths[1:].sum()
-
             fig, ax = plt.subplots(figsize=(15, 8))
-            ax.bar(np.arange(1, diameter + 1), height=freq_percent)
+            ax.bar(np.arange(1, max_diameter + 1), height=freq_percent)
             ax.set_title(
-                "Distribution of shortest path length in G", fontdict={"size": 35}, loc="center"
+                f"Distribution of shortest path length in G{title_suffix}", 
+                fontdict={"size": 35}, loc="center"
             )
             ax.set_xlabel("Shortest Path Length", fontdict={"size": 22})
             ax.set_ylabel("Frequency (%)", fontdict={"size": 22})
             plt.show()
             
             freq_dict = {freq: length for length, freq in enumerate(freq_percent, start=1)}
-            self.network_analysis.format_for_upperright_table(freq_dict, metric='Frequency (%)', 
-                                                            value='Shortest Path Length', 
-                                                            title="Distribution of shortest path length in G")
+            self.network_analysis.format_for_upperright_table(
+                freq_dict, 
+                metric='Frequency (%)', 
+                value='Shortest Path Length', 
+                title=f"Distribution of shortest path length in G{title_suffix}"
+            )
+            
         except Exception as e:
             print(f"Error generating shortest path histogram: {e}")
     
@@ -15217,20 +15688,62 @@ class HistogramSelector(QWidget):
                                                             title="Degree Centrality Table")
         except Exception as e:
             print(f"Error generating degree centrality histogram: {e}")
-    
+
     def betweenness_centrality_histogram(self):
         try:
-            betweenness_centrality = nx.centrality.betweenness_centrality(self.G)
+            # Check if graph has multiple disconnected components
+            components = list(nx.connected_components(self.G))
+            
+            if len(components) > 1:
+                print(f"Warning: Graph has {len(components)} disconnected components. Computing betweenness centrality within each component separately.")
+                
+                # Initialize dictionary to collect betweenness centrality from all components
+                combined_betweenness_centrality = {}
+                
+                # Process each component separately
+                for i, component in enumerate(components):
+                    if len(component) < 2:
+                        # For single-node components, betweenness centrality is 0
+                        for node in component:
+                            combined_betweenness_centrality[node] = 0.0
+                        continue
+                    
+                    # Create subgraph for this component
+                    subgraph = self.G.subgraph(component)
+                    
+                    # Compute betweenness centrality for this component
+                    component_betweenness = nx.centrality.betweenness_centrality(subgraph)
+                    
+                    # Add to combined results
+                    combined_betweenness_centrality.update(component_betweenness)
+                
+                betweenness_centrality = combined_betweenness_centrality
+                title_suffix = f" (across {len(components)} components)"
+                
+            else:
+                # Single component
+                betweenness_centrality = nx.centrality.betweenness_centrality(self.G)
+                title_suffix = ""
+            
+            # Generate visualization and results (same for both cases)
             plt.figure(figsize=(15, 8))
             plt.hist(betweenness_centrality.values(), bins=100)
             plt.xticks(ticks=[0, 0.02, 0.1, 0.2, 0.3, 0.4, 0.5])
-            plt.title("Betweenness Centrality Histogram ", fontdict={"size": 35}, loc="center")
+            plt.title(
+                f"Betweenness Centrality Histogram{title_suffix}", 
+                fontdict={"size": 35}, loc="center"
+            )
             plt.xlabel("Betweenness Centrality", fontdict={"size": 20})
             plt.ylabel("Counts", fontdict={"size": 20})
             plt.show()
-            self.network_analysis.format_for_upperright_table(betweenness_centrality, metric='Node', 
-                                                            value='Betweenness Centrality', 
-                                                            title="Betweenness Centrality Table")
+            
+            self.network_analysis.format_for_upperright_table(
+                betweenness_centrality, 
+                metric='Node', 
+                value='Betweenness Centrality', 
+                title=f"Betweenness Centrality Table{title_suffix}"
+            )
+            
         except Exception as e:
             print(f"Error generating betweenness centrality histogram: {e}")
     
@@ -15283,7 +15796,27 @@ class HistogramSelector(QWidget):
     def bridges_analysis(self):
         try:
             bridges = list(nx.bridges(self.G))
-            self.network_analysis.format_for_upperright_table(bridges, metric='Node Pair', 
+            try:
+                # Get the existing DataFrame from the model
+                original_df = self.network_analysis.network_table.model()._data
+                
+                # Create boolean mask
+                mask = pd.Series([False] * len(original_df))
+                
+                for u, v in bridges:
+                    # Check for both (u,v) and (v,u) orientations
+                    bridge_mask = (
+                        ((original_df.iloc[:, 0] == u) & (original_df.iloc[:, 1] == v)) |
+                        ((original_df.iloc[:, 0] == v) & (original_df.iloc[:, 1] == u))
+                    )
+                    mask |= bridge_mask
+                # Filter the DataFrame to only include bridge connections
+                filtered_df = original_df[mask].copy()
+                df_dict = {i: row.tolist() for i, row in enumerate(filtered_df.values)}
+                self.network_analysis.format_for_upperright_table(df_dict, metric='Bridge ID', value = ['NodeA', 'NodeB', 'EdgeC'],
+                                                            title="Bridges")
+            except:
+                self.network_analysis.format_for_upperright_table(bridges, metric='Node Pair', 
                                                             title="Bridges")
         except Exception as e:
             print(f"Error generating bridges analysis: {e}")
@@ -15310,7 +15843,7 @@ class HistogramSelector(QWidget):
     def node_connectivity_histogram(self):
         """Local node connectivity - minimum number of nodes that must be removed to disconnect neighbors"""
         try:
-            if self.G.number_of_nodes() > 500:  # Skip for large networks (computationally expensive)
+            if self.G.number_of_nodes() > 500:
                 print("Note this analysis may be slow for large network (>500 nodes)")
                 #return
                 
@@ -15388,7 +15921,7 @@ class HistogramSelector(QWidget):
     def load_centrality_histogram(self):
         """Load centrality - fraction of shortest paths passing through each node"""
         try:
-            if self.G.number_of_nodes() > 1000:  # Skip for very large networks
+            if self.G.number_of_nodes() > 1000:
                 print("Note this analysis may be slow for large network (>1000 nodes)")
                 #return
                 
@@ -15407,21 +15940,67 @@ class HistogramSelector(QWidget):
     def communicability_centrality_histogram(self):
         """Communicability centrality - based on communicability between nodes"""
         try:
-            if self.G.number_of_nodes() > 500:  # Skip for large networks (memory intensive)
+            if self.G.number_of_nodes() > 500:
                 print("Note this analysis may be slow for large network (>500 nodes)")
                 #return
+            
+            # Check if graph has multiple disconnected components
+            components = list(nx.connected_components(self.G))
+            
+            if len(components) > 1:
+                print(f"Warning: Graph has {len(components)} disconnected components. Computing communicability centrality within each component separately.")
                 
-            # Use the correct function name - it's in the communicability module
-            comm_centrality = nx.communicability_betweenness_centrality(self.G)
+                # Initialize dictionary to collect communicability centrality from all components
+                combined_comm_centrality = {}
+                
+                # Process each component separately
+                for i, component in enumerate(components):
+                    if len(component) < 2:
+                        # For single-node components, communicability betweenness centrality is 0
+                        for node in component:
+                            combined_comm_centrality[node] = 0.0
+                        continue
+                    
+                    # Create subgraph for this component
+                    subgraph = self.G.subgraph(component)
+                    
+                    # Compute communicability betweenness centrality for this component
+                    try:
+                        component_comm_centrality = nx.communicability_betweenness_centrality(subgraph)
+                        # Add to combined results
+                        combined_comm_centrality.update(component_comm_centrality)
+                    except Exception as comp_e:
+                        print(f"Error computing communicability centrality for component {i+1}: {comp_e}")
+                        # Set centrality to 0 for nodes in this component if computation fails
+                        for node in component:
+                            combined_comm_centrality[node] = 0.0
+                
+                comm_centrality = combined_comm_centrality
+                title_suffix = f" (across {len(components)} components)"
+                
+            else:
+                # Single component
+                comm_centrality = nx.communicability_betweenness_centrality(self.G)
+                title_suffix = ""
+            
+            # Generate visualization and results (same for both cases)
             plt.figure(figsize=(15, 8))
             plt.hist(comm_centrality.values(), bins=50, alpha=0.7)
-            plt.title("Communicability Betweenness Centrality Distribution", fontdict={"size": 35}, loc="center")
+            plt.title(
+                f"Communicability Betweenness Centrality Distribution{title_suffix}", 
+                fontdict={"size": 35}, loc="center"
+            )
             plt.xlabel("Communicability Betweenness Centrality", fontdict={"size": 20})
             plt.ylabel("Frequency", fontdict={"size": 20})
             plt.show()
-            self.network_analysis.format_for_upperright_table(comm_centrality, metric='Node', 
-                                                            value='Communicability Betweenness Centrality', 
-                                                            title="Communicability Betweenness Centrality Table")
+            
+            self.network_analysis.format_for_upperright_table(
+                comm_centrality, 
+                metric='Node', 
+                value='Communicability Betweenness Centrality', 
+                title=f"Communicability Betweenness Centrality Table{title_suffix}"
+            )
+            
         except Exception as e:
             print(f"Error generating communicability betweenness centrality histogram: {e}")
     
@@ -15444,20 +16023,67 @@ class HistogramSelector(QWidget):
     def current_flow_betweenness_histogram(self):
         """Current flow betweenness - models network as electrical circuit"""
         try:
-            if self.G.number_of_nodes() > 500:  # Skip for large networks (computationally expensive)
+            if self.G.number_of_nodes() > 500:  
                 print("Note this analysis may be slow for large network (>500 nodes)")
                 #return
+            
+            # Check if graph has multiple disconnected components
+            components = list(nx.connected_components(self.G))
+            
+            if len(components) > 1:
+                print(f"Warning: Graph has {len(components)} disconnected components. Computing current flow betweenness centrality within each component separately.")
                 
-            current_flow = nx.current_flow_betweenness_centrality(self.G)
+                # Initialize dictionary to collect current flow betweenness from all components
+                combined_current_flow = {}
+                
+                # Process each component separately
+                for i, component in enumerate(components):
+                    if len(component) < 2:
+                        # For single-node components, current flow betweenness centrality is 0
+                        for node in component:
+                            combined_current_flow[node] = 0.0
+                        continue
+                    
+                    # Create subgraph for this component
+                    subgraph = self.G.subgraph(component)
+                    
+                    # Compute current flow betweenness centrality for this component
+                    try:
+                        component_current_flow = nx.current_flow_betweenness_centrality(subgraph)
+                        # Add to combined results
+                        combined_current_flow.update(component_current_flow)
+                    except Exception as comp_e:
+                        print(f"Error computing current flow betweenness for component {i+1}: {comp_e}")
+                        # Set centrality to 0 for nodes in this component if computation fails
+                        for node in component:
+                            combined_current_flow[node] = 0.0
+                
+                current_flow = combined_current_flow
+                title_suffix = f" (across {len(components)} components)"
+                
+            else:
+                # Single component
+                current_flow = nx.current_flow_betweenness_centrality(self.G)
+                title_suffix = ""
+            
+            # Generate visualization and results (same for both cases)
             plt.figure(figsize=(15, 8))
             plt.hist(current_flow.values(), bins=50, alpha=0.7)
-            plt.title("Current Flow Betweenness Centrality Distribution", fontdict={"size": 35}, loc="center")
+            plt.title(
+                f"Current Flow Betweenness Centrality Distribution{title_suffix}", 
+                fontdict={"size": 35}, loc="center"
+            )
             plt.xlabel("Current Flow Betweenness Centrality", fontdict={"size": 20})
             plt.ylabel("Frequency", fontdict={"size": 20})
             plt.show()
-            self.network_analysis.format_for_upperright_table(current_flow, metric='Node', 
-                                                            value='Current Flow Betweenness', 
-                                                            title="Current Flow Betweenness Table")
+            
+            self.network_analysis.format_for_upperright_table(
+                current_flow, 
+                metric='Node', 
+                value='Current Flow Betweenness', 
+                title=f"Current Flow Betweenness Table{title_suffix}"
+            )
+            
         except Exception as e:
             print(f"Error generating current flow betweenness histogram: {e}")
     

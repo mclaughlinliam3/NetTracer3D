@@ -1055,19 +1055,18 @@ class InteractiveSegmenter:
         self.realtimechunks = chunk_dict
         print("Ready!")
 
-    def compute_3d_chunks(self, chunk_size=None):
+    def compute_3d_chunks(self, chunk_size=None, thickness=49):
         """
-        Compute 3D chunks with consistent logic across all operations (GPU version).
+        Compute 3D chunks as rectangular prisms with consistent logic across all operations.
+        Creates chunks that are thin in Z and square-like in X/Y dimensions.
         
         Args:
-            chunk_size: Optional chunk size, otherwise uses dynamic calculation
+            chunk_size: Optional chunk size for volume calculation, otherwise uses dynamic calculation
+            thickness: Z-dimension thickness of chunks (default: 9)
             
         Returns:
             list: List of chunk coordinates [z_start, z_end, y_start, y_end, x_start, x_end]
         """
-        import cupy as cp
-        import multiprocessing
-        
         # Use consistent chunk size calculation
         if chunk_size is None:
             if hasattr(self, 'master_chunk') and self.master_chunk is not None:
@@ -1075,10 +1074,10 @@ class InteractiveSegmenter:
             else:
                 # Dynamic calculation (same as segmentation)
                 total_cores = multiprocessing.cpu_count()
-                total_volume = cp.prod(cp.array(self.image_3d.shape))
+                total_volume = np.prod(self.image_3d.shape)
                 target_volume_per_chunk = total_volume / (total_cores * 4)
                 
-                chunk_size = int(cp.cbrt(target_volume_per_chunk))
+                chunk_size = int(np.cbrt(target_volume_per_chunk))
                 chunk_size = max(16, min(chunk_size, min(self.image_3d.shape) // 2))
                 chunk_size = ((chunk_size + 7) // 16) * 16
         
@@ -1087,28 +1086,57 @@ class InteractiveSegmenter:
         except:
             depth, height, width, rgb = self.image_3d.shape
         
-        # Calculate chunk grid dimensions
-        z_chunks = (depth + chunk_size - 1) // chunk_size
-        y_chunks = (height + chunk_size - 1) // chunk_size
-        x_chunks = (width + chunk_size - 1) // chunk_size
+        # Calculate target volume per chunk (same as original cube)
+        target_volume = chunk_size ** 3
         
-        # Generate all chunk start positions using CuPy
-        chunk_starts = cp.array(cp.meshgrid(
-            cp.arange(z_chunks) * chunk_size,
-            cp.arange(y_chunks) * chunk_size,
-            cp.arange(x_chunks) * chunk_size,
-            indexing='ij'
-        )).reshape(3, -1).T
+        # Calculate XY side length based on thickness and target volume
+        # Volume = thickness * xy_side * xy_side
+        # So xy_side = sqrt(volume / thickness)
+        xy_side = int(np.sqrt(target_volume / thickness))
+        xy_side = max(1, xy_side)  # Ensure minimum size of 1
         
+        # Calculate actual chunk dimensions for grid calculation
+        z_chunk_size = thickness
+        xy_chunk_size = xy_side
         
-        # Create chunk coordinate list
+        # Calculate number of chunks in each dimension
+        z_chunks = (depth + z_chunk_size - 1) // z_chunk_size
+        y_chunks = (height + xy_chunk_size - 1) // xy_chunk_size
+        x_chunks = (width + xy_chunk_size - 1) // xy_chunk_size
+        
+        # Calculate actual chunk sizes to distribute remainder evenly
+        # This ensures all chunks are roughly the same size
+        z_sizes = np.full(z_chunks, depth // z_chunks)
+        z_remainder = depth % z_chunks
+        z_sizes[:z_remainder] += 1
+        
+        y_sizes = np.full(y_chunks, height // y_chunks)
+        y_remainder = height % y_chunks
+        y_sizes[:y_remainder] += 1
+        
+        x_sizes = np.full(x_chunks, width // x_chunks)
+        x_remainder = width % x_chunks
+        x_sizes[:x_remainder] += 1
+        
+        # Calculate cumulative positions
+        z_positions = np.concatenate([[0], np.cumsum(z_sizes)])
+        y_positions = np.concatenate([[0], np.cumsum(y_sizes)])
+        x_positions = np.concatenate([[0], np.cumsum(x_sizes)])
+        
+        # Generate all chunk coordinates
         chunks = []
-        for z_start, y_start, x_start in chunk_starts:
-            z_end = min(z_start + chunk_size, depth)
-            y_end = min(y_start + chunk_size, height)
-            x_end = min(x_start + chunk_size, width)
-            coords = [int(z_start), int(z_end), int(y_start), int(y_end), int(x_start), int(x_end)]
-            chunks.append(coords)
+        for z_idx in range(z_chunks):
+            for y_idx in range(y_chunks):
+                for x_idx in range(x_chunks):
+                    z_start = z_positions[z_idx]
+                    z_end = z_positions[z_idx + 1]
+                    y_start = y_positions[y_idx]
+                    y_end = y_positions[y_idx + 1]
+                    x_start = x_positions[x_idx]
+                    x_end = x_positions[x_idx + 1]
+                    
+                    coords = [z_start, z_end, y_start, y_end, x_start, x_end]
+                    chunks.append(coords)
         
         return chunks
 
@@ -1196,10 +1224,20 @@ class InteractiveSegmenter:
                                                (x[0][2] - curr_x) ** 2))
                     return nearest[0]
             else:
-                # 3D chunks: use existing center-based distance calculation
-                nearest = min(unprocessed_chunks, 
+                # 3D chunks: find chunks on nearest Z-plane, then closest in X/Y
+                # First find the nearest Z-plane among available chunks
+                nearest_z = min(unprocessed_chunks, 
+                               key=lambda x: abs(x[1]['center'][0] - curr_z))[1]['center'][0]
+                
+                # Get all chunks on that nearest Z-plane
+                nearest_z_chunks = [chunk for chunk in unprocessed_chunks 
+                                   if chunk[1]['center'][0] == nearest_z]
+                
+                # From those chunks, find closest in X/Y
+                nearest = min(nearest_z_chunks, 
                              key=lambda x: sum((a - b) ** 2 for a, b in 
-                                             zip(x[1]['center'], (curr_z, curr_y, curr_x))))
+                                             zip(x[1]['center'][1:], (curr_y, curr_x))))
+                
                 return nearest[0]
             
             return None

@@ -6,14 +6,14 @@
   <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
 
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>All File Menu Options &mdash; NetTracer3D 1.0.5 documentation</title>
+  <title>All File Menu Options &mdash; NetTracer3D 1.1.3 documentation</title>
       <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=b86133f3" />
       <link rel="stylesheet" type="text/css" href="_static/css/theme.css?v=e59714d7" />
 
   
       <script src="_static/jquery.js?v=5d32c60e"></script>
       <script src="_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
-      <script src="_static/documentation_options.js?v=d55fa986"></script>
+      <script src="_static/documentation_options.js?v=cb7bf70b"></script>
       <script src="_static/doctools.js?v=9bcbadda"></script>
       <script src="_static/sphinx_highlight.js?v=dc90522c"></script>
     <script src="_static/js/theme.js"></script>
@@ -240,6 +240,14 @@
 </dl>
 </li>
 <li><dl class="simple">
+<dt>‘Load Full Sized Highlight Overlay’</dt><dd><ul class="simple">
+<li><p>Prompts the user to find a .tif/.tiff/.nii/.jpg/.jpeg/.png image to load into the Highlight Overlay.</p></li>
+<li><p>Note that this exists because for images that are sufficiently large, the highlight overlay is rendered only on the visible plane rather than making a 3D image. However, the full highlight overlay is rendered for any method that needs it (such as showing 3D visualization). If a highlight overlay is present in reference to the nodes (for example) in such a case of a large image, and the user loads something else into the nodes channel, the highlight overlay will be altered to instead reference the new nodes. Loading the desired overlay directly with this function bypasses the mini plane-based highlight overlay, for example for 3D visualization.</p></li>
+</ul>
+</dd>
+</dl>
+</li>
+<li><dl class="simple">
 <dt>‘Load Network’</dt><dd><ul class="simple">
 <li><p>Prompts the user to find a .csv/.xlsx file containing network data in the structure NetTracer3D expects (that is, the same structure it saves .csv/.xlsx networks as).</p></li>
 </ul>
@@ -268,10 +276,20 @@
 </dd>
 </dl>
 </li>
-<li><p>‘Load Misc Properties -&gt; Load Edge Centroids’
-* Prompts the user to find a .csv/.xlsx file containing Edge Centroids in the structure NetTracer3D expects (that is, the same structure it saves Edge Centroids as).</p></li>
-<li><p>‘Load Misc Properties -&gt; Load Node Communities
-* Prompts the user to find a .csv/.xlsx file containing network communities in the structure NetTracer3D expects (that is, the same structure it saves communities as).</p></li>
+<li><dl class="simple">
+<dt>‘Load Misc Properties -&gt; Load Edge Centroids’</dt><dd><ul class="simple">
+<li><p>Prompts the user to find a .csv/.xlsx file containing Edge Centroids in the structure NetTracer3D expects (that is, the same structure it saves Edge Centroids as).</p></li>
+</ul>
+</dd>
+</dl>
+</li>
+<li><dl class="simple">
+<dt>‘Load Misc Properties -&gt; Load Node Communities</dt><dd><ul class="simple">
+<li><p>Prompts the user to find a .csv/.xlsx file containing network communities in the structure NetTracer3D expects (that is, the same structure it saves communities as).</p></li>
+</ul>
+</dd>
+</dl>
+</li>
 </ol>
 </section>
 <section id="images-node-identities">

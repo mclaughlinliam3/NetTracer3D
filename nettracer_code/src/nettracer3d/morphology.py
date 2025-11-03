@@ -65,7 +65,7 @@ def reslice_3d_array(args):
     return resliced_array
 
 
-def _get_node_edge_dict(label_array, edge_array, label, dilate_xy, dilate_z, cores = 0, search = 0, fastdil = False, xy_scale = 1, z_scale = 1):
+def _get_node_edge_dict(label_array, edge_array, label, dilate_xy, dilate_z, cores = 0, search = 0, fastdil = False, length = False, xy_scale = 1, z_scale = 1):
     """Internal method used for the secondary algorithm to find pixel involvement of nodes around an edge."""
     
     # Create a boolean mask where elements with the specified label are True
@@ -74,24 +74,25 @@ def _get_node_edge_dict(label_array, edge_array, label, dilate_xy, dilate_z, cor
 
     if cores == 0: #For getting the volume of objects. Cores presumes you want the 'core' included in the interaction.
         edge_array = edge_array * dil_array  # Filter the edges by the label in question
-        label_array = np.count_nonzero(dil_array)
-        edge_array = np.count_nonzero(edge_array) # For getting the interacting skeleton
-
     elif cores == 1: #Cores being 1 presumes you do not want to 'core' included in the interaction
         label_array = dil_array - label_array
         edge_array = edge_array * label_array
-        label_array = np.count_nonzero(label_array)
-        edge_array = np.count_nonzero(edge_array) # For getting the interacting skeleton
-
     elif cores == 2: #Presumes you want skeleton within the core but to only 'count' the stuff around the core for volumes... because of imaging artifacts, perhaps
         edge_array = edge_array * dil_array
         label_array = dil_array - label_array
-        label_array = np.count_nonzero(label_array)
-        edge_array = np.count_nonzero(edge_array) # For getting the interacting skeleton
 
+    label_count = np.count_nonzero(label_array) * xy_scale * xy_scale * z_scale
 
-    
-    args = [edge_array, label_array]
+    if not length:
+        edge_count = np.count_nonzero(edge_array) * xy_scale * xy_scale * z_scale # For getting the interacting skeleton
+    else:
+        edge_count = calculate_skeleton_lengths(
+            edge_array, 
+            xy_scale=xy_scale, 
+            z_scale=z_scale
+        )
+
+    args = [edge_count, label_count]
 
     return args
 
@@ -115,7 +116,7 @@ def process_label(args):
 
 
 
-def create_node_dictionary(nodes, edges, num_nodes, dilate_xy, dilate_z, cores=0, search = 0, fastdil = False, xy_scale = 1, z_scale = 1):
+def create_node_dictionary(nodes, edges, num_nodes, dilate_xy, dilate_z, cores=0, search = 0, fastdil = False, length = False, xy_scale = 1, z_scale = 1):
     """Modified to pre-compute all bounding boxes using find_objects"""
     node_dict = {}
     array_shape = nodes.shape
@@ -135,20 +136,20 @@ def create_node_dictionary(nodes, edges, num_nodes, dilate_xy, dilate_z, cores=0
         # Process results in parallel
         for label, sub_nodes, sub_edges in results:
             executor.submit(create_dict_entry, node_dict, label, sub_nodes, sub_edges, 
-                          dilate_xy, dilate_z, cores, search, fastdil, xy_scale, z_scale)
+                          dilate_xy, dilate_z, cores, search, fastdil, length, xy_scale, z_scale)
 
     return node_dict
 
-def create_dict_entry(node_dict, label, sub_nodes, sub_edges, dilate_xy, dilate_z, cores = 0, search = 0, fastdil = False, xy_scale = 1, z_scale = 1):
+def create_dict_entry(node_dict, label, sub_nodes, sub_edges, dilate_xy, dilate_z, cores = 0, search = 0, fastdil = False, length = False, xy_scale = 1, z_scale = 1):
     """Internal method used for the secondary algorithm to pass around args in parallel."""
 
     if label is None:
         pass
     else:
-        node_dict[label] = _get_node_edge_dict(sub_nodes, sub_edges, label, dilate_xy, dilate_z, cores = cores, search = search, fastdil = fastdil, xy_scale = xy_scale, z_scale = z_scale)
+        node_dict[label] = _get_node_edge_dict(sub_nodes, sub_edges, label, dilate_xy, dilate_z, cores = cores, search = search, fastdil = fastdil, length = length, xy_scale = xy_scale, z_scale = z_scale)
 
 
-def quantify_edge_node(nodes, edges, search = 0, xy_scale = 1, z_scale = 1, cores = 0, resize = None, save = True, skele = False, fastdil = False):
+def quantify_edge_node(nodes, edges, search = 0, xy_scale = 1, z_scale = 1, cores = 0, resize = None, save = True, skele = False, length = False, auto = True, fastdil = False):
 
     def save_dubval_dict(dict, index_name, val1name, val2name, filename):
 
@@ -168,6 +169,9 @@ def quantify_edge_node(nodes, edges, search = 0, xy_scale = 1, z_scale = 1, core
         edges = tifffile.imread(edges)
 
     if skele:
+        if auto:
+            edges = nettracer.skeletonize(edges)
+            edges = nettracer.fill_holes_3d(edges)
         edges = nettracer.skeletonize(edges)
     else:
         edges = nettracer.binarize(edges)
@@ -188,7 +192,7 @@ def quantify_edge_node(nodes, edges, search = 0, xy_scale = 1, z_scale = 1, core
         dilate_xy, dilate_z = 0, 0
 
 
-    edge_quants = create_node_dictionary(nodes, edges, num_nodes, dilate_xy, dilate_z, cores = cores, search = search, fastdil = fastdil, xy_scale = xy_scale, z_scale = z_scale) #Find which edges connect which nodes and put them in a dictionary.
+    edge_quants = create_node_dictionary(nodes, edges, num_nodes, dilate_xy, dilate_z, cores = cores, search = search, fastdil = fastdil, length = length, xy_scale = xy_scale, z_scale = z_scale) #Find which edges connect which nodes and put them in a dictionary.
 
     if save:
     
@@ -197,6 +201,98 @@ def quantify_edge_node(nodes, edges, search = 0, xy_scale = 1, z_scale = 1, core
     else:
 
         return edge_quants
+
+
+# Helper methods for counting the lens of skeletons:
+
+def calculate_skeleton_lengths(skeleton_binary, xy_scale=1.0, z_scale=1.0, skeleton_coords = None):
+    """
+    Calculate total length of all skeletons in a 3D binary image.
+    
+    skeleton_binary: 3D boolean array where True = skeleton voxel
+    xy_scale, z_scale: physical units per voxel
+    """
+
+    if skeleton_coords is None:
+        # Find all skeleton voxels
+        skeleton_coords = np.argwhere(skeleton_binary)
+        shape = skeleton_binary.shape
+    else:
+        shape = skeleton_binary #Very professional stuff
+    
+    if len(skeleton_coords) == 0:
+        return 0.0
+    
+    # Create a mapping from coordinates to indices for fast lookup
+    coord_to_idx = {tuple(coord): idx for idx, coord in enumerate(skeleton_coords)}
+    
+    # Build adjacency graph
+    adjacency_list = build_adjacency_graph(skeleton_coords, coord_to_idx, shape)
+    
+    # Calculate lengths using scaled distances
+    total_length = calculate_graph_length(skeleton_coords, adjacency_list, xy_scale, z_scale)
+    
+    return total_length
+
+def build_adjacency_graph(skeleton_coords, coord_to_idx, shape):
+    """Build adjacency list for skeleton voxels using 26-connectivity."""
+    adjacency_list = [[] for _ in range(len(skeleton_coords))]
+    
+    # 26-connectivity offsets (all combinations of -1,0,1 except 0,0,0)
+    offsets = []
+    for dz in [-1, 0, 1]:
+        for dy in [-1, 0, 1]:
+            for dx in [-1, 0, 1]:
+                if not (dx == 0 and dy == 0 and dz == 0):
+                    offsets.append((dz, dy, dx))
+    
+    for idx, coord in enumerate(skeleton_coords):
+        z, y, x = coord
+        
+        # Check all 26 neighbors
+        for dz, dy, dx in offsets:
+            nz, ny, nx = z + dz, y + dy, x + dx
+            
+            # Check bounds
+            if (0 <= nz < shape[0] and 
+                0 <= ny < shape[1] and 
+                0 <= nx < shape[2]):
+                
+                neighbor_coord = (nz, ny, nx)
+                if neighbor_coord in coord_to_idx:
+                    neighbor_idx = coord_to_idx[neighbor_coord]
+                    adjacency_list[idx].append(neighbor_idx)
+    
+    return adjacency_list
+
+def calculate_graph_length(skeleton_coords, adjacency_list, xy_scale, z_scale):
+    """Calculate total length by summing distances between adjacent voxels."""
+    total_length = 0.0
+    processed_edges = set()
+    
+    for idx, neighbors in enumerate(adjacency_list):
+        coord = skeleton_coords[idx]
+        
+        for neighbor_idx in neighbors:
+            # Avoid double-counting edges
+            edge = tuple(sorted([idx, neighbor_idx]))
+            if edge in processed_edges:
+                continue
+            processed_edges.add(edge)
+            
+            neighbor_coord = skeleton_coords[neighbor_idx]
+            
+            # Calculate scaled distance
+            dz = (coord[0] - neighbor_coord[0]) * z_scale
+            dy = (coord[1] - neighbor_coord[1]) * xy_scale
+            dx = (coord[2] - neighbor_coord[2]) * xy_scale
+            
+            distance = np.sqrt(dx*dx + dy*dy + dz*dz)
+            total_length += distance
+    
+    return total_length
+
+# End helper methods
 
 
 

@@ -1,6 +1,6 @@
 Metadata-Version: 2.4
 Name: nettracer3d
-Version: 1.0.5
+Version: 1.1.3
 Summary: Scripts for intializing and analyzing networks from segmentations of three dimensional images.
 Author-email: Liam McLaughlin <liamm@wustl.edu>
 Project-URL: Documentation, https://nettracer3d.readthedocs.io/en/latest/
@@ -110,7 +110,6 @@ McLaughlin, L., Zhang, B., Sharma, S. et al. Three dimensional multiscalar neuro
 
 NetTracer3D was developed by Liam McLaughlin while working under Dr. Sanjay Jain at Washington University School of Medicine.
 
--- Version 1.0.4 Updates --
+-- Version 1.1.3 Updates --
 
-	* Some small bug fixes and adjustments
-	* Heatmap theoretical distances can now be calculated based on an area constrained within a binary mask.
+	* Some minor text adjustments

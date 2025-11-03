@@ -6,14 +6,14 @@
   <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
 
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>All Analyze Menu Options &mdash; NetTracer3D 1.0.5 documentation</title>
+  <title>All Analyze Menu Options &mdash; NetTracer3D 1.1.3 documentation</title>
       <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=b86133f3" />
       <link rel="stylesheet" type="text/css" href="_static/css/theme.css?v=e59714d7" />
 
   
       <script src="_static/jquery.js?v=5d32c60e"></script>
       <script src="_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
-      <script src="_static/documentation_options.js?v=d55fa986"></script>
+      <script src="_static/documentation_options.js?v=cb7bf70b"></script>
       <script src="_static/doctools.js?v=9bcbadda"></script>
       <script src="_static/sphinx_highlight.js?v=dc90522c"></script>
     <script src="_static/js/theme.js"></script>
@@ -86,6 +86,7 @@
 <li class="toctree-l3"><a class="reference internal" href="#id6">Parameter Explanations</a></li>
 </ul>
 </li>
+<li class="toctree-l2"><a class="reference internal" href="#analyze-stats-significance-testing">‘Analyze -&gt; Stats -&gt; Significance Testing’</a></li>
 <li class="toctree-l2"><a class="reference internal" href="#analyze-stats-radial-distribution-analysis">‘Analyze -&gt; Stats -&gt; Radial Distribution Analysis’</a><ul>
 <li class="toctree-l3"><a class="reference internal" href="#id7">Parameter Explanations</a></li>
 </ul>
@@ -116,32 +117,36 @@
 <li class="toctree-l3"><a class="reference internal" href="#id15">Algorithm Explanation</a></li>
 </ul>
 </li>
-<li class="toctree-l2"><a class="reference internal" href="#analyze-stats-calculate-node-edge-interactions">‘Analyze -&gt; Stats -&gt; Calculate Node &lt; &gt; Edge Interactions’</a></li>
-<li class="toctree-l2"><a class="reference internal" href="#analyze-stats-show-identities-violin-umap">‘Analyze -&gt; Stats -&gt; Show Identities Violin/UMAP’</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="#analyze-stats-calculate-node-edge-interactions">‘Analyze -&gt; Stats -&gt; Calculate Node &lt; &gt; Edge Interactions’</a><ul>
 <li class="toctree-l3"><a class="reference internal" href="#id16">Parameter Explanation</a></li>
 <li class="toctree-l3"><a class="reference internal" href="#id17">Algorithm Explanation</a></li>
-<li class="toctree-l3"><a class="reference internal" href="#id18">Parameter Explanations</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="#analyze-stats-show-identities-violin-umap">‘Analyze -&gt; Stats -&gt; Show Identities Violin/UMAP’</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#id18">Parameter Explanation</a></li>
 <li class="toctree-l3"><a class="reference internal" href="#id19">Algorithm Explanation</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#id20">Parameter Explanations</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#id21">Algorithm Explanation</a></li>
 </ul>
 </li>
 <li class="toctree-l2"><a class="reference internal" href="#analyze-data-overlays-get-degree-information">‘Analyze -&gt; Data/Overlays -&gt; Get Degree Information’</a><ul>
-<li class="toctree-l3"><a class="reference internal" href="#id20">Parameter Explanations</a></li>
-</ul>
-</li>
-<li class="toctree-l2"><a class="reference internal" href="#analyze-data-overlays-get-hub-information">‘Analyze -&gt; Data/Overlays -&gt; Get Hub Information’</a><ul>
-<li class="toctree-l3"><a class="reference internal" href="#id21">Parameter Explanations</a></li>
-</ul>
-</li>
-<li class="toctree-l2"><a class="reference internal" href="#analyze-data-overlays-get-mother-nodes">‘Analyze -&gt; Data/Overlays -&gt; Get Mother Nodes’</a><ul>
 <li class="toctree-l3"><a class="reference internal" href="#id22">Parameter Explanations</a></li>
 </ul>
 </li>
-<li class="toctree-l2"><a class="reference internal" href="#analyze-data-overlays-code-communities">‘Analyze -&gt; Data/Overlays -&gt; Code Communities’</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="#analyze-data-overlays-get-hub-information">‘Analyze -&gt; Data/Overlays -&gt; Get Hub Information’</a><ul>
 <li class="toctree-l3"><a class="reference internal" href="#id23">Parameter Explanations</a></li>
 </ul>
 </li>
-<li class="toctree-l2"><a class="reference internal" href="#analyze-data-overlays-code-identities">‘Analyze -&gt; Data/Overlays -&gt; Code Identities’</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="#analyze-data-overlays-get-mother-nodes">‘Analyze -&gt; Data/Overlays -&gt; Get Mother Nodes’</a><ul>
 <li class="toctree-l3"><a class="reference internal" href="#id24">Parameter Explanations</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="#analyze-data-overlays-code-communities">‘Analyze -&gt; Data/Overlays -&gt; Code Communities’</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#id25">Parameter Explanations</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="#analyze-data-overlays-code-identities">‘Analyze -&gt; Data/Overlays -&gt; Code Identities’</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#id26">Parameter Explanations</a></li>
 </ul>
 </li>
 <li class="toctree-l2"><a class="reference internal" href="#analyze-data-overlays-centroid-umap">‘Analyze -&gt; Data/Overlays -&gt; Centroid UMAP’</a></li>
@@ -780,6 +785,18 @@
 </ol>
 </section>
 </section>
+<section id="analyze-stats-significance-testing">
+<h2>‘Analyze -&gt; Stats -&gt; Significance Testing’<a class="headerlink" href="#analyze-stats-significance-testing" title="Link to this heading"></a></h2>
+<ul class="simple">
+<li><p>Opens a new gui to help the user do significance testing, for example from any data obtained in NetTracer3D.</p></li>
+<li><p>To use the gui, first arrange desired data into an excel file in a columnar basis.</p></li>
+<li><p>Drag the excel file into the ‘Data Staging Area’. Python will show the file’s contents in the ‘Data Display’.</p></li>
+<li><p>Drag the headers of desired columns to the ‘Data Selection Area’. In short, each column dragged over here should individually represent some kind of distribution. The contents of each column is what will be compared via significance test.</p></li>
+<li><p>Under ‘Statistical Test Selection’, use the dropdown menu to select the desired test to run on the above data. Options include paired/unpaired Student’s t tests, paired/unpaired Welch’s t tests, one-way ANOVA, Mann-Whittney U (ranksums) test, Pearson test, Shapiro-Wilk normality test, and a Chi-squared test.</p></li>
+<li><p>Press ‘execute statistical test’ to run the desired test on the datasets. The ‘Test Results’ window will display a variety of output info, including p-values and test statistic values.</p></li>
+<li><p>All of these tests are simply obtained by running their respective scipy.stats function on the inputted data. See <a class="reference external" href="https://docs.scipy.org/doc/scipy/reference/stats.html">https://docs.scipy.org/doc/scipy/reference/stats.html</a> for more info.</p></li>
+</ul>
+</section>
 <section id="analyze-stats-radial-distribution-analysis">
 <h2>‘Analyze -&gt; Stats -&gt; Radial Distribution Analysis’<a class="headerlink" href="#analyze-stats-radial-distribution-analysis" title="Link to this heading"></a></h2>
 <ul class="simple">
@@ -1201,6 +1218,66 @@
 </ul>
 <a class="reference internal image-reference" href="_images/analyze5.png"><img alt="edgenode Menu" src="_images/analyze5.png" style="width: 800px;" />
 </a>
+<section id="id16">
+<h3>Parameter Explanation<a class="headerlink" href="#id16" title="Link to this heading"></a></h3>
+<ol class="arabic simple">
+<li><dl class="simple">
+<dt>Node Search</dt><dd><ul class="simple">
+<li><p>The distance nodes should search outward for to consider for quantifying nearby edge amounts.</p></li>
+</ul>
+</dd>
+</dl>
+</li>
+<li><dl class="simple">
+<dt>Execution Mode</dt><dd><ul class="simple">
+<li><dl class="simple">
+<dt>Dropdown menu has 2 options:</dt><dd><ol class="arabic simple">
+<li><p>Include Regions Inside Node - Edgesd that pass directly through the node will be quantified together with those in the search space.</p></li>
+<li><p>Exclude Regions Inside Node - Only edges in the search space will be considered.</p></li>
+</ol>
+</dd>
+</dl>
+</li>
+</ul>
+</dd>
+</dl>
+</li>
+<li><dl class="simple">
+<dt>Return lengths</dt><dd><ul class="simple">
+<li><p>By default, nodes will return the ‘volume’ of adjacent edge.</p></li>
+<li><p>If this is enabled, they will return the lengths of nearby edges instead. Volume and Length calculations are scaled based on the ‘xy_scale’ and ‘z_scale’ properties, as set in ‘Image -&gt; Properties’.</p></li>
+</ul>
+</dd>
+</dl>
+</li>
+<li><dl class="simple">
+<dt>(If Above): Attempt to correct skeleton looping.</dt><dd><ul class="simple">
+<li><p>This is enabled by default and is essentially an extra algorithmic step to improve skeletonization of thick objects in 3D. See the section on skeletonization for more information.</p></li>
+</ul>
+</dd>
+</dl>
+</li>
+<li><dl class="simple">
+<dt>Use Fast Dilation…</dt><dd><ul class="simple">
+<li><p>Uses ‘Pseuedo 3D Binary Kernels’ instead of distance transformations to find the search region if enabled.</p></li>
+<li><p>Note this may be faster for small dilations but also will give slightly incorrect data so it is disabled by default.</p></li>
+</ul>
+</dd>
+</dl>
+</li>
+</ol>
+</section>
+<section id="id17">
+<h3>Algorithm Explanation<a class="headerlink" href="#id17" title="Link to this heading"></a></h3>
+<ol class="arabic simple">
+<li><p>The scipy.ndimage.find_objects() method is used to get bounding boxes around all the labeled nodes.</p></li>
+<li><p>For each object, a subarray is cut out around it using its bounding box, with padding on all sides proportional to the desired search region.</p></li>
+<li><p>The search region is then calculated for each node in parallel using dilation (see the section on dilation for more information).</p></li>
+<li><p>The edges in the desired search regions are obtained via boolean indexing for each node.</p></li>
+<li><p>Edge and Search region volumes are obtained by counting pixels and scaling them by the scaling parameters.</p></li>
+<li><p>If lengths are used instead, the edges are skeletonized as specified, then coordinates of the skeletons are obtained, followed by usage of the distance formula between each adjacent coordinate (scaled by the scaling parameters).</p></li>
+</ol>
+</section>
 </section>
 <section id="analyze-stats-show-identities-violin-umap">
 <h2>‘Analyze -&gt; Stats -&gt; Show Identities Violin/UMAP’<a class="headerlink" href="#analyze-stats-show-identities-violin-umap" title="Link to this heading"></a></h2>
@@ -1209,8 +1286,8 @@
 <li><p>The aforementioned identity assignment funtion produces a table that shows the average intensity of each node for each marker. Please save this table from the upper-right data tables for use in this function. This data is the only one natively compatible with this function.</p></li>
 <li><p>Upon running, the user will be prompted to retrieve this data table as a .csv or .xlsx file. Note that this table would ideally be the one created during the aforementioned node assignment, with the node identities themselves also derived from that function.</p></li>
 </ul>
-<section id="id16">
-<h3>Parameter Explanation<a class="headerlink" href="#id16" title="Link to this heading"></a></h3>
+<section id="id18">
+<h3>Parameter Explanation<a class="headerlink" href="#id18" title="Link to this heading"></a></h3>
 <ol class="arabic simple">
 <li><p>‘Return Identity Violin Plots?’ - ‘None’ by default, but the dropdown menu can be used to select one of the current node_identities in the session, which informs the program to yield a violin plot displaying the normalized intensity expression for each channel of all nodes belonging to the aforementioned identity. This is useful for seeing what other channels a particular identity is generally positive in.</p></li>
 </ol>
@@ -1218,8 +1295,8 @@
 * To view any designated violin plots, press ‘Show-Z-score-like Violin’. The plot will be shown, and the corresponding data will populate the upper right data tables.
 * Alternatively, “Show Z-score UMAP” may be pressed to show a UMAP of the intensity Z-score for each node relative to the identity of each channel. (This is the same UMAP that can be displayed at the end of ‘File -&gt; Images -&gt; Node Identities -&gt; Assign Node Identities from Overlap with Other Images’)</p>
 </section>
-<section id="id17">
-<h3>Algorithm Explanation<a class="headerlink" href="#id17" title="Link to this heading"></a></h3>
+<section id="id19">
+<h3>Algorithm Explanation<a class="headerlink" href="#id19" title="Link to this heading"></a></h3>
 <ol class="arabic simple">
 <li><dl class="simple">
 <dt>For both violin-plot producing methods, the aforementioned data table is first normalized in a Z-score-like fashion. Essentially, for all nodes belonging to each unique identity, the minimum of those nodes is obtained. The data table values are then normalized using a Z-score, but centered around the minimum valid intensity for each identity (as it corresponds to each channel, i.e. a CD31 channel will be centered about the min of nodes with the CD31 identity).</dt><dd><ul class="simple">
@@ -1237,8 +1314,8 @@
 <li><p>UMAP generation instead utilizes standard Z-scores, as the altered normalization is not relevant when comparing nodes in this manner. The UMAP itself is created with the Python umap module.</p></li>
 </ul>
 </section>
-<section id="id18">
-<h3>Parameter Explanations<a class="headerlink" href="#id18" title="Link to this heading"></a></h3>
+<section id="id20">
+<h3>Parameter Explanations<a class="headerlink" href="#id20" title="Link to this heading"></a></h3>
 <ol class="arabic simple">
 <li><dl class="simple">
 <dt>node_search:</dt><dd><ul class="simple">
@@ -1275,8 +1352,8 @@
 <li><p>Press Calculate to run the method with the desired parameters. The output data will be used to create a new table in the tabulated data widget.</p></li>
 </ul>
 </section>
-<section id="id19">
-<h3>Algorithm Explanation<a class="headerlink" href="#id19" title="Link to this heading"></a></h3>
+<section id="id21">
+<h3>Algorithm Explanation<a class="headerlink" href="#id21" title="Link to this heading"></a></h3>
 <ol class="arabic simple">
 <li><p>The scipy.ndimage.find_objects() method is used to get bounding boxes around all the labeled objects in the nodes channel.</p></li>
 <li><p>For each object, a subarray is cut out around it using its bounding box, that includes the object plus any additional space that it will need to perform a search/dilation.</p></li>
@@ -1301,15 +1378,15 @@
 </ul>
 <a class="reference internal image-reference" href="_images/analyze6.png"><img alt="edgenode Menu" src="_images/analyze6.png" style="width: 800px;" />
 </a>
-<section id="id20">
-<h3>Parameter Explanations<a class="headerlink" href="#id20" title="Link to this heading"></a></h3>
+<section id="id22">
+<h3>Parameter Explanations<a class="headerlink" href="#id22" title="Link to this heading"></a></h3>
 <ol class="arabic simple">
 <li><dl class="simple">
 <dt>Execution Mode</dt><dd><ul class="simple">
 <li><dl class="simple">
 <dt>This dropdown menu has three options:</dt><dd><ol class="arabic simple">
 <li><p>‘Just make table’ - places a table with the ID of each node and its degree in the tabulated data widget, without generating any overlays.</p></li>
-<li><p>‘Draw Degree of Node as Overlay…’ - This method creates an overlay where the degree value of each node is literally drawn onto its centroid as an overlay (ie, a node of degree 5 has a 5 drawn at its centroid). This can be used to quickly eyeball node connectivity.</p></li>
+<li><p>‘Draw Degree of Node as Overlay…’ - This method creates an overlay where the degree value of each node is literally drawn onto its centroid as an overlay (ie, a node of degree 5 has a 5 drawn at its centroid). This can be used to quickly eyeball node connectivity. Note that entering a downsample into the corresponding param will actually enlarge the rendered numbers.</p></li>
 <li><dl class="simple">
 <dt>‘Label Nodes by Degree…’ - This method takes each node label and reassigns its label to its degree. The idea would be to export the image and do downstream analysis elsewhere while thresholding for specific degree values.</dt><dd><ul>
 <li><p>Note this thresholding can be done in NetTracer3D by using the intensity thresholder.</p></li>
@@ -1351,8 +1428,8 @@
 <ul class="simple">
 <li><p>This method can be used to extract information about hub nodes, which are the nodes that are the fewest degrees of seperation from any other node.</p></li>
 </ul>
-<section id="id21">
-<h3>Parameter Explanations<a class="headerlink" href="#id21" title="Link to this heading"></a></h3>
+<section id="id23">
+<h3>Parameter Explanations<a class="headerlink" href="#id23" title="Link to this heading"></a></h3>
 <ul class="simple">
 <li><p>This method only has two parameters.</p></li>
 </ul>
@@ -1384,8 +1461,8 @@
 <li><p>This method can be used to extract information about ‘mother nodes’, which are we define as those nodes that contain connections between one community and another.</p></li>
 <li><p>This method would be used to identify what nodes enable interaction between seperate communities.</p></li>
 </ul>
-<section id="id22">
-<h3>Parameter Explanations<a class="headerlink" href="#id22" title="Link to this heading"></a></h3>
+<section id="id24">
+<h3>Parameter Explanations<a class="headerlink" href="#id24" title="Link to this heading"></a></h3>
 <ul class="simple">
 <li><p>This method only has one parameter.</p></li>
 </ul>
@@ -1408,8 +1485,8 @@
 <ul class="simple">
 <li><p>This method can be used to generate an overlay that shows what nodes belong to which community.</p></li>
 </ul>
-<section id="id23">
-<h3>Parameter Explanations<a class="headerlink" href="#id23" title="Link to this heading"></a></h3>
+<section id="id25">
+<h3>Parameter Explanations<a class="headerlink" href="#id25" title="Link to this heading"></a></h3>
 <ul class="simple">
 <li><p>This method only has two parameters.</p></li>
 </ul>
@@ -1446,8 +1523,8 @@
 <ul class="simple">
 <li><p>This method can be used to generate an overlay that shows what nodes belong to which identity.</p></li>
 </ul>
-<section id="id24">
-<h3>Parameter Explanations<a class="headerlink" href="#id24" title="Link to this heading"></a></h3>
+<section id="id26">
+<h3>Parameter Explanations<a class="headerlink" href="#id26" title="Link to this heading"></a></h3>
 <ul class="simple">
 <li><p>This method only has two parameters.</p></li>
 </ul>

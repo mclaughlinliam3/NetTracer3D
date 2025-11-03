@@ -793,7 +793,7 @@ def create_community_heatmap(community_intensity, node_community, node_centroids
             return np.array([r, g, b], dtype=np.uint8)
         
         # Create lookup table for RGB colors
-        max_label = max(max(labeled_array.flat), max(node_to_community_intensity.keys()) if node_to_community_intensity else 0)
+        max_label = int(max(max(labeled_array.flat), max(node_to_community_intensity.keys()) if node_to_community_intensity else 0))
         color_lut = np.zeros((max_label + 1, 3), dtype=np.uint8)  # Default to black (0,0,0)
         
         # Fill lookup table with RGB colors based on community intensity
@@ -1036,8 +1036,8 @@ def create_node_heatmap(node_intensity, node_centroids, shape=None, is_3d=True,
 
         # Modified usage in your main function:
         # Create lookup table for RGBA colors (note the 4 channels now)
-        max_label = max(max(labeled_array.flat), max(node_to_intensity.keys()) if node_to_intensity else 0)
-        color_lut = np.zeros((max_label + 1, 4), dtype=np.uint8)  # Default to transparent (0,0,0,0)
+        max_label = int(max(max(labeled_array.flat), max(node_to_intensity.keys()) if node_to_intensity else 0))
+        color_lut = np.zeros((max_label + 1, 4), dtype=np.uint8)
 
         # Fill lookup table with RGBA colors based on intensity
         for node_id, intensity in node_to_intensity.items():
