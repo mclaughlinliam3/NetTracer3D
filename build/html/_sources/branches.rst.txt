@@ -17,7 +17,13 @@ To demonstrate branch labeling, I will use a cartoon depiction of a neuron.
 1. First, I load my image into the nodes channel and segment the image into a binary mask with the ML-segmenter. 
 2. Next, I save the binary mask and reload it into the edges channel. The edges channel is the staging channel for all branch labeling.
 3. Next, I run 'Process -> Generate -> Label Branches'
-4. I am prompted by a window and select 'Run Branch Label' to use the default settings. I am prompted by a second window and select 'Run Node Generation' to use its default settings (this is a sub-algorithm that the former uses).
+4. I am prompted by a window and select 'Run Branch Label' to use the default settings. 
+
+.. image:: _static/process6.png
+   :width: 500px
+   :alt: Default Menu Settings
+
+5. I am prompted by a second window and select 'Run Node Generation' to use its default settings (this is a sub-algorithm that the former uses).
 
 With these default settings, my labeled branches look like this:
 
@@ -37,7 +43,7 @@ However, in this instance, there are few areas that may be worth addressing for 
 
 Luckily NetTracer3D's branch labelling algorithm has a good variety of auto-correcting tools when labeling branches. Here are a few that are enabled by default that I generally recommend:
 
-1. By default, 'Auto-Correct 2' is enabled in the branch labeler. This option collapses any internal labels and forces them to merge with neighbors bordering the background. Otherwise, the middle of the neuron here (the soma) would likely have obtained a mosaic-looking set of labels.
+1. By default, two auto-correct options are enabled in the branch labeler. The first option collapses any internal labels and forces them to merge with neighbors bordering the background. Otherwise, the middle of the neuron here (the soma) would likely have obtained a mosaic-looking set of labels. The second auto-attempts to correct any branch labels that may not be contiguous in space. It is recommended to keep these settings enabled, although they can be disabled for increased speed in exchange form some minor inaccuracies.
 
 2. For 3D images, 'Attempt to Auto-Correct Skeleton Looping' is auto-enabled. This option attempts to convert any polyp-looking artifacts that show up in the internal skeletonization step back to single filaments (generally recommend).
  * However, this is not enabled for 2D, so my neuron did not use it. Mainly this is because in 2D, it cannot tell the difference between an artifactual and a real loop, but in this case we don't have any real loops so we'll use it.
@@ -60,13 +66,9 @@ when prompted with the second menu, I enable a new optional setting:
    :alt: Branch Grouped
 *Here, I set 'Skeleton Branch Length to Remove' to '8'*
 
+There are some other correction options you can read about in 'Process -> Generate -> Label Branches', but this spine one is all we will use here.
 Now when I run my labeler, it ignores all *terminal* branches below that length. Note this algorithm will only remove branches starting from an endpoint, until reaching a parent branch. Therefore, more internal branches that do not have endpoints themselves are always safe from removal, allowing us to use larger numbers without risk of major changes to the image.
 
-
-Handling split labels
-~~~~~~~~~~~~~~~~~~~
-* Depending on the the structure of the branched image, rarely certain branches may inherit the label of a nearby branch, if they are far away from the internal filament (skeleton) of their own branch and the adjacent branch is much smaller.
-* This issue does not apply here, but to address it, I could enable the 'Split Non-Touching Branches' correction option, which is relevant mainly for 'Branch Adjacency Networks', but generally not recommended if running purely morphological analysis.
 
 With Corrections
 ~~~~~~~~~~~~~~~~~~~
@@ -76,6 +78,18 @@ Our final branch labeled neuron looks like this:
    :width: 500px
    :alt: Branch Final
 *Branches smaller than 8 voxels long have joined their neighbors*
+
+
+Branch Merging Corrections
+~~~~~~~~~~~~~~~~~~~
+* Although I did not use it for this specific case, another potentially useful correction option to enable is 'Reunify Main Branches', available from the branch labeling menu shown above.
+* By default, branches are labeled as segments existing between branch points. But selecting this will have the program do some additional processing to evaluate if any branches traveling in a similar direction, with a similar radius, ought to be re-joined back into a single long branch.
+* For my neuron, this feature does not handle the 'Soma' very well since it's technically not a branch, but just to show what it can do for some of the other branches, here is the labeling with this option enabled:
+
+.. image:: _static/union.png
+   :width: 500px
+   :alt: Union
+*Note how branches such as the big yellow-green one at the bottom now get labeled over longer ranges. In this case, I didn't enable the 'collapse internal labels' feature, which is why the Soma has become more mosaic looking. I could have enabled it, but this additional correction would then merge a few branches with the Soma itself, so it's a trade off if you have any such non-branched structures. This correction is quite strong for branches themselves, though.*
 
 Morphological Analysis
 ~~~~~~~~~~~~~~~~~~~~~~~~

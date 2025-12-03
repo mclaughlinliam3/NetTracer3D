@@ -91,7 +91,41 @@ This is an image of a renal papilla. Here it is stained with DAPI (Nuclei).
 *Note that the UMAP adds an extra processing step but it can be a decent option for validation. If your cells are overlapping where they shouldn't, either the thresholding step or the image itself was poor.*
 
 * This method of identity assignment can be quite useful to shield against phenotyping errors, since the mean intensity of each node is considered when assigning cells, with the user-in-the-loop, rather than just auto-assigning them based on overlap with the channel's segmented foreground.
-* However the auto-assignment option also exists, and I am going to be using it from here on out anyway, since I happened to already have segmented several channels of interest.
+
+Grouping Cells By Shared Expression Profile
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+* When we finish running the above steps, we will be prompted to save a spreadsheet containing the average intensity of each channel for each cell. We will want to save that, as well as our progress so far, as we especially do not want to lose our assigned node identities. Utilize 'File -> Save As -> Save Network3D Object As' to save the current session.
+* Next, from the menu bar, select 'Analyze -> Stats -> Show Identity Violins/UMAP/Assign Intensity Neighborhoods'. We are prompted to find the intensities spreadsheet we just saved. After finding it, we open this menu:
+
+.. image:: _static/violin_menu.png
+   :width: 400px
+   :alt: Violins
+
+* From this menu, we can generate violin plots for each marker. The markers are normalized based on what we called the lower-end threshold for what is valid as that identity. 
+* As an example, we can generate this violin plot containing all our cells we called 'CD68':
+
+.. image:: _static/violins.png
+   :width: 400px
+   :alt: Violins2
+
+* This plot is quite easy to interpret. Any value above 0 represents what we called a 'valid' representation of that identity during our assignment phase. We can see that our CD68 violin is completely above 0, as we are only looking at cells we assigned CD68 anyway. 
+* Therefore, any portion of the other plots above 0 means that our CD68 cells are also showing valid expression of that marker. Here, we see the most overlap with 'CD31'.
+* From the previous menu, we can group all our cells into neighborhoods based on the overlap of their channel markers. These neighborhoods can be used to re-label our UMAP from before:
+
+.. image:: _static/UMAPhoods.png
+   :width: 800px
+   :alt: UMAPhoods
+
+* We can also create violin plots akin to those shown previously, but for our communities or neighborhoods:
+
+.. image:: _static/violinhoods.png
+   :width: 800px
+   :alt: violinhoods
+
+* This neighborhood shows strong expression of CD31 but weaker expression of the other markers. It likely just represents blood vessels. This can be an effective way to query different unique cell phenotypes in our image.
+
+* Moving on from marker-based analysis, we may be interested in NetTracer3D's spatial capabilities. We will evaluate this over a broader set of markers. While this system is primarily designed to start with our user-in-the-loop per-channel thresholder, more nuanced segmentations can be created and also brought in via the auto-assignment capability. I will just demo that for these additional markers since I happened to already have segmented several channels of interest.
 * To use the auto-assignment, choose the following option:
 
 .. image:: _static/choosetwo.png

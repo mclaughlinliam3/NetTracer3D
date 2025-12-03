@@ -6,14 +6,14 @@
   <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
 
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Labeling Branches and Branch Networks &mdash; NetTracer3D 1.1.3 documentation</title>
+  <title>Labeling Branches and Branch Networks &mdash; NetTracer3D 1.2.3 documentation</title>
       <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=b86133f3" />
       <link rel="stylesheet" type="text/css" href="_static/css/theme.css?v=e59714d7" />
 
   
       <script src="_static/jquery.js?v=5d32c60e"></script>
       <script src="_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
-      <script src="_static/documentation_options.js?v=cb7bf70b"></script>
+      <script src="_static/documentation_options.js?v=590429e0"></script>
       <script src="_static/doctools.js?v=9bcbadda"></script>
       <script src="_static/sphinx_highlight.js?v=dc90522c"></script>
     <script src="_static/js/theme.js"></script>
@@ -52,8 +52,8 @@
 <li class="toctree-l2"><a class="reference internal" href="#labeling-branches">Labeling Branches</a></li>
 <li class="toctree-l2"><a class="reference internal" href="#examples-of-tweaking-branch-labels-optional">Examples of Tweaking Branch Labels (Optional)</a><ul>
 <li class="toctree-l3"><a class="reference internal" href="#handling-spine-artifacts">Handling spine artifacts</a></li>
-<li class="toctree-l3"><a class="reference internal" href="#handling-split-labels">Handling split labels</a></li>
 <li class="toctree-l3"><a class="reference internal" href="#with-corrections">With Corrections</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#branch-merging-corrections">Branch Merging Corrections</a></li>
 <li class="toctree-l3"><a class="reference internal" href="#morphological-analysis">Morphological Analysis</a></li>
 </ul>
 </li>
@@ -119,7 +119,12 @@
 <li><p>First, I load my image into the nodes channel and segment the image into a binary mask with the ML-segmenter.</p></li>
 <li><p>Next, I save the binary mask and reload it into the edges channel. The edges channel is the staging channel for all branch labeling.</p></li>
 <li><p>Next, I run ‘Process -&gt; Generate -&gt; Label Branches’</p></li>
-<li><p>I am prompted by a window and select ‘Run Branch Label’ to use the default settings. I am prompted by a second window and select ‘Run Node Generation’ to use its default settings (this is a sub-algorithm that the former uses).</p></li>
+<li><p>I am prompted by a window and select ‘Run Branch Label’ to use the default settings.</p></li>
+</ol>
+<a class="reference internal image-reference" href="_images/process6.png"><img alt="Default Menu Settings" src="_images/process6.png" style="width: 500px;" />
+</a>
+<ol class="arabic simple" start="5">
+<li><p>I am prompted by a second window and select ‘Run Node Generation’ to use its default settings (this is a sub-algorithm that the former uses).</p></li>
 </ol>
 <p>With these default settings, my labeled branches look like this:</p>
 <a class="reference internal image-reference" href="_images/branch1.png"><img alt="Neuron default" src="_images/branch1.png" style="width: 500px;" />
@@ -135,7 +140,7 @@
 </ul>
 <p>Luckily NetTracer3D’s branch labelling algorithm has a good variety of auto-correcting tools when labeling branches. Here are a few that are enabled by default that I generally recommend:</p>
 <ol class="arabic simple">
-<li><p>By default, ‘Auto-Correct 2’ is enabled in the branch labeler. This option collapses any internal labels and forces them to merge with neighbors bordering the background. Otherwise, the middle of the neuron here (the soma) would likely have obtained a mosaic-looking set of labels.</p></li>
+<li><p>By default, two auto-correct options are enabled in the branch labeler. The first option collapses any internal labels and forces them to merge with neighbors bordering the background. Otherwise, the middle of the neuron here (the soma) would likely have obtained a mosaic-looking set of labels. The second auto-attempts to correct any branch labels that may not be contiguous in space. It is recommended to keep these settings enabled, although they can be disabled for increased speed in exchange form some minor inaccuracies.</p></li>
 <li><p>For 3D images, ‘Attempt to Auto-Correct Skeleton Looping’ is auto-enabled. This option attempts to convert any polyp-looking artifacts that show up in the internal skeletonization step back to single filaments (generally recommend).</p></li>
 </ol>
 <blockquote>
@@ -154,14 +159,8 @@ To do this, I want to decide what length of spine to remove from the image skele
 <a class="reference internal image-reference" href="_images/branch4.png"><img alt="Branch Grouped" src="_images/branch4.png" style="width: 500px;" />
 </a>
 <p><em>Here, I set ‘Skeleton Branch Length to Remove’ to ‘8’</em></p>
-<p>Now when I run my labeler, it ignores all <em>terminal</em> branches below that length. Note this algorithm will only remove branches starting from an endpoint, until reaching a parent branch. Therefore, more internal branches that do not have endpoints themselves are always safe from removal, allowing us to use larger numbers without risk of major changes to the image.</p>
-</section>
-<section id="handling-split-labels">
-<h3>Handling split labels<a class="headerlink" href="#handling-split-labels" title="Link to this heading"></a></h3>
-<ul class="simple">
-<li><p>Depending on the the structure of the branched image, rarely certain branches may inherit the label of a nearby branch, if they are far away from the internal filament (skeleton) of their own branch and the adjacent branch is much smaller.</p></li>
-<li><p>This issue does not apply here, but to address it, I could enable the ‘Split Non-Touching Branches’ correction option, which is relevant mainly for ‘Branch Adjacency Networks’, but generally not recommended if running purely morphological analysis.</p></li>
-</ul>
+<p>There are some other correction options you can read about in ‘Process -&gt; Generate -&gt; Label Branches’, but this spine one is all we will use here.
+Now when I run my labeler, it ignores all <em>terminal</em> branches below that length. Note this algorithm will only remove branches starting from an endpoint, until reaching a parent branch. Therefore, more internal branches that do not have endpoints themselves are always safe from removal, allowing us to use larger numbers without risk of major changes to the image.</p>
 </section>
 <section id="with-corrections">
 <h3>With Corrections<a class="headerlink" href="#with-corrections" title="Link to this heading"></a></h3>
@@ -169,6 +168,17 @@ To do this, I want to decide what length of spine to remove from the image skele
 <a class="reference internal image-reference" href="_images/branch6.png"><img alt="Branch Final" src="_images/branch6.png" style="width: 500px;" />
 </a>
 <p><em>Branches smaller than 8 voxels long have joined their neighbors</em></p>
+</section>
+<section id="branch-merging-corrections">
+<h3>Branch Merging Corrections<a class="headerlink" href="#branch-merging-corrections" title="Link to this heading"></a></h3>
+<ul class="simple">
+<li><p>Although I did not use it for this specific case, another potentially useful correction option to enable is ‘Reunify Main Branches’, available from the branch labeling menu shown above.</p></li>
+<li><p>By default, branches are labeled as segments existing between branch points. But selecting this will have the program do some additional processing to evaluate if any branches traveling in a similar direction, with a similar radius, ought to be re-joined back into a single long branch.</p></li>
+<li><p>For my neuron, this feature does not handle the ‘Soma’ very well since it’s technically not a branch, but just to show what it can do for some of the other branches, here is the labeling with this option enabled:</p></li>
+</ul>
+<a class="reference internal image-reference" href="_images/union.png"><img alt="Union" src="_images/union.png" style="width: 500px;" />
+</a>
+<p><em>Note how branches such as the big yellow-green one at the bottom now get labeled over longer ranges. In this case, I didn’t enable the ‘collapse internal labels’ feature, which is why the Soma has become more mosaic looking. I could have enabled it, but this additional correction would then merge a few branches with the Soma itself, so it’s a trade off if you have any such non-branched structures. This correction is quite strong for branches themselves, though.</em></p>
 </section>
 <section id="morphological-analysis">
 <h3>Morphological Analysis<a class="headerlink" href="#morphological-analysis" title="Link to this heading"></a></h3>

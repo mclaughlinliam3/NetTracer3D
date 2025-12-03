@@ -77,7 +77,12 @@ def draw_line_inplace(start, end, array):
     """
     
     # Calculate the distances between start and end coordinates
-    distances = end - start
+    try:
+        distances = end - start
+    except:
+        end = np.array(end)
+        start = np.array(start)
+        distances = end - start
 
     # Determine the number of steps along the line
     num_steps = int(max(np.abs(distances)) + 1)
@@ -242,7 +247,8 @@ def draw_network_from_centroids(nodes, network, centroids, twod_bool, directory 
             centroid_dic[item] = centroid
 
         except KeyError:
-            print(f"Centroid {item} missing")
+            pass
+            #print(f"Centroid {item} missing")
     output_stack = np.zeros(np.shape(nodes), dtype=np.uint8)
 
     for i, pair1_val in enumerate(pair1):
@@ -253,7 +259,7 @@ def draw_network_from_centroids(nodes, network, centroids, twod_bool, directory 
             pair2_centroid = centroid_dic[pair2_val]
             draw_line_inplace(pair1_centroid, pair2_centroid, output_stack)
         except KeyError:
-            print(f"Missing centroid {i}")
+            #print(f"Missing centroid {i}")
             pass
 
     if twod_bool:

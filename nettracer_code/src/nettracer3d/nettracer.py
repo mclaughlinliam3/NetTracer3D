@@ -384,6 +384,13 @@ def invert_dict(d):
         inverted.setdefault(value, []).append(key)
     return inverted
 
+def revert_dict(d):
+    inverted = {}
+    for key, value_list in d.items():
+        for value in value_list:
+            inverted[value] = key
+    return inverted
+
 def invert_dict_special(d):
 
     d = invert_dict(d)
@@ -626,6 +633,10 @@ def remove_branches_new(skeleton, length):
     image_copy = (image_copy[1:-1, 1:-1, 1:-1]).astype(np.uint8)
     return image_copy
 
+import numpy as np
+from collections import deque, defaultdict
+
+    
 def remove_branches(skeleton, length):
     """Used to compensate for overly-branched skeletons resulting from the scipy 3d skeletonization algorithm"""
 
@@ -737,8 +748,40 @@ def estimate_object_radii(labeled_array, gpu=False, n_jobs=None, xy_scale = 1, z
     else:
         return morphology.estimate_object_radii_cpu(labeled_array, n_jobs, xy_scale = xy_scale, z_scale = z_scale)
 
+def get_surface_areas(labeled, xy_scale=1, z_scale=1):
+    labels = np.unique(labeled)
+    labels = labels[labels > 0]  # Remove background label
+    max_label = int(np.max(labeled))
+    
+    # Size array to accommodate highest label value
+    surface_areas = np.zeros(max_label + 1, dtype=np.float64)
+    
+    # Check each of 6 face directions (±x, ±y, ±z)
+    for axis in range(3):
+        # Determine face area based on axis (anisotropic scaling)
+        if axis == 2:  # z-axis: face is in xy plane
+            face_area = xy_scale * xy_scale
+        else:  # x or y axis: face is perpendicular to xy plane
+            face_area = xy_scale * z_scale
+        
+        for direction in [-1, 1]:
+            # Shift array to compare with neighbors
+            shifted = np.roll(labeled, direction, axis=axis)
+            
+            # Find faces exposed to different label (including background)
+            exposed_faces = (labeled != shifted) & (labeled > 0)
+            
+            # Count exposed faces per label
+            face_counts = np.bincount(labeled[exposed_faces], 
+                                     minlength=max_label + 1)
+            surface_areas += face_counts * face_area
+    
+    # Create dictionary mapping label to surface area
+    result = {int(label): float(surface_areas[label]) for label in labels}
+        
+    return result
 
-def break_and_label_skeleton(skeleton, peaks = 1, branch_removal = 0, comp_dil = 0, max_vol = 0, directory = None, return_skele = False, nodes = None, compute = True, xy_scale = 1, z_scale = 1):
+def break_and_label_skeleton(skeleton, peaks = 1, branch_removal = 0, comp_dil = 0, max_vol = 0, directory = None, return_skele = False, nodes = None, compute = True, unify = False, xy_scale = 1, z_scale = 1):
     """Internal method to break open a skeleton at its branchpoints and label the remaining components, for an 8bit binary array"""
 
     if type(skeleton) == str:
@@ -786,11 +829,16 @@ def break_and_label_skeleton(skeleton, peaks = 1, branch_removal = 0, comp_dil =
         tifffile.imwrite(filename, labeled_image, photometric='minisblack')
         print(f"Broken skeleton saved to {filename}")
 
+    if not unify:
+        verts = None
+    else:
+        verts = invert_array(verts)
+
     if compute:
 
-        return labeled_image, None, skeleton, None
+        return labeled_image, verts, skeleton, None
 
-    return labeled_image, None, None, None
+    return labeled_image, verts, None, None
 
 def compute_optional_branchstats(verts, labeled_array, endpoints, xy_scale = 1, z_scale = 1):
 
@@ -847,6 +895,11 @@ def compute_optional_branchstats(verts, labeled_array, endpoints, xy_scale = 1, 
             max_distance = distances.max()
             
             tortuosity_dict[label] = len_dict[label]/max_distance
+
+        for branch, length in len_dict.items():
+            if length == 0: # This can happen for branches that are 1 pixel which shouldn't have '0' length technically, so we just set them to the length of a pixel
+                len_dict[branch] = xy_scale
+                tortuosity_dict[branch] = 1
 
     """
     verts = invert_array(verts)
@@ -1045,9 +1098,12 @@ def show_3d(arrays_3d=None, arrays_4d=None, down_factor=None, order=0, xy_scale=
         # Downsample arrays if specified
         arrays_3d = [downsample(array, down_factor, order=order) for array in arrays_3d] if arrays_3d is not None else None
         arrays_4d = [downsample(array, down_factor, order=order) for array in arrays_4d] if arrays_4d is not None else None
+        scale = [z_scale * down_factor, xy_scale * down_factor, xy_scale * down_factor]
+    else:
+        scale = [z_scale, xy_scale, xy_scale]
+
     
     viewer = napari.Viewer(ndisplay=3)
-    scale = [z_scale, xy_scale, xy_scale]  # [z, y, x] order for napari
     
     # Add 3D arrays if provided
     if arrays_3d is not None:
@@ -2205,8 +2261,6 @@ def binarize(arrayimage, directory = None):
 
     arrayimage = arrayimage != 0
 
-    arrayimage = arrayimage.astype(np.uint8)
-
     arrayimage = arrayimage * 255
 
     if type(arrayimage) == str:
@@ -2217,7 +2271,7 @@ def binarize(arrayimage, directory = None):
             tifffile.imwrite(f"{directory}/binary.tif", arrayimage)
 
 
-    return arrayimage
+    return arrayimage.astype(np.uint8)
 
 def dilate(arrayimage, amount, xy_scale = 1, z_scale = 1, directory = None, fast_dil = False, recursive = False, dilate_xy = None, dilate_z = None):
     """
@@ -2322,7 +2376,7 @@ def skeletonize(arrayimage, directory = None):
 
     return arrayimage
 
-def label_branches(array, peaks = 0, branch_removal = 0, comp_dil = 0, max_vol = 0, down_factor = None, directory = None, nodes = None, bonus_array = None, GPU = True, arrayshape = None, compute = False, xy_scale = 1, z_scale = 1):
+def label_branches(array, peaks = 0, branch_removal = 0, comp_dil = 0, max_vol = 0, down_factor = None, directory = None, nodes = None, bonus_array = None, GPU = True, arrayshape = None, compute = False, unify = False, union_val = 10, xy_scale = 1, z_scale = 1):
     """
     Can be used to label branches a binary image. Labelled output will be saved to the active directory if none is specified. Note this works better on already thin filaments and may over-divide larger trunkish objects.
     :param array: (Mandatory, string or ndarray) - If string, a path to a tif file to label. Note that the ndarray alternative is for internal use mainly and will not save its output.
@@ -2346,26 +2400,31 @@ def label_branches(array, peaks = 0, branch_removal = 0, comp_dil = 0, max_vol =
     else:
         arrayshape = arrayshape
 
-
     if nodes is None:
 
         array = array > 0
 
         other_array = skeletonize(array)
 
-        other_array, verts, skele, endpoints = break_and_label_skeleton(other_array, peaks = peaks, branch_removal = branch_removal, comp_dil = comp_dil, max_vol = max_vol, nodes = nodes, compute = compute, xy_scale = xy_scale, z_scale = z_scale)
+        other_array, verts, skele, endpoints = break_and_label_skeleton(other_array, peaks = peaks, branch_removal = branch_removal, comp_dil = comp_dil, max_vol = max_vol, nodes = nodes, compute = compute, unify = unify, xy_scale = xy_scale, z_scale = z_scale)
 
     else:
-        array, verts, skele, endpoints = break_and_label_skeleton(array, peaks = peaks, branch_removal = branch_removal, comp_dil = comp_dil, max_vol = max_vol, nodes = nodes, compute = compute, xy_scale = xy_scale, z_scale = z_scale)
+        if down_factor is not None:
+            bonus_array = downsample(bonus_array, down_factor)
+        array, verts, skele, endpoints = break_and_label_skeleton(array, peaks = peaks, branch_removal = branch_removal, comp_dil = comp_dil, max_vol = max_vol, nodes = nodes, compute = compute, unify = unify, xy_scale = xy_scale, z_scale = z_scale)
 
-    if nodes is not None and down_factor is not None:
-        array = upsample_with_padding(array, down_factor, arrayshape)
+    if unify is True and nodes is not None:
+        from . import branch_stitcher
+        verts = dilate_3D_old(verts, 3, 3, 3,)
+        verts, _ = label_objects(verts)
+        array = branch_stitcher.trace(bonus_array, array, verts, score_thresh = union_val)
+        verts = None
+
 
     if nodes is None:
 
         array = smart_dilate.smart_label(array, other_array, GPU = GPU, remove_template = True)
         #distance = smart_dilate.compute_distance_transform_distance(array)
-        print("Watershedding result...")
         #array = water(-distance, other_array, mask=array) #Tried out skimage watershed as shown and found it did not label branches as well as smart_label (esp combined combined with post-processing label splitting if needed)
 
     else:
@@ -2393,6 +2452,9 @@ def label_branches(array, peaks = 0, branch_removal = 0, comp_dil = 0, max_vol =
         print(f"Labelled branches saved to {filename}")
     else:
         print("Branches labelled")
+
+    if nodes is not None and down_factor is not None:
+        array = upsample_with_padding(array, down_factor, arrayshape)
 
 
     return array, verts, skele, endpoints
@@ -2515,7 +2577,7 @@ def label_vertices(array, peaks = 0, branch_removal = 0, comp_dil = 0, max_vol =
     else:
         broken_skele = None
 
-    if down_factor > 0:
+    if down_factor > 1:
         array_shape = array.shape
         array = downsample(array, down_factor, order)
         if order == 3:
@@ -3065,7 +3127,7 @@ class Network_3D:
                 for _ in range(weight):
                     lista.append(u)
                     listb.append(v)
-                    listc.append(weight)
+                    listc.append(0)
             
             self._network_lists = [lista, listb, listc]
 
@@ -3299,7 +3361,14 @@ class Network_3D:
             if directory is None:
                 try:
                     if len(self._nodes.shape) == 3:
-                        tifffile.imwrite(f"{filename}", self._nodes, imagej=True, metadata=imagej_metadata, resolution=(resolution_value, resolution_value))
+                        try:
+                            tifffile.imwrite(f"{filename}", self._nodes, imagej=True, metadata=imagej_metadata, resolution=(resolution_value, resolution_value))
+                        except:
+                            try:
+                                tifffile.imwrite(f"{filename}", self._nodes)
+                            except:
+                                self._nodes = binarize(self._nodes)
+                                tifffile.imwrite(f"{filename}", self._nodes, imagej=True, metadata=imagej_metadata, resolution=(resolution_value, resolution_value))
                     else:
                         tifffile.imwrite(f"{filename}", self._nodes)
                     print(f"Nodes saved to {filename}")
@@ -3308,9 +3377,16 @@ class Network_3D:
             if directory is not None:
                 try:
                     if len(self._nodes.shape) == 3:
-                        tifffile.imwrite(f"{directory}/{filename}", self._nodes, imagej=True, metadata=imagej_metadata, resolution=(resolution_value, resolution_value))
+                        try:
+                            tifffile.imwrite(f"{directory}/{filename}", self._nodes, imagej=True, metadata=imagej_metadata, resolution=(resolution_value, resolution_value))
+                        except:
+                            try:
+                                tifffile.imwrite(f"{directory}/{filename}", self._nodes)
+                            except:
+                                self._nodes = binarize(self._nodes)
+                                tifffile.imwrite(f"{directory}/{filename}", self._nodes, imagej=True, metadata=imagej_metadata, resolution=(resolution_value, resolution_value))
                     else:
-                        tifffile.imwrite(f"{directory}/{filename}")
+                        tifffile.imwrite(f"{directory}/{filename}", self._nodes)
                     print(f"Nodes saved to {directory}/{filename}")
                 except Exception as e:
                     print(f"Could not save nodes to {directory}")
@@ -3340,11 +3416,25 @@ class Network_3D:
 
         if self._edges is not None:
             if directory is None:
-                tifffile.imwrite(f"{filename}", self._edges, imagej=True, metadata=imagej_metadata, resolution=(resolution_value, resolution_value))
+                try:
+                    tifffile.imwrite(f"{filename}", self._edges, imagej=True, metadata=imagej_metadata, resolution=(resolution_value, resolution_value))
+                except:
+                    try:
+                        tifffile.imwrite(f"{filename}", self._edges)
+                    except:
+                        self._edges = binarize(self._edges)
+                        tifffile.imwrite(f"{filename}", self._edges, imagej=True, metadata=imagej_metadata, resolution=(resolution_value, resolution_value))
                 print(f"Edges saved to {filename}")
 
             if directory is not None:
-                tifffile.imwrite(f"{directory}/{filename}", self._edges, imagej=True, metadata=imagej_metadata, resolution=(resolution_value, resolution_value))
+                try:
+                    tifffile.imwrite(f"{directory}/{filename}", self._edges, imagej=True, metadata=imagej_metadata, resolution=(resolution_value, resolution_value))
+                except:
+                    try:
+                        tifffile.imwrite(f"{directory}/{filename}", self._edges)
+                    except:
+                        self._edges = binarize(self._edges)
+                        tifffile.imwrite(f"{directory}/{filename}", self._edges, imagej=True, metadata=imagej_metadata, resolution=(resolution_value, resolution_value))
                 print(f"Edges saved to {directory}/{filename}")
 
         if self._edges is None:
@@ -3517,14 +3607,28 @@ class Network_3D:
         if self._network_overlay is not None:
             if directory is None:
                 if len(self._network_overlay.shape) == 3:
-                    tifffile.imwrite(f"{filename}", self._network_overlay, imagej=True, metadata=imagej_metadata, resolution=(resolution_value, resolution_value))
+                    try:
+                        tifffile.imwrite(f"{filename}", self._network_overlay, imagej=True, metadata=imagej_metadata, resolution=(resolution_value, resolution_value))
+                    except:
+                        try:
+                            tifffile.imwrite(f"{filename}", self._network_overlay)
+                        except:
+                            self._network_overlay = binarize(self._network_overlay)
+                            tifffile.imwrite(f"{filename}", self._network_overlay, imagej=True, metadata=imagej_metadata, resolution=(resolution_value, resolution_value))
                 else:
                     tifffile.imwrite(f"{filename}", self._network_overlay)
                 print(f"Network overlay saved to {filename}")
 
             if directory is not None:
                 if len(self._network_overlay.shape) == 3:
-                    tifffile.imwrite(f"{directory}/{filename}", self._network_overlay, imagej=True, metadata=imagej_metadata, resolution=(resolution_value, resolution_value))
+                    try:
+                        tifffile.imwrite(f"{directory}/{filename}", self._network_overlay, imagej=True, metadata=imagej_metadata, resolution=(resolution_value, resolution_value))
+                    except:
+                        try:
+                            tifffile.imwrite(f"{directory}/{filename}", self._network_overlay)
+                        except:
+                            self._network_overlay = binarize(self._network_overlay)
+                            tifffile.imwrite(f"{directory}/{filename}", self._network_overlay, imagej=True, metadata=imagej_metadata, resolution=(resolution_value, resolution_value))
                 else:
                     tifffile.imwrite(f"{directory}/{filename}", self._network_overlay)
                 print(f"Network overlay saved to {directory}/{filename}")
@@ -3548,14 +3652,28 @@ class Network_3D:
         if self._id_overlay is not None:
             if directory is None:
                 if len(self._id_overlay.shape) == 3:
-                    tifffile.imwrite(f"{filename}", self._id_overlay, imagej=True, metadata=imagej_metadata, resolution=(resolution_value, resolution_value))
+                    try:
+                        tifffile.imwrite(f"{filename}", self._id_overlay, imagej=True, metadata=imagej_metadata, resolution=(resolution_value, resolution_value))
+                    except:
+                        try:
+                            tifffile.imwrite(f"{filename}", self._id_overlay)
+                        except:                            
+                            self._id_overlay = binarize(self._id_overlay)
+                            tifffile.imwrite(f"{filename}", self._id_overlay, imagej=True, metadata=imagej_metadata, resolution=(resolution_value, resolution_value))
                 else:
                     tifffile.imwrite(f"{filename}", self._id_overlay, imagej=True)
                 print(f"Network overlay saved to {filename}")
 
             if directory is not None:
                 if len(self._id_overlay.shape) == 3:
-                    tifffile.imwrite(f"{directory}/{filename}", self._id_overlay, imagej=True, metadata=imagej_metadata, resolution=(resolution_value, resolution_value))
+                    try:
+                        tifffile.imwrite(f"{directory}/{filename}", self._id_overlay, imagej=True, metadata=imagej_metadata, resolution=(resolution_value, resolution_value))
+                    except:
+                        try:
+                            tifffile.imwrite(f"{directory}/{filename}", self._id_overlay)
+                        except:
+                            self._id_overlay = binarize(self._id_overlay)
+                            tifffile.imwrite(f"{directory}/{filename}", self._id_overlay, imagej=True, metadata=imagej_metadata, resolution=(resolution_value, resolution_value))
                 else:
                     tifffile.imwrite(f"{directory}/{filename}", self._id_overlay)
                 print(f"ID overlay saved to {directory}/{filename}")
@@ -4290,6 +4408,88 @@ class Network_3D:
             df = create_and_save_dataframe(connections_parallel)
             self._network_lists = network_analysis.read_excel_to_lists(df)
             self._network, net_weights = network_analysis.weighted_network(df)
+
+    def create_id_network(self, n=5):
+        import ast
+        import random
+        
+        if self.node_identities is None:
+            return
+        
+        def invert_dict(d):
+            inverted = {}
+            for key, value in d.items():
+                inverted.setdefault(value, []).append(key)
+            return inverted
+        
+        # Invert to get identity -> list of nodes
+        identity_to_nodes = invert_dict(self.node_identities)
+        
+        G = nx.Graph()
+        edge_set = set()
+        
+        # Step 1: Connect nodes within same exact identity
+        for identity, nodes in identity_to_nodes.items():
+            if len(nodes) <= 1:
+                continue
+            
+            # Each node chooses n random neighbors from its identity group
+            for node in nodes:
+                available = [other for other in nodes if other != node]
+                num_to_choose = min(n, len(available))
+                neighbors = random.sample(available, num_to_choose)
+                
+                for neighbor in neighbors:
+                    edge = tuple(sorted([node, neighbor]))
+                    edge_set.add(edge)
+        
+        # Step 2: For list-like identities, connect across groups with shared sub-identities
+        for identity, nodes in identity_to_nodes.items():
+            if identity.startswith('['):
+                try:
+                    sub_identities = ast.literal_eval(identity)
+                    
+                    # For each sub-identity in this list-like identity
+                    for sub_id in sub_identities:
+                        # Find all OTHER identity groups that contain this sub-identity
+                        for other_identity, other_nodes in identity_to_nodes.items():
+                            if other_identity == identity:
+                                continue  # Skip connecting to same exact identity (already done in Step 1)
+                            
+                            # Check if other_identity contains sub_id
+                            contains_sub_id = False
+                            
+                            if other_identity.startswith('['):
+                                try:
+                                    other_sub_ids = ast.literal_eval(other_identity)
+                                    if sub_id in other_sub_ids:
+                                        contains_sub_id = True
+                                except (ValueError, SyntaxError):
+                                    pass
+                            elif other_identity == sub_id:
+                                # Single identity that matches our sub-identity
+                                contains_sub_id = True
+                            
+                            if contains_sub_id:
+                                # Each node from current identity connects to n nodes from other_identity
+                                for node in nodes:
+                                    num_to_choose = min(n, len(other_nodes))
+                                    if num_to_choose > 0:
+                                        neighbors = random.sample(other_nodes, num_to_choose)
+                                        
+                                        for neighbor in neighbors:
+                                            edge = tuple(sorted([node, neighbor]))
+                                            edge_set.add(edge)
+                
+                except (ValueError, SyntaxError):
+                    pass  # Not a valid list, treat as already handled in Step 1
+        
+        G.add_edges_from(edge_set)
+        self.network = G
+
+
+
+
 
     def calculate_all(self, nodes, edges, xy_scale = 1, z_scale = 1, down_factor = None, search = None, diledge = None, inners = True, remove_trunk = 0, ignore_search_region = False, other_nodes = None, label_nodes = True, directory = None, GPU = True, fast_dil = True, skeletonize = False, GPU_downsample = None):
         """
@@ -5378,7 +5578,7 @@ class Network_3D:
         network_analysis.create_bar_graph(proportion_dict, title2, "Node Identity", "Proportion", directory=directory)
 
         try:
-            network_analysis.create_bar_graph(densities, f'Clustering Factor of Node Identities with {search} from nodes {root}', "Node Identity", "Density Search/Density Total", directory=directory)
+            network_analysis.create_bar_graph(densities, f'Relative Density of Node Identities with {search} from nodes {root}', "Node Identity", "Density Search/Density Total", directory=directory)
         except:
             densities = None
 
@@ -5608,7 +5808,6 @@ class Network_3D:
         else:
             search_x, search_z = dilation_length_to_pixels(self._xy_scale, self._z_scale, search, search)
 
-
         num_nodes = int(np.max(self._nodes))
 
         my_dict = proximity.create_node_dictionary(self._nodes, num_nodes, search_x, search_z, targets = targets, fastdil = fastdil, xy_scale = self._xy_scale, z_scale = self._z_scale, search = search)
@@ -5768,7 +5967,7 @@ class Network_3D:
         neighborhoods.visualize_cluster_composition_umap(self.node_centroids, None, id_dictionary = self.node_identities, graph_label = "Node ID", title = 'UMAP Visualization of Node Centroids') 
 
 
-    def identity_umap(self, data):
+    def identity_umap(self, data, mode = 0):
 
         try:
 
@@ -5788,16 +5987,18 @@ class Network_3D:
                 else:
                     del umap_dict[item]
 
-            from scipy.stats import zscore
+            #from scipy.stats import zscore
 
             # Z-score normalize each marker (column)
-            for key in umap_dict:
-                umap_dict[key] = zscore(umap_dict[key])
-
+            #for key in umap_dict:
+                #umap_dict[key] = zscore(umap_dict[key])
 
             from . import neighborhoods
 
-            neighborhoods.visualize_cluster_composition_umap(umap_dict, None, id_dictionary = neighbor_classes, graph_label = "Node ID", title = 'UMAP Visualization of Node Identities by Z-Score') 
+            if mode == 0:
+                neighborhoods.visualize_cluster_composition_umap(umap_dict, None, id_dictionary = neighbor_classes, graph_label = "Node ID", title = 'UMAP Visualization of Node Identities by Z-Score') 
+            else:
+                neighborhoods.visualize_cluster_composition_umap(umap_dict, None, id_dictionary = neighbor_classes, graph_label = "Node ID", title = 'UMAP Visualization of Node Identities by Z-Score', neighborhoods = self.communities, original_communities = self.communities) 
 
         except Exception as e:
             import traceback
@@ -5916,7 +6117,6 @@ class Network_3D:
                         neighbor_group[com] = neighbors[node]
                     except:
                         neighbor_group[com] = 0
-                print(neighbors)
                 neighborhoods.visualize_cluster_composition_umap(umap_dict, id_set, neighborhoods = neighbor_group, original_communities = neighbors)
             elif label == 1:
                 neighborhoods.visualize_cluster_composition_umap(umap_dict, id_set, label = True) 
@@ -5928,6 +6128,19 @@ class Network_3D:
 
         return output, id_set
 
+
+    def group_nodes_by_intensity(self, data, count = None):
+
+        from . import neighborhoods
+
+        clusters = neighborhoods.cluster_arrays(data, count, seed = 42)
+
+        coms = {}
+
+        for i, cluster in enumerate(clusters):
+            coms[i + 1] = cluster
+
+        self.communities = revert_dict(coms)
 
     def assign_neighborhoods(self, seed, count, limit = None, prev_coms = None, proportional = False, mode = 0):
 
@@ -6078,13 +6291,6 @@ class Network_3D:
             return array
 
     def community_cells(self, size = 32, xy_scale = 1, z_scale = 1):
-
-        def revert_dict(d):
-            inverted = {}
-            for key, value_list in d.items():
-                for value in value_list:
-                    inverted[value] = key
-            return inverted
 
         size_x = int(size * xy_scale)
         size_z = int(size * z_scale)

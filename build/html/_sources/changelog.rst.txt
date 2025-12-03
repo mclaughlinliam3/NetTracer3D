@@ -122,3 +122,19 @@ Versions 1.0.6 - 1.1.3 Updates
 	* Added option when calculating branches to get some stats about them (lengths, tortuosity).
 	* Added 'Clean Segmentation' function which just shows a menu grouping together some functions useful for cleaning up a segmentation.
 	* Bug fixes and minor adjustments.
+
+Versions 1.1.4 - 1.2.3 Updates
+	* When using the intensity table used from interactive thresholding for multi-chan codex image (where the user assigns identities to cells based on their defined intensities) - added option to allow k-means clustering based on the results they obtained as a way to group together cells that express similar intensities of fluorescent markers. This is available through the Analyze -> Stats -> Show Identity Violins/UMAP. Should be a good way to auto detect different cell phenotypes in an image. The detected groups are saved as communities, and thereafter can be called once more through the Show Identity Violins/UMAP to comparatively assess the relative marker composition of each community, or to now generate a UMAP grouping the cells based on marker overlap but colored in the visualization by community (before this UMAP could also be shown but would color the cells based on one of their assigned identities).
+	* Removed the option to input a directory for the few methods that could autosave to one when processing something (since saving is generally done elsewhere in the GUI).
+	* Added 'Analyze -> Stats -> Calculate Branch Stats...' to the GUI. Before branch stats could be calculated by labeling branches, but calling this method on a channel with labeled branches in them will just let the user get the branch stats once more. Mainly added this since the user might want to manually reconfigure something about the labeled branches and re-obtain these stats afterwards.
+	* Removed some parameters from a few of the functions that I felt were not very useful/were confusing to use.
+	* Implemented an in-GUI tutorial available from the 'Help' menu
+	* Added second 'neighbor label' option to label objects in one image based on whether they are continuous in space with labels in a second image. Previously the only option was based on rote distance to the nearest label. This one can better define things that are stemming from other things, for example I made it for first labeling branches of an 'Opened' segmentation (eroded, then dilated, which smooths out borders and can improve branch labeling), then relabeling the original branch segmentation based on the 'Opened' branches.
+	* Updated the label correcting optional step for the branch labeler to assign discontinuous branches to have the label of an adjacent 'correctly labeled' branch rather than just taking on a unique label which should greatly improve the labeling schema if a broken label happens to show up.
+	* Added a scalebar that can be toggled on an off in the main canvas.
+	* Fixed saving of Boolean True/False arrays.
+	* Fixed branch functions not working correctly when a temporary downsample was being applied
+	* Added the 'filaments tracer' which can be used to improve vessel based segmentations
+	* Removed options for 'cubic' downsampling during processing as this option actually made outputs worse.
+	* Rearranged the 'Analyze -> Stats' menu
+	* Added ability to attempt to re-merge contiguous large branches that had been split up into separate branches by the branch labeler.

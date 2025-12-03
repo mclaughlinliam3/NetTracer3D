@@ -12,6 +12,7 @@ from typing import Dict, Union, Tuple, List, Optional
 from collections import defaultdict
 from multiprocessing import Pool, cpu_count
 import functools
+from . import smart_dilate as sdl
 
 # Related to morphological border searching:
 
@@ -104,7 +105,6 @@ def create_node_dictionary(nodes, num_nodes, dilate_xy, dilate_z, targets=None, 
     """pre-compute all bounding boxes using find_objects"""
     node_dict = {}
     array_shape = nodes.shape
-
     
     # Get all bounding boxes at once
     bounding_boxes = ndimage.find_objects(nodes)
@@ -1057,3 +1057,124 @@ def create_dict_entry_id(node_dict, label, sub_nodes, sub_edges):
         pass
     else:
         node_dict[label] = _get_node_edge_dict_id(sub_nodes, sub_edges, label)
+
+
+# For the continuous structure labeler:
+
+def get_reslice_space(slice_obj, array_shape):
+    z_slice, y_slice, x_slice = slice_obj
+    
+    # Extract min/max from slices
+    z_min, z_max = z_slice.start, z_slice.stop - 1
+    y_min, y_max = y_slice.start, y_slice.stop - 1
+    x_min, x_max = x_slice.start, x_slice.stop - 1
+    # Add padding
+    y_max = y_max + 1
+    y_min = y_min - 1
+    x_max = x_max + 1
+    x_min = x_min - 1
+    z_max = z_max + 1
+    z_min = z_min - 1
+    # Boundary checks
+    y_max = min(y_max, array_shape[1] - 1)
+    x_max = min(x_max, array_shape[2] - 1)
+    z_max = min(z_max, array_shape[0] - 1)
+    y_min = max(y_min, 0)
+    x_min = max(x_min, 0)
+    z_min = max(z_min, 0)
+    return [z_min, z_max], [y_min, y_max], [x_min, x_max]
+
+def reslice_array(args):
+    """Internal method used for the secondary algorithm to reslice subarrays."""
+    input_array, z_range, y_range, x_range = args
+    z_start, z_end = z_range
+    z_start, z_end = int(z_start), int(z_end)
+    y_start, y_end = y_range
+    y_start, y_end = int(y_start), int(y_end)
+    x_start, x_end = x_range
+    x_start, x_end = int(x_start), int(x_end)
+    
+    # Reslice the array
+    resliced_array = input_array[z_start:z_end + 1, y_start:y_end + 1, x_start:x_end + 1]
+    
+    return resliced_array
+
+def _reassign_label_by_continuous_proximity(sub_to_assign, sub_labels, label):
+    """Internal method used for the secondary algorithm to find pixel involvement of component to be labeled based on nearby labels."""
+    
+    # Create a boolean mask where elements with the specified label are True
+    sub_to_assign = sub_to_assign == label
+    sub_to_assign = nettracer.dilate_3D_old(sub_to_assign, 3, 3, 3) #Dilate the label by 1 to see where the dilated label overlaps
+    sub_to_assign = sub_to_assign != 0
+    sub_labels = sub_labels * sub_to_assign # Isolate only adjacent label
+    sub_to_assign = sdl.smart_label_single(sub_to_assign, sub_labels) # Assign labeling schema from 'sub_to_assign' to 'sub_labels'
+    return sub_to_assign
+
+def process_and_write_voxels(args):
+    """Optimized version using vectorized operations"""
+    to_assign, labels, label, array_shape, bounding_boxes, result_array = args
+    print(f"Processing node {label}")
+
+    # Get the pre-computed bounding box for this label
+    slice_obj = bounding_boxes[label-1]  # -1 because label numbers start at 1
+    
+    z_vals, y_vals, x_vals = get_reslice_space(slice_obj, array_shape)
+    z_start, z_end = z_vals
+    y_start, y_end = y_vals
+    x_start, x_end = x_vals
+    
+    # Extract subarrays
+    sub_to_assign = reslice_array((to_assign, z_vals, y_vals, x_vals))
+    sub_labels = reslice_array((labels, z_vals, y_vals, x_vals))
+    
+    # Create mask for this label BEFORE relabeling (critical!)
+    label_mask = (sub_to_assign == label)
+    
+    # Get local coordinates of voxels belonging to this label
+    local_coords = np.where(label_mask)
+    
+    # Do the relabeling on the subarray
+    # Note: relabeled may contain multiple different label values now
+    relabeled = _reassign_label_by_continuous_proximity(sub_to_assign, sub_labels, label)
+
+    # Apply offsets (vectorized)
+    global_coords = (
+        local_coords[0] + z_start,
+        local_coords[1] + y_start,
+        local_coords[2] + x_start
+    )
+    
+    # Single vectorized write operation
+    # This copies all new label values (potentially multiple different labels)
+    # for voxels that originally belonged to 'label'
+    result_array[global_coords] = relabeled[local_coords]
+
+def create_label_map(to_assign, labels, num_labels, array_shape):
+    """Modified to pre-compute all bounding boxes and write voxels in parallel"""
+    
+    # Get all bounding boxes at once
+    bounding_boxes = ndimage.find_objects(to_assign)
+    
+    # Clone to_assign for modifications (original used for reading subarrays)
+    result_array = to_assign.copy()
+    
+    # Use ThreadPoolExecutor for parallel execution
+    with ThreadPoolExecutor(max_workers=mp.cpu_count()) as executor:
+        # Create args list with bounding_boxes and result_array included
+        args_list = [(to_assign, labels, i, array_shape, bounding_boxes, result_array) 
+                    for i in range(1, num_labels + 1)]
+        
+        # Execute parallel tasks - each writes directly to result_array
+        futures = [executor.submit(process_and_write_voxels, args) for args in args_list]
+        
+        # Wait for all to complete
+        for future in futures:
+            future.result()
+    
+    return result_array
+
+def label_continuous(to_assign, labels):
+    array_shape = to_assign.shape
+    num_labels = np.max(to_assign)
+    result = create_label_map(to_assign, labels, num_labels, array_shape)
+    return result

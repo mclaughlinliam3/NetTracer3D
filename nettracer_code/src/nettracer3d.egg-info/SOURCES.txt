@@ -2,9 +2,11 @@ LICENSE
 README.md
 pyproject.toml
 src/nettracer3d/__init__.py
+src/nettracer3d/branch_stitcher.py
 src/nettracer3d/cellpose_manager.py
 src/nettracer3d/community_extractor.py
 src/nettracer3d/excelotron.py
+src/nettracer3d/filaments.py
 src/nettracer3d/modularity.py
 src/nettracer3d/morphology.py
 src/nettracer3d/neighborhoods.py
@@ -21,6 +23,7 @@ src/nettracer3d/segmenter_GPU.py
 src/nettracer3d/simple_network.py
 src/nettracer3d/smart_dilate.py
 src/nettracer3d/stats.py
+src/nettracer3d/tutorial.py
 src/nettracer3d.egg-info/PKG-INFO
 src/nettracer3d.egg-info/SOURCES.txt
 src/nettracer3d.egg-info/dependency_links.txt

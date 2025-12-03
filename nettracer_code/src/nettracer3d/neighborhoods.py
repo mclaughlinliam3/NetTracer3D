@@ -200,10 +200,14 @@ def plot_dict_heatmap(unsorted_data_dict, id_set, figsize=(12, 8), title="Neighb
     
     data_dict = {k: unsorted_data_dict[k] for k in sorted(unsorted_data_dict.keys())}
     # Convert dict to 2D array for heatmap
-    # Each row represents one key from the dict
     keys = list(data_dict.keys())
     data_matrix = np.array([data_dict[key] for key in keys])
-    
+
+    # Move key 0 to the bottom if it exists as the first key
+    if keys and keys[0] == 0:
+        keys.append(keys.pop(0))
+        data_matrix = np.vstack([data_matrix[1:], data_matrix[0:1]])
+
     # Create the plot
     fig, ax = plt.subplots(figsize=figsize)
     
@@ -276,8 +280,13 @@ def plot_dict_heatmap(unsorted_data_dict, id_set, figsize=(12, 8), title="Neighb
     ax.set_xticks(np.arange(len(id_set)))
     ax.set_yticks(np.arange(len(keys)))
     ax.set_xticklabels(id_set)
-    ax.set_yticklabels(keys)
-    
+    labels = list(keys)
+    if labels and labels[-1] == 0:
+        labels[-1] = 'Excluded (0)'
+    ax.set_yticklabels(labels)
+
+
+
     # Rotate x-axis labels for better readability
     plt.setp(ax.get_xticklabels(), rotation=45, ha="right", rotation_mode="anchor")
     
@@ -793,7 +802,7 @@ def create_community_heatmap(community_intensity, node_community, node_centroids
             return np.array([r, g, b], dtype=np.uint8)
         
         # Create lookup table for RGB colors
-        max_label = int(max(max(labeled_array.flat), max(node_to_community_intensity.keys()) if node_to_community_intensity else 0))
+        max_label = max(max(labeled_array.flat), max(node_to_community_intensity.keys()) if node_to_community_intensity else 0)
         color_lut = np.zeros((max_label + 1, 3), dtype=np.uint8)  # Default to black (0,0,0)
         
         # Fill lookup table with RGB colors based on community intensity
@@ -1036,8 +1045,8 @@ def create_node_heatmap(node_intensity, node_centroids, shape=None, is_3d=True,
 
         # Modified usage in your main function:
         # Create lookup table for RGBA colors (note the 4 channels now)
-        max_label = int(max(max(labeled_array.flat), max(node_to_intensity.keys()) if node_to_intensity else 0))
-        color_lut = np.zeros((max_label + 1, 4), dtype=np.uint8)
+        max_label = max(max(labeled_array.flat), max(node_to_intensity.keys()) if node_to_intensity else 0)
+        color_lut = np.zeros((max_label + 1, 4), dtype=np.uint8)  # Default to transparent (0,0,0,0)
 
         # Fill lookup table with RGBA colors based on intensity
         for node_id, intensity in node_to_intensity.items():
@@ -1128,7 +1137,7 @@ def create_node_heatmap(node_intensity, node_centroids, shape=None, is_3d=True,
 
 def create_violin_plots(data_dict, graph_title="Violin Plots"):
     """
-    Create violin plots from dictionary data with distinct colors.
+    Create violin plots from dictionary data with distinct colors and IQR lines.
     
     Parameters:
     data_dict (dict): Dictionary where keys are column headers (strings) and 
@@ -1140,110 +1149,133 @@ def create_violin_plots(data_dict, graph_title="Violin Plots"):
         return
     
     # Prepare data
+    data_dict = dict(sorted(data_dict.items()))
     labels = list(data_dict.keys())
     data_lists = list(data_dict.values())
     
-    # Generate colors using the community color strategy
+    # Generate colors
     try:
-        # Create a mock community dict for color generation
-        mock_community_dict = {i: i+1 for i in range(len(labels))}  # No outliers for simplicity
-        
-        # Get distinct colors
-        n_colors = len(labels)
-        colors_rgb = community_extractor.generate_distinct_colors(n_colors)
-        
-        # Sort by data size for consistent color assignment (like community sizes)
-        data_sizes = [(i, len(data_lists[i])) for i in range(len(data_lists))]
-        sorted_indices = sorted(data_sizes, key=lambda x: (-x[1], x[0]))
-        
-        # Create color mapping
-        colors = []
-        for i, _ in sorted_indices:
-            color_idx = sorted_indices.index((i, _))
-            if color_idx < len(colors_rgb):
-                # Convert RGB (0-255) to matplotlib format (0-1)
-                rgb_normalized = tuple(c/255.0 for c in colors_rgb[color_idx])
-                colors.append(rgb_normalized)
-            else:
-                colors.append('gray')  # Fallback color
-        
-        # Reorder colors to match original label order
-        final_colors = ['gray'] * len(labels)
-        for idx, (original_idx, _) in enumerate(sorted_indices):
-            final_colors[original_idx] = colors[idx]
-            
+        final_colors = generate_distinct_colors(len(labels))
     except Exception as e:
         print(f"Color generation failed, using default colors: {e}")
-        # Fallback to default matplotlib colors
         final_colors = plt.cm.Set3(np.linspace(0, 1, len(labels)))
     
-    # Create the plot
     fig, ax = plt.subplots(figsize=(max(8, len(labels) * 1.5), 6))
     
     # Create violin plots
-    violin_parts = ax.violinplot(data_lists, positions=range(len(labels)), 
-                                showmeans=False, showmedians=True, showextrema=True)
+    violin_parts = ax.violinplot(
+        data_lists, positions=range(len(labels)),
+        showmeans=False, showmedians=True, showextrema=True
+    )
     
-    # Color the violins
+    # Color violins
     for i, pc in enumerate(violin_parts['bodies']):
         if i < len(final_colors):
             pc.set_facecolor(final_colors[i])
             pc.set_alpha(0.7)
     
-    # Color the other violin elements
+    # Color other violin parts
     for partname in ('cbars', 'cmins', 'cmaxes', 'cmedians'):
         if partname in violin_parts:
             violin_parts[partname].set_edgecolor('black')
             violin_parts[partname].set_linewidth(1)
-            
-    # Add data points as scatter plot overlay with much lower transparency
-    """
-    for i, data in enumerate(data_lists):
-        y = data
-        # Add some jitter to x positions for better visibility
-        x = np.random.normal(i, 0.04, size=len(y))
-        ax.scatter(x, y, alpha=0.2, s=15, color='black', edgecolors='none', zorder=3)  # No borders, more transparent
-    """
     
-    # Calculate reasonable y-axis limits to focus on the bulk of the data
+    # Set y-limits using percentiles to reduce extreme outlier influence
     all_data = [val for sublist in data_lists for val in sublist]
     if all_data:
-        # Use percentiles to exclude extreme outliers from the view
-        y_min = np.percentile(all_data, 5)   # 5th percentile
-        y_max = np.percentile(all_data, 95)  # 95th percentile
-        
-        # Add some padding
+        y_min = np.percentile(all_data, 5)
+        y_max = np.percentile(all_data, 95)
         y_range = y_max - y_min
         y_padding = y_range * 0.15
         ax.set_ylim(y_min - y_padding, y_max + y_padding)
     
-    # Add IQR and median text annotations BELOW the violins
+    # Add IQR and median text annotations and dotted IQR lines
     for i, data in enumerate(data_lists):
         if len(data) > 0:
             q1, median, q3 = np.percentile(data, [25, 50, 75])
             iqr = q3 - q1
+
+            # Add dotted green lines for IQR
+            ax.hlines(
+                [q1, q3],
+                i - 0.25, i + 0.25,
+                colors='green',
+                linestyles='dotted',
+                linewidth=1.5,
+                zorder=3,
+                label='IQR (25th–75th)' if i == 0 else None  # Add label once
+            )
             
-            # Position text below the violin (using current y-axis limits)
+            # Text annotation below the violins
             y_min_current = ax.get_ylim()[0]
             y_text = y_min_current - (ax.get_ylim()[1] - ax.get_ylim()[0]) * 0.15
-            
-            ax.text(i, y_text, f'Median: {median:.2f}\nIQR: {iqr:.2f}', 
-                   horizontalalignment='center', fontsize=8, 
-                   bbox=dict(boxstyle='round,pad=0.3', facecolor='white', alpha=0.8))
+            ax.text(
+                i, y_text, f'Median: {median:.2f}\nIQR: {iqr:.2f}', 
+                ha='center', fontsize=8, 
+                bbox=dict(boxstyle='round,pad=0.3', facecolor='white', alpha=0.8)
+            )
     
-    # Customize the plot
+    # Customize appearance
     ax.set_xticks(range(len(labels)))
     ax.set_xticklabels(labels, rotation=45, ha='right')
     ax.set_title(graph_title, fontsize=14, fontweight='bold')
     ax.set_ylabel('Normalized Values (Z-score-like)', fontsize=12)
     ax.grid(True, alpha=0.3)
     
-    # Add a horizontal line at y=0 (the identity centerpoint)
-    ax.axhline(y=0, color='red', linestyle='--', alpha=0.5, linewidth=1, 
-               label='Identity Centerpoint')
+    # Add baseline
+    ax.axhline(y=0, color='red', linestyle='--', alpha=0.5, linewidth=1, label='Identity Basepoint')
     ax.legend(loc='upper right')
     
-    # Adjust layout to prevent label cutoff and accommodate bottom text
-    plt.subplots_adjust(bottom=0.2)  # Extra space for bottom text
+    plt.subplots_adjust(bottom=0.2)
     plt.tight_layout()
     plt.show()
+
+    # --- Outlier Detection ---
+    outliers_info = []
+    non_outlier_data = []
+
+    for i, data in enumerate(data_lists):
+        if len(data) > 0:
+            q1, median, q3 = np.percentile(data, [25, 50, 75])
+            iqr = q3 - q1
+            lower_bound = q1 - 1.5 * iqr
+            upper_bound = q3 + 1.5 * iqr
+
+            outliers = [val for val in data if val < lower_bound or val > upper_bound]
+            non_outliers = [val for val in data if lower_bound <= val <= upper_bound]
+
+            outliers_info.append({
+                'label': labels[i],
+                'outliers': outliers,
+                'lower_bound': lower_bound,
+                'upper_bound': upper_bound,
+                'total_count': len(data)
+            })
+            non_outlier_data.append(non_outliers)
+        else:
+            outliers_info.append({
+                'label': labels[i],
+                'outliers': [],
+                'lower_bound': None,
+                'upper_bound': None,
+                'total_count': 0
+            })
+            non_outlier_data.append([])
+
+    print("\n" + "="*60)
+    print("OUTLIER DETECTION SUMMARY")
+    print("="*60)
+    total_outliers = 0
+    for info in outliers_info:
+        n_outliers = len(info['outliers'])
+        total_outliers += n_outliers
+        if n_outliers > 0:
+            print(f"{info['label']}: {n_outliers} outliers out of {info['total_count']} points "
+                  f"({n_outliers/info['total_count']*100:.1f}%)")
+            print(f" Outlier Removed Range: [{info['lower_bound']:.2f}, {info['upper_bound']:.2f}]")
+    if total_outliers == 0:
+        print("No outliers detected in any dataset.")
+    else:
+        print(f"\nTotal outliers across all datasets: {total_outliers}")
+    print("="*60 + "\n")
+

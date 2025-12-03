@@ -49,7 +49,8 @@ Before we start with an example, we'll go over the control panel on the bottom. 
 
 #. The Active Image widget
     * Clicking on the carrot will allow you to select which image is 'Active'. Many processing/analysis functions will by default run on the image that is 'Active'. Furthermore, when clicking or drawing in the Image Viewer Window, the 'Active' image is the one that will be referenced.
-#. The home widget; simply resets the view to default, in case you get stuck in a weird zoom state. (Shortcut - 'Shift + Right Click' while in zoom mode.)
+#. The scale bar widget: Click this to add a scale bar to the canvas display. Click it again to remove the scale bar.
+#. The home widget: simply resets the view to default, in case you get stuck in a weird zoom state. (Shortcut - 'Shift + Right Click' while in zoom mode.)
 #. The zoom widget (magnifying glass - Shortcut Z)
     * Press z or click the magnifying glass widget to enter the zoom mode. Clicking the Image Viewer Window in zoom mode will cause you to zoom in. Right clicking will cause you to zoom out. Dragging in zoom mode will zoom in on a specific area.
 #. The pan widget (hand - Shortcut middle mouse)

@@ -495,6 +495,42 @@ def smart_label(binary_array, label_array, directory = None, GPU = True, predown
 
     return dilated_nodes_with_labels
 
+def smart_label_single(binary_array, label_array):
+
+    # Step 1: Binarize the labeled array
+    binary_core = binarize(label_array)
+    binary_array = binarize(binary_array)
+
+    # Step 3: Isolate the ring (binary dilated mask minus original binary mask)
+    ring_mask = binary_array & invert_array(binary_core)
+
+    nearest_label_indices = compute_distance_transform(invert_array(label_array))
+
+    # Step 5: Process the entire array without parallelization
+    dilated_nodes_with_labels = process_chunk(0, label_array.shape[1], label_array, ring_mask, nearest_label_indices)
+
+    dilated_nodes_with_labels = dilated_nodes_with_labels * binary_array
+
+
+    return dilated_nodes_with_labels
+
+def neighbor_label(binary_array, label_array):
+
+    binary_array = binary_array != 0
+
+    targets = binary_array - binarize(label_array)
+
+    label_array = smart_dilate(label_array, 3, 3, GPU = False, fast_dil = False, xy_scale = 1, z_scale = 1)
+
+    return None 
+
+    #TBD: This requires the serial dilation strategy methinks, unfortunately. Get labeled components of all outer regions of the binary array to be labeled. For each, cut out a sub array from the old label array and pad by one in all dimensions. Apply boolean threshold to get just the label we want. Apply binary dilation on the binary subarray of just one and multiply that against the labeled sub array - we have isolated the available labelers. Finally do smart dilate on this sub array region. 
+
+
+
+
+
+
 def compute_distance_transform_GPU(nodes, return_dists = False, sampling = [1, 1, 1]):
     is_pseudo_3d = nodes.shape[0] == 1
     if is_pseudo_3d:

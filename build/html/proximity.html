@@ -6,14 +6,14 @@
   <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
 
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Proximity Networks - Ideal for Cellular Data &mdash; NetTracer3D 1.1.3 documentation</title>
+  <title>Proximity Networks - Ideal for Cellular Data &mdash; NetTracer3D 1.2.3 documentation</title>
       <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=b86133f3" />
       <link rel="stylesheet" type="text/css" href="_static/css/theme.css?v=e59714d7" />
 
   
       <script src="_static/jquery.js?v=5d32c60e"></script>
       <script src="_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
-      <script src="_static/documentation_options.js?v=cb7bf70b"></script>
+      <script src="_static/documentation_options.js?v=590429e0"></script>
       <script src="_static/doctools.js?v=9bcbadda"></script>
       <script src="_static/sphinx_highlight.js?v=dc90522c"></script>
     <script src="_static/js/theme.js"></script>
@@ -49,7 +49,10 @@
 <li class="toctree-l1"><a class="reference internal" href="quickstart.html">Quickstart - Segmenting Data and Generating Connectivity Networks</a></li>
 <li class="toctree-l1 current"><a class="current reference internal" href="#">Proximity Networks - Ideal for Cellular Data</a><ul>
 <li class="toctree-l2"><a class="reference internal" href="#generating-a-network-based-on-proximity">Generating a Network Based on Proximity</a></li>
-<li class="toctree-l2"><a class="reference internal" href="#using-proximity-networks-for-advanced-cellular-neighborhood-analysis-example-analysis-of-codex-sample">Using Proximity Networks for Advanced Cellular Neighborhood Analysis - Example Analysis of CODEX sample</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#using-proximity-networks-for-advanced-cellular-neighborhood-analysis-example-analysis-of-codex-sample">Using Proximity Networks for Advanced Cellular Neighborhood Analysis - Example Analysis of CODEX sample</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#grouping-cells-by-shared-expression-profile">Grouping Cells By Shared Expression Profile</a></li>
+</ul>
+</li>
 <li class="toctree-l2"><a class="reference internal" href="#next-steps">Next Steps</a></li>
 </ul>
 </li>
@@ -166,7 +169,36 @@ This is an image of a renal papilla. Here it is stained with DAPI (Nuclei).</p>
 <p><em>Note that the UMAP adds an extra processing step but it can be a decent option for validation. If your cells are overlapping where they shouldn’t, either the thresholding step or the image itself was poor.</em></p>
 <ul class="simple">
 <li><p>This method of identity assignment can be quite useful to shield against phenotyping errors, since the mean intensity of each node is considered when assigning cells, with the user-in-the-loop, rather than just auto-assigning them based on overlap with the channel’s segmented foreground.</p></li>
-<li><p>However the auto-assignment option also exists, and I am going to be using it from here on out anyway, since I happened to already have segmented several channels of interest.</p></li>
+</ul>
+<section id="grouping-cells-by-shared-expression-profile">
+<h3>Grouping Cells By Shared Expression Profile<a class="headerlink" href="#grouping-cells-by-shared-expression-profile" title="Link to this heading"></a></h3>
+<ul class="simple">
+<li><p>When we finish running the above steps, we will be prompted to save a spreadsheet containing the average intensity of each channel for each cell. We will want to save that, as well as our progress so far, as we especially do not want to lose our assigned node identities. Utilize ‘File -&gt; Save As -&gt; Save Network3D Object As’ to save the current session.</p></li>
+<li><p>Next, from the menu bar, select ‘Analyze -&gt; Stats -&gt; Show Identity Violins/UMAP/Assign Intensity Neighborhoods’. We are prompted to find the intensities spreadsheet we just saved. After finding it, we open this menu:</p></li>
+</ul>
+<a class="reference internal image-reference" href="_images/violin_menu.png"><img alt="Violins" src="_images/violin_menu.png" style="width: 400px;" />
+</a>
+<ul class="simple">
+<li><p>From this menu, we can generate violin plots for each marker. The markers are normalized based on what we called the lower-end threshold for what is valid as that identity.</p></li>
+<li><p>As an example, we can generate this violin plot containing all our cells we called ‘CD68’:</p></li>
+</ul>
+<a class="reference internal image-reference" href="_images/violins.png"><img alt="Violins2" src="_images/violins.png" style="width: 400px;" />
+</a>
+<ul class="simple">
+<li><p>This plot is quite easy to interpret. Any value above 0 represents what we called a ‘valid’ representation of that identity during our assignment phase. We can see that our CD68 violin is completely above 0, as we are only looking at cells we assigned CD68 anyway.</p></li>
+<li><p>Therefore, any portion of the other plots above 0 means that our CD68 cells are also showing valid expression of that marker. Here, we see the most overlap with ‘CD31’.</p></li>
+<li><p>From the previous menu, we can group all our cells into neighborhoods based on the overlap of their channel markers. These neighborhoods can be used to re-label our UMAP from before:</p></li>
+</ul>
+<a class="reference internal image-reference" href="_images/UMAPhoods.png"><img alt="UMAPhoods" src="_images/UMAPhoods.png" style="width: 800px;" />
+</a>
+<ul class="simple">
+<li><p>We can also create violin plots akin to those shown previously, but for our communities or neighborhoods:</p></li>
+</ul>
+<a class="reference internal image-reference" href="_images/violinhoods.png"><img alt="violinhoods" src="_images/violinhoods.png" style="width: 800px;" />
+</a>
+<ul class="simple">
+<li><p>This neighborhood shows strong expression of CD31 but weaker expression of the other markers. It likely just represents blood vessels. This can be an effective way to query different unique cell phenotypes in our image.</p></li>
+<li><p>Moving on from marker-based analysis, we may be interested in NetTracer3D’s spatial capabilities. We will evaluate this over a broader set of markers. While this system is primarily designed to start with our user-in-the-loop per-channel thresholder, more nuanced segmentations can be created and also brought in via the auto-assignment capability. I will just demo that for these additional markers since I happened to already have segmented several channels of interest.</p></li>
 <li><p>To use the auto-assignment, choose the following option:</p></li>
 </ul>
 <a class="reference internal image-reference" href="_images/choosetwo.png"><img alt="choosetwo" src="_images/choosetwo.png" style="width: 800px;" />
@@ -247,6 +279,7 @@ This is an image of a renal papilla. Here it is stained with DAPI (Nuclei).</p>
 <li><p>An important mention is that these histograms may be slow to generate for very complex networks. If over-connectivity is an issue for proximity networks, there is a parameter during their generation that can be used to actually limit the number of connections each node is allowed to make to their nearest ‘n’ neighbors! This can be important to use for very knotted networks (but it only works for the proximity networks made from centroids)! (Also worth mentioning that this means we can generate networks based on nearest neighbors as opposed to distance if we just tell NetTracer3D to limit itself to n nearest neighbors, but with a very large search distance).</p></li>
 <li><p>Finally, the histogram algorithms may refuse to run on disconnected networks, which many of these cell graphs can frequently yield. One option then is to first get the subgraph. You can click on any node in the image, then right click and choose ‘Show Connected Component’. The corresponding subgraph will populate the ‘Selection’ table in the lower left. Right click the selection table to save it, then load it back into NetTracer3D with load network (or right click it and choose swap with network table, but beware that this risks losing the wider network information if it’s not backed up). Once we’ve put the subgraph in the main network, the network analysis algorithms will run on the subgraph instead!</p></li>
 </ul>
+</section>
 </section>
 <section id="next-steps">
 <h2>Next Steps<a class="headerlink" href="#next-steps" title="Link to this heading"></a></h2>

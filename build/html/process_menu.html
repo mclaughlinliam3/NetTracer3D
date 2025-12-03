@@ -6,14 +6,14 @@
   <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
 
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>All Process Menu Options &mdash; NetTracer3D 1.1.3 documentation</title>
+  <title>All Process Menu Options &mdash; NetTracer3D 1.2.3 documentation</title>
       <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=b86133f3" />
       <link rel="stylesheet" type="text/css" href="_static/css/theme.css?v=e59714d7" />
 
   
       <script src="_static/jquery.js?v=5d32c60e"></script>
       <script src="_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
-      <script src="_static/documentation_options.js?v=cb7bf70b"></script>
+      <script src="_static/documentation_options.js?v=590429e0"></script>
       <script src="_static/doctools.js?v=9bcbadda"></script>
       <script src="_static/sphinx_highlight.js?v=dc90522c"></script>
     <script src="_static/js/theme.js"></script>
@@ -155,12 +155,17 @@
 <li class="toctree-l3"><a class="reference internal" href="#id31">Algorithm Explanations</a></li>
 </ul>
 </li>
+<li class="toctree-l2"><a class="reference internal" href="#process-generate-trace-filaments">‘Process -&gt; Generate -&gt; Trace Filaments’</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#id32">Parameter Explanations</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#id33">Algorithm Explanations</a></li>
+</ul>
+</li>
 <li class="toctree-l2"><a class="reference internal" href="#process-generate-generate-voronoi-diagram">‘Process -&gt; Generate -&gt; Generate Voronoi Diagram’</a><ul>
-<li class="toctree-l3"><a class="reference internal" href="#id32">Algorithm Explanations</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#id34">Algorithm Explanations</a></li>
 </ul>
 </li>
 <li class="toctree-l2"><a class="reference internal" href="#process-modify-network-properties">‘Process -&gt; Modify Network/Properties’</a><ul>
-<li class="toctree-l3"><a class="reference internal" href="#id33">Parameter Explanations</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#id35">Parameter Explanations</a></li>
 </ul>
 </li>
 <li class="toctree-l2"><a class="reference internal" href="#next-steps">Next Steps</a></li>
@@ -221,13 +226,6 @@
 <h3>Parameter Explanations<a class="headerlink" href="#parameter-explanations" title="Link to this heading"></a></h3>
 <ol class="arabic simple">
 <li><dl class="simple">
-<dt>Output Directory</dt><dd><ul class="simple">
-<li><p>If a string path is included to a directory, the resulting Network3D Object will be saved there as it’s calculated. If nothing is included, this will save nothing by default, and the user will need to save in post with ‘File -&gt; Save (As)’</p></li>
-</ul>
-</dd>
-</dl>
-</li>
-<li><dl class="simple">
 <dt>xy_scale</dt><dd><ul class="simple">
 <li><p>Enter a float value here if you want your X/Y 2D plane pixel-scaling to correspond to some real world value. (ie, 5 microns per pixel). It is presumed to be 1 by default.</p></li>
 </ul>
@@ -263,41 +261,9 @@
 </dl>
 </li>
 <li><dl class="simple">
-<dt>Downsample for Centroids (int)</dt><dd><ul class="simple">
-<li><p>Temporarily downsamples the image on the step to calculate centroids to speed that up (it can be somewhat slow on overly large images). The downsample will be performed in all three dimensions corresponding to the factor entered here.</p></li>
-<li><p>Note that centroids calculated on downsampled images have to be approximated to the upsampled version, so they may not correspond <em>perfectly</em>, although they will generally be close enough.</p></li>
-<li><dl class="simple">
-<dt>Warning: for any downsample on an image containing small nodes, if those nodes’ smallest dimension is smaller than this down factor, they run the risk of being kicked out of the downsampled image, which means their centroid will not be found.</dt><dd><ul>
-<li><p>Please use downsampling that corresponds to your node sizes.</p></li>
-</ul>
-</dd>
-</dl>
-</li>
-<li><p>(For larger images, I would generally set this param to something assuming your nodes are big enough.)</p></li>
-<li><p>As a side note, the value here will also essentially enlarge the overlays from this method (assuming you opt to use them). Larger overlays may be desired for visualization purposes. Note that smaller overlays can still be generated from ‘Image -&gt; Overlays…’ if this behavior is not desired.</p></li>
-</ul>
-</dd>
-</dl>
-</li>
-<li><dl class="simple">
-<dt>Downsample for Distance Transform (GPU) (int):</dt><dd><ul class="simple">
-<li><p>Currently this param only applies if both fast dilation and GPU is enabled. (Non fast-dilation allows calculates a full distance transform).</p></li>
-<li><p>This param temporarily downsamples the image in all three dimensions by the downsample factor while calculating the distance transform on GPU.</p></li>
-<li><dl class="simple">
-<dt>Warning: for any downsample on an image containing small nodes, if those nodes’ smallest dimension is smaller than this down factor, they run the risk of being kicked out of the downsampled image, which means they will not be considered for network connections.</dt><dd><ul>
-<li><p>Please use downsampling that corresponds to your node sizes.</p></li>
-</ul>
-</dd>
-</dl>
-</li>
-</ul>
-</dd>
-</dl>
-</li>
-<li><dl class="simple">
-<dt>Filepath or directory containing additional node images.</dt><dd><ul class="simple">
-<li><p>If a string filepath is inputted here, NetTracer3D will look in that directory. It will attempt to merge any .tif files in that directory with the current node channel before calculating the network, assigning them identities based on their image of origin.</p></li>
-<li><p>See <a class="reference internal" href="file_menu.html#merge-nodes"><span class="std std-ref">‘File-&gt; Load -&gt; Load Misc Properties -&gt; Merge Nodes’</span></a> for more information.</p></li>
+<dt>Re-Label Nodes…:</dt><dd><ul class="simple">
+<li><p>Makes NetTracer3D label objects in the nodes channel with a simple adjacency-labeling scheme (ie, all discrete objects in space aquire a unique number).</p></li>
+<li><p><strong>DISABLE</strong> this option if your nodes were already labeled elsewhere.</p></li>
 </ul>
 </dd>
 </dl>
@@ -312,25 +278,6 @@
 </dl>
 </li>
 <li><dl class="simple">
-<dt>Use GPU:</dt><dd><ul class="simple">
-<li><p>Has NetTracer3D attempt to use the GPU for the distance transform step.</p></li>
-<li><p>If fast dilation is enabled and your system runs out of VRAM doing the distance transform, this algorithm is set up to iteratively retry the operation with successive downsamples, until it finds one that fits in your GPU. This downsample is only temporary - NetTracer3D is attempting to find seed kernels to reassign labels in a full-sized binary dilation.</p></li>
-<li><p>Note that this of course runs the risk of removing nodes from your array, as described in parameter 7 (Use parameter 7 for more direct control over this behavior).</p></li>
-<li><p>If the distance transform fails for any othe reason on GPU, it will by default be computed on CPU instead. The CPU version will never attempt to downsample.</p></li>
-<li><p>Note that the above only applies to fast dilation. Not using fast dilation will just attempt to use the GPU for the distance transform once, then move on the CPU if memory runs out.</p></li>
-</ul>
-</dd>
-</dl>
-</li>
-<li><dl class="simple">
-<dt>Re-Label Nodes…:</dt><dd><ul class="simple">
-<li><p>Makes NetTracer3D label objects in the nodes channel with a simple adjacency-labeling scheme (ie, all discrete objects in space aquire a unique number).</p></li>
-<li><p><strong>DISABLE</strong> this option if your nodes were already labeled elsewhere.</p></li>
-</ul>
-</dd>
-</dl>
-</li>
-<li><dl class="simple">
 <dt>Use Inner Edges:</dt><dd><ul class="simple">
 <li><p>If enabled, edges that connect nodes that exist soley within said nodes’ search regions will be used to make connections.</p></li>
 <li><p>Note that there is not really a great reason to disable this, but it could be because you only want more distant connections to be considered.</p></li>
@@ -339,10 +286,18 @@
 </dl>
 </li>
 <li><dl class="simple">
-<dt>Use Fast Dilation:</dt><dd><ul class="simple">
-<li><p>If enabled, dilation will be predicted using pseudo-3D binary kernels.</p></li>
-<li><p>When disabled, dilation will be done using a perfect distance transform.</p></li>
-<li><p>For more information on this algorithm, see <a class="reference internal" href="#dilation"><span class="std std-ref">‘Process -&gt; Image -&gt; Dilate’</span></a>.</p></li>
+<dt>Downsample for Centroids (int)</dt><dd><ul class="simple">
+<li><p>Temporarily downsamples the image on the step to calculate centroids to speed that up (it can be somewhat slow on overly large images). The downsample will be performed in all three dimensions corresponding to the factor entered here.</p></li>
+<li><p>Note that centroids calculated on downsampled images have to be approximated to the upsampled version, so they may not correspond <em>perfectly</em>, although they will generally be close enough.</p></li>
+<li><dl class="simple">
+<dt>Warning: for any downsample on an image containing small nodes, if those nodes’ smallest dimension is smaller than this down factor, they run the risk of being kicked out of the downsampled image, which means their centroid will not be found.</dt><dd><ul>
+<li><p>Please use downsampling that corresponds to your node sizes.</p></li>
+</ul>
+</dd>
+</dl>
+</li>
+<li><p>(For larger images, I would generally set this param to something assuming your nodes are big enough.)</p></li>
+<li><p>As a side note, the value here will also essentially enlarge the overlays from this method (assuming you opt to use them). Larger overlays may be desired for visualization purposes. Note that smaller overlays can still be generated from ‘Image -&gt; Overlays…’ if this behavior is not desired.</p></li>
 </ul>
 </dd>
 </dl>
@@ -444,15 +399,15 @@
 </dl>
 </li>
 <li><dl class="simple">
-<dt>Output Directory</dt><dd><ul class="simple">
-<li><p>If a string path is included to a directory, the resulting Network3D Object will be saved there as it’s calculated. If nothing is included, this will save nothing by default, and the user will need to save in post with ‘File -&gt; Save (As)’</p></li>
+<dt>Generate Overlays</dt><dd><ul class="simple">
+<li><p>If enabled, NetTracer3D will execute ‘Image -&gt; Overlay -&gt; Create Network Overlay’ and ‘Image -&gt; Overlay -&gt; Create ID Overlay’ (which will override Overay 1 and 2, respectively).</p></li>
 </ul>
 </dd>
 </dl>
 </li>
 <li><dl class="simple">
-<dt>Generate Overlays</dt><dd><ul class="simple">
-<li><p>If enabled, NetTracer3D will execute ‘Image -&gt; Overlay -&gt; Create Network Overlay’ and ‘Image -&gt; Overlay -&gt; Create ID Overlay’ (which will override Overay 1 and 2, respectively).</p></li>
+<dt>(If Above): Downsample factor for drawing overlays…?</dt><dd><ul class="simple">
+<li><p>Entering a positive integer greater than 1 here will make the rendered overlays come out that many times larger.</p></li>
 </ul>
 </dd>
 </dl>
@@ -471,16 +426,6 @@
 <li><p>Restricts nodes from only making a number of connections to the integer value passed to this param.</p></li>
 <li><p>They will connect to their n nearest neighbors within the search region.</p></li>
 <li><p>This is a useful way to simplify dense networks.</p></li>
-</ul>
-</dd>
-</dl>
-</li>
-<li><dl class="simple">
-<dt>(If using morphological) Use Fast Dilation…</dt><dd><ul class="simple">
-<li><p>If enabled, dilation will be predicted using pseudo-3D binary kernels.</p></li>
-<li><p>When disabled, dilation will be done using a perfect distance transform.</p></li>
-<li><p>For more information on this algorithm, see <a class="reference internal" href="#dilation"><span class="std std-ref">‘Process -&gt; Image -&gt; Dilate’</span></a>.</p></li>
-<li><p>This does not apply at all for the centroid search option.</p></li>
 </ul>
 </dd>
 </dl>
@@ -504,8 +449,7 @@
 <li><p>The scipy.ndimage.find_objects() method is used to get bounding boxes around all the labeled objects in the nodes channel.</p></li>
 <li><p>For each object, a subarray is cut out around it using its bounding box, that includes the object plus any additional space that it will need to perform a search/dilation.</p></li>
 <li><p>The node object in question is boolen indexed within its subarray.</p></li>
-<li><p>If not using the fast dilation option, then the scipy.ndimage.distance_transform_edt() method is used to get a distance transform for the object. This distance transform is thresholded based on the desired distance away from the node we want, then binarized.</p></li>
-<li><p>If using fast dilation, the above is performed using psuedo-3D binary kernels without having to take a dt or transform the subarray itself.</p></li>
+<li><p>The scipy.ndimage.distance_transform_edt() method is used to get a distance transform for the object. This distance transform is thresholded based on the desired distance away from the node we want, then binarized.</p></li>
 <li><p>The binary dilated mask is then multiplied against the original, non-indexed subarray to isolate other nodes specific to the dilated region.</p></li>
 <li><p>These other nodes are stored in a growing node:neighbors dictionary that is used to make the network.</p></li>
 <li><p>This process is paralellized across all available CPU cores. It <em>will</em> hog your entire machine if given a big task.</p></li>
@@ -545,13 +489,6 @@
 <li><p>This method has the following parameters:</p></li>
 </ul>
 <ol class="arabic simple">
-<li><dl class="simple">
-<dt>Output Directory</dt><dd><ul class="simple">
-<li><p>If a string path is included to a directory, the resulting centroids csv will be saved there as it’s calculated. If nothing is included, this will save nothing by default, and the user will need to save in post with ‘File -&gt; Save (As)’</p></li>
-</ul>
-</dd>
-</dl>
-</li>
 <li><dl class="simple">
 <dt>Downsample Factor:</dt><dd><ul class="simple">
 <li><p>Temporarily downsamples the image to speed up centroid calculation. Downsampling is done in all three dimensions by the inputed factor.</p></li>
@@ -654,8 +591,8 @@
 </li>
 <li><dl class="simple">
 <dt>Use cubic algorithm</dt><dd><ul class="simple">
-<li><p>Disable this to use the standard resample algorithm, which is quick and ideal for labeled images, but will be more lenient with preserving the exact morphological shapes of objects.</p></li>
-<li><p>Enable this to use the cubic resample algorithm, which is slower but may better preserve shapes. However, it will not preserve labeling and therefore should not be used on labeled data.</p></li>
+<li><p>Disable this to use the standard resample algorithm, which is quick and ideal for binary/labeled images.</p></li>
+<li><p>Enable this to use the cubic resample algorithm, which is slower but may better preserve shapes for visualization purposes only. However, it will not preserve labeling and therefore should not be used on data intended for actual quantification.</p></li>
 </ul>
 </dd>
 </dl>
@@ -726,6 +663,13 @@
 <li><dl class="simple">
 <dt>Fill Holes</dt><dd><ul class="simple">
 <li><p>This just calls the fill holes method. Holes are gaps completely enveloped by a mask from the perspective of the 2D stack. Please reference the fill holes algorithm section for more info.</p></li>
+</ul>
+</dd>
+</dl>
+</li>
+<li><dl class="simple">
+<dt>Trace Filaments</dt><dd><ul class="simple">
+<li><p>This calls the filament tracer (Normally in ‘Process -&gt; Generate -&gt; Trace Filaments’), which can clean up segmentations of filamentous objects such as nerves or vessels.</p></li>
 </ul>
 </dd>
 </dl>
@@ -1051,22 +995,14 @@
 </dl>
 </li>
 <li><dl class="simple">
-<dt>Use GPU</dt><dd><ul class="simple">
-<li><p>Whether or not to try to use the GPU (only possible with a working CUDA toolkit).</p></li>
-<li><p>Note that this method will always fall back to CPU if the GPU fails.</p></li>
-<li><p>This method will additionally attempt to downsample your image if the GPU runs out of memory - see below for more information.</p></li>
+<dt>Labeling Mode:</dt><dd><ul class="simple">
+<li><p>‘Label Individual Voxels based on proximity’ - The default mode. Each non-zero voxel in the binary image is just assigned the label of the closest object in the labeled image.</p></li>
+<li><p>‘Label Continuous Domains that border labels’ - A more nuanced version that instead labels only nearby voxels that are continuous in space with each label. Binary voxel elements touching no labels get removed. This option is useful, for example, if a ‘Binary Close’ was used to refine a segmentation, that segmentation was labeled (or with the branch labeling algo), and then you wanted to re-label the original segmentation based on the ‘Closed’ one.</p></li>
 </ul>
 </dd>
 </dl>
 </li>
-<li><dl class="simple">
-<dt>Internal Downsample for GPU…</dt><dd><ul class="simple">
-<li><p>If using the GPU, the number entered here will be used to temporarily downsample the image during calculation.</p></li>
-<li><p>The method will attempt downsamples automatically if it has to, but this option allows more direct control over that behavior.</p></li>
-</ul>
-</dd>
-</dl>
-</li>
+<li><p>‘Correct Nontouching Labels in Post’ - If the resultant labeled image has any labels that are not touching, the largest instance of that label will keep its label. All other labels will instead merge with the label they are touching the most, or take on a new label if they are touching none. Note that this is executed by default for the second mode in param 3.</p></li>
 </ol>
 <ul class="simple">
 <li><p>Press ‘Run Smart Label’ to run the method with the desired parameters. Note the channel refered to in param 2 is the one that will be labeled, with the output also being returned there.</p></li>
@@ -1076,6 +1012,7 @@
 <h3>Algorithm Explanations<a class="headerlink" href="#id16" title="Link to this heading"></a></h3>
 <ul class="simple">
 <li><p>This method is ostensibly the same one used in smart dilate but applied in a different context.</p></li>
+<li><p>In the case of the primary labeling mode:</p></li>
 </ul>
 <ol class="arabic simple">
 <li><p>The prelabeled array is binarized, inverted, and then a distance transform with indices is calculated for that array, providing a map of which indices ‘belong’ to labeled regions in the prelabeled array.</p></li>
@@ -1084,12 +1021,18 @@
 <li><p>The chunks are recombined to get the label-dilated array.</p></li>
 </ol>
 <ul class="simple">
-<li><p>Note that if this method runs out of VRAM while using the GPU, it will downsample inverted label image and attempt to get the distance transform again. It will do this until the GPU manages to produce a distance transform. The binary image is equivalently downsampled, 3D dilated by one voxel, and assigned labels using the above algorithm. This labeled, downsampled image can be upsampled, with the original binary array then used to ‘stamp out’ its correct shape from the upsampled, labeled array.</p></li>
-<li><p>Assuming no labeled regions are lost during the downsample, the output is ostensibly the same as doing it on the full sized image. This is essentially because we are using the downsampled image with distance transform to approximate a ‘nearest label map’ which can be applied to the upsample image, with the only difference being some minor margin errors between regions.</p></li>
-<li><p>However if any labels have a dimension smaller than the downsample factor the system attempts to use (which will be told to you in the command window), they risk being removed from the downsampled image and therefore will not establish a ‘label territory’, which will cause them to be lost.</p></li>
-<li><p>As a result, this behavior is not good for large images with rather small labels. In such a case, do not use the GPU.</p></li>
-<li><p>If the GPU does fail for any reason (besides memory-related), the system will reattempt with CPU.</p></li>
+<li><p>In the case of the second labeling mode:</p></li>
 </ul>
+<ol class="arabic simple">
+<li><p>Rather than just labeling the closest elements outright, the binary image is skeletonized first. The skeleton pieces then check which label they’re touching and inherit that label. This labeled image is combined with the skeleton to give it ‘extensions’ into the nearby binary regions to allow for a more nuanced label.</p></li>
+<li><p>The ‘Correct Nontouching Labels’ option is then always performed on top of this.</p></li>
+</ol>
+<ul class="simple">
+<li><p>For ‘Correct Nontouching Labels’</p></li>
+</ul>
+<ol class="arabic simple">
+<li><p>Each label is evaluated whether it is contiguous in space. For those that are not, the largest volume of said label keeps its label. The other pieces evaluate which label they are touching the most and take on that label. If they are touching nothing, they get a new label entirely.</p></li>
+</ol>
 </section>
 </section>
 <section id="process-image-threshold-segment">
@@ -1318,13 +1261,6 @@
 <p>Running Watershed</p>
 <ol class="arabic simple">
 <li><dl class="simple">
-<dt>Output Directory</dt><dd><ul class="simple">
-<li><p>If a string path is included to a directory, the resulting Watershed will be saved there after it’s calculated. If nothing is included, this will save nothing by default, and the user will need to save in post with ‘File -&gt; Save (As)’</p></li>
-</ul>
-</dd>
-</dl>
-</li>
-<li><dl class="simple">
 <dt>Smallest Radius</dt><dd><ul class="simple">
 <li><p>The smallest radius of objects that you want to be split off by the watershed. Objects any smaller may get thresholded out - this value always overrides below ‘proportion’ param. Somewhat more intuitive param then below, use a conservative value a bit smaller than your smallest object’s radius.</p></li>
 </ul>
@@ -1474,40 +1410,10 @@
 </dl>
 </li>
 <li><dl class="simple">
-<dt>(if downsampling): Use cubic downsample?:</dt><dd><ul class="simple">
-<li><p>Enable this to use the cubic resample algorithm, which is slower but may better preserve shapes. Cubic may be useful for branch downsamples specifically, because it can protect small branches from being evicted from the image.</p></li>
-</ul>
-</dd>
-</dl>
-</li>
-<li><dl class="simple">
 <dt>Skeleton Voxel Branch Length to remove…</dt><dd><ul class="simple">
 <li><p>The length (in pixels/voxels, not scaled) of terminal branches (or spines) to remove from the skeleton output.</p></li>
 <li><p>This method only removes terminal branches. Internal branches will never be effected regardless of how large this param is.</p></li>
 <li><p>Branches that are completely removed will not result in a branchpoint. Therefore, this parameter is an effective way to handle artifacts due to spiny skeletons.</p></li>
-</ul>
-</dd>
-</dl>
-</li>
-<li><dl class="simple">
-<dt>Maximum Voxel Volume to Retain…</dt><dd><ul class="simple">
-<li><p>If a numbered is entered here, any branchpoints larger than that number will be removed.</p></li>
-<li><p>Note that the smallest (and most common) branchpoint is generally 3x3x3 voxels, so 27 voxel volume.</p></li>
-<li><p>Larger branchpoints would generally occur from loop artifacts. This is one way to remove those. However, this method may be redundant given parameter 7. It was my initial solution that parameter 7 essentially replaced, so it can general be ignored, however I left in the option.</p></li>
-</ul>
-</dd>
-</dl>
-</li>
-<li><dl class="simple">
-<dt>Voxel Distance to Merge Nearby nodes…</dt><dd><ul class="simple">
-<li><p>If a numbered is entered here, branchpoint nodes will be enlarged before they are labeled, meaning nearby ones will merge. This can be a way to handle an abundance of nearby nodes resulting from odd skeleton structures, although I generally feel like it can be ignored.</p></li>
-</ul>
-</dd>
-</dl>
-</li>
-<li><dl class="simple">
-<dt>(If using above) Use Fast Dilation…</dt><dd><ul class="simple">
-<li><p>If using param 5, enabling this will dilate with psuedo-3d kernels, while disabling this will dilate with perfect distance transforms. See <a class="reference internal" href="#dilation"><span class="std std-ref">‘Process -&gt; Image -&gt; Dilate’</span></a> for more information.</p></li>
 </ul>
 </dd>
 </dl>
@@ -1521,6 +1427,13 @@
 </dd>
 </dl>
 </li>
+<li><dl class="simple">
+<dt>Amount to expand nodes…</dt><dd><ul class="simple">
+<li><p>If a numbered is entered here, branchpoint nodes will be enlarged before they are labeled, meaning nearby ones will merge. This can be a way to handle an abundance of nearby nodes resulting from odd skeleton structures, although I generally feel like it can be ignored.</p></li>
+</ul>
+</dd>
+</dl>
+</li>
 </ol>
 <ul class="simple">
 <li><p>Select ‘Run Node Generation’ to run this method with the desired parameters. The edges will be skeletonized, while the new nodes will load into the nodes channel.</p></li>
@@ -1530,11 +1443,10 @@
 <h3>Algorithm Explanations<a class="headerlink" href="#id29" title="Link to this heading"></a></h3>
 <ol class="arabic simple">
 <li><p>3D skeletonization is achieved via the sklearn.morphology.skeletonize() algorithm: <a class="reference external" href="https://scikit-image.org/docs/stable/auto_examples/edges/plot_skeleton.html">https://scikit-image.org/docs/stable/auto_examples/edges/plot_skeleton.html</a></p></li>
-<li><p>If param 7 is enabled, NetTracer3D will run its ‘Process -&gt; Image -&gt; Fill Holes’ method, which will for the most part succesfully fill loop artifacts, returning them into 3D blobs. It will then just run the skeletonization again, which is often able to accurately skeletonize the blobs.</p></li>
-<li><p>If param 3 is enabled, NetTracer3D will iterate along the skeleton and identify endpoints as those regions that only have one neighbor. It will ‘crawl’ up from those endpoints along the skeleton a number of times equal to the inputed value (or until it hits a junction), and remove all associated positive voxels.</p></li>
+<li><p>If param 3 is enabled, NetTracer3D will run its ‘Process -&gt; Image -&gt; Fill Holes’ method, which will for the most part succesfully fill loop artifacts, returning them into 3D blobs. It will then just run the skeletonization again, which is often able to accurately skeletonize the blobs.</p></li>
+<li><p>If param 2 is enabled, NetTracer3D will iterate along the skeleton and identify endpoints as those regions that only have one neighbor. It will ‘crawl’ up from those endpoints along the skeleton a number of times equal to the inputed value (or until it hits a junction), and remove all associated positive voxels.</p></li>
 <li><p>NetTracer3D will then iterate through the entire skeleton, exploring the immediate 3x3x3 neighborhood for each voxel. Branchpoints are identified by setting the center skeleton piece of the 3x3x3 neighborhood to 0, then using the scipy.ndimage.label() method to assign distinct IDs to all non-touching elements remaining. If there are at least 3 distinct elements, this location is considered a branchpoint and added to an output array.</p></li>
-<li><p>If param 4 is enabled, the branchpoints are labeled, and any larger than the set value will be removed from the output array.</p></li>
-<li><p>If param 5 is enabled, the branchpoints are dilated as described, in order to merge nearby branchpoints. The resulting branchpoints are relabeled.</p></li>
+<li><p>If param 4 is enabled, the branchpoints are dilated as described, in order to merge nearby branchpoints. The resulting branchpoints are relabeled.</p></li>
 <li><p>The newly labeled branchpoint array is placed in the nodes channel to be used to make branchpoint networks.</p></li>
 </ol>
 </section>
@@ -1552,28 +1464,6 @@
 <h3>Parameter Explanations<a class="headerlink" href="#id30" title="Link to this heading"></a></h3>
 <ol class="arabic simple">
 <li><dl class="simple">
-<dt>Auto-Correct Branches by Collapsing Busy Neighbors</dt><dd><ul class="simple">
-<li><p>If enabled, thick branches that get wrongly split up due to the skeletonization not handling them well (Usually due to messy segmentations) get handled by an additional algorithm that attempts to fix them by merging labeled branches in crowded regions. Somewhat unpredictable and so is not enabled by default.</p></li>
-</ul>
-</dd>
-</dl>
-</li>
-<li><dl class="simple">
-<dt>Avg Degree of Nearby Branch Communities to Merge…</dt><dd><ul class="simple">
-<li><p>If param 1 is enabled, this dictates its behavior. Essentially, after the branches are labeled, they will be organized into network communities. Those communities with nodes with many neighbors can be collapsed back to one object. The threshold for average neighbors to collapse the communities is this param.</p></li>
-<li><p>Essentially lower vals are more aggressive and more likely to collapse communities.</p></li>
-</ul>
-</dd>
-</dl>
-</li>
-<li><dl class="simple">
-<dt>Random Seed For Auto Correction…</dt><dd><ul class="simple">
-<li><p>Sets the random seed for the branch grouping method from param 1 to use (since the starting point effects the outcome). You should use the same seed each time for reproducibility, or vary the seed to see how it effects grouping. Leaving the seed empty will just use the seed of the rand (and numpy random) modules, which is initialized at program start.</p></li>
-</ul>
-</dd>
-</dl>
-</li>
-<li><dl class="simple">
 <dt>Auto-Correct Branches by Collapsing Internal Labels</dt><dd><ul class="simple">
 <li><p>If enabled, thick branches that get wrongly split up due to the skeletonization not handling them well (Usually due to messy segmentations) get handled by an additional algorithm that attempts to fix them by merging any branches not touching the background with nearby branch regions that are touching the background.</p></li>
 </ul>
@@ -1581,8 +1471,27 @@
 </dl>
 </li>
 <li><dl class="simple">
-<dt>Split Nontouching Branches…?</dt><dd><ul class="simple">
-<li><p>Branches essentially get labeled by splitting up their skeleton at the branchpoints and assigning the skeleton pieces labels. The larger branch regions are then labeled just based on what internal filament each nonzero voxel is closest to. What this means is that a very thick branch that has small branches next to it may inadvertently assume the wrong label in its outer regions. I should note this is generally rather uncommon but it can happen. This option is a correction that takes any labels that are not physically joined in space and breaks them into new labels, so that anything that has this issue does not misrepresent a branch’s actual location in space.</p></li>
+<dt>Auto-Correct Nontouching Branches…?</dt><dd><ul class="simple">
+<li><p>Branches essentially get labeled by splitting up their skeleton at the branchpoints and assigning the skeleton pieces labels. The larger branch regions are then labeled just based on what internal filament each nonzero voxel is closest to. What this means is that a very thick branch that has small branches next to it may inadvertently assume the wrong label in its outer regions. I should note this is generally rather uncommon but it can happen. This option is a correction that takes any labels that are not physically joined in space and relabels them. The largest instance of the non-contiguous label keeps its label, but the other pieces inherit the label of the other label they border the most (or they get a new one if they border nothing).</p></li>
+</ul>
+</dd>
+</dl>
+</li>
+<li><dl class="simple">
+<dt>Reunify Main Branches</dt><dd><ul class="simple">
+<li><p>By default, a branch is just the structure between two branch points.</p></li>
+<li><p>However, you might want to consider a ‘large branch’ a single object regardless of what’s branching off of it. Such as a whole tree trunk rather than a bunch of trunk segments.</p></li>
+<li><p>Enabling this will have the program attempt to reunify these contiguous branches.</p></li>
+<li><p>Note that at each branchpoint junction, only a single pair can remake a connection.</p></li>
+</ul>
+</dd>
+</dl>
+</li>
+<li><dl class="simple">
+<dt>(For Reunify) Minimum score to merge…?</dt><dd><ul class="simple">
+<li><p>This val only applies to the above parameter.</p></li>
+<li><p>If you are doing the reunification, a more positive value here makes branch reconnections less likely to occur.</p></li>
+<li><p>In my testing, only values 20-40 really made a difference. Those below 20 tended to always connect a pair at a branchpoint, while those above 40 made 0 reconnections.</p></li>
 </ul>
 </dd>
 </dl>
@@ -1596,8 +1505,8 @@
 </dl>
 </li>
 <li><dl class="simple">
-<dt>(if downsampling): Use cubic downsample?:</dt><dd><ul class="simple">
-<li><p>Enable this to use the cubic resample algorithm, which is slower but may better preserve shapes. Cubic may be useful for branch downsamples specifically, because it can protect small branches from being evicted from the image.</p></li>
+<dt>Compute branch stats:</dt><dd><ul class="simple">
+<li><p>Will also calculate the branch lengths and tortuosities for each branch.</p></li>
 </ul>
 </dd>
 </dl>
@@ -1606,15 +1515,6 @@
 <dt>Generate Nodes from edges?</dt><dd><ul class="simple">
 <li><p>This method actually forks ‘Process -&gt; Generate -&gt; Generate Nodes (From ‘Edge’ Vertices)’ (above), and relies on the nodes it generates for its labeling scheme.</p></li>
 <li><p>Usually when you run this you would leave this enabled (which will let it populate its own nodes), but in the instance you already ran ‘Process -&gt; Generate -&gt; Generate Nodes (From ‘Edge’ Vertices)’, and were satisfied with the result that was placed in the nodes channel, you could skip running it again by disabling this.</p></li>
-</ul>
-</dd>
-</dl>
-</li>
-<li><dl class="simple">
-<dt>Use GPU</dt><dd><ul class="simple">
-<li><p>Whether or not to try to use the GPU (only possible with a working CUDA toolkit).</p></li>
-<li><p>Note that this method will always fall back to CPU if the GPU fails.</p></li>
-<li><p>This method will additionally attempt to downsample your image if the GPU runs out of memory - see below for more information.</p></li>
 </ul>
 </dd>
 </dl>
@@ -1631,8 +1531,109 @@
 <li><p>The branch labeler starts with the same set of steps as ‘Process -&gt; Generate -&gt; Generate Nodes (From ‘Edge’ Vertices)’, so please see its section above for an outline of those steps.</p></li>
 <li><p>Once branchpoint nodes are generated, however, they are used as a mask to break up the skeleton.</p></li>
 <li><p>The broken skeleton pieces are labeled with the scipy.ndimage.label() method, which assigns nontouching objects unique label IDs. What results is (ideally) a skeleton piece with a unique ID within each branch.</p></li>
-<li><p>The branches themselves then aquire the label of their branch piece via Smart Label. (see Process -&gt; Image -&gt; Neighbor Labels). The only caveat is that while GPU downsampling is not typically a big issue, it is generally advised to be avoided if encountered here, as the skeleton pieces themselves are not very amenable to downsampling. If you try to use the GPU and it wants to downsample, please use the CPU instead for this method or the results will likely not be accurate.</p></li>
-<li><p>If param 3 is enabled, a morphological proximity network will be generated between the branches to find their neighbors. Louvain network community detection will be applied to group them. The average degree of each community will be aquired, and those above the threshold in param 4 will be collapsed to a single label.</p></li>
+<li><p>The branches themselves then aquire the label of their branch piece via Smart Label. (see Process -&gt; Image -&gt; Neighbor Labels).</p></li>
+<li><p>If the ‘reunify parameter is being used’ — each branchpoint junction of endpoints compares all branches that are considering reconnecting. The branches are scored based on shared characteristics, such as similar radii and similar direction. Those with the highest score get reconnected, so long as any are above the threshold.</p></li>
+<li><p>See ‘Analyze -&gt; Stats -&gt; Morphological -&gt; Calculate Branch Stats’ for information about how the branch stats are obtained.</p></li>
+</ol>
+</section>
+</section>
+<section id="process-generate-trace-filaments">
+<h2>‘Process -&gt; Generate -&gt; Trace Filaments’<a class="headerlink" href="#process-generate-trace-filaments" title="Link to this heading"></a></h2>
+<ul class="simple">
+<li><p>This method is meant to be used on segmented data for filamentous structures (ie, nerves, vessels). They can either be binary or just have the background removed.</p></li>
+<li><p>It will attempt to trace a refined filamentous structure over the segmentation, serving as a way to remove noise, fill gaps, and smooth edges.</p></li>
+<li><p>The point of this is to refine filamental segmentations before branch labeling, in a way that is hopefully straightforward.</p></li>
+<li><p>Selecting this function will show the following menu:</p></li>
+</ul>
+<a class="reference internal image-reference" href="_images/filaments.png"><img alt="filament" src="_images/filaments.png" style="width: 800px;" />
+</a>
+<section id="id32">
+<h3>Parameter Explanations<a class="headerlink" href="#id32" title="Link to this heading"></a></h3>
+<ol class="arabic simple">
+<li><dl class="simple">
+<dt>Kernel Spacing</dt><dd><ul class="simple">
+<li><p>Increase this value to utilize fewer kernels for tracing the filaments. This may slightly decrease accuracy but will generally speed it up in larger images quite noticeably.</p></li>
+</ul>
+</dd>
+</dl>
+</li>
+<li><dl class="simple">
+<dt>Temporary Downsample Factor</dt><dd><ul class="simple">
+<li><p>Enter an integer greater than 1 to apply that level of downsample when tracing the filaments. Again, this is just a way to speed up the results at the cost of possible accuracy.</p></li>
+</ul>
+</dd>
+</dl>
+</li>
+<li><dl class="simple">
+<dt>Max Distance to Consider Connecting Filaments</dt><dd><ul class="simple">
+<li><p>Each endpoint of a filament needs to evaluate each other nearby filament to decide if it should make a connection. By default, it will only look outward 20 voxels to do this. Increasing this value will allow for considerations of larger distances, but note that the task increases with cubic complexity since it’s a sphere.</p></li>
+</ul>
+</dd>
+</dl>
+</li>
+<li><dl class="simple">
+<dt>Gap Tolerance…</dt><dd><ul class="simple">
+<li><p>By default, the filaments will not like to connect over large distances even if searching across them. Increasing this parameter will make it more likely.</p></li>
+</ul>
+</dd>
+</dl>
+</li>
+<li><dl class="simple">
+<dt>Connection Quality Threshold</dt><dd><ul class="simple">
+<li><p>Lower this value to make any sort of connection less likely to occur. Increase it to make connections more frequent.</p></li>
+</ul>
+</dd>
+</dl>
+</li>
+<li><dl class="simple">
+<dt>Minimum Compoment Size to Include</dt><dd><ul class="simple">
+<li><p>After the filaments have all been connected, those with internal points fewer than this value will get filtered out. Essentially just a way to remove noise for small things.</p></li>
+</ul>
+</dd>
+</dl>
+</li>
+<li><dl class="simple">
+<dt>Spherical Objects…</dt><dd><ul class="simple">
+<li><p>This represents the sphericity of filaments (after tracing) that should get removed. At the default value of 1.0, this param will actually do nothing and will skip the sphere filtering. But enter a lower value, and any objects with sphericities greater than that will get filtered out. Sphericities can be 0-1, with 1 representing more spherical. Of course, filaments should not be spherical usually, so this option exists to try to remove any such artifacts that arise.</p></li>
+</ul>
+</dd>
+</dl>
+</li>
+<li><dl class="simple">
+<dt>If filtering spheroids…</dt><dd><ul class="simple">
+<li><p>If you enable the above option, only detected spheroids that are larger than the indicated volume in this parameter will actually get removed. This is because small objects are better handled in param 6, so this is more to get out any obviously incorrect large spheres.</p></li>
+</ul>
+</dd>
+</dl>
+</li>
+<li><dl class="simple">
+<dt>Remove Branch Spines…?</dt><dd><ul class="simple">
+<li><p>When drawing filaments, enter a value here to remove spines along branches that are below the entered length. This can smooth out some potentially jagged filaments, although it usually can be skipped.</p></li>
+</ul>
+</dd>
+</dl>
+</li>
+</ol>
+<ul class="simple">
+<li><p>As a demo, here is the filament tracer applied to the below image:</p></li>
+</ul>
+<a class="reference internal image-reference" href="_images/filament2.png"><img alt="filament2" src="_images/filament2.png" style="width: 800px;" />
+</a>
+<p><em>The gray image is an angiogram of a brain. I created a somewhat messy segmentation (green) of the cranial vessels. The results of the filament tracer are shown in red. These are with the default params. As we can see, it cleaned up the segmentation quite nicely.</em></p>
+</section>
+<section id="id33">
+<h3>Algorithm Explanations<a class="headerlink" href="#id33" title="Link to this heading"></a></h3>
+<ol class="arabic simple">
+<li><p>Remove small noise objects - Filter out tiny connected components (&lt; 10 voxels)</p></li>
+<li><p>Compute skeleton - Extract the 3D skeleton of the binary segmentation</p></li>
+<li><p>Compute distance transform - Calculate distances to nearest background voxel for radius estimation</p></li>
+<li><p>Sample kernel points - Select evenly-spaced points along the skeleton using topology-aware subsampling</p></li>
+<li><p>Extract kernel features - Compute geometric features (radius, direction, endpoint status) for each kernel point</p></li>
+<li><p>Build skeleton backbone graph - Connect all neighboring kernel points along the skeleton</p></li>
+<li><p>Connect endpoints across gaps - Bridge gaps between disconnected endpoints that should be connected. This is accomplished by scoring each potential endpoint connection based on similar characteristics. For example, filaments traveling in the same direction with similarly sized radii are likely to get connected</p></li>
+<li><p>Screen noise filaments - Remove entire connected components that are likely noise based on geometric scores</p></li>
+<li><p>Reconstruct vessel structure - Draw tapered cylinders between connected kernels to create the final traced structure</p></li>
+<li><p>Filter spherical artifacts (optional) - Remove large spherical blobs that don’t match vessel morphology, by calculating sphericity in the manner described in ‘Analyze -&gt; Stats -&gt; Morphological -&gt; Calculate Sphericities’</p></li>
 </ol>
 </section>
 </section>
@@ -1646,8 +1647,8 @@
 <li><p>Voronoi diagrams have other uses in spatial mathematics but NetTracer3D only offers the option to generate one - it does not use it directly for anything.</p></li>
 <li><p>To run this method, simply select it from the menu bar. If node_centroids exist, their Voronoi diagram will be generated and loaded into Overlay2.</p></li>
 </ul>
-<section id="id32">
-<h3>Algorithm Explanations<a class="headerlink" href="#id32" title="Link to this heading"></a></h3>
+<section id="id34">
+<h3>Algorithm Explanations<a class="headerlink" href="#id34" title="Link to this heading"></a></h3>
 <ul class="simple">
 <li><p>This method now just runs smart dilate with a maximal dimension length of the image as the dilation parameter.</p></li>
 </ul>
@@ -1661,8 +1662,8 @@
 </ul>
 <a class="reference internal image-reference" href="_images/process7.png"><img alt="Modify Menu" src="_images/process7.png" style="width: 800px;" />
 </a>
-<section id="id33">
-<h3>Parameter Explanations<a class="headerlink" href="#id33" title="Link to this heading"></a></h3>
+<section id="id35">
+<h3>Parameter Explanations<a class="headerlink" href="#id35" title="Link to this heading"></a></h3>
 <ol class="arabic simple">
 <li><dl class="simple">
 <dt>Remove Unsassigned IDs from Centroid List?</dt><dd><ul class="simple">

@@ -129,7 +129,11 @@ def draw_from_centroids(nodes, num_nodes, centroids, twod_bool, directory=None):
     # Draw text using OpenCV (no PIL conversions needed)
     for idx in centroids.keys():
         centroid = centroids[idx]
-        z, y, x = centroid.astype(int)
+
+        try:
+            z, y, x = centroid.astype(int)
+        except:
+            z, y, x = centroid
         
         for z_offset in [0, 1, -1]:
             z_target = z + z_offset
