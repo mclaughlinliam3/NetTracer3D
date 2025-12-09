@@ -10090,7 +10090,7 @@ class NeighborIdentityDialog(QDialog):
             self.root = None
 
         self.mode = QComboBox()
-        self.mode.addItems(["From Network - Based on Absolute Connectivity", "Use Labeled Nodes - Based on Morphological Neighborhood Densities"])
+        self.mode.addItems(["From Network - Quantifies Neighbors Based on Adjacent Network Connections", "Use Labeled Nodes - Quantifies Neighbors Volume of Neighbor Within Search Region"])
         self.mode.setCurrentIndex(0)
         layout.addRow("Mode", self.mode)
 

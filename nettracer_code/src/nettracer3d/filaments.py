@@ -93,16 +93,24 @@ class VesselDenoiser:
         # A voxel contributes to surface area if any neighbor is different
         for axis in range(3):
             for direction in [-1, 1]:
-                # Shift array to compare with neighbors
-                shifted = np.roll(labeled, direction, axis=axis)
+                # Pad with zeros only on the axis we're checking
+                pad_width = [(1, 1) if i == axis else (0, 0) for i in range(3)]
+                padded = np.pad(labeled, pad_width, mode='constant', constant_values=0)
                 
-                # Find faces exposed to different label (including background)
-                exposed_faces = (labeled != shifted) & (labeled > 0)
+                # Roll the padded array
+                shifted = np.roll(padded, direction, axis=axis)
                 
-                # Count exposed faces per label
+                # Extract the center region (original size) from shifted
+                slices = [slice(1, -1) if i == axis else slice(None) for i in range(3)]
+                shifted_cropped = shifted[tuple(slices)]
+                
+                # Find exposed faces
+                exposed_faces = (labeled != shifted_cropped) & (labeled > 0)
+                
                 face_counts = np.bincount(labeled[exposed_faces], 
                                          minlength=num_features + 1)
                 surface_areas += face_counts
+        del padded
         
         # Calculate sphericity for each component
         # Sphericity = (surface area of sphere with same volume) / (actual surface area)

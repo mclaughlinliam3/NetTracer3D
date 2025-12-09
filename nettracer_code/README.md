@@ -56,8 +56,6 @@ While not related to NetTracer3D, if you want to use Cellpose3 (for which GPU-us
 This gui is built from the PyQt6 package and therefore may not function on dockers or virtual envs that are unable to support PyQt6 displays.
 
 
-For a (slightly outdated) video tutorial on using the GUI: https://www.youtube.com/watch?v=cRatn5VTWDY
-
 NetTracer3D is free to use/fork for academic/nonprofit use so long as citation is provided, and is available for commercial use at a fee (see license file for information).
 The current citation is here: 
 
@@ -65,8 +63,9 @@ McLaughlin, L., Zhang, B., Sharma, S. et al. Three dimensional multiscalar neuro
 
 NetTracer3D was developed by Liam McLaughlin while working under Dr. Sanjay Jain at Washington University School of Medicine.
 
--- Version 1.2.3 Updates --
+-- Version 1.2.4 Updates --
 
-	* Tweaked the 'branch unification params' - now hard rejects any sharp forks in the branches so branches will mostly be straight.
+	* Fixed bug for calculating surface area when the surface was on the edge of the image.
+	* Removed video tutorial from youtube for being outdated. May add new one later.
 	
 	

@@ -53,11 +53,8 @@ Or if you've already installed the NetTracer3D base package and want to get just
 While not related to NetTracer3D, if you want to use Cellpose3 (for which GPU-usage is somewhat obligatory) to help segment cells for any networks, you will also want to install pytorch here: https://pytorch.org/. Use the pytorch build menu on this webpage to find a pip install command that is compatible with Python and your CUDA version.
 
 
-
 This gui is built from the PyQt6 package and therefore may not function on dockers or virtual envs that are unable to support PyQt6 displays.
 
-
-For a (somewhat outdated) video tutorial on using the GUI: https://www.youtube.com/watch?v=cRatn5VTWDY
 
 NetTracer3D is free to use/fork for academic/nonprofit use so long as citation is provided, and is available for commercial use at a fee (see license file for information).
 

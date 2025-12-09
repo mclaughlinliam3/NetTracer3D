@@ -750,35 +750,37 @@ def estimate_object_radii(labeled_array, gpu=False, n_jobs=None, xy_scale = 1, z
 
 def get_surface_areas(labeled, xy_scale=1, z_scale=1):
     labels = np.unique(labeled)
-    labels = labels[labels > 0]  # Remove background label
+    labels = labels[labels > 0]
     max_label = int(np.max(labeled))
     
-    # Size array to accommodate highest label value
     surface_areas = np.zeros(max_label + 1, dtype=np.float64)
     
-    # Check each of 6 face directions (±x, ±y, ±z)
     for axis in range(3):
-        # Determine face area based on axis (anisotropic scaling)
-        if axis == 2:  # z-axis: face is in xy plane
+        if axis == 2:
             face_area = xy_scale * xy_scale
-        else:  # x or y axis: face is perpendicular to xy plane
+        else:
             face_area = xy_scale * z_scale
         
         for direction in [-1, 1]:
-            # Shift array to compare with neighbors
-            shifted = np.roll(labeled, direction, axis=axis)
+            # Pad with zeros only on the axis we're checking
+            pad_width = [(1, 1) if i == axis else (0, 0) for i in range(3)]
+            padded = np.pad(labeled, pad_width, mode='constant', constant_values=0)
             
-            # Find faces exposed to different label (including background)
-            exposed_faces = (labeled != shifted) & (labeled > 0)
+            # Roll the padded array
+            shifted = np.roll(padded, direction, axis=axis)
             
-            # Count exposed faces per label
+            # Extract the center region (original size) from shifted
+            slices = [slice(1, -1) if i == axis else slice(None) for i in range(3)]
+            shifted_cropped = shifted[tuple(slices)]
+            
+            # Find exposed faces
+            exposed_faces = (labeled != shifted_cropped) & (labeled > 0)
+            
             face_counts = np.bincount(labeled[exposed_faces], 
                                      minlength=max_label + 1)
             surface_areas += face_counts * face_area
     
-    # Create dictionary mapping label to surface area
     result = {int(label): float(surface_areas[label]) for label in labels}
-        
     return result
 
 def break_and_label_skeleton(skeleton, peaks = 1, branch_removal = 0, comp_dil = 0, max_vol = 0, directory = None, return_skele = False, nodes = None, compute = True, unify = False, xy_scale = 1, z_scale = 1):
@@ -5560,14 +5562,14 @@ class Network_3D:
                 except:
                     pass
 
-            title1 = f'Neighborhood Distribution of Nodes in Network from Nodes: {root}'
-            title2 = f'Neighborhood Distribution of Nodes in Network from Nodes {root} as a proportion of total nodes of that ID'
+            title1 = f'Neighborhood Distribution of Nodes in Network from Node Type: {root}'
+            title2 = f'Neighborhood Distribution of Nodes in Network from Node Type {root} as a Proportion (# neighbors with ID x / Total # ID x)'
 
 
         elif mode == 1: #Search neighborhoods morphologically, obtain densities
             neighborhood_dict, total_dict, densities = morphology.search_neighbor_ids(self._nodes, targets, node_identities, neighborhood_dict, total_dict, search, self._xy_scale, self._z_scale, root, fastdil = fastdil)
-            title1 = f'Volumetric Neighborhood Distribution of Nodes in image that are {search} from nodes: {root}'
-            title2 = f'Density Distribution of Nodes in image that are {search} from Nodes {root} as a proportion of total node volume of that ID'
+            title1 = f'Volumetric Neighborhood Distribution of Nodes in image that are {search} from Node Type: {root}'
+            title2 = f'Density Distribution of Nodes in image that are {search} from Node Type {root} as a proportion (Vol neighors with ID x / Total vol ID x)'
 
 
         for identity in neighborhood_dict:
@@ -5578,7 +5580,7 @@ class Network_3D:
         network_analysis.create_bar_graph(proportion_dict, title2, "Node Identity", "Proportion", directory=directory)
 
         try:
-            network_analysis.create_bar_graph(densities, f'Relative Density of Node Identities with {search} from nodes {root}', "Node Identity", "Density Search/Density Total", directory=directory)
+            network_analysis.create_bar_graph(densities, f'Relative Density of Node Identities with {search} from Node Type {root}', "Node Identity", "Density within search region/Density within entire image", directory=directory)
         except:
             densities = None
 
@@ -6233,14 +6235,14 @@ class Network_3D:
         if proportional:
 
             identities2, id_set2 = self.community_id_info_per_com(proportional = True)
-            output = neighborhoods.plot_dict_heatmap(identities2, id_set2, title = "Neighborhood Heatmap by Proportional Composition of Nodes in Neighborhood vs All Nodes")
+            output = neighborhoods.plot_dict_heatmap(identities2, id_set2, title = "Neighborhood Heatmap by Proportional Composition of Nodes in Neighborhood vs All Nodes in Image")
             matrixes.append(output)
 
             identities3 = {}
             for iden in identities2:
                 identities3[iden] = identities2[iden]/len_dict[iden][1]
 
-            output = neighborhoods.plot_dict_heatmap(identities3, id_set2, title = "Neighborhood Heatmap by Proportional Composition of Nodes in Neighborhood vs All Nodes Divided by Neighborhood Total Proportion of All Nodes (val < 1 = underrepresented, val > 1 = overrepresented)", center_at_one = True)
+            output = neighborhoods.plot_dict_heatmap(identities3, id_set2, title = "Over/Underrepresentation of Node Identities per Neighborhood (val < 1 = underrepresented, val > 1 = overrepresented)", center_at_one = True)
             matrixes.append(output)
 
         return len_dict, matrixes, id_set

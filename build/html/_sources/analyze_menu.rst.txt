@@ -384,9 +384,9 @@ Parameter Explanations
 2. Output Directory
     * If a string path is included to a directory, the resulting outputs will be autosaved there.
 3. Mode (Menu Includes the following options):
-    1. From Network - Based on Absolute Connectivity
+    1. From Network - Quantifies Neighbors Based on Adjacent Network Connections
         * Reveals information about neighors based on the connectivity of the network.
-    2. Use Labeled Nodes - Based on Morphological Densities 
+    2. Use Labeled Nodes - Quantifies Neighbors Volume of Neighbor Within Search Region 
         * Reveals information about neighors based on what sorts of nodes are physically in the vicinity.
 4. Search Radius (if using Mode 2)
     * The distance that nodes will search to characterize their neighborhoods. Option one currently will always just search for immediate network neighbors.
