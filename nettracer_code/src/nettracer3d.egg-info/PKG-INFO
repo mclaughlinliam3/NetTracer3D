@@ -1,6 +1,6 @@
 Metadata-Version: 2.4
 Name: nettracer3d
-Version: 1.2.4
+Version: 1.2.5
 Summary: Scripts for intializing and analyzing networks from segmentations of three dimensional images.
 Author-email: Liam McLaughlin <liamm@wustl.edu>
 Project-URL: Documentation, https://nettracer3d.readthedocs.io/en/latest/
@@ -50,7 +50,7 @@ Please see: https://nettracer3d.readthedocs.io/en/latest/
 
 --- Installation ---
 
-To install nettracer3d, simply install Python and use this command in your command terminal:
+To install nettracer3d, simply install Python. Make sure the Python installation installs pip, and that both Python and pip are available on your PATH. Next, use this command in your command terminal:
 
 pip install nettracer3d
 
@@ -58,6 +58,10 @@ I recommend installing the program as an Anaconda package to ensure its modules 
 (Install anaconda at the link below, set up a new python env for nettracer3d, then use the same pip command).
 
 https://www.anaconda.com/download?utm_source=anacondadocs&utm_medium=documentation&utm_campaign=download&utm_content=installwindows
+
+Alternatively, you can download a compiled .exe of version 1.2.4 here: https://doi.org/10.5281/zenodo.17873800 
+
+Unzip the folder, then double click the NetTracer3D executable to run the program. Note that this version will be missing a few features compared to the Python package, namely the 3D display and the ability to print updates to the command window. It will also not be updated as often.
 
 Optional Packages
 ~~~~~~~~~~~~~~~~~~
@@ -100,16 +104,14 @@ While not related to NetTracer3D, if you want to use Cellpose3 (for which GPU-us
 This gui is built from the PyQt6 package and therefore may not function on dockers or virtual envs that are unable to support PyQt6 displays.
 
 
-NetTracer3D is free to use/fork for academic/nonprofit use so long as citation is provided, and is available for commercial use at a fee (see license file for information).
-The current citation is here: 
+NetTracer3D is freely available for academic and nonprofit use and can obtained from pip (pip install nettracer3d), provided that citation is included in any abstract, paper, or presentation utilizing NetTracer3D.
 
-McLaughlin, L., Zhang, B., Sharma, S. et al. Three dimensional multiscalar neurovascular nephron connectivity map of the human kidney across the lifespan. Nat Commun 16, 5161 (2025). https://doi.org/10.1038/s41467-025-60435-8
+(The official paper to cite is coming soon)
 
 NetTracer3D was developed by Liam McLaughlin while working under Dr. Sanjay Jain at Washington University School of Medicine.
 
--- Version 1.2.4 Updates --
+-- Version 1.2.5 Updates --
 
-	* Fixed bug for calculating surface area when the surface was on the edge of the image.
-	* Removed video tutorial from youtube for being outdated. May add new one later.
+	* Updated readme, license
 	
 	

@@ -11,9 +11,9 @@ Before installing NetTracer3D, ensure your system meets the following requiremen
 
 * Operating System: Windows 10/11, macOS 10.15+, or Linux (Ubuntu 20.04+ recommended)
 * CPU: Multi-core processor (4+ cores recommended)
-* RAM: Minimum 8GB (16GB+ recommended for larger images. For very large images such as lightsheet data, you would even want a workstation with 128+, for example)
+* RAM: Minimum 8GB (16GB+ recommended for larger images. For very large images such as lightsheet data, you would even want a workstation with 128+, for example, or downsample the data accordingly)
 * GPU: NVIDIA dedicated GPU (Optional)
-* Storage: 1GB for installation, additional space for captured data
+* Storage: ~7GB for installation (at least, that's how big the compiled version's dependencies get), additional space for captured data
 * Python: 3.11
 
 Installing NetTracer3D
@@ -22,17 +22,38 @@ Installing NetTracer3D
 Using pip
 ~~~~~~~~~
 
-The easiest way to install NetTracer3D is using pip:
+The easiest way to install NetTracer3D is using pip. First, you will want to go to the Python website (https://www.python.org/). Download the Python installer for the latest version of Python. When you run it, make sure to include the option to also install Pip, and to add both Pip and Python to your path.
+
+After installing Python and pip, you can verify (on windows at least) the installation by pressing the windows key + R. In the window that pops up, type 'cmd' to open the command terminal. In the command terminal, type 'where pip' or 'where python'.
+If your installation of them worked properly, the window will tell you what folder your pip/python .exe resides in. If it cannot find them, it means they either did not get installed, or that they were not added to your PATH. 
+You can try reinstalling them, if perhaps the wrong setting was selected, or you can manually add them to the environment variables (the PATH) from the windows control panel. (I am not a mac user so I cannot provide advice there).
+
+Once you have Python and pip set up, open the command terminal once more (Windows + R, followed by typing 'cmd' in the window that appears). Type the following command.
 
 .. code-block:: bash
 
     pip install nettracer3d
 
+
+Or if you want the 3D visualization options to be included:
+
+.. code-block:: bash
+
+    pip install nettracer3d[viz]
+
+
 This will install NetTracer3D and all its core dependencies.
+
+Using the compiled version
+~~~~~~~~~~~~~~~~~~~~~~~~
+If you want to avoid going the Python/pip route, you can download a compiled .exe of version 1.2.4 here: https://doi.org/10.5281/zenodo.17873800 
+
+Unzip the folder, then double click the NetTracer3D executable to run the program. Note that this version will be missing a few features compared to the Python package, namely the 3D display, any GPU support, and the ability to print updates to the command window. It will also not be updated as often.
+
 
 Optional Packages
 ~~~~~~~~~~~~~~~~~~
-I recommend including Napari (Chi-Li Chiu, Nathan Clack, the napari community, napari: a Python Multi-Dimensional Image Viewer Platform for the Research Community, Microscopy and Microanalysis, Volume 28, Issue S1, 1 August 2022, Pages 1576–1577, https://doi.org/10.1017/S1431927622006328) in the download as well, which allows NetTracer3D to use 3D displays. The standard package only comes with its native 2D slice display window. 
+This was touched on above, but I recommend including Napari (Chi-Li Chiu, Nathan Clack, the napari community, napari: a Python Multi-Dimensional Image Viewer Platform for the Research Community, Microscopy and Microanalysis, Volume 28, Issue S1, 1 August 2022, Pages 1576–1577, https://doi.org/10.1017/S1431927622006328) in the download as well, which allows NetTracer3D to use 3D displays. The standard package only comes with its native 2D slice display window. 
 If Napari is present, all 3D images and overlays from NetTracer3D can be easily displayed in 3D with a click of a button. To package with Napari, use this install command instead: 
 
 .. code-block:: bash
@@ -106,7 +127,7 @@ If you encounter errors about conflicting dependencies, download anaconda and tr
 
     pip install nettracer3d
 
-The highest probability is that a version of a package you are running is not compatible with numpy version 2 and above. Please try upgrading/downgrading the incompatible packages as needed.
+The highest probability is that a version of a package you are running is not compatible with numpy version 2 and above. Please try upgrading/downgrading the incompatible packages as needed. I would generally not downgrade numpy below version 2.0, as it is the main workhorse when it comes to image processing in Python (sorry, OpenCV), and the 2.0 release made a lot of nice optimizations.
 This is generally done along the lines of:
 
 .. code-block:: bash

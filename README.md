@@ -6,14 +6,18 @@ Please see: https://nettracer3d.readthedocs.io/en/latest/
 
 --- Installation ---
 
-To install nettracer3d, simply install Python and use this command in your command terminal:
+To install nettracer3d, simply install Python. Make sure the Python installation installs pip, and that both Python and pip are available on your PATH. Next, use this command in your command terminal:
 
-    pip install nettracer3d
+pip install nettracer3d
 
 I recommend installing the program as an Anaconda package to ensure its modules are work together on your specific system:
 (Install anaconda at the link below, set up a new python env for nettracer3d, then use the same pip command).
 
 https://www.anaconda.com/download?utm_source=anacondadocs&utm_medium=documentation&utm_campaign=download&utm_content=installwindows
+
+Alternatively, you can download a compiled .exe of version 1.2.4 here: https://doi.org/10.5281/zenodo.17873800 
+
+Unzip the folder, then double click the NetTracer3D executable to run the program. Note that this version will be missing a few features compared to the Python package, namely the 3D display and the ability to print updates to the command window. It will also not be updated as often.
 
 Optional Packages
 ~~~~~~~~~~~~~~~~~~
@@ -56,6 +60,8 @@ While not related to NetTracer3D, if you want to use Cellpose3 (for which GPU-us
 This gui is built from the PyQt6 package and therefore may not function on dockers or virtual envs that are unable to support PyQt6 displays.
 
 
-NetTracer3D is free to use/fork for academic/nonprofit use so long as citation is provided, and is available for commercial use at a fee (see license file for information).
+NetTracer3D is freely available for academic and nonprofit use and can obtained from pip (pip install nettracer3d), provided that citation is included in any abstract, paper, or presentation utilizing NetTracer3D.
+
+(The official paper to cite is coming soon)
 
 NetTracer3D was developed by Liam McLaughlin while working under Dr. Sanjay Jain at Washington University School of Medicine.

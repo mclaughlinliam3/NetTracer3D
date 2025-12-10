@@ -138,3 +138,7 @@ Versions 1.1.4 - 1.2.3 Updates
 	* Removed options for 'cubic' downsampling during processing as this option actually made outputs worse.
 	* Rearranged the 'Analyze -> Stats' menu
 	* Added ability to attempt to re-merge contiguous large branches that had been split up into separate branches by the branch labeler.
+
+Version 1.2.4-1.2.5 Update
+	* Bug fixes
+	* Updated license and readme files.

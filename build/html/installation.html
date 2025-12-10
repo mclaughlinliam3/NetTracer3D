@@ -6,14 +6,14 @@
   <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
 
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Installation &mdash; NetTracer3D 1.2.4 documentation</title>
+  <title>Installation &mdash; NetTracer3D 1.2.5 documentation</title>
       <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=b86133f3" />
       <link rel="stylesheet" type="text/css" href="_static/css/theme.css?v=e59714d7" />
 
   
       <script src="_static/jquery.js?v=5d32c60e"></script>
       <script src="_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
-      <script src="_static/documentation_options.js?v=928db92d"></script>
+      <script src="_static/documentation_options.js?v=36f53d34"></script>
       <script src="_static/doctools.js?v=9bcbadda"></script>
       <script src="_static/sphinx_highlight.js?v=dc90522c"></script>
     <script src="_static/js/theme.js"></script>
@@ -49,6 +49,7 @@
 <li class="toctree-l2"><a class="reference internal" href="#system-requirements">System Requirements</a></li>
 <li class="toctree-l2"><a class="reference internal" href="#installing-nettracer3d">Installing NetTracer3D</a><ul>
 <li class="toctree-l3"><a class="reference internal" href="#using-pip">Using pip</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#using-the-compiled-version">Using the compiled version</a></li>
 <li class="toctree-l3"><a class="reference internal" href="#optional-packages">Optional Packages</a></li>
 <li class="toctree-l3"><a class="reference internal" href="#gpu">GPU</a></li>
 </ul>
@@ -118,9 +119,9 @@
 <ul class="simple">
 <li><p>Operating System: Windows 10/11, macOS 10.15+, or Linux (Ubuntu 20.04+ recommended)</p></li>
 <li><p>CPU: Multi-core processor (4+ cores recommended)</p></li>
-<li><p>RAM: Minimum 8GB (16GB+ recommended for larger images. For very large images such as lightsheet data, you would even want a workstation with 128+, for example)</p></li>
+<li><p>RAM: Minimum 8GB (16GB+ recommended for larger images. For very large images such as lightsheet data, you would even want a workstation with 128+, for example, or downsample the data accordingly)</p></li>
 <li><p>GPU: NVIDIA dedicated GPU (Optional)</p></li>
-<li><p>Storage: 1GB for installation, additional space for captured data</p></li>
+<li><p>Storage: ~7GB for installation (at least, that’s how big the compiled version’s dependencies get), additional space for captured data</p></li>
 <li><p>Python: 3.11</p></li>
 </ul>
 </section>
@@ -128,15 +129,28 @@
 <h2>Installing NetTracer3D<a class="headerlink" href="#installing-nettracer3d" title="Link to this heading"></a></h2>
 <section id="using-pip">
 <h3>Using pip<a class="headerlink" href="#using-pip" title="Link to this heading"></a></h3>
-<p>The easiest way to install NetTracer3D is using pip:</p>
+<p>The easiest way to install NetTracer3D is using pip. First, you will want to go to the Python website (<a class="reference external" href="https://www.python.org/">https://www.python.org/</a>). Download the Python installer for the latest version of Python. When you run it, make sure to include the option to also install Pip, and to add both Pip and Python to your path.</p>
+<p>After installing Python and pip, you can verify (on windows at least) the installation by pressing the windows key + R. In the window that pops up, type ‘cmd’ to open the command terminal. In the command terminal, type ‘where pip’ or ‘where python’.
+If your installation of them worked properly, the window will tell you what folder your pip/python .exe resides in. If it cannot find them, it means they either did not get installed, or that they were not added to your PATH.
+You can try reinstalling them, if perhaps the wrong setting was selected, or you can manually add them to the environment variables (the PATH) from the windows control panel. (I am not a mac user so I cannot provide advice there).</p>
+<p>Once you have Python and pip set up, open the command terminal once more (Windows + R, followed by typing ‘cmd’ in the window that appears). Type the following command.</p>
 <div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>pip<span class="w"> </span>install<span class="w"> </span>nettracer3d
+</pre></div>
+</div>
+<p>Or if you want the 3D visualization options to be included:</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>pip<span class="w"> </span>install<span class="w"> </span>nettracer3d<span class="o">[</span>viz<span class="o">]</span>
 </pre></div>
 </div>
 <p>This will install NetTracer3D and all its core dependencies.</p>
 </section>
+<section id="using-the-compiled-version">
+<h3>Using the compiled version<a class="headerlink" href="#using-the-compiled-version" title="Link to this heading"></a></h3>
+<p>If you want to avoid going the Python/pip route, you can download a compiled .exe of version 1.2.4 here: <a class="reference external" href="https://doi.org/10.5281/zenodo.17873800">https://doi.org/10.5281/zenodo.17873800</a></p>
+<p>Unzip the folder, then double click the NetTracer3D executable to run the program. Note that this version will be missing a few features compared to the Python package, namely the 3D display, any GPU support, and the ability to print updates to the command window. It will also not be updated as often.</p>
+</section>
 <section id="optional-packages">
 <h3>Optional Packages<a class="headerlink" href="#optional-packages" title="Link to this heading"></a></h3>
-<p>I recommend including Napari (Chi-Li Chiu, Nathan Clack, the napari community, napari: a Python Multi-Dimensional Image Viewer Platform for the Research Community, Microscopy and Microanalysis, Volume 28, Issue S1, 1 August 2022, Pages 1576–1577, <a class="reference external" href="https://doi.org/10.1017/S1431927622006328">https://doi.org/10.1017/S1431927622006328</a>) in the download as well, which allows NetTracer3D to use 3D displays. The standard package only comes with its native 2D slice display window.
+<p>This was touched on above, but I recommend including Napari (Chi-Li Chiu, Nathan Clack, the napari community, napari: a Python Multi-Dimensional Image Viewer Platform for the Research Community, Microscopy and Microanalysis, Volume 28, Issue S1, 1 August 2022, Pages 1576–1577, <a class="reference external" href="https://doi.org/10.1017/S1431927622006328">https://doi.org/10.1017/S1431927622006328</a>) in the download as well, which allows NetTracer3D to use 3D displays. The standard package only comes with its native 2D slice display window.
 If Napari is present, all 3D images and overlays from NetTracer3D can be easily displayed in 3D with a click of a button. To package with Napari, use this install command instead:</p>
 <div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>pip<span class="w"> </span>install<span class="w"> </span>nettracer3d<span class="o">[</span>viz<span class="o">]</span>
 </pre></div>
@@ -191,7 +205,7 @@ conda<span class="w"> </span>activate<span class="w"> </span>nettracer3d
 pip<span class="w"> </span>install<span class="w"> </span>nettracer3d
 </pre></div>
 </div>
-<p>The highest probability is that a version of a package you are running is not compatible with numpy version 2 and above. Please try upgrading/downgrading the incompatible packages as needed.
+<p>The highest probability is that a version of a package you are running is not compatible with numpy version 2 and above. Please try upgrading/downgrading the incompatible packages as needed. I would generally not downgrade numpy below version 2.0, as it is the main workhorse when it comes to image processing in Python (sorry, OpenCV), and the 2.0 release made a lot of nice optimizations.
 This is generally done along the lines of:</p>
 <div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>pip<span class="w"> </span>install<span class="w"> </span><span class="s1">&#39;numpy&lt;=2.2&#39;</span><span class="w"> </span><span class="c1"># If a version of numpy beyond 2.2 was causing a conflict, for example.</span>
 </pre></div>
