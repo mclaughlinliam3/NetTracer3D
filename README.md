@@ -4,6 +4,12 @@ NetTracer3D is a python package developed for both 2D and 3D analysis of microsc
 
 Please see: https://nettracer3d.readthedocs.io/en/latest/
 
+
+--- Video Tutorial ---
+
+Please see: https://www.youtube.com/watch?v=_4uDy0mzG94&list=PLsrhxiimzKJMZ3_gTWkfrcAdJQQobUhj7
+
+
 --- Installation ---
 
 To install nettracer3d, simply install Python. Make sure the Python installation installs pip, and that both Python and pip are available on your PATH. Next, use this command in your command terminal:
@@ -65,3 +71,6 @@ NetTracer3D is freely available for academic and nonprofit use and can obtained 
 (The official paper to cite is coming soon)
 
 NetTracer3D was developed by Liam McLaughlin while working under Dr. Sanjay Jain at Washington University School of Medicine.
+
+	
+	

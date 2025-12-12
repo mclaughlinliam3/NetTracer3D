@@ -29,7 +29,9 @@ Key Features
 Getting Started
 -------------
 
-To get started with NetTracer3D, check out the :doc:`installation` guide and then proceed to the :doc:`quickstart` tutorial.
+To get started with NetTracer3D, check out the :doc:`installation` guide and then proceed to the :doc:`quickstart` tutorial. 
+
+A youtube tutorial on installing and using the program can be found here: https://www.youtube.com/watch?v=_4uDy0mzG94&list=PLsrhxiimzKJMZ3_gTWkfrcAdJQQobUhj7
 
 .. toctree::
    :maxdepth: 2

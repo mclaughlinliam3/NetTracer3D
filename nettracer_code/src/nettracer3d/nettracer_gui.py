@@ -4927,6 +4927,8 @@ class ImageViewerWindow(QMainWindow):
         documentation_action.triggered.connect(self.help_me)
         tutorial_action = help_menu.addAction("Tutorial")
         tutorial_action.triggered.connect(self.start_tutorial)
+        documentation_action = help_menu.addAction("Youtube")
+        documentation_action.triggered.connect(self.help_me_vid)
 
         # Initialize downsample factor
         self.downsample_factor = 1
@@ -5184,6 +5186,16 @@ class ImageViewerWindow(QMainWindow):
         import webbrowser
         try:
             webbrowser.open('https://nettracer3d.readthedocs.io/en/latest/')
+            return True
+        except Exception as e:
+            print(f"Error opening URL: {e}")
+            return False
+
+    def help_me_vid(self):
+
+        import webbrowser
+        try:
+            webbrowser.open('https://www.youtube.com/watch?v=_4uDy0mzG94&list=PLsrhxiimzKJMZ3_gTWkfrcAdJQQobUhj7')
             return True
         except Exception as e:
             print(f"Error opening URL: {e}")
@@ -6737,6 +6749,12 @@ class ImageViewerWindow(QMainWindow):
             
             else:  # Save
                 parent_dir = None  # Let the backend handle default save location
+
+            if len(self.channel_data[0].shape) == 4:
+                try:
+                    self.load_channel(0, self.reduce_rgb_dimension(self.channel_data[0], 'weight'), True)
+                except:
+                    pass
             
             # Call appropriate save method
             if asbool:
@@ -13051,8 +13069,7 @@ class MachineWindow(QMainWindow):
                         self.kill_segmentation()
                         time.sleep(0.2)  # Give additional time for cleanup
                         try:
-                            self.parent().channel_data[0] = self.parent().reduce_rgb_dimension(self.parent().channel_data[0], 'weight')
-                            self.update_display()
+                            self.parent().load_channel(0, self.parent().reduce_rgb_dimension(self.parent().channel_data[0], 'weight'), True)
                         except:
                             pass
                         

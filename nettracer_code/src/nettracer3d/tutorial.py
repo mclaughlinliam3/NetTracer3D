@@ -1098,8 +1098,6 @@ def setup_start_tutorial(window):
         )
 
 
-
-    
     
     # Step 9: Close dialog and finish
     def close_dialog():
@@ -1111,7 +1109,6 @@ def setup_start_tutorial(window):
         None,
         "That's it for the Intro tutorial! Select the Basic Interface Tour next to see how to use the main GUI elements.",
         message_position="bottom",
-        pre_action=MenuHelper.create_widget_interaction(tutorial, 'properties_dialog', 'xy_scale', 'close()'),
         action=close_dialog
     )
 

@@ -1,6 +1,6 @@
 [project]
 name = "nettracer3d"
-version = "1.2.5"
+version = "1.2.6"
 authors = [
   { name="Liam McLaughlin", email="liamm@wustl.edu" },
 ]
@@ -51,4 +51,4 @@ nettracer3d = "nettracer3d.run:main"
 
 [project.urls]
 Documentation = "https://nettracer3d.readthedocs.io/en/latest/"
-Reference_Citation_For_Use = "https://doi.org/10.1101/2024.07.29.605633"
+Youtube_Tutorial = "https://www.youtube.com/watch?v=_4uDy0mzG94&list=PLsrhxiimzKJMZ3_gTWkfrcAdJQQobUhj7"
