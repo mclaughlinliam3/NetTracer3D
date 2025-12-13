@@ -49,6 +49,7 @@
 <li class="toctree-l2"><a class="reference internal" href="#system-requirements">System Requirements</a></li>
 <li class="toctree-l2"><a class="reference internal" href="#installing-nettracer3d">Installing NetTracer3D</a><ul>
 <li class="toctree-l3"><a class="reference internal" href="#using-pip">Using pip</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#using-anaconda">Using Anaconda</a></li>
 <li class="toctree-l3"><a class="reference internal" href="#using-the-compiled-version">Using the compiled version</a></li>
 <li class="toctree-l3"><a class="reference internal" href="#optional-packages">Optional Packages</a></li>
 <li class="toctree-l3"><a class="reference internal" href="#gpu">GPU</a></li>
@@ -122,7 +123,7 @@
 <li><p>RAM: Minimum 8GB (16GB+ recommended for larger images. For very large images such as lightsheet data, you would even want a workstation with 128+, for example, or downsample the data accordingly)</p></li>
 <li><p>GPU: NVIDIA dedicated GPU (Optional)</p></li>
 <li><p>Storage: ~7GB for installation (at least, that’s how big the compiled version’s dependencies get), additional space for captured data</p></li>
-<li><p>Python: 3.11</p></li>
+<li><p>Python: 3.12</p></li>
 </ul>
 </section>
 <section id="installing-nettracer3d">
@@ -141,7 +142,30 @@ You can try reinstalling them, if perhaps the wrong setting was selected, or you
 <div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>pip<span class="w"> </span>install<span class="w"> </span>nettracer3d<span class="o">[</span>viz<span class="o">]</span>
 </pre></div>
 </div>
-<p>This will install NetTracer3D and all its core dependencies.</p>
+<p>This will install NetTracer3D and all its core dependencies. Then, if you want to run nettracer3d, open the command terminal like before and enter the following command:</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>nettracer3d
+</pre></div>
+</div>
+</section>
+<section id="using-anaconda">
+<h3>Using Anaconda<a class="headerlink" href="#using-anaconda" title="Link to this heading"></a></h3>
+<p>Anaconda is a useful program that manages Python packages for you and can help work out problems regarding conflicting package versions during installation. Installing NetTracer3D with Anaconda is similar to the above method, except it will be housed in a dedicated NetTracer3D anaconda environment rather than in your computer’s Python packages.
+You would first want to download the version of anaconda that is compatible with your operating system here: <a class="reference external" href="https://www.anaconda.com/download">https://www.anaconda.com/download</a></p>
+<p>Run the installer they provide. Once it’s finished, search ‘anaconda prompt’ in your taskbar and open the corresponding program. You will be taken to a command line window.
+Next, you can run these commands:</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>conda<span class="w"> </span>create<span class="w"> </span>--name<span class="w"> </span>nettracer3d<span class="w"> </span><span class="nv">python</span><span class="o">=</span><span class="m">3</span>.12
+
+conda<span class="w"> </span>activate<span class="w"> </span>nettracer3d
+
+pip<span class="w"> </span>install<span class="w"> </span>nettracer3d<span class="o">[</span>viz<span class="o">]</span>
+</pre></div>
+</div>
+<p>This should install the program in the ‘nettracer3d’ environment in conda. Then, whenever you wanted to run nettracer3d, you would first open the ‘anaconda prompt’, followed by entering these commands:</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>conda<span class="w"> </span>activate<span class="w"> </span>nettracer3d
+
+nettracer3d
+</pre></div>
+</div>
 </section>
 <section id="using-the-compiled-version">
 <h3>Using the compiled version<a class="headerlink" href="#using-the-compiled-version" title="Link to this heading"></a></h3>
@@ -198,18 +222,23 @@ pip<span class="w"> </span>install<span class="w"> </span>cupy<span class="w"> <
 <h3>Common Issues<a class="headerlink" href="#common-issues" title="Link to this heading"></a></h3>
 <p><strong>Conflicting Dependencies</strong></p>
 <p>If you encounter errors about conflicting dependencies, download anaconda and try installing them in a new anaconda env:</p>
-<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>conda<span class="w"> </span>create<span class="w"> </span>--name<span class="w"> </span>nettracer3d<span class="w"> </span><span class="nv">python</span><span class="o">=</span><span class="m">3</span>.11
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>conda<span class="w"> </span>create<span class="w"> </span>--name<span class="w"> </span>nettracer3d<span class="w"> </span><span class="nv">python</span><span class="o">=</span><span class="m">3</span>.12
 
 conda<span class="w"> </span>activate<span class="w"> </span>nettracer3d
 
 pip<span class="w"> </span>install<span class="w"> </span>nettracer3d
 </pre></div>
 </div>
-<p>The highest probability is that a version of a package you are running is not compatible with numpy version 2 and above. Please try upgrading/downgrading the incompatible packages as needed. I would generally not downgrade numpy below version 2.0, as it is the main workhorse when it comes to image processing in Python (sorry, OpenCV), and the 2.0 release made a lot of nice optimizations.
+<p>The highest probability is that a version of a package you are running is not compatible with numpy version 2 and above. Please try upgrading/downgrading the incompatible packages as needed. I would generally not downgrade numpy below version 2.0, as it is the main workhorse when it comes to image processing in Python, and the 2.0 release made a lot of nice optimizations.
 This is generally done along the lines of:</p>
 <div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>pip<span class="w"> </span>install<span class="w"> </span><span class="s1">&#39;numpy&lt;=2.2&#39;</span><span class="w"> </span><span class="c1"># If a version of numpy beyond 2.2 was causing a conflict, for example.</span>
 </pre></div>
 </div>
+<p><strong>Python Version Problems</strong></p>
+<p>Another problem might be due to some of the packages that NetTracer3D depends on not having proper build protocols set up for newer Python releases. If you are attempting to install the package and find that it starts the installation but crashes part-way through, it might be a good idea to try downgrading your version of Python.
+Generally speaking, the installation should work fine with Python version 3.12. However, issues may arise with later versions as of writing this (12/13/2025) specifically with the sklearn package.
+To downgrade Python you can either uninstall it from your computer (on windows, from the add/remove programs menu), followed by reinstalling version 3.12.
+On anaconda, you can just make a new environment and specify what Python version you want.</p>
 </section>
 <section id="getting-help">
 <h3>Getting Help<a class="headerlink" href="#getting-help" title="Link to this heading"></a></h3>
