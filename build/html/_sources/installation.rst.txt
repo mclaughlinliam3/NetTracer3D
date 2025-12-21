@@ -22,25 +22,43 @@ Installing NetTracer3D
 Using pip
 ~~~~~~~~~
 
-The easiest way to install NetTracer3D is using pip. First, you will want to go to the Python website (https://www.python.org/). Download the Python installer for the latest version of Python. When you run it, make sure to include the option to also install Pip, and to add both Pip and Python to your path.
+1. **Get Python and Pip on your path**: The easiest way to install NetTracer3D is using pip. First, you will want to go to the Python website (https://www.python.org/). Download the Python installer for the latest version of Python. When you run it, make sure to include the option to also install Pip, and to add both Pip and Python to your path.
 
 After installing Python and pip, you can verify (on windows at least) the installation by pressing the windows key + R. In the window that pops up, type 'cmd' to open the command terminal. In the command terminal, type 'where pip' or 'where python'.
 If your installation of them worked properly, the window will tell you what folder your pip/python .exe resides in. If it cannot find them, it means they either did not get installed, or that they were not added to your PATH. 
 You can try reinstalling them, if perhaps the wrong setting was selected, or you can manually add them to the environment variables (the PATH) from the windows control panel. (I am not a mac user so I cannot provide advice there).
 
-Once you have Python and pip set up, open the command terminal once more (Windows + R, followed by typing 'cmd' in the window that appears). Type the following command.
+2. **Installing Base Package**: Once you have Python and pip set up, open the command terminal once more (Windows + R, followed by typing 'cmd' in the window that appears). Type the following command.
 
 .. code-block:: bash
 
     pip install nettracer3d
 
 
-Or if you want the 3D visualization options to be included:
+3. **Optional — For 3D Displays**: Or if you want the 3D visualization options to be included:
 
 .. code-block:: bash
 
     pip install nettracer3d[viz]
 
+4. **Optional — Performance Boost for Large Data**: If you are trying to process large images, you may also want to include the 'edt' module in your package. This will allow parallelized CPU calculations for several of the search functions which can increase their speed by an order of magnitude or more depending on how many cores your CPU has. This can be a major benefit if you have a strong CPU and sufficient RAM. It requires an extra pre-installation step, thus is not included by default. You will also have to install the C++ build tools from windows. Please head to this link, then download and run the installer: https://visualstudio.microsoft.com/visual-cpp-build-tools/. In the menu of the installer, select the 'Desktop Development with C++' option, then proceed to download/install it using the installation menu. You will likely want to be using the Python distributed from the actual Python website and not the windows store (or elsewhere) or the edt module may not work properly. To bundle with edt use:
+
+.. code-block:: bash
+
+    pip install nettracer3d[edt]
+
+5. **Optional — Recommended full package**: Or if you want to just get both edt and napari at once:
+	
+.. code-block:: bash
+
+    pip install nettracer3d[rec]
+
+6. Likewise, if you already installed the default version, you can add napari and/or edt with just:
+
+.. code-block:: bash
+
+    pip install edt
+    pip install napari
 
 This will install NetTracer3D and all its core dependencies. Then, if you want to run nettracer3d, open the command terminal like before and enter the following command:
 
@@ -53,7 +71,7 @@ Using Anaconda
 ~~~~~~~~~~~~~~~~~~~~~~
 
 Anaconda is a useful program that manages Python packages for you and can help work out problems regarding conflicting package versions during installation. Installing NetTracer3D with Anaconda is similar to the above method, except it will be housed in a dedicated NetTracer3D anaconda environment rather than in your computer's Python packages.
-You would first want to download the version of anaconda that is compatible with your operating system here: https://www.anaconda.com/download
+You would first want to download the version of anaconda that is compatible with your operating system here: https://www.anaconda.com/download.
 
 Run the installer they provide. Once it's finished, search 'anaconda prompt' in your taskbar and open the corresponding program. You will be taken to a command line window.
 Next, you can run these commands:
@@ -64,7 +82,7 @@ Next, you can run these commands:
 
     conda activate nettracer3d
 
-    pip install nettracer3d[viz]
+    pip install nettracer3d[rec]
 
 This should install the program in the 'nettracer3d' environment in conda. Then, whenever you wanted to run nettracer3d, you would first open the 'anaconda prompt', followed by entering these commands:
 
@@ -74,11 +92,12 @@ This should install the program in the 'nettracer3d' environment in conda. Then,
 
     nettracer3d
 
-Using the compiled version
+**Alternate Option** — Just downloading the compiled version instead of the package
 ~~~~~~~~~~~~~~~~~~~~~~~~
-If you want to avoid going the Python/pip route, you can download a compiled .exe of version 1.2.4 here: https://doi.org/10.5281/zenodo.17873800 
 
-Unzip the folder, then double click the NetTracer3D executable to run the program. Note that this version will be missing a few features compared to the Python package, namely the 3D display, any GPU support, and the ability to print updates to the command window. It will also not be updated as often.
+If you want to avoid going the Python/pip route, you can download a compiled .exe of version 1.2.7 here: https://doi.org/10.5281/zenodo.17873800 
+
+Unzip the folder, then double click the NetTracer3D executable to run the program. Note that this version will be missing a few features compared to the Python package, namely GPU support for segmentation, and the ability to print updates to the command window. It will also not be updated as often.
 
 
 Optional Packages
@@ -98,7 +117,7 @@ To include Cellpose3 in the install, use this command:
 
     pip install nettracer3d[cellpose]
 
-Alternatively, both Napari and Cellpose can be included in the package with this command: (Or they can be independently installed with pip from the base package env)
+Alternatively, both Napari, Cellpose, and edt can be included in the package with this command: (Or they can be independently installed with pip from the base package env)
 
 .. code-block:: bash
 
@@ -135,9 +154,9 @@ To verify that NetTracer3D has been installed correctly, run:
 
 .. code-block:: bash
 
-    nettracer3d --version
+    pip show nettracer3d
 
-You should see the current version number displayed.
+You should see the current version number displayed. If windows does not recognize 'nettracer3d' as the command to start the program, it may be because it is using the windows store version of Python. Please uninstall the windows store version of Python, then make sure to download and install Python from the Python website and not the windows store to allow it to run packages directly from the command line.
 
 Troubleshooting
 --------------
@@ -172,6 +191,9 @@ Generally speaking, the installation should work fine with Python version 3.12. 
 To downgrade Python you can either uninstall it from your computer (on windows, from the add/remove programs menu), followed by reinstalling version 3.12. 
 On anaconda, you can just make a new environment and specify what Python version you want.
 
+**Installed but not starting**
+
+If windows does not recognize 'nettracer3d' as the command to start the program, it may be because it is using the windows store version of Python. Please uninstall the windows store version of Python, then make sure to download and install Python from the Python website and not the windows store to allow it to run packages directly from the command line.
 
 
 Getting Help
@@ -179,8 +201,7 @@ Getting Help
 
 If you continue to experience installation issues:
 
-* Check the :doc:`troubleshooting` guide
-* Email me at liamm@wustl.edu
+    * Email me at liamm@wustl.edu
 
 Next Steps
 ---------

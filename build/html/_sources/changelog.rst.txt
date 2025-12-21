@@ -142,3 +142,11 @@ Versions 1.1.4 - 1.2.3 Updates
 Version 1.2.4-1.2.5 Update
 	* Bug fixes
 	* Updated license and readme files.
+
+Version 1.2.6-1.2.8 updates
+	* Added a faster parallelized option for all distance transform calculations.
+	* Similarly, added flooding as a faster but slightly rougher option for propagating labels. This and the above can be combined to do much faster calculations for bigger images.
+	* Now has the 'edt' package as an optional dependency, which is required for parallel distance transforms.
+	* Removed dependency on nibabel (which was just being used to open .nii files). .nii files can still be opened if nibabel is installed manually.
+	* Added option to not show numerical labels when displaying network graph.
+	* Bug fixes

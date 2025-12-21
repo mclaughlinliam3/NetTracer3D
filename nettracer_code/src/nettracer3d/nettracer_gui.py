@@ -2565,10 +2565,40 @@ class ImageViewerWindow(QMainWindow):
         # Apply pass 2 results
         pass2_array = pass1_array.copy()
         
-        for illegal_label, new_label in results_pass2:
-            if new_label is not None and new_label != illegal_label:
-                # Reassign this label
-                pass2_array[pass1_array == illegal_label] = new_label
+        def replace_labels_in_chunk(args):
+            """Process a single chunk of the array"""
+            pass1_chunk, results_pass2 = args
+            
+            # Create output chunk (copy of input)
+            pass2_chunk = pass1_chunk.copy()
+            
+            # Find which labels actually exist in this chunk
+            unique_labels = set(np.unique(pass1_chunk))
+            
+            for illegal_label, new_label in results_pass2:
+                if new_label is not None and new_label != illegal_label:
+                    # Only process if this label exists in this chunk
+                    if illegal_label in unique_labels:
+                        # Read from pass1_chunk, write to pass2_chunk
+                        pass2_chunk[pass1_chunk == illegal_label] = new_label
+            
+            return pass2_chunk
+
+        # Get number of CPU cores
+        num_cores = mp.cpu_count()
+
+        # Split array along y-axis (axis=1)
+        chunks = np.array_split(pass1_array, num_cores, axis=1)
+
+        # Prepare arguments for each worker
+        chunk_args = [(chunk, results_pass2) for chunk in chunks]
+
+        # Process chunks in parallel with threads
+        with ThreadPoolExecutor(max_workers=num_cores) as executor:
+            processed_chunks = list(executor.map(replace_labels_in_chunk, chunk_args))
+
+        # Stack results back together along y-axis
+        pass2_array = np.concatenate(processed_chunks, axis=1)
         
         print(f"Pass 2 complete")
         return pass2_array
@@ -5600,10 +5630,13 @@ class ImageViewerWindow(QMainWindow):
         except:
             pass
 
-    def show_dilate_dialog(self, args = None):
+    def show_dilate_dialog(self, args = None, execute = False):
         """show the dilate dialog"""
         dialog = DilateDialog(self, args)
-        dialog.show()
+        if not execute:
+            dialog.show()
+        else:
+            dialog.exec()
 
     def show_erode_dialog(self, args = None):
         """show the erode dialog"""
@@ -6418,12 +6451,15 @@ class ImageViewerWindow(QMainWindow):
                         self.channel_data[channel_index] = test_channel_data
 
                     elif file_extension == 'nii':
-                        import nibabel as nib
-                        nii_img = nib.load(filename)
-                        # Get data and transpose to match TIFF orientation
-                        # If X needs to become Z, we move axis 2 (X) to position 0 (Z)
-                        arraydata = nii_img.get_fdata()
-                        self.channel_data[channel_index] = np.transpose(arraydata, (2, 1, 0))
+                        try:
+                            import nibabel as nib
+                            nii_img = nib.load(filename)
+                            # Get data and transpose to match TIFF orientation
+                            # If X needs to become Z, we move axis 2 (X) to position 0 (Z)
+                            arraydata = nii_img.get_fdata()
+                            self.channel_data[channel_index] = np.transpose(arraydata, (2, 1, 0))
+                        except:
+                            return
                         
                     elif file_extension in ['jpg', 'jpeg', 'png']:
                         from PIL import Image
@@ -8751,6 +8787,12 @@ class MergeNodeIdDialog(QDialog):
         layout.addRow("xy_scale:", self.xy_scale)
         self.z_scale = QLineEdit(f"{my_network.z_scale}")
         layout.addRow("z_scale:", self.z_scale)
+
+        self.search_mode = QComboBox()
+        self.search_mode.addItems(["Standard", "Fast (May be Rougher at Handling Adjacent Expanded Borders - Use for Very Large 3D Images)"])
+        self.search_mode.setCurrentIndex(0)  # Default to Mode 1
+        layout.addRow("Step-out algorithm:", self.search_mode)
+
         self.mode_selector = QComboBox()
         self.mode_selector.addItems(["Auto-Binarize(Otsu)/Presegmented", "Manual (Interactive Thresholder)"])
         self.mode_selector.setCurrentIndex(1)  # Default to Mode 1
@@ -8812,6 +8854,12 @@ class MergeNodeIdDialog(QDialog):
             data = self.parent().channel_data[0]
             include = self.include.isChecked()
             umap = True
+            search_mode = self.search_mode.currentIndex()
+
+            if search_mode == 0:
+                fast_dil = False
+            else:
+                fast_dil = True
             
             if data is None:
                 return
@@ -8828,7 +8876,7 @@ class MergeNodeIdDialog(QDialog):
                 return  # User cancelled directory selection
                 
             if search > 0:
-                data = sdl.smart_dilate(data, 1, 1, GPU=False, fast_dil=False, 
+                data = sdl.smart_dilate(data, fast_dil=fast_dil, 
                                       use_dt_dil_amount=search, xy_scale=xy_scale, z_scale=z_scale)
             
             # Check if manual mode is selected
@@ -9439,6 +9487,10 @@ class NetShowDialog(QDialog):
         self.geo_layout.setCheckable(True)
         self.geo_layout.setChecked(False)
         layout.addRow("Use Geographic Layout:", self.geo_layout)
+
+        self.show_labels = QCheckBox("Show Node Numerical IDs?")
+        self.show_labels.setChecked(True)
+        layout.addRow(self.show_labels)
         
         # Add mode selection dropdown
         self.mode_selector = QComboBox()
@@ -9460,6 +9512,8 @@ class NetShowDialog(QDialog):
     def show_network(self):
         # Get parameters and run analysis
 
+        show_labels = self.show_labels.isChecked()
+
         geo = self.geo_layout.isChecked()
         if geo:
             if my_network.node_centroids is None:
@@ -9479,12 +9533,12 @@ class NetShowDialog(QDialog):
 
         try:
             if accepted_mode == 0:
-                my_network.show_network(geometric=geo, directory = directory)
+                my_network.show_network(geometric=geo, show_labels = show_labels)
             elif accepted_mode == 1:
-                my_network.show_communities_flex(geometric=geo, directory = directory, weighted = weighted, partition = my_network.communities)
+                my_network.show_communities_flex(geometric=geo, weighted = weighted, partition = my_network.communities, show_labels = show_labels)
                 self.parent().format_for_upperright_table(my_network.communities, 'NodeID', 'CommunityID')
             elif accepted_mode == 2:
-                my_network.show_identity_network(geometric=geo, directory = directory)
+                my_network.show_identity_network(geometric=geo, show_labels = show_labels)
             
             self.accept()
         except Exception as e:
@@ -10117,8 +10171,8 @@ class NeighborIdentityDialog(QDialog):
 
         self.fastdil = QPushButton("Fast Dilate")
         self.fastdil.setCheckable(True)
-        self.fastdil.setChecked(False)
-        #layout.addRow("(If not using network) Use Fast Dilation (Higher speed, less accurate with search regions much larger than nodes):", self.fastdil)
+        self.fastdil.setChecked(True)
+        layout.addRow("(If not using network) Use Fast Dilation (Parallelized):", self.fastdil)
 
         # Add Run button
         run_button = QPushButton("Get Neighborhood Identity Distribution")
@@ -11794,17 +11848,21 @@ class CleanDialog(QDialog):
     def close(self):
 
         try:
-            self.parent().show_dilate_dialog(args = [1])
-            self.parent().show_erode_dialog(args = [self.parent().last_dil])
+            self.parent().show_dilate_dialog(args = [1, 0], execute = True)
+            self.parent().show_erode_dialog(args = self.parent().last_dil)
         except:
+            import traceback
+            print(traceback.format_exc())
             pass
 
     def open(self):
 
         try:
-            self.parent().show_erode_dialog(args = [1])
-            self.parent().show_dilate_dialog(args = [self.parent().last_ero])
+            self.parent().show_erode_dialog(args = [1, 0])
+            self.parent().show_dilate_dialog(args = self.parent().last_ero, execute = True)
         except:
+            import traceback
+            print(traceback.format_exc())
             pass
 
     def holes(self):
@@ -13630,20 +13688,11 @@ class SmartDilateDialog(QDialog):
 
         layout = QFormLayout(self)
 
-        # GPU checkbox (default True)
-        self.GPU = QPushButton("GPU")
-        self.GPU.setCheckable(True)
-        self.GPU.setChecked(False)
-        layout.addRow("Use GPU:", self.GPU)
-
         # dt checkbox (default False)
         self.predt = QPushButton("Fast Dilation")
         self.predt.setCheckable(True)
         self.predt.setChecked(False)
-        layout.addRow("Use Fast Dilation (Higher speed, less accurate with search regions much larger than nodes):", self.predt)
-
-        self.down_factor = QLineEdit("")
-        layout.addRow("Internal Downsample for GPU (if needed):", self.down_factor)
+        layout.addRow("Use Fast Dilation? (Higher speed, may be rougher along adjacent boundaries):", self.predt)
 
         self.params = params
 
@@ -13654,14 +13703,10 @@ class SmartDilateDialog(QDialog):
 
     def smart_dilate(self):
 
-        GPU = self.GPU.isChecked()
-        down_factor = float(self.down_factor.text()) if self.down_factor.text().strip() else None
         predt = self.predt.isChecked()
         active_data, amount, xy_scale, z_scale = self.params
 
-        dilate_xy, dilate_z = n3d.dilation_length_to_pixels(xy_scale, z_scale, amount, amount)
-
-        result = sdl.smart_dilate(active_data, dilate_xy, dilate_z, GPU = GPU, predownsample = down_factor, fast_dil = predt, use_dt_dil_amount = amount, xy_scale = xy_scale, z_scale = z_scale)
+        result = sdl.smart_dilate(active_data, fast_dil = predt, use_dt_dil_amount = amount, xy_scale = xy_scale, z_scale = z_scale)
 
         self.parent().load_channel(self.parent().active_channel, result, True, preserve_zoom = (self.parent().ax.get_xlim(), self.parent().ax.get_ylim()))
         self.accept()
@@ -13678,7 +13723,10 @@ class DilateDialog(QDialog):
 
         if args:
             self.parent().last_dil = args[0]
-            self.index = 1
+            if args[1] > 1:
+                self.index = 1
+            else:
+                self.index = 0
         else:
             self.parent().last_dil = 1
             self.index = 0
@@ -13694,7 +13742,7 @@ class DilateDialog(QDialog):
 
         # Add mode selection dropdown
         self.mode_selector = QComboBox()
-        self.mode_selector.addItems(["Distance Transform-Based (Slower but more accurate at larger dilations)", "Preserve Labels (slower)", "Pseudo3D Binary Kernels (For Fast, small dilations)"])
+        self.mode_selector.addItems(["Parallel Distance Transform-Based", "Preserve Labels (Distance Transform Based)", "Pseudo3D Binary Kernels (For Fast, small dilations for visualization purposes. Slightly inaccurate, moreso at large dilations)", "Distance Transform-Based (Non-Parallel Version)"])
         self.mode_selector.setCurrentIndex(self.index)  # Default to Mode 1
         layout.addRow("Execution Mode:", self.mode_selector)
 
@@ -13737,7 +13785,7 @@ class DilateDialog(QDialog):
             if active_data is None:
                 raise ValueError("No active image selected")
 
-            self.parent().last_dil = amount
+            self.parent().last_dil = [amount, accepted_mode]
 
             if accepted_mode == 1:
                 dialog = SmartDilateDialog(self.parent(), [active_data, amount, xy_scale, z_scale])
@@ -13746,6 +13794,8 @@ class DilateDialog(QDialog):
                 return
 
             if accepted_mode == 0:
+                result = n3d.dilate_3D_dt(active_data, amount, xy_scaling = xy_scale, z_scaling = z_scale, fast_dil = True)
+            elif accepted_mode == 3:
                 result = n3d.dilate_3D_dt(active_data, amount, xy_scaling = xy_scale, z_scaling = z_scale)
             else:
 
@@ -13784,7 +13834,10 @@ class ErodeDialog(QDialog):
 
         if args:
             self.parent().last_ero = args[0]
-            self.index = 1
+            if args[1] == 1: #user opted to preserve labels
+                self.index = 2 #this is where the labels option lives in the erode menu
+            else:
+                self.index = 0
         else:
             self.parent().last_ero = 1
             self.index = 0
@@ -13800,7 +13853,7 @@ class ErodeDialog(QDialog):
 
         # Add mode selection dropdown
         self.mode_selector = QComboBox()
-        self.mode_selector.addItems(["Distance Transform-Based (Slower but more accurate at larger erosions)", "Preserve Labels (Slower)", "Pseudo3D Binary Kernels (For Fast, small erosions)"])
+        self.mode_selector.addItems(["Parallel Distance Transform Based", "Distance Transform-Based (Non-Parallel)", "Preserve Labels (Parallel)", "Preserve Labels (Non-Parallel)"])
         self.mode_selector.setCurrentIndex(self.index)  # Default to Mode 1
         layout.addRow("Execution Mode:", self.mode_selector)
 
@@ -13837,7 +13890,7 @@ class ErodeDialog(QDialog):
 
             mode = self.mode_selector.currentIndex()
 
-            if mode == 1:
+            if mode == 2 or mode == 3:
                 preserve_labels = True
             else:
                 preserve_labels = False
@@ -13859,7 +13912,7 @@ class ErodeDialog(QDialog):
 
 
             self.parent().load_channel(self.parent().active_channel, result, True, preserve_zoom = (self.parent().ax.get_xlim(), self.parent().ax.get_ylim()))
-            self.parent().last_ero = amount
+            self.parent().last_ero = [amount, mode]
             self.accept()
             
         except Exception as e:
@@ -14029,7 +14082,7 @@ class FilamentDialog(QDialog):
             if downsample_factor and downsample_factor > 1:
                 data = n3d.downsample(data, downsample_factor)
 
-            result = filaments.trace(data, kernel_spacing, max_distance, min_component, gap_tolerance, blob_sphericity, blob_volume, spine_removal, score_threshold)
+            result = filaments.trace(data, kernel_spacing, max_distance, min_component, gap_tolerance, blob_sphericity, blob_volume, spine_removal, score_threshold, my_network.xy_scale, my_network.z_scale)
 
             if downsample_factor and downsample_factor > 1:
 
@@ -14565,6 +14618,12 @@ class DistanceDialog(QDialog):
         
         layout = QFormLayout(self)
 
+        # Add mode selection dropdown
+        self.mode_selector = QComboBox()
+        self.mode_selector.addItems(["Parallel (Faster)", "Non-Parallel (Uses less CPU resources)"])
+        self.mode_selector.setCurrentIndex(0)  # Default to Mode 1
+        layout.addRow("Execution Mode:", self.mode_selector)
+
         # Add Run button
         run_button = QPushButton("Run")
         run_button.clicked.connect(self.run)
@@ -14574,11 +14633,19 @@ class DistanceDialog(QDialog):
 
         try:
 
+            mode = self.mode_selector.currentIndex()
+            if mode == 0:
+                fast_dil = True
+            else:
+                fast_dil = False
+
             data = self.parent().channel_data[self.parent().active_channel]
 
-            data = sdl.compute_distance_transform_distance(data, sampling = [my_network.z_scale, my_network.xy_scale, my_network.xy_scale])
+            data = sdl.compute_distance_transform_distance(data, sampling = [my_network.z_scale, my_network.xy_scale, my_network.xy_scale], fast_dil = fast_dil)
 
             self.parent().load_channel(self.parent().active_channel, data, data = True, preserve_zoom = (self.parent().ax.get_xlim(), self.parent().ax.get_ylim()))
+
+            self.accept()
 
         except Exception as e:
 
@@ -14697,17 +14764,24 @@ class WatershedDialog(QDialog):
         self.proportion = QLineEdit(f"{self.default}")
         layout.addRow(f"Proportion (0-1) of distance transform value set [ie unique elements] to exclude (ie 0.2 = 20% of the set of all values of the distance transform get excluded).\n Essentially, vals closer to 0 are less likely to split objects but also won't kick out small objects from the output, vals slightly further from 0 will split more aggressively, but vals closer to 1 become unstable, leading to objects being evicted or labelling errors. \nRecommend something between 0.05 and 0.4, but it depends on the data (Or just enter a smallest radius above to avoid using this). \nWill tell you in command window what equivalent 'smallest radius' this is):", self.proportion)
         
+
+        # Add mode selection dropdown
+        self.mode_selector = QComboBox()
+        self.mode_selector.addItems(["Parallel (Faster)", "Non-Parallel (Uses less CPU resources)"])
+        self.mode_selector.setCurrentIndex(0)  # Default to Mode 1
+        layout.addRow("Execution Mode:", self.mode_selector)
+
         # GPU checkbox (default True)
         self.gpu = QPushButton("GPU")
         self.gpu.setCheckable(True)
         self.gpu.setChecked(False)
-        layout.addRow("Use GPU:", self.gpu)
+        #layout.addRow("Use GPU:", self.gpu)
         
         
         # Predownsample (empty by default)
         self.predownsample = QLineEdit()
         self.predownsample.setPlaceholderText("Leave empty for None")
-        layout.addRow("Kernel Obtainment GPU Downsample:", self.predownsample)
+        #layout.addRow("Kernel Obtainment GPU Downsample:", self.predownsample)
         
         # Predownsample2 (empty by default)
         #self.predownsample2 = QLineEdit()
@@ -14724,6 +14798,14 @@ class WatershedDialog(QDialog):
 
     def run_watershed(self):
         try:
+
+            mode = self.mode_selector.currentIndex()
+
+            if mode == 0:
+                fast_dil = True
+            else:
+                fast_dil = False
+
             # Get directory (None if empty)
             directory = None
             
@@ -14767,6 +14849,7 @@ class WatershedDialog(QDialog):
                 proportion=proportion,
                 GPU=gpu,
                 smallest_rad=smallest_rad,
+                fast_dil = fast_dil,
                 predownsample=predownsample,
                 predownsample2=predownsample2
             )
@@ -14975,52 +15058,9 @@ class GenNodesDialog(QDialog):
         main_layout = QVBoxLayout(self)
         self.called = called
         
-        # Set down_factor and cubic
+        # Set down_factor
         if not down_factor:
             down_factor = None
-        
-        if down_factor is None:
-            # --- Processing Options Group ---
-            process_group = QGroupBox("Processing Options")
-            process_layout = QGridLayout()
-            
-            # Downsample factor
-            self.down_factor = QLineEdit("0")
-            process_layout.addWidget(QLabel("Downsample Factor (Speeds up calculation at the cost of fidelity):"), 0, 0)
-            process_layout.addWidget(self.down_factor, 0, 1)
-            
-            # Cubic checkbox
-            self.cubic = QPushButton("Cubic Downsample")
-            self.cubic.setCheckable(True)
-            self.cubic.setChecked(False)
-            #process_layout.addWidget(QLabel("Use cubic downsample? (Slower but preserves structure better):"), 1, 0)
-            #process_layout.addWidget(self.cubic, 1, 1)
-            
-            # Fast dilation checkbox
-            self.fast_dil = QPushButton("Fast-Dil")
-            self.fast_dil.setCheckable(True)
-            self.fast_dil.setChecked(True)
-            #process_layout.addWidget(QLabel("Use Fast Dilation (Higher speed, less accurate with large search regions):"), 2, 0)
-            #process_layout.addWidget(self.fast_dil, 2, 1)
-            
-            process_group.setLayout(process_layout)
-            main_layout.addWidget(process_group)
-        else:
-            self.down_factor = down_factor[0]
-            self.cubic = down_factor[1]
-            
-            # Fast dilation checkbox (still needed even if down_factor is provided)
-            #process_group = QGroupBox("Processing Options")
-            #process_layout = QGridLayout()
-            
-            self.fast_dil = QPushButton("Fast-Dil")
-            self.fast_dil.setCheckable(True)
-            self.fast_dil.setChecked(True)
-            #process_layout.addWidget(QLabel("Use Fast Dilation (Higher speed, less accurate with large search regions):"), 0, 0)
-            #process_layout.addWidget(self.fast_dil, 0, 1)
-            
-            #process_group.setLayout(process_layout)
-            #main_layout.addWidget(process_group)
         
         # --- Recommended Corrections Group ---
         rec_group = QGroupBox("Recommended Corrections")
@@ -15063,6 +15103,39 @@ class GenNodesDialog(QDialog):
         
         opt_group.setLayout(opt_layout)
         main_layout.addWidget(opt_group)
+
+        # --- Processing Options Group ---
+        process_group = QGroupBox("Processing Options")
+        process_layout = QGridLayout()
+        
+        if not called:
+
+
+            # Fast dilation checkbox
+            self.fast_dil = QPushButton("Fast-Dil")
+            self.fast_dil.setCheckable(True)
+            self.fast_dil.setChecked(True)
+            process_layout.addWidget(QLabel("Use Fast Dilation if merging nodes (Parallelized):"), 0, 0)
+            process_layout.addWidget(self.fast_dil, 0, 1)
+            
+            # Downsample factor
+            self.down_factor = QLineEdit("0")
+            process_layout.addWidget(QLabel("Downsample Factor (Speeds up calculation at the cost of fidelity):"), 1, 0)
+            process_layout.addWidget(self.down_factor, 1, 1)
+                        
+            process_group.setLayout(process_layout)
+            main_layout.addWidget(process_group)
+        else:
+            self.down_factor = down_factor
+            
+            self.fast_dil = QPushButton("Fast-Dil")
+            self.fast_dil.setCheckable(True)
+            self.fast_dil.setChecked(True)
+            process_layout.addWidget(QLabel("Use Fast Dilation if merging nodes (Parallelized):"), 0, 0)
+            process_layout.addWidget(self.fast_dil, 0, 1)
+            
+            process_group.setLayout(process_layout)
+            main_layout.addWidget(process_group)
         
         # Set retain variable but don't add to layout
         if not called:
@@ -15106,31 +15179,26 @@ class GenNodesDialog(QDialog):
                 comp_dil = 0
                 
             # Get down_factor
-            if type(self.down_factor) is int:
+            if type(self.down_factor) is int or self.down_factor is None:
                 down_factor = self.down_factor
-                cubic = self.cubic
             else:
                 try:
-                    down_factor = int(self.down_factor.text()) if self.down_factor.text() else 0
+                    down_factor = int(self.down_factor.text()) if self.down_factor.text() else None
+                    if down_factor == 0:
+                        down_factor = None
                 except ValueError:
-                    down_factor = 0
-                cubic = self.cubic.isChecked()
+                    down_factor = None
                 
             try:
                 retain = self.retain.isChecked()
             except:
                 retain = True
 
-            if cubic:
-                order = 3
-            else:
-                order = 0
-
             auto = self.auto.isChecked()
 
             fastdil = self.fast_dil.isChecked()
 
-            if down_factor > 1:
+            if down_factor is not None:
                 my_network.edges = n3d.downsample(my_network.edges, down_factor)
 
             if auto:
@@ -15143,15 +15211,15 @@ class GenNodesDialog(QDialog):
                 max_vol=max_vol,
                 branch_removal=branch_removal,
                 comp_dil=comp_dil,
-                order = order,
+                order = 0,
                 return_skele = True,
                 fastdil = fastdil
             )
 
-            if down_factor > 0 and not self.called:
+            if down_factor is not None and not self.called:
                 self.parent().resizing = True
 
-                my_network.edges = n3d.downsample(my_network.edges, down_factor, order = order)
+                my_network.edges = n3d.downsample(my_network.edges, down_factor, order = 0)
                 my_network.xy_scale = my_network.xy_scale * down_factor
                 my_network.z_scale = my_network.z_scale * down_factor
                 print("xy_scales and z_scales have been adjusted per downsample. Check image -> properties to manually reset them to 1 if desired.")
@@ -15258,13 +15326,14 @@ class BranchDialog(QDialog):
         self.down_factor = QLineEdit("0")
         processing_layout.addWidget(QLabel("Internal downsample factor (will recompute nodes):"), 0, 0)
         processing_layout.addWidget(self.down_factor, 0, 1)
-        
-        # Cubic checkbox
-        self.cubic = QPushButton("Cubic Downsample")
-        self.cubic.setCheckable(True)
-        self.cubic.setChecked(False)
-        #processing_layout.addWidget(QLabel("Use cubic downsample? (Slower but preserves structure better):"), 1, 0)
-        #processing_layout.addWidget(self.cubic, 1, 1)
+
+        # Add mode selection dropdown
+        self.mode = QComboBox()
+        self.mode.addItems(["Standard", "Fast (May be a little rougher along adjacent labels)"])
+        self.mode.setCurrentIndex(0)
+        processing_layout.addWidget(QLabel("Algorithm (Standard or Fast?):"), 1, 0)
+        processing_layout.addWidget(self.mode, 1, 1)
+
         
         processing_group.setLayout(processing_layout)
         main_layout.addWidget(processing_group)
@@ -15314,17 +15383,20 @@ class BranchDialog(QDialog):
         try:
 
             try:
-                down_factor = int(self.down_factor.text()) if self.down_factor.text() else 0
+                down_factor = int(self.down_factor.text()) if self.down_factor.text() else None
             except ValueError:
-                down_factor = 0
+                down_factor = None
+
+            if down_factor == 0:
+                down_factor = None
 
             nodes = self.nodes.isChecked()
             GPU = self.GPU.isChecked()
-            cubic = self.cubic.isChecked()
             fix = self.fix.isChecked()
             fix2 = self.fix2.isChecked()
             fix3 = self.fix3.isChecked()
             fix4 = self.fix4.isChecked()
+            mode = self.mode.currentIndex()
             fix_val = float(self.fix_val.text()) if self.fix_val.text() else None
             fix4_val = float(self.fix4_val.text()) if self.fix4_val.text() else 10
             seed = int(self.seed.text()) if self.seed.text() else None
@@ -15337,11 +15409,7 @@ class BranchDialog(QDialog):
             original_shape = my_network.edges.shape
             original_array = copy.deepcopy(my_network.edges)
 
-            if down_factor > 0:
-                self.parent().show_gennodes_dialog(down_factor = [down_factor, cubic], called = True)
-            elif nodes or my_network.nodes is None:
-                self.parent().show_gennodes_dialog(called = True)
-                down_factor = None
+            self.parent().show_gennodes_dialog(down_factor = down_factor, called = True)
 
             if my_network.edges is not None and my_network.nodes is not None and my_network.id_overlay is not None:
 
@@ -15350,9 +15418,11 @@ class BranchDialog(QDialog):
                 else:
                     unify = False
 
-                output, verts, skeleton, endpoints = n3d.label_branches(my_network.edges, nodes = my_network.nodes, bonus_array = original_array, GPU = GPU, down_factor = down_factor, arrayshape = original_shape, compute = compute, unify = unify, union_val = fix4_val, xy_scale = my_network.xy_scale, z_scale = my_network.z_scale)
+                output, verts, skeleton, endpoints = n3d.label_branches(my_network.edges, nodes = my_network.nodes, bonus_array = original_array, GPU = GPU, down_factor = down_factor, arrayshape = original_shape, compute = compute, unify = unify, union_val = fix4_val, mode = mode, xy_scale = my_network.xy_scale, z_scale = my_network.z_scale)
 
                 if fix2:
+
+                    print("Correcting Internal Branches...")
 
                     temp_network = n3d.Network_3D(nodes = output)
 
@@ -15405,6 +15475,7 @@ class BranchDialog(QDialog):
                         self.parent().format_for_upperright_table(tortuosity_dict, 'BranchID', 'Tortuosity', 'Branch Tortuosities')
                         #self.parent().format_for_upperright_table(angle_dict, 'Vertex ID', title, 'Branch Angles')
 
+                scalings = my_network.xy_scale, my_network.z_scale
 
                 if down_factor is not None:
 
@@ -15413,6 +15484,9 @@ class BranchDialog(QDialog):
                 else:
                     self.parent().reset(id_overlay = True)
                 self.parent().update_display(dims = (output.shape[1], output.shape[2]))
+
+                my_network.xy_scale, my_network.z_scale = scalings
+
 
                 self.parent().load_channel(1, channel_data = output, data = True)
 
@@ -15923,7 +15997,7 @@ class CalcAllDialog(QDialog):
     prev_gpu = False
     prev_label_nodes = True
     prev_inners = True
-    prev_fastdil = False
+    prev_fastdil = True
     prev_overlays = False
     prev_updates = True
     
@@ -15996,10 +16070,10 @@ class CalcAllDialog(QDialog):
         self.gpu.setChecked(self.prev_gpu)
         #speedup_layout.addRow("Use GPU:", self.gpu)
         
-        self.fastdil = QPushButton("Fast Dilate")
+        self.fastdil = QPushButton("Fast Search")
         self.fastdil.setCheckable(True)
         self.fastdil.setChecked(self.prev_fastdil)
-        #speedup_layout.addRow("Use Fast Dilation (Higher speed, less accurate with search regions much larger than nodes):", self.fastdil)
+        speedup_layout.addRow("Use Fast Search (Parallelized searching, search regions may be a tad rougher along adjacent boundaries):", self.fastdil)
         
         main_layout.addWidget(speedup_group)
         

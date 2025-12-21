@@ -1643,33 +1643,13 @@ def setup_connectivity_tutorial(window):
         action=MenuHelper.create_widget_interaction(tutorial, 'con_dialog', 'down_factor', 'setText("")')
     )
 
-    """ # <-- so I am trying out removing these because their use cases are confusing
-
-    tutorial.add_step(
-        MenuHelper.create_widget_getter(tutorial, 'con_dialog', 'GPU_downsample'),
-        "If you want to try and use the GPU, you can likewise enter an arbitrary integer downsample factor here to speed it up. Note the GPU calculation can be greedy with VRAM and will automatically try to downsample itself in a lot of cases."
-        highlight_type=None,
-        message_position="beside",
-        pre_action=MenuHelper.create_widget_interaction(tutorial, 'con_dialog', 'GPU_downsample', 'setText("INTEGER!")'),
-        action=MenuHelper.create_widget_interaction(tutorial, 'con_dialog', 'GPU_downsample', 'setText("")')
-    )
-
-    tutorial.add_step(
-        MenuHelper.create_widget_getter(tutorial, 'con_dialog', 'GPU'),
-        "Enable this to have your system attempt to use the GPU. You will need a CUDA toolkit and a corresponding cupy package installed. Note that I consider this function somewhat experimental. In short, the cupy implementation uses a distance transform calculation that can be very greedy with VRAM. If it overflows, it will attempt to iteratively downsample itself until the calculation works (specifically containing to calculating the 'node search' volume). Note this risks kicking out small nodes from your image. Furthermore, it is only really applicable of 'fast dilation' is enabled. Therefore, generally skip using this option. However, it can be a way to rapidly assess the general network structure of a large image.",
-        highlight_type=None,
-        message_position="beside",
-        pre_action=MenuHelper.create_widget_interaction(tutorial, 'con_dialog', 'GPU', 'click()'),
-        action = MenuHelper.create_widget_interaction(tutorial, 'con_dialog', 'GPU', 'toggle()'))
-
     tutorial.add_step(
         MenuHelper.create_widget_getter(tutorial, 'con_dialog', 'fastdil'),
-        "Enable this to have the algorithm use fast dilation. Fast dilation "
-        highlight_type=None,
+        "Enable the fast search button to use a slightly alternate algorithm for the node search step that is faster. This algorithm uses a parallelized distance transform to create a binary search region which is a lot faster if you have a lot of CPU cores. It then uses flooding to label the binary search region, which leads to slightly rough labeling where two search regions meet. When disabled, a non-parallel distance transform is used, which can be slower but always has exact labels where two search regions meet. I recommend enabling this for larger images and disabling it for smaller ones.",        highlight_type=None,
         message_position="beside",
         pre_action=MenuHelper.create_widget_interaction(tutorial, 'con_dialog', 'fastdil', 'click()'),
-        action = MenuHelper.create_widget_interaction(tutorial, 'con_dialog', 'fastdil', 'toggle()'))
-    """
+        action=MenuHelper.create_widget_interaction(tutorial, 'con_dialog', 'fastdil', 'toggle()')
+    )
 
     tutorial.add_step(
         MenuHelper.create_widget_getter(tutorial, 'con_dialog', 'overlays'),
@@ -1762,35 +1742,6 @@ def setup_branch_tutorial(window):
         pre_action=open_dialog
     )
 
-    """
-    tutorial.add_step(
-        MenuHelper.create_widget_getter(tutorial, 'branch_dialog', 'fix'),
-        "This first auto-correction option is designed if you feel like the branch labels are generally too busy. Selecting this will have the program attempt to collapse overly-dense regions of branches into a single label. Note that this behavior is somewhat tricky to predict so I generally don't use it but feel free to give it a shot and see how it looks.",
-        highlight_type=None,
-        message_position="beside",
-        pre_action=MenuHelper.create_widget_interaction(tutorial, 'branch_dialog', 'fix', 'click()'),
-        action=MenuHelper.create_widget_interaction(tutorial, 'branch_dialog', 'fix', 'toggle()')
-    )
-    
-    tutorial.add_step(
-        MenuHelper.create_widget_getter(tutorial, 'branch_dialog', 'fix_val'),
-        "This integer value tells the above parameter (if enabled) what degree of branch-busyness should get merged. In short, a lower value is more aggressive with merging while a higher value only merges very busy regions. By default it is set to 4.",
-        highlight_type=None,
-        message_position="beside",
-        pre_action=MenuHelper.create_widget_interaction(tutorial, 'branch_dialog', 'fix_val', 'selectAll()'),
-        action=MenuHelper.create_widget_interaction(tutorial, 'branch_dialog', 'fix_val', 'deselect()')
-    )
-
-    tutorial.add_step(
-        MenuHelper.create_widget_getter(tutorial, 'branch_dialog', 'seed'),
-        "The random seed for grouping branches above can be changed here with an integer value, if the behavior of the above option is desired to be tweaked somewhat. It will use 42 by default.",
-        highlight_type=None,
-        message_position="beside",
-        pre_action=MenuHelper.create_widget_interaction(tutorial, 'branch_dialog', 'seed', 'setText("INTEGER!")'),
-        action=MenuHelper.create_widget_interaction(tutorial, 'branch_dialog', 'seed', 'setText("")')
-    )
-
-    """
 
     tutorial.add_step(
         MenuHelper.create_widget_getter(tutorial, 'branch_dialog', 'fix2'),
@@ -1833,6 +1784,15 @@ def setup_branch_tutorial(window):
         message_position="beside",
         pre_action=MenuHelper.create_widget_interaction(tutorial, 'branch_dialog', 'down_factor', 'selectAll()'),
         action=MenuHelper.create_widget_interaction(tutorial, 'branch_dialog', 'down_factor', 'deselect()')
+    )
+
+    tutorial.add_step(
+        MenuHelper.create_widget_getter(tutorial, 'branch_dialog', 'mode'),
+        "The Algorithm Dropdown lets you choose between the standard algorithm, which provides more exact labels along branch borders, and the faster labeling algorithm, which uses flooding to label the binary branches, leading to slightly rough labeling where two branches meet. I recommend using the standard for smaller images and the fast for larger images where computation time becomes an issue.",
+        highlight_type=None,
+        message_position="beside",
+        pre_action=MenuHelper.create_widget_interaction(tutorial, 'branch_dialog', 'mode', 'showPopup()'),
+        action=MenuHelper.create_widget_interaction(tutorial, 'branch_dialog', 'mode', 'hidePopup()')
     )
 
 
@@ -1879,16 +1839,6 @@ def setup_branch_tutorial(window):
     )
 
     tutorial.add_step(
-        MenuHelper.create_widget_getter(tutorial, 'gen_dialog', 'down_factor'),
-        "This integer value can be used to temporarily downsample the image while creating branchpoints. Aside from speeding up the process, this may alter branch detection, possibly performing a cleaner branch appraisal of very thick branches but losing network identification of smaller branches (Much like in the prior menu - note that any value entered in the prior menu will be applied by default here for consistency, and you won't see this option). It is disabled by default. Larger values will downsample more aggressively.",
-        highlight_type=None,
-        message_position="beside",
-        pre_action=MenuHelper.create_widget_interaction(tutorial, 'gen_dialog', 'down_factor', 'selectAll()'),
-        action=MenuHelper.create_widget_interaction(tutorial, 'gen_dialog', 'down_factor', 'deselect()')
-    )
-
-
-    tutorial.add_step(
         MenuHelper.create_widget_getter(tutorial, 'gen_dialog', 'branch_removal'),
         "IMPORTANT - This branch removal parameter (Skeleton voxel branch to remove...) is something I would consider entering a value for. This is the length of terminal branches that will be removed prior to any vertex/branch labeling. Any branch shorter than the value here will be removed, but only if it is a terminal branch. For more jagged segmentations, this may be a necessity to prevent branchpoints from arising from spine-like artifacts. More internal branches will not be removed, so as a test it is generally safe to enter a large value here, which will preserve the majority of the branch schema and just risk losing occasional terminal branches.",
         highlight_type=None,
@@ -1914,6 +1864,26 @@ def setup_branch_tutorial(window):
         pre_action=MenuHelper.create_widget_interaction(tutorial, 'gen_dialog', 'comp_dil', 'setText("INTEGER!")'),
         action=MenuHelper.create_widget_interaction(tutorial, 'gen_dialog', 'comp_dil', 'setText("")')
     )
+
+    tutorial.add_step(
+        MenuHelper.create_widget_getter(tutorial, 'gen_dialog', 'fast_dil'),
+        "Enable fast dilation to use a parallelized distance transform to do 3D dilation which is a lot faster if you have a lot of CPU cores. Note that this only applies if you have chosen to merge your nodes.",        
+        highlight_type=None,
+        message_position="beside",
+        pre_action=MenuHelper.create_widget_interaction(tutorial, 'gen_dialog', 'fast_dil', 'click()'),
+        action=MenuHelper.create_widget_interaction(tutorial, 'gen_dialog', 'fast_dil', 'toggle()')
+    )
+
+    tutorial.add_step(
+        MenuHelper.create_widget_getter(tutorial, 'gen_dialog', 'down_factor'),
+        "This integer value can be used to temporarily downsample the image while creating branchpoints. Aside from speeding up the process, this may alter branch detection, possibly performing a cleaner branch appraisal of very thick branches but losing network identification of smaller branches (Much like in the prior menu - note that any value entered in the prior menu will be applied by default here for consistency, and you won't see this option). It is disabled by default. Larger values will downsample more aggressively.",
+        highlight_type=None,
+        message_position="beside",
+        pre_action=MenuHelper.create_widget_interaction(tutorial, 'gen_dialog', 'down_factor', 'selectAll()'),
+        action=MenuHelper.create_widget_interaction(tutorial, 'gen_dialog', 'down_factor', 'deselect()')
+    )
+
+
 
     def close_dialog():
         if hasattr(tutorial, 'gen_dialog') and tutorial.gen_dialog:

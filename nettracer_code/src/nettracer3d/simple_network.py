@@ -119,7 +119,7 @@ def geometric_positions(centroids, shape):
     return xy_pos, z_pos
 
 
-def show_simple_network(excel_file_path, geometric = False, geo_info = None, directory = None):
+def show_simple_network(excel_file_path, geometric = False, geo_info = None, directory = None, show_labels = True):
 
     if type(excel_file_path) == str:
         master_list = read_excel_to_lists(excel_file_path)
@@ -142,11 +142,11 @@ def show_simple_network(excel_file_path, geometric = False, geo_info = None, dir
 
         pos, z_pos  = geometric_positions(geo_info[0], geo_info[1])
         node_sizes_list = [z_pos[node] for node in G.nodes()]
-        nx.draw(G, pos, with_labels=True, font_color='black', font_weight='bold', node_size= node_sizes_list, alpha=0.8, font_size = 12)
+        nx.draw(G, pos, with_labels=show_labels, font_color='black', font_weight='bold', node_size= node_sizes_list, alpha=0.8, font_size = 12)
     else:
         # Visualize the graph with different edge colors for each community
         pos = nx.spring_layout(G, iterations = 15)
-        nx.draw(G, pos, with_labels=True, font_color='red', font_weight='bold', node_size=10)
+        nx.draw(G, pos, with_labels=show_labels, font_color='red', font_weight='bold', node_size=10)
 
     if directory is not None:
         plt.savefig(f'{directory}/network_plot.png')
@@ -154,7 +154,7 @@ def show_simple_network(excel_file_path, geometric = False, geo_info = None, dir
     plt.show()
 
 
-def show_identity_network(excel_file_path, node_identities, geometric=False, geo_info=None, directory=None):
+def show_identity_network(excel_file_path, node_identities, geometric=False, geo_info=None, directory=None, show_labels = True):
     if type(node_identities) == str:
         # Read the Excel file into a DataFrame
         df = pd.read_excel(node_identities)
@@ -220,9 +220,16 @@ def show_identity_network(excel_file_path, node_identities, geometric=False, geo
     color_map = dict(zip(unique_categories, colors))
 
     # Node size handling
-    node_dict = {node: 30 if identity_dict[node] == 'Edge' else 100 
-                 for node in G.nodes()}
-    
+    node_dict = {}
+    for node in G.nodes():
+        try:
+            if identity_dict[node] == 'Edge':
+                node_dict[node] = 30
+            else:
+                node_dict[node] = 100
+        except:
+            node_dict[node] = 100
+
     if geometric:
         # Handle geometric positioning
         for node in list(G.nodes()):
@@ -244,14 +251,26 @@ def show_identity_network(excel_file_path, node_identities, geometric=False, geo
     graph_ax = plt.gca()
     
     # Draw the network with enhanced font styling
-    node_colors = [color_map[identity_dict[node]] for node in G.nodes()]
-    nx.draw(G, pos, ax=graph_ax, with_labels=True, font_color='black', 
+    misc = False
+    node_colors = []
+    for node in G.nodes():
+        try:
+            node_colors.append(color_map[identity_dict[node]])
+        except:
+            misc = True
+            node_colors.append((1, 1, 1))
+
+    #node_colors = [color_map[identity_dict[node]] for node in G.nodes()]
+    nx.draw(G, pos, ax=graph_ax, with_labels=show_labels, font_color='black', 
             font_weight='bold', node_size=node_sizes_list, 
             node_color=node_colors, alpha=0.8, font_size=11, font_family='sans-serif')
 
     # Create custom legend with multiple columns if needed
     legend_handles = [Patch(color=color, label=category) 
                      for category, color in color_map.items()]
+
+    if misc:
+        legend_handles.append(Patch(color = (1, 1, 1,), label = 'Unassigned'))
     
     # Adjust number of columns based on number of categories
     if len(unique_categories) > 20:

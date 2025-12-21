@@ -22,20 +22,19 @@ The Analyze Menu offers options for creating graphs and statistical tables.
 Parameter Explanations
 ~~~~~~~~~~~~~~~
 
-1. Enable the 'geo_layout' button to have nodes be placed in representative regions of their 3D location.
+#. Enable the 'geo_layout' button to have nodes be placed in representative regions of their 3D location.
     * Their XY position in the graph will correspond to the image, while the node size will represent their Z-position (with larger nodes representing smaller Z-vals, ie. closer to the viewer).
     * Note that this method may run rather slowly on graphs with a huge number of nodes.
     * Keeping this unselected will group nodes using the NetworkX spring layout.
-2. Execution Mode (Menu Includes the following options):
+#. Select 'Show Node Numerical IDs' to have each node be labelled on the graph by their internal label value from their image. This is useful for finding specific nodes but may clutter visualization.
+#. Execution Mode (Menu Includes the following options):
     1. Default:
         * All nodes are represented by their numerical ID, and nothing else.
     2. Community Coded (Uses Current...)
         * Colors nodes by their community, assuming they have already been community partitioned. Will prompt the user to partition if not.
     3. Node-ID Coded
         * Display nodes color-coded by their node ID (if it exists).
-3. Output directory
-    * If a string path is included to a directory, the resulting graph will be autosaved there.
-    * Note these graphs can be saved in the matplotlib window anyway.
+
 * Press Show Network to open a new matplotlib window displaying the graph.
 
 'Analyze -> Network -> Generic Network Report'
@@ -330,9 +329,6 @@ Parameter Explanations
 
 1. Bucket Distance...
     * This is the distance that will be used as a step size while searching outward from nodes in the graph to evaluate how close in 3D space their neighbors are.
-2. Output Directory
-    * If a string path is included to a directory, the resulting graph will be autosaved there.
-    * Note these graphs can be saved in the matplotlib window anyway.
 
 * Press 'Get Radial Distribution' to open a new matplotlib window showing the graph, and also place the obtained data in as a new table in the tabulated data widget.
 
@@ -381,15 +377,16 @@ Parameter Explanations
 
 1. Root Identity to Search...
     * This is the identity of the sorts of nodes we will search outward from. The neighborhoods of these nodes will be characterized.
-2. Output Directory
-    * If a string path is included to a directory, the resulting outputs will be autosaved there.
-3. Mode (Menu Includes the following options):
+2. Mode (Menu Includes the following options):
     1. From Network - Quantifies Neighbors Based on Adjacent Network Connections
         * Reveals information about neighors based on the connectivity of the network.
     2. Use Labeled Nodes - Quantifies Neighbors Volume of Neighbor Within Search Region 
         * Reveals information about neighors based on what sorts of nodes are physically in the vicinity.
-4. Search Radius (if using Mode 2)
+3. Search Radius (if using Mode 2)
     * The distance that nodes will search to characterize their neighborhoods. Option one currently will always just search for immediate network neighbors.
+4. Use Fast Dilation... (Only applies if using mode 2 and have entered a value for param 3)
+    * If enabled, the program will attempt to use the edt module to solve the dilation in parallel. If edt is not present or this fails somehow, it will fall back to the scipy method.
+    * If disabled, the program will use the scipy distance_transform_edt method to solve the dilation, which may be slower.
 
 * Press 'Get Neighborhood Identity Distribution' to display a few matplotlib barcharts, with associated data tables being added to the tabulated data widget.
 * The following tables (and corresponding graphs) will appear:

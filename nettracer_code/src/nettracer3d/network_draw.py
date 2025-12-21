@@ -264,20 +264,20 @@ def draw_network_from_centroids(nodes, network, centroids, twod_bool, directory 
 
     if twod_bool:
         output_stack = output_stack[0,:,:] | output_stack[0,:,:]
+    
+    #if directory is None:
+     #   try:
+      #      tifffile.imwrite("drawn_network.tif", output_stack)
+       # except Exception as e:
+        #    print("Could not save network lattice to active directory")
+         #   print("Network lattice saved as drawn_network.tif")
 
-    if directory is None:
-        try:
-            tifffile.imwrite("drawn_network.tif", output_stack)
-        except Exception as e:
-            print("Could not save network lattice to active directory")
-            print("Network lattice saved as drawn_network.tif")
-
-    if directory is not None:
-        try:
-            tifffile.imwrite(f"{directory}/drawn_network.tif", output_stack)
-            print(f"Network lattice saved to {directory}/drawn_network.tif")
-        except Exception as e:
-            print(f"Could not save network lattice to {directory}")
+    #if directory is not None:
+     #   try:
+      #      tifffile.imwrite(f"{directory}/drawn_network.tif", output_stack)
+       #     print(f"Network lattice saved to {directory}/drawn_network.tif")
+        #except Exception as e:
+         #   print(f"Could not save network lattice to {directory}")
 
     return output_stack
 
@@ -340,6 +340,7 @@ def draw_network_from_centroids_GPU(nodes, network, centroids, twod_bool, direct
 
     output_stack = cp.asnumpy(output_stack)
 
+    """
     if directory is None:
         try:
             tifffile.imwrite("drawn_network.tif", output_stack)
@@ -353,7 +354,7 @@ def draw_network_from_centroids_GPU(nodes, network, centroids, twod_bool, direct
             print(f"Network lattice saved to {directory}/drawn_network.tif")
         except Exception as e:
             print(f"Could not save network lattice to {directory}")
-
+    """
 
 if __name__ == '__main__':
 

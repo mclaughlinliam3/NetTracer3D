@@ -145,10 +145,10 @@ def draw_from_centroids(nodes, num_nodes, centroids, twod_bool, directory=None):
         draw_array = draw_array[0,:,:] | draw_array[1,:,:]
     
     filename = f'{directory}/labelled_node_indices.tif' if directory else 'labelled_node_indices.tif'
-    try:
-        tifffile.imwrite(filename, draw_array)
-    except Exception as e:
-        print(f"Could not save node indices to {filename}")
+    #try:
+     #   tifffile.imwrite(filename, draw_array)
+    #except Exception as e:
+     #   print(f"Could not save node indices to {filename}")
     
     return draw_array
 

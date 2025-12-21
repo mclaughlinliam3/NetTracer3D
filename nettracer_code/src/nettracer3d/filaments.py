@@ -1,10 +1,11 @@
 import numpy as np
 import networkx as nx
 from . import nettracer as n3d
-from scipy.ndimage import distance_transform_edt, gaussian_filter, binary_fill_holes
+from scipy.ndimage import gaussian_filter, binary_fill_holes
 from scipy.spatial import cKDTree
 from skimage.morphology import remove_small_objects, skeletonize
 import warnings
+from . import smart_dilate as sdl
 warnings.filterwarnings('ignore')
 
 
@@ -22,6 +23,8 @@ class VesselDenoiser:
                  blob_volume = 200,
                  spine_removal=0,
                  score_thresh = 2,
+                 xy_scale = 1,
+                 z_scale = 1,
                  radius_aware_distance=True):
         """
         Parameters:
@@ -46,6 +49,8 @@ class VesselDenoiser:
         self.spine_removal = spine_removal
         self.radius_aware_distance = radius_aware_distance
         self.score_thresh = score_thresh
+        self.xy_scale = xy_scale
+        self.z_scale = z_scale
 
         self._sphere_cache = {}  # Cache sphere masks for different radii
 
@@ -939,7 +944,7 @@ class VesselDenoiser:
         
         if verbose:
             print("Step 3: Computing distance transform...")
-        distance_map = distance_transform_edt(cleaned)
+        distance_map = sdl.compute_distance_transform_distance(cleaned, fast_dil = True)
         
         # Step 3: Sample kernels along skeleton
         if verbose:
@@ -1036,7 +1041,7 @@ class VesselDenoiser:
         return result
 
 
-def trace(data, kernel_spacing = 1, max_distance = 20, min_component = 20, gap_tolerance = 5, blob_sphericity = 1.0, blob_volume = 200, spine_removal = 0, score_thresh = 2):
+def trace(data, kernel_spacing = 1, max_distance = 20, min_component = 20, gap_tolerance = 5, blob_sphericity = 1.0, blob_volume = 200, spine_removal = 0, score_thresh = 2, xy_scale = 1, z_scale = 1):
 
     """Main function with user prompts"""
     
@@ -1054,7 +1059,9 @@ def trace(data, kernel_spacing = 1, max_distance = 20, min_component = 20, gap_t
         blob_sphericity = blob_sphericity,
         blob_volume = blob_volume,
         spine_removal = spine_removal,
-        score_thresh = score_thresh
+        score_thresh = score_thresh,
+        xy_scale = xy_scale,
+        z_scale = z_scale
     )
     
     # Run denoising

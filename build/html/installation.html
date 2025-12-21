@@ -6,14 +6,14 @@
   <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
 
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Installation &mdash; NetTracer3D 1.2.6 documentation</title>
+  <title>Installation &mdash; NetTracer3D 1.2.8 documentation</title>
       <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=b86133f3" />
       <link rel="stylesheet" type="text/css" href="_static/css/theme.css?v=e59714d7" />
 
   
       <script src="_static/jquery.js?v=5d32c60e"></script>
       <script src="_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
-      <script src="_static/documentation_options.js?v=010db75e"></script>
+      <script src="_static/documentation_options.js?v=4d6f9085"></script>
       <script src="_static/doctools.js?v=9bcbadda"></script>
       <script src="_static/sphinx_highlight.js?v=dc90522c"></script>
     <script src="_static/js/theme.js"></script>
@@ -50,7 +50,7 @@
 <li class="toctree-l2"><a class="reference internal" href="#installing-nettracer3d">Installing NetTracer3D</a><ul>
 <li class="toctree-l3"><a class="reference internal" href="#using-pip">Using pip</a></li>
 <li class="toctree-l3"><a class="reference internal" href="#using-anaconda">Using Anaconda</a></li>
-<li class="toctree-l3"><a class="reference internal" href="#using-the-compiled-version">Using the compiled version</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#alternate-option-just-downloading-the-compiled-version-instead-of-the-package"><strong>Alternate Option</strong> — Just downloading the compiled version instead of the package</a></li>
 <li class="toctree-l3"><a class="reference internal" href="#optional-packages">Optional Packages</a></li>
 <li class="toctree-l3"><a class="reference internal" href="#gpu">GPU</a></li>
 </ul>
@@ -130,16 +130,41 @@
 <h2>Installing NetTracer3D<a class="headerlink" href="#installing-nettracer3d" title="Link to this heading"></a></h2>
 <section id="using-pip">
 <h3>Using pip<a class="headerlink" href="#using-pip" title="Link to this heading"></a></h3>
-<p>The easiest way to install NetTracer3D is using pip. First, you will want to go to the Python website (<a class="reference external" href="https://www.python.org/">https://www.python.org/</a>). Download the Python installer for the latest version of Python. When you run it, make sure to include the option to also install Pip, and to add both Pip and Python to your path.</p>
+<ol class="arabic simple">
+<li><p><strong>Get Python and Pip on your path</strong>: The easiest way to install NetTracer3D is using pip. First, you will want to go to the Python website (<a class="reference external" href="https://www.python.org/">https://www.python.org/</a>). Download the Python installer for the latest version of Python. When you run it, make sure to include the option to also install Pip, and to add both Pip and Python to your path.</p></li>
+</ol>
 <p>After installing Python and pip, you can verify (on windows at least) the installation by pressing the windows key + R. In the window that pops up, type ‘cmd’ to open the command terminal. In the command terminal, type ‘where pip’ or ‘where python’.
 If your installation of them worked properly, the window will tell you what folder your pip/python .exe resides in. If it cannot find them, it means they either did not get installed, or that they were not added to your PATH.
 You can try reinstalling them, if perhaps the wrong setting was selected, or you can manually add them to the environment variables (the PATH) from the windows control panel. (I am not a mac user so I cannot provide advice there).</p>
-<p>Once you have Python and pip set up, open the command terminal once more (Windows + R, followed by typing ‘cmd’ in the window that appears). Type the following command.</p>
+<ol class="arabic simple" start="2">
+<li><p><strong>Installing Base Package</strong>: Once you have Python and pip set up, open the command terminal once more (Windows + R, followed by typing ‘cmd’ in the window that appears). Type the following command.</p></li>
+</ol>
 <div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>pip<span class="w"> </span>install<span class="w"> </span>nettracer3d
 </pre></div>
 </div>
-<p>Or if you want the 3D visualization options to be included:</p>
+<ol class="arabic simple" start="3">
+<li><p><strong>Optional — For 3D Displays</strong>: Or if you want the 3D visualization options to be included:</p></li>
+</ol>
 <div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>pip<span class="w"> </span>install<span class="w"> </span>nettracer3d<span class="o">[</span>viz<span class="o">]</span>
+</pre></div>
+</div>
+<ol class="arabic simple" start="4">
+<li><p><strong>Optional — Performance Boost for Large Data</strong>: If you are trying to process large images, you may also want to include the ‘edt’ module in your package. This will allow parallelized CPU calculations for several of the search functions which can increase their speed by an order of magnitude or more depending on how many cores your CPU has. This can be a major benefit if you have a strong CPU and sufficient RAM. It requires an extra pre-installation step, thus is not included by default. You will also have to install the C++ build tools from windows. Please head to this link, then download and run the installer: <a class="reference external" href="https://visualstudio.microsoft.com/visual-cpp-build-tools/">https://visualstudio.microsoft.com/visual-cpp-build-tools/</a>. In the menu of the installer, select the ‘Desktop Development with C++’ option, then proceed to download/install it using the installation menu. You will likely want to be using the Python distributed from the actual Python website and not the windows store (or elsewhere) or the edt module may not work properly. To bundle with edt use:</p></li>
+</ol>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>pip<span class="w"> </span>install<span class="w"> </span>nettracer3d<span class="o">[</span>edt<span class="o">]</span>
+</pre></div>
+</div>
+<ol class="arabic simple" start="5">
+<li><p><strong>Optional — Recommended full package</strong>: Or if you want to just get both edt and napari at once:</p></li>
+</ol>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>pip<span class="w"> </span>install<span class="w"> </span>nettracer3d<span class="o">[</span>rec<span class="o">]</span>
+</pre></div>
+</div>
+<ol class="arabic simple" start="6">
+<li><p>Likewise, if you already installed the default version, you can add napari and/or edt with just:</p></li>
+</ol>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>pip<span class="w"> </span>install<span class="w"> </span>edt
+pip<span class="w"> </span>install<span class="w"> </span>napari
 </pre></div>
 </div>
 <p>This will install NetTracer3D and all its core dependencies. Then, if you want to run nettracer3d, open the command terminal like before and enter the following command:</p>
@@ -150,14 +175,14 @@ You can try reinstalling them, if perhaps the wrong setting was selected, or you
 <section id="using-anaconda">
 <h3>Using Anaconda<a class="headerlink" href="#using-anaconda" title="Link to this heading"></a></h3>
 <p>Anaconda is a useful program that manages Python packages for you and can help work out problems regarding conflicting package versions during installation. Installing NetTracer3D with Anaconda is similar to the above method, except it will be housed in a dedicated NetTracer3D anaconda environment rather than in your computer’s Python packages.
-You would first want to download the version of anaconda that is compatible with your operating system here: <a class="reference external" href="https://www.anaconda.com/download">https://www.anaconda.com/download</a></p>
+You would first want to download the version of anaconda that is compatible with your operating system here: <a class="reference external" href="https://www.anaconda.com/download">https://www.anaconda.com/download</a>.</p>
 <p>Run the installer they provide. Once it’s finished, search ‘anaconda prompt’ in your taskbar and open the corresponding program. You will be taken to a command line window.
 Next, you can run these commands:</p>
 <div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>conda<span class="w"> </span>create<span class="w"> </span>--name<span class="w"> </span>nettracer3d<span class="w"> </span><span class="nv">python</span><span class="o">=</span><span class="m">3</span>.12
 
 conda<span class="w"> </span>activate<span class="w"> </span>nettracer3d
 
-pip<span class="w"> </span>install<span class="w"> </span>nettracer3d<span class="o">[</span>viz<span class="o">]</span>
+pip<span class="w"> </span>install<span class="w"> </span>nettracer3d<span class="o">[</span>rec<span class="o">]</span>
 </pre></div>
 </div>
 <p>This should install the program in the ‘nettracer3d’ environment in conda. Then, whenever you wanted to run nettracer3d, you would first open the ‘anaconda prompt’, followed by entering these commands:</p>
@@ -167,10 +192,10 @@ nettracer3d
 </pre></div>
 </div>
 </section>
-<section id="using-the-compiled-version">
-<h3>Using the compiled version<a class="headerlink" href="#using-the-compiled-version" title="Link to this heading"></a></h3>
-<p>If you want to avoid going the Python/pip route, you can download a compiled .exe of version 1.2.4 here: <a class="reference external" href="https://doi.org/10.5281/zenodo.17873800">https://doi.org/10.5281/zenodo.17873800</a></p>
-<p>Unzip the folder, then double click the NetTracer3D executable to run the program. Note that this version will be missing a few features compared to the Python package, namely the 3D display, any GPU support, and the ability to print updates to the command window. It will also not be updated as often.</p>
+<section id="alternate-option-just-downloading-the-compiled-version-instead-of-the-package">
+<h3><strong>Alternate Option</strong> — Just downloading the compiled version instead of the package<a class="headerlink" href="#alternate-option-just-downloading-the-compiled-version-instead-of-the-package" title="Link to this heading"></a></h3>
+<p>If you want to avoid going the Python/pip route, you can download a compiled .exe of version 1.2.7 here: <a class="reference external" href="https://doi.org/10.5281/zenodo.17873800">https://doi.org/10.5281/zenodo.17873800</a></p>
+<p>Unzip the folder, then double click the NetTracer3D executable to run the program. Note that this version will be missing a few features compared to the Python package, namely GPU support for segmentation, and the ability to print updates to the command window. It will also not be updated as often.</p>
 </section>
 <section id="optional-packages">
 <h3>Optional Packages<a class="headerlink" href="#optional-packages" title="Link to this heading"></a></h3>
@@ -185,7 +210,7 @@ To include Cellpose3 in the install, use this command:</p>
 <div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>pip<span class="w"> </span>install<span class="w"> </span>nettracer3d<span class="o">[</span>cellpose<span class="o">]</span>
 </pre></div>
 </div>
-<p>Alternatively, both Napari and Cellpose can be included in the package with this command: (Or they can be independently installed with pip from the base package env)</p>
+<p>Alternatively, both Napari, Cellpose, and edt can be included in the package with this command: (Or they can be independently installed with pip from the base package env)</p>
 <div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>pip<span class="w"> </span>install<span class="w"> </span>nettracer3d<span class="o">[</span>all<span class="o">]</span>
 </pre></div>
 </div>
@@ -211,10 +236,10 @@ pip<span class="w"> </span>install<span class="w"> </span>cupy<span class="w"> <
 <section id="verifying-installation">
 <h2>Verifying Installation<a class="headerlink" href="#verifying-installation" title="Link to this heading"></a></h2>
 <p>To verify that NetTracer3D has been installed correctly, run:</p>
-<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>nettracer3d<span class="w"> </span>--version
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>pip<span class="w"> </span>show<span class="w"> </span>nettracer3d
 </pre></div>
 </div>
-<p>You should see the current version number displayed.</p>
+<p>You should see the current version number displayed. If windows does not recognize ‘nettracer3d’ as the command to start the program, it may be because it is using the windows store version of Python. Please uninstall the windows store version of Python, then make sure to download and install Python from the Python website and not the windows store to allow it to run packages directly from the command line.</p>
 </section>
 <section id="troubleshooting">
 <h2>Troubleshooting<a class="headerlink" href="#troubleshooting" title="Link to this heading"></a></h2>
@@ -239,14 +264,17 @@ This is generally done along the lines of:</p>
 Generally speaking, the installation should work fine with Python version 3.12. However, issues may arise with later versions as of writing this (12/13/2025) specifically with the sklearn package.
 To downgrade Python you can either uninstall it from your computer (on windows, from the add/remove programs menu), followed by reinstalling version 3.12.
 On anaconda, you can just make a new environment and specify what Python version you want.</p>
+<p><strong>Installed but not starting</strong></p>
+<p>If windows does not recognize ‘nettracer3d’ as the command to start the program, it may be because it is using the windows store version of Python. Please uninstall the windows store version of Python, then make sure to download and install Python from the Python website and not the windows store to allow it to run packages directly from the command line.</p>
 </section>
 <section id="getting-help">
 <h3>Getting Help<a class="headerlink" href="#getting-help" title="Link to this heading"></a></h3>
 <p>If you continue to experience installation issues:</p>
-<ul class="simple">
-<li><p>Check the <span class="xref std std-doc">troubleshooting</span> guide</p></li>
+<blockquote>
+<div><ul class="simple">
 <li><p>Email me at <a class="reference external" href="mailto:liamm&#37;&#52;&#48;wustl&#46;edu">liamm<span>&#64;</span>wustl<span>&#46;</span>edu</a></p></li>
 </ul>
+</div></blockquote>
 </section>
 </section>
 <section id="next-steps">

@@ -6,14 +6,14 @@
   <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
 
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Changelog &mdash; NetTracer3D 1.2.6 documentation</title>
+  <title>Changelog &mdash; NetTracer3D 1.2.8 documentation</title>
       <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=b86133f3" />
       <link rel="stylesheet" type="text/css" href="_static/css/theme.css?v=e59714d7" />
 
   
       <script src="_static/jquery.js?v=5d32c60e"></script>
       <script src="_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
-      <script src="_static/documentation_options.js?v=010db75e"></script>
+      <script src="_static/documentation_options.js?v=4d6f9085"></script>
       <script src="_static/doctools.js?v=9bcbadda"></script>
       <script src="_static/sphinx_highlight.js?v=dc90522c"></script>
     <script src="_static/js/theme.js"></script>
@@ -278,6 +278,15 @@
 <dt>Version 1.2.4-1.2.5 Update</dt><dd><ul class="simple">
 <li><p>Bug fixes</p></li>
 <li><p>Updated license and readme files.</p></li>
+</ul>
+</dd>
+<dt>Version 1.2.6-1.2.8 updates</dt><dd><ul class="simple">
+<li><p>Added a faster parallelized option for all distance transform calculations.</p></li>
+<li><p>Similarly, added flooding as a faster but slightly rougher option for propagating labels. This and the above can be combined to do much faster calculations for bigger images.</p></li>
+<li><p>Now has the ‘edt’ package as an optional dependency, which is required for parallel distance transforms.</p></li>
+<li><p>Removed dependency on nibabel (which was just being used to open .nii files). .nii files can still be opened if nibabel is installed manually.</p></li>
+<li><p>Added option to not show numerical labels when displaying network graph.</p></li>
+<li><p>Bug fixes</p></li>
 </ul>
 </dd>
 </dl>

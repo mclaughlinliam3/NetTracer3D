@@ -3,12 +3,19 @@ import numpy as np
 from scipy.ndimage import binary_dilation, distance_transform_edt
 from scipy.ndimage import gaussian_filter
 from scipy import ndimage
-from concurrent.futures import ThreadPoolExecutor, as_completed
+from concurrent.futures import ThreadPoolExecutor, as_completed, ProcessPoolExecutor
+from skimage.segmentation import watershed
 import cv2
 import os
+try:
+    import edt
+    print("Parallel search functions enabled")
+except:
+    print("Parallel search functions disabled (requires edt package), will fall back to single-threaded")
 import math
 import re
 from . import nettracer
+from multiprocessing import shared_memory
 import multiprocessing as mp
 try:
     import cupy as cp
@@ -177,6 +184,7 @@ def dilate_3D_old(tiff_array, dilated_x=3, dilated_y=3, dilated_z=3):
     
     return dilated_array.astype(np.uint8)
 
+
 def dilate_3D_dt(array, search_distance, xy_scaling=1.0, z_scaling=1.0, GPU = False):
     """
     Dilate a 3D array using distance transform method. Dt dilation produces perfect results but only works in euclidean geometry and lags in big arrays.
@@ -286,74 +294,30 @@ def process_chunk(start_idx, end_idx, nodes, ring_mask, nearest_label_indices):
     
     return dilated_nodes_with_labels_chunk
 
-def smart_dilate(nodes, dilate_xy, dilate_z, directory = None, GPU = True, fast_dil = True, predownsample = None, use_dt_dil_amount = None, xy_scale = 1, z_scale = 1):
+def smart_dilate(nodes, dilate_xy = 0, dilate_z = 0, directory = None, GPU = True, fast_dil = True, predownsample = None, use_dt_dil_amount = None, xy_scale = 1, z_scale = 1):
+
+    if fast_dil:
+        dilated = nettracer.dilate_3D_dt(nodes, use_dt_dil_amount, xy_scale, z_scale, fast_dil = True)
+        return smart_label_watershed(dilated, nodes, directory = None, remove_template = False)
+
+    else:
+        return smart_dilate_short(nodes, use_dt_dil_amount, directory, xy_scale, z_scale)
+
+
+
+
+
+def smart_dilate_short(nodes, amount = None, directory = None, xy_scale = 1, z_scale = 1):
 
     original_shape = nodes.shape
 
+    print("Performing distance transform for smart search...")
 
-    #Dilate the binarized array
-    if fast_dil:
-        # Step : Binarize the labeled array
-        binary_nodes = binarize(nodes)
-        dilated_binary_nodes = dilate_3D(binary_nodes, dilate_xy, dilate_xy, dilate_z)
-    else:
-        dilated_binary_nodes, nearest_label_indices, nodes = dilate_3D_dt(nodes, use_dt_dil_amount, GPU = GPU, xy_scaling = xy_scale, z_scaling = z_scale)
-        binary_nodes = binarize(nodes)
-
-    # Step 3: Isolate the ring (binary dilated mask minus original binary mask)
-    ring_mask = dilated_binary_nodes & invert_array(binary_nodes)
-
+    dilated_binary_nodes, nearest_label_indices, nodes = dilate_3D_dt(nodes, amount, xy_scaling = xy_scale, z_scaling = z_scale)
+    binary_nodes = binarize(nodes)
+    ring_mask = dilated_binary_nodes & (~binary_nodes)
+    del dilated_binary_nodes
     del binary_nodes
-
-    print("Preforming distance transform for smart search... this step may take some time if computed on CPU...")
-
-    if fast_dil:
-
-        try:
-
-            if GPU == True and cp.cuda.runtime.getDeviceCount() > 0:
-                print("GPU detected. Using CuPy for distance transform.")
-
-                try:
-
-                    if predownsample is None:
-
-                        # Step 4: Find the nearest label for each voxel in the ring
-                        nearest_label_indices = compute_distance_transform_GPU(invert_array(nodes))
-
-                    else:
-                        gotoexcept = 1/0
-
-                except (cp.cuda.memory.OutOfMemoryError, ZeroDivisionError) as e:
-                    if predownsample is None:
-                        down_factor = catch_memory(e) #Obtain downsample amount based on memory missing
-                    else:
-                        down_factor = (predownsample)**3
-
-                    while True:
-                        downsample_needed = down_factor**(1./3.)
-                        small_nodes = nettracer.downsample(nodes, downsample_needed) #Apply downsample
-                        try:
-                            nearest_label_indices = compute_distance_transform_GPU(invert_array(small_nodes)) #Retry dt on downsample
-                            print(f"Using {down_factor} downsample ({downsample_needed} in each dim - Largest possible with this GPU unless user specified downsample)")
-                            break
-                        except cp.cuda.memory.OutOfMemoryError:
-                            down_factor += 1
-                    binary_nodes = binarize(small_nodes) #Recompute variables for downsample
-                    dilated_mask = dilated_binary_nodes #Need this for later to stamp out the correct output
-                    dilated_binary_nodes = dilate_3D(binary_nodes, 2 + round_to_odd(dilate_xy/downsample_needed), 2 + round_to_odd(dilate_xy/downsample_needed), 2 + round_to_odd(dilate_z/downsample_needed)) #Mod dilation to recompute variables for downsample while also over dilatiing
-
-                    ring_mask = dilated_binary_nodes & invert_array(binary_nodes)
-                    nodes = small_nodes
-                    del small_nodes
-            else:
-                goto_except = 1/0
-        except Exception as e:
-            print("GPU dt failed or did not detect GPU (cupy must be installed with a CUDA toolkit setup...). Computing CPU distance transform instead.")
-            if GPU:
-                print(f"Error message: {str(e)}")
-            nearest_label_indices = compute_distance_transform(invert_array(nodes))
-
 
     # Step 5: Process in parallel chunks using ThreadPoolExecutor
     num_cores = mp.cpu_count()  # Use all available CPU cores
@@ -369,11 +333,6 @@ def smart_dilate(nodes, dilate_xy, dilate_z, directory = None, GPU = True, fast_
 
     # Combine results from chunks
     dilated_nodes_with_labels = np.concatenate(results, axis=1)
-
-
-    if (dilated_nodes_with_labels.shape[1] < original_shape[1]) and fast_dil: #If downsample was used, upsample output
-        dilated_nodes_with_labels = nettracer.upsample_with_padding(dilated_nodes_with_labels, downsample_needed, original_shape)
-        dilated_nodes_with_labels = dilated_nodes_with_labels * dilated_mask
 
     if directory is not None:
         try:
@@ -393,7 +352,63 @@ def round_to_odd(number):
             rounded -= 1
     return rounded
 
-def smart_label(binary_array, label_array, directory = None, GPU = True, predownsample = None, remove_template = False):
+def smart_label_watershed(binary_array, label_array, directory = None, remove_template = False):
+    """
+    Watershed-based version - much lower memory footprint
+    """
+    original_shape = binary_array.shape
+    
+    if type(binary_array) == str or type(label_array) == str:
+        string_bool = True
+    else:
+        string_bool = None
+    if type(binary_array) == str:
+        binary_array = tifffile.imread(binary_array)
+    if type(label_array) == str:
+        label_array = tifffile.imread(label_array)
+    
+    # Binarize
+    binary_array = binarize(binary_array)
+    
+    print("Performing watershed label propagation...")
+    
+    # Watershed approach: propagate existing labels into the dilated region
+    # The labels themselves are the "markers" (seeds)
+    # We use the binary mask to define where labels can spread
+    
+    # Simple elevation map: distance from edges (lower = closer to labeled regions)
+    # This makes watershed flow from labeled regions outward
+    elevation = binary_array.astype(np.float32)
+    
+    # Apply watershed - labels propagate into binary_array region
+    dilated_nodes_with_labels = watershed(
+        elevation,           # Elevation map (flat works fine)
+        markers=label_array, # Seed labels
+        mask=binary_array,   # Where to propagate
+        compactness=0        # Pure distance-based (not shape-based)
+    )
+    
+    if remove_template:
+        dilated_nodes_with_labels *= binary_array
+    
+    if string_bool:
+        if directory is not None:
+            try:
+                tifffile.imwrite(f"{directory}/smart_labelled_array.tif", dilated_nodes_with_labels)
+            except Exception as e:
+                print(f"Could not save search region file to {directory}")
+        else:
+            try:
+                tifffile.imwrite("smart_labelled_array.tif", dilated_nodes_with_labels)
+            except Exception as e:
+                print(f"Could not save search region file to active directory")
+    
+    return dilated_nodes_with_labels
+
+def smart_label(binary_array, label_array, directory = None, GPU = True, predownsample = None, remove_template = False, mode = 0):
+
+    if mode == 1:
+        return smart_label_watershed(binary_array, label_array, directory, remove_template)
 
     original_shape = binary_array.shape
 
@@ -406,79 +421,93 @@ def smart_label(binary_array, label_array, directory = None, GPU = True, predown
     if type(label_array) == str:
         label_array = tifffile.imread(label_array)
 
-    # Step 1: Binarize the labeled array
-    binary_core = binarize(label_array)
+    # Binarize inputs
     binary_array = binarize(binary_array)
+    
+    print("Performing distance transform for smart label...")
 
-    # Step 3: Isolate the ring (binary dilated mask minus original binary mask)
-    ring_mask = binary_array & invert_array(binary_core)
-
-
+    downsample_needed = None  # Track if we downsampled
+    
     try:
-
         if GPU == True and cp.cuda.runtime.getDeviceCount() > 0:
             print("GPU detected. Using CuPy for distance transform.")
 
             try:
-
                 if predownsample is None:
-
-                    # Step 4: Find the nearest label for each voxel in the ring
+                    # Compute binary_core only when needed
+                    binary_core = binarize(label_array)
                     nearest_label_indices = compute_distance_transform_GPU(invert_array(binary_core))
-
+                    del binary_core  # Free immediately after use
                 else:
-                    gotoexcept = 1/0
+                    raise ZeroDivisionError  # Force downsample path
 
             except (cp.cuda.memory.OutOfMemoryError, ZeroDivisionError) as e:
                 if predownsample is None:
-                    down_factor = catch_memory(e) #Obtain downsample amount based on memory missing
+                    down_factor = catch_memory(e)
                 else:
                     down_factor = (predownsample)**3
 
                 while True:
                     downsample_needed = down_factor**(1./3.)
-                    small_array = nettracer.downsample(label_array, downsample_needed) #Apply downsample
+                    small_array = nettracer.downsample(label_array, downsample_needed)
                     try:
-                        nearest_label_indices = compute_distance_transform_GPU(invert_array(small_array)) #Retry dt on downsample
-                        print(f"Using {down_factor} downsample ({downsample_needed} in each dim - Largest possible with this GPU unless user specified downsample)")
+                        binary_core = binarize(small_array)
+                        nearest_label_indices = compute_distance_transform_GPU(invert_array(binary_core))
+                        print(f"Using {down_factor} downsample ({downsample_needed} in each dim)")
+                        del small_array  # Don't need small_array anymore
                         break
                     except cp.cuda.memory.OutOfMemoryError:
+                        del small_array, binary_core  # Clean up before retry
                         down_factor += 1
-                binary_core = binarize(small_array)
-                label_array = small_array
+                
+                # Update label_array for later use
+                label_array = nettracer.downsample(label_array, downsample_needed)
                 binary_small = nettracer.downsample(binary_array, downsample_needed)
                 binary_small = nettracer.dilate_3D_old(binary_small)
                 ring_mask = binary_small & invert_array(binary_core)
-
+                del binary_small, binary_core  # Free after creating ring_mask
         else:
-            goto_except = 1/0
+            raise Exception("GPU not available")
+            
     except Exception as e:
         if GPU:
-            print("GPU dt failed or did not detect GPU (cupy must be installed with a CUDA toolkit setup...). Computing CPU distance transform instead.")
+            print("GPU dt failed or did not detect GPU. Computing CPU distance transform instead.")
             print(f"Error message: {str(e)}")
             import traceback
             print(traceback.format_exc())
-        nearest_label_indices = compute_distance_transform(invert_array(label_array))
+        binary_core = binarize(label_array)
+        nearest_label_indices = compute_distance_transform(invert_array(binary_core))
+        del binary_core
 
-    print("Preforming distance transform for smart label...")
+    # Compute ring_mask only if not already computed in downsample path
+    if 'ring_mask' not in locals():
+        binary_core = binarize(label_array)
+        ring_mask = binary_array & invert_array(binary_core)
+        del binary_core
 
-    # Step 5: Process in parallel chunks using ThreadPoolExecutor
-    num_cores = mp.cpu_count()  # Use all available CPU cores
-    chunk_size = label_array.shape[1] // num_cores  # Divide the array into chunks along the z-axis
-
+    # Step 5: Process in parallel chunks
+    num_cores = mp.cpu_count()
+    chunk_size = label_array.shape[1] // num_cores
 
     with ThreadPoolExecutor(max_workers=num_cores) as executor:
-        args_list = [(i * chunk_size, (i + 1) * chunk_size if i != num_cores - 1 else label_array.shape[1], label_array, ring_mask, nearest_label_indices) for i in range(num_cores)]
+        args_list = [(i * chunk_size, (i + 1) * chunk_size if i != num_cores - 1 else label_array.shape[1], 
+                     label_array, ring_mask, nearest_label_indices) for i in range(num_cores)]
         results = list(executor.map(lambda args: process_chunk(*args), args_list))
 
-    # Combine results from chunks
-    dilated_nodes_with_labels = np.concatenate(results, axis=1)
+    # Free large arrays no longer needed
+    del label_array, ring_mask, nearest_label_indices
 
-    if label_array.shape[1] < original_shape[1]: #If downsample was used, upsample output
+    # Combine results
+    dilated_nodes_with_labels = np.concatenate(results, axis=1)
+    del results  # Free the list of chunks
+
+    if downsample_needed is not None:  # If downsample was used
         dilated_nodes_with_labels = nettracer.upsample_with_padding(dilated_nodes_with_labels, downsample_needed, original_shape)
-        dilated_nodes_with_labels = dilated_nodes_with_labels * binary_array
+        dilated_nodes_with_labels *= binary_array  # In-place multiply if possible
     elif remove_template:
-        dilated_nodes_with_labels = dilated_nodes_with_labels * binary_array
+        dilated_nodes_with_labels *= binary_array  # In-place multiply if possible
+
+    del binary_array  # Done with this
 
     if string_bool:
         if directory is not None:
@@ -491,7 +520,6 @@ def smart_label(binary_array, label_array, directory = None, GPU = True, predown
                 tifffile.imwrite("smart_labelled_array.tif", dilated_nodes_with_labels)
             except Exception as e:
                 print(f"Could not save search region file to active directory")
-
 
     return dilated_nodes_with_labels
 
@@ -613,21 +641,94 @@ def compute_distance_transform_distance_GPU(nodes, sampling = [1, 1, 1]):
     return distance    
 
 
-def compute_distance_transform_distance(nodes, sampling = [1, 1, 1]):
+def _run_edt_in_process_shm(input_shm_name, output_shm_name, shape, dtype_str, sampling_tuple):
+    """Helper function to run edt in a separate process using shared memory."""
+    import edt  # Import here to ensure it's available in child process
+    
+    input_shm = shared_memory.SharedMemory(name=input_shm_name)
+    output_shm = shared_memory.SharedMemory(name=output_shm_name)
+    
+    try:
+        nodes_arr = np.ndarray(shape, dtype=dtype_str, buffer=input_shm.buf)
+        
+        n_cores = mp.cpu_count()
+        result = edt.edt(
+            nodes_arr.astype(bool),
+            anisotropy=sampling_tuple,
+            parallel=n_cores
+        )
+        
+        result_array = np.ndarray(result.shape, dtype=result.dtype, buffer=output_shm.buf)
+        np.copyto(result_array, result)
+        
+        return result.shape, str(result.dtype)
+    finally:
+        input_shm.close()
+        output_shm.close()
 
-    #print("(Now doing distance transform...)")
-
+def compute_distance_transform_distance(nodes, sampling=[1, 1, 1], fast_dil=False):
+    """
+    Compute distance transform with automatic parallelization when available.
+    
+    Args:
+        nodes: Binary array (True/1 for objects)
+        sampling: Voxel spacing [z, y, x] for anisotropic data
+    
+    Returns:
+        Distance transform array
+    """
     is_pseudo_3d = nodes.shape[0] == 1
+    
     if is_pseudo_3d:
-        nodes = np.squeeze(nodes)  # Convert to 2D for processing
+        nodes = np.squeeze(nodes)
         sampling = [sampling[1], sampling[2]]
-
-    # Fallback to CPU if there's an issue with GPU computation
-    distance = distance_transform_edt(nodes, sampling = sampling)
+    
+    if fast_dil:
+        try:
+            # Use shared memory for all array sizes
+            input_shm = shared_memory.SharedMemory(create=True, size=nodes.nbytes)
+            output_size = nodes.size * np.dtype(np.float64).itemsize
+            output_shm = shared_memory.SharedMemory(create=True, size=output_size)
+            
+            try:
+                shm_array = np.ndarray(nodes.shape, dtype=nodes.dtype, buffer=input_shm.buf)
+                np.copyto(shm_array, nodes)
+                
+                with ProcessPoolExecutor(max_workers=1) as executor:
+                    future = executor.submit(
+                        _run_edt_in_process_shm,
+                        input_shm.name,
+                        output_shm.name,
+                        nodes.shape,
+                        str(nodes.dtype),
+                        tuple(sampling)
+                    )
+                    result_shape, result_dtype = future.result(timeout=300)  # Add timeout
+                
+                distance = np.ndarray(result_shape, dtype=result_dtype, buffer=output_shm.buf).copy()
+                
+            finally:
+                input_shm.close()
+                input_shm.unlink()
+                output_shm.close()
+                output_shm.unlink()
+                
+        except Exception as e:
+            print(f"Parallel distance transform failed ({e}), falling back to scipy")
+            try:
+                import edt
+                import traceback
+                traceback.print_exc()  # See the full error
+            except:
+                print("edt package not found. Please use 'pip install edt' if you would like to enable parallel searching.")
+            distance = distance_transform_edt(nodes, sampling=sampling)
+    else:
+        distance = distance_transform_edt(nodes, sampling=sampling)
+    
     if is_pseudo_3d:
-        distance = np.expand_dims(distance, axis = 0)
+        distance = np.expand_dims(distance, axis=0)
+    
     return distance
-
 
 
 

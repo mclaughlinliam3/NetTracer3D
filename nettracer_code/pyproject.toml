@@ -1,6 +1,6 @@
 [project]
 name = "nettracer3d"
-version = "1.2.6"
+version = "1.2.8"
 authors = [
   { name="Liam McLaughlin", email="liamm@wustl.edu" },
 ]
@@ -20,10 +20,8 @@ dependencies = [
     "qtrangeslider",
     "PyQt6",
     "scikit-learn",
-    "nibabel",
     "setuptools",
-    "umap-learn"
-]
+    "umap-learn"]
 
 readme = "README.md"
 requires-python = ">=3.7"
@@ -42,9 +40,11 @@ cupy = ["cupy"]
 # Features
 cellpose = ["cellpose[GUI]"]
 viz = ["napari"]
+rec = ["napari", "edt"]
+edt = ["edt"]
 
 # All non-GPU features
-all = ["cellpose[GUI]", "napari"]
+all = ["cellpose[GUI]", "napari", "edt"]
 
 [project.scripts]
 nettracer3d = "nettracer3d.run:main"
@@ -52,3 +52,4 @@ nettracer3d = "nettracer3d.run:main"
 [project.urls]
 Documentation = "https://nettracer3d.readthedocs.io/en/latest/"
 Youtube_Tutorial = "https://www.youtube.com/watch?v=_4uDy0mzG94&list=PLsrhxiimzKJMZ3_gTWkfrcAdJQQobUhj7"
+Downloadable_Version = "https://doi.org/10.5281/zenodo.17873800"

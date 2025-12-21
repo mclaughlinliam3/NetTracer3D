@@ -55,6 +55,10 @@ Parameter Explanations
         * Please use downsampling that corresponds to your node sizes.
     * (For larger images, I would generally set this param to something assuming your nodes are big enough.)
     * As a side note, the value here will also essentially enlarge the overlays from this method (assuming you opt to use them). Larger overlays may be desired for visualization purposes. Note that smaller overlays can still be generated from 'Image -> Overlays...' if this behavior is not desired.
+#. Use fast search...:
+    * Selecting this button will have the program attempt to use a faster search algorithm. Search regions and edge dilation are achieved using parallelization via the edt module instead of scipy. (This requires the edt module to be installed and working, see the installation doc for more info).
+    * After search regions are obtained, they are labelled via flooding with the skimage watershed function. This results in slightly rougher search regions along adjacent searching borders, although it is not large enough to make much of a practical difference in output.
+    * For comparison, the not selecting this will use scipy's distance_transform_edt function to solve the search region, which will yield an exact voxel-to-voxel labeling schema, but will be calculated on a single CPU core and thus potentially take a while for larger images. The program will always fall back to this if the parallel calculation fails somehow.
 #. Generate Overlays:
     * If enabled, NetTracer3D will execute 'Image -> Overlay -> Create Network Overlay' and 'Image -> Overlay -> Create ID Overlay' (which will override Overay 1 and 2, respectively).
 #. Update Node/Edge in NetTracer3D:
@@ -285,24 +289,19 @@ Parameter Explanations
     * The depth per-voxel in the 3D z plane I want to be applied on parameter 1. This box will auto-populate with the z_scale property set for the images, however any number entered in the box will always be used regardless of the property.
 #. Execution mode
     * This dropdown window provides several options for different dilation strategies.
-        1. 'Psuedo3D Binary Kernels' - Dilates in 2D in the XY and XZ planes, trying to simulate a 3D dilation. The image will be binarized prior to dilation. For small-to-medium dilation, this option can save time but will not result in a perfect dilation due to not being able to 'see' diagonally. Note that for particularly large dilations (relative to the starting objects), this option may actually be slower than distance transform.
+        1. 'Parallel Distance Transform Based' - Attempts to use edt module to compute the dilation in parallel on your CPU. If edt is not installed or the parallel computation fails, the program will fall back to option 4 by default.
         2. 'Preserve Labels' - Use this to dilate objects without binarizing them, preserving labels. A new window for additional params will open, see below.
-        3. 'Distance-Transform Based' - Use this dilate objects via a distance transform, allowing for more perfect dilations, but often being slower. 
+        3. 'Psuedo3D Binary Kernels' - Dilates in 2D in the XY and XZ planes, trying to simulate a 3D dilation. The image will be binarized prior to dilation. This is primarily meant for purely visualization purposes (not quantitative) for small-to-medium dilation. This option can save time but will not result in a perfect dilation due to not being able to 'see' diagonally. Note that for particularly large dilations (relative to the starting objects), this option may actually be slower than distance transform.
+        4. 'Distance-Transform Based (Non-Parallel)' - Use this dilate objects via a distance transform, allowing for more perfect dilations, but often being slower. 
 
 * Press 'Run Dilate' to run the method with the desired parameters. Note the channel refered to in 'Active Image' is the one that will be dilated, with the output also being returned there.
 * If using 'Preserve Labels', an additional window will appear requesting more params:
 
-#. Use GPU
-    * Whether or not to try to use the GPU (only possible with a working CUDA toolkit).
-    * Note that this method will always fall back to CPU if the GPU fails.
-    * If using psuedo-3d kernels, this method will additionally attempt to downsample your image if the GPU runs out of memory - see below for more information.
-#. Use fast dilation...
-    * If enabled, this algorithm will use psuedo3d binary kernels (as described above, or below).
-    * If disabled, it will use the distance transform method.
-#. Internal Downsample for GPU...
-    * If using the GPU, the number entered here will be used to temporarily downsample the image for the psuedo-3d kernel method only.
-    * The psuedo-3d kernel method does this automatically, but this option allows more direct control over that behavior.
-
+#. Fast Dilation:
+    * Selecting this button will have the program attempt to use a faster gray dilation algorithm. Binary dilation is first achieved using parallelization via the edt module instead of scipy. (This requires the edt module to be installed and working, see the installation doc for more info).
+    * After binary dilation regions are obtained, they are labelled via flooding with the skimage watershed function. This results in slightly rougher search regions along adjacent searching borders, which may not be desirable.
+    * For comparison, the not selecting this will use scipy's distance_transform_edt function to solve the gray dilation, which will yield an exact voxel-to-voxel labeling schema, but will be calculated on a single CPU core and thus potentially take a while for larger images. The program will always fall back to this if the parallel calculation fails somehow.
+    * If disabled, it will use the scipy distance transform method.
 
 Algorithm Explanations
 ~~~~~~~~~~~~~~~~~~~~~
@@ -347,13 +346,6 @@ Algorithm Explanations
 4. We then search through the indices of all the shell regions, get the index of the node it 'belongs' to from the distance transform index image, find the label of said node, and finally reassign the binary index in the dilated image to be its proper label instead.
 5. The chunks are recombined to get the label-dilated array.
 
-* Note that if fast dilation (pseudo-3D kernels) is being used, and this method runs out of VRAM while using the GPU, it will downsample inverted nodes image and attempt to get the distance transform again. It will do this until the GPU manages to produce a distance transform, and after the dilated (with +1 search region in this instance) image in the downsampled image is found, it will be upsampled. Then, the full-sized binary, dilated image that we got earlier will be used to boolean-index the image we just upsampled, producing the final output.
-* Assuming no nodes are lost during the downsample, the output is ostensibly the same as doing it on the full sized image. This is essentially because we are using the downsampled image with distance transform to approximate a 'nearest label map' which can be applied to the upsample image, with the only difference being some minor margin errors between nodes.
-* However if any nodes have a dimension smaller than the downsample factor the system attempts to use (which will be told to you in the command window), they risk being removed from the downsampled image and therefore will not establish a 'label territory', which will cause them to be lost. 
-* As a result, this behavior is not good for large images with rather small nodes. In such a case, do not use fast dilation together with GPU.
-* The purpose of this method is that it offers a rather accelerated option for certain cases. For example, connectivity networks can be found with decent accuracy assuming the dilation is not significantly larger than the nodes, and that the nodes aren't too small if downsampling occurs.
-* Note this GPU behavior will not occur with distance transforms. This is because we need to get a distance transform to compute the dilation in the first place, so a downsampled alternative cannot be really used to 'seed' a full sized dilation as a way to preserve speed. 
-* In both cases if the GPU does fail for any reason (besides memory-related for fast dilation), the system will reattempt with CPU.
 
 'Process -> Image -> Erode'
 -------------------------------------------------------
@@ -372,22 +364,22 @@ Parameter Explanations
     * The depth per-voxel in the 3D z plane I want to be applied on parameter 1. This box will auto-populate with the z_scale property set for the images, however any number entered in the box will always be used regardless of the property.
 #. Execution mode
     * This dropdown window provides two erosion options.
-        1. 'Psuedo3D Binary Kernels' - Erodes in 2D in the XY and XZ planes, trying to simulate a 3D dilation. The image will be binarized prior to erosion. For small-to-medium erosion, this option can save time but will not result in a perfect erosion due to not being able to 'see' diagonally. Note that for particularly large erosions (relative to the starting objects), this option may actually be slower than distance transform.
-        2. 'Distance-Transform Based' - Use this erode objects via a distance transform, allowing for more perfect erosions, but often being slower.
-        3. 'Preserve Labels' - Also uses the distance transform, but also makes each object keep its label. Labeled objects that share a border will see that border get eroded as well.
+        2. 'Parallel Distance-Transform Based' - Use this erode objects via a distance transform calculated in parallel with the edt module. If edt is not installed or the parallel calculation fails, it will fall back to the scipy version.
+        2. 'Distance-Transform Based (Non-Parallel)' - Use the scipy non-parallel distance transform to perform the erosion.
+        3. 'Preserve Labels (Parallel)' - Use edt to erode while maintaining object labels. Labeled objects that share a border will see that border get eroded as well.
+        4. 'Preserve Labels (Non - Parallel)' - Use scipy non-parallel distance transform to erode while preserving labels. 
 
 * Press 'Run Erode' to run the method with the desired parameters. Note the channel refered to in 'Active Image' is the one that will be eroded, with the output also being returned there.
 
 Algorithm Explanations
 ~~~~~~~~~~~~~~~~~~~~~
 
-* This algorithm pretty much works the same as the binary options for dilating, except openCV2 erode method to handle the Psuedo-3D kernels over the dilate method, and in the case of the distance transform, it is performed without inverting the image. 
-* For context, see :ref:`dilation`.
+* Erosion is accomplished by calculating the distance transform and then thresholding at the desired erosion distance.
 * If labels are kept, the skimage find_borders method is used to boolean threshold out the borders so that the resulting distance transform can tell the labeled objects to move away from each other.
 * As a side note, erosion can be combined with dilation to preform something called an 'Open' or 'Close' operation.
     * An Open operation is an erosion followed by an equivalent level of dilation, which can be a cheap way to split apart objects that are just barely touching, while also eliminating noise, although it can be a bit disfiguring on masks at large values.
     * A more useful operation is Close, which is a dilation followed by an equivalent erosion. The result will fuse together nearby objects while keeping the image mask a similar shape/size. This is useful for NetTracer3D specically as a way to fix segmentation artifacts (holes), without having to touch the 'diledge' parameter in the main method.
-    * Please note I advise only attempting Open or Close operations with the **distance transform** versions of the erosion/dilation methods, due to the slight instability of the psuedo-3D kernels.
+    * Both of these can be called from the 'Clean Segmentation' function.
 
 'Process -> Image -> Fill Holes'
 -------------------------------------------------------
@@ -608,11 +600,6 @@ Algorithm Explanations
 * This method can be used to watershed a binary image, which splits (via labeling) apart fused objects that 'look' like two seperate objects.
 * It is meant to be applied to binary segmentations, not segmentations of raw images.
 * This method is ideal for seperating overlapping objects in a binary segmentation, for example adjacent cells.
-* Selecting this method will show the following menu:
-
-.. image:: _static/process4.png
-   :width: 800px
-   :alt: Watershed Menu
 
 Parameter Explanations
 ~~~~~~~~~~~~~~~~~~~~~~~
@@ -623,20 +610,16 @@ Running Watershed
 #. Proportion
     * Controls how 'aggressive' the watershed is. See algorithm explanation.
     * Proportion (0-1) of distance transform value set [ie unique elements] to exclude (ie 0.2 = 20% of the set of all values of the distance transform get excluded).Essentially, vals closer to 0 are less likely to split objects but also won't kick out small objects from the output, vals slightly further from 0 will split more aggressively, but vals closer to 1 become unstable, leading to objects being evicted or labelling errors. Recommend something between 0.05 and 0.4, but it depends on the data (Or just enter a smallest radius above to avoid using this). Will tell you in command window what equivalent 'smallest radius' this is.
-#. Use GPU
-    * Whether or not to try to use the GPU (only possible with a working CUDA toolkit).
-    * Note that this method will always fall back to CPU if the GPU fails.
-    * This method will additionally attempt to downsample your image if the GPU runs out of memory - see below for more information.
-5. Kernel Obtainment GPU downsample
-    * If using GPU, provides user control to any forced downsampling that occurs for the first distance transform (which has larger labeled objects, so it can be a bit more aggressive) - see algorithm explanations.
+#. Execution mode:
+    1. Parallel - Use edt to solve the distance transform in parallel (faster). If edt is not found or the parallel calculation fails somehow, the program will fall back to the scipy version.
+    2. Non-Parallel - Use scipy's non-parallel distance_transform_edt to do the watershed.
 
 Algorithm Explanations
 ~~~~~~~~~~~~~~~~~~~~~~~
 1. This algorithm computes a distance transform on the binary image, telling the computer what regions lie close to the background. 
-2. Like the other distance transforms in NetTracer3D, if the system runs out of VRAM computing the distance transform on GPU, it will reattempt with serial downsampling. This will ostensibly give the same output unless labeled objects have a dimension smaller than the downsample factor, after which they might be removed from the image. Do not use GPU if that may occur on this image.
-3. These regions are then erroded based on the value 'Proportion' - Essentially for a proportion of 0.05 (default), only the internal distance values with in the top 5% of the set of all distance values will be kept, to be used as seed kernels for relabeling the image.
-4. These seed kernels are assigned unique labels with the scipy.ndimage.label() method, before they are used to relabel the original binary image.
-5. The relabelling (and ultimate watershed) from the kernels unto the binary image is then completed with the skimage watershed method.
+2. These regions are then eroded based on the value 'Proportion' - Essentially for a proportion of 0.05 (default), only the internal distance values with in the top 5% of the set of all distance values will be kept, to be used as seed kernels for relabeling the image. If you opted to use the smallest radius parameter instead, the program will compute what 'proportion' that corresponds to.
+3. These seed kernels are assigned unique labels with the scipy.ndimage.label() method, before they are used to relabel the original binary image.
+4. The relabelling (and ultimate watershed) from the kernels unto the binary image is then completed with the skimage watershed method.
 
 * This algorithm can be a bit slow on large images. The 'proportion' param is a bit hard to select; therefore, smallest radius is the better option, if it is known (The measurement points can be used to obtain this value). For proportion, 0.05 works rather well for many cases, but if watershed outputs are not quite right, please try varying values for 'proportion', increasing from 0.05 to around 0.5 typically.
 * Below is an example:
@@ -710,9 +693,7 @@ Algorithm Explanations
 
 Parameter Explanations
 ~~~~~~~~~~~~~~~~~~~~~~~
-#. Downsample Factor:
-    * Temporarily downsamples the image to speed up calculation. Downsampling is done in all three dimensions by the inputed factor.
-    * Note that for branch-related functions, downsampling doesn't just speed up calculation, but may also be useful in simplifying the skeletonization of thick objects. The trade off is losing resolution of thin objects, which should be considered if using the downsample to alter skeletonization specifically.
+
 #. Skeleton Voxel Branch Length to remove...
     * The length (in pixels/voxels, not scaled) of terminal branches (or spines) to remove from the skeleton output.
     * This method only removes terminal branches. Internal branches will never be effected regardless of how large this param is.
@@ -723,6 +704,12 @@ Parameter Explanations
     * I generally like to leave this enabled.
 #. Amount to expand nodes...
     * If a numbered is entered here, branchpoint nodes will be enlarged before they are labeled, meaning nearby ones will merge. This can be a way to handle an abundance of nearby nodes resulting from odd skeleton structures, although I generally feel like it can be ignored.
+#. Use fast dilation:
+    * Selecting this button will have the program attempt to use parallelization to 'merge nodes' (presuming that is happening at all) via the edt module instead of scipy. (This requires the edt module to be installed and working, see the installation doc for more info).
+    * For comparison, the not selecting this will use scipy's distance_transform_edt function to expand nodes, which will be calculated on a single CPU core and thus potentially take a while for larger images. The program will always fall back to this if the parallel calculation fails somehow.
+#. Downsample Factor:
+    * Temporarily downsamples the image to speed up calculation. Downsampling is done in all three dimensions by the inputed factor.
+    * Note that for branch-related functions, downsampling doesn't just speed up calculation, but may also be useful in simplifying the skeletonization of thick objects. The trade off is losing resolution of thin objects, which should be considered if using the downsample to alter skeletonization specifically.
 
 * Select 'Run Node Generation' to run this method with the desired parameters. The edges will be skeletonized, while the new nodes will load into the nodes channel.
 
@@ -766,6 +753,9 @@ Parameter Explanations
 #. Internal downsample...
     * Temporarily downsamples the image to speed up calculation. Downsampling is done in all three dimensions by the inputed factor.
     * Note that for branch-related functions, downsampling doesn't just speed up calculation, but may also be useful in simplifying the skeletonization of thick objects. The trade off is losing resolution of thin objects, which should be considered if using the downsample to alter skeletonization specifically.
+#. Algorithm...
+    1. Standard - Uses scipy's distance_transform_edt to compute what branch labels belong to which skeleton segment. This can be a slow calculation on large images but results in well-labeled borders.
+    2. Fast - Uses skimage's watershed function to flood branch regions from their skeleton segments to achieve labeling. This is generally faster but will result in rougher labels along borders, where certain branches may have odd shapes there. Enable this for large images if processing time is more important than exactness along these borders.
 #. Compute branch stats:
     * Will also calculate the branch lengths and tortuosities for each branch.
 #. Generate Nodes from edges?

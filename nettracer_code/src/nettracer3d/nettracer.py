@@ -90,6 +90,7 @@ def reslice_3d_array(args):
 def _get_node_edge_dict(label_array, edge_array, label, dilate_xy, dilate_z):
     """Internal method used for the secondary algorithm to find which nodes interact with which edges."""
     
+    import tifffile
     # Create a boolean mask where elements with the specified label are True
     label_array = label_array == label
     label_array = dilate_3D(label_array, dilate_xy, dilate_xy, dilate_z) #Dilate the label to see where the dilated label overlaps
@@ -104,7 +105,7 @@ def _get_node_edge_dict(label_array, edge_array, label, dilate_xy, dilate_z):
 def process_label(args):
     """Modified to use pre-computed bounding boxes instead of argwhere"""
     nodes, edges, label, dilate_xy, dilate_z, array_shape, bounding_boxes = args
-    print(f"Processing node {label}")
+    #print(f"Processing node {label}")
     
     # Get the pre-computed bounding box for this label
     slice_obj = bounding_boxes[int(label)-1]  # -1 because label numbers start at 1
@@ -122,6 +123,7 @@ def process_label(args):
 
 def create_node_dictionary(nodes, edges, num_nodes, dilate_xy, dilate_z):
     """Modified to pre-compute all bounding boxes using find_objects"""
+    print("Calculating network...")
     node_dict = {}
     array_shape = nodes.shape
     
@@ -1520,7 +1522,7 @@ def dilate_2D(array, search, scaling = 1):
     return inv
 
 
-def dilate_3D_dt(array, search_distance, xy_scaling=1.0, z_scaling=1.0):
+def dilate_3D_dt(array, search_distance, xy_scaling=1.0, z_scaling=1.0, fast_dil = False):
     """
     Dilate a 3D array using distance transform method. Dt dilation produces perfect results but only works in euclidean geometry and lags in big arrays.
     
@@ -1568,7 +1570,7 @@ def dilate_3D_dt(array, search_distance, xy_scaling=1.0, z_scaling=1.0):
     """
 
     # Compute distance transform (Euclidean)
-    inv = smart_dilate.compute_distance_transform_distance(inv, sampling = [z_scaling, xy_scaling, xy_scaling])
+    inv = smart_dilate.compute_distance_transform_distance(inv, sampling = [z_scaling, xy_scaling, xy_scaling], fast_dil = fast_dil)
 
     #inv = inv * cardinal
     
@@ -1615,7 +1617,7 @@ def erode_2D(array, search, scaling=1, preserve_labels = False):
     
     return array
 
-def erode_3D_dt(array, search_distance, xy_scaling=1.0, z_scaling=1.0, preserve_labels = False):
+def erode_3D_dt(array, search_distance, xy_scaling=1.0, z_scaling=1.0, fast_dil = False, preserve_labels = False):
     """
     Erode a 3D array using distance transform method. DT erosion produces perfect results 
     with Euclidean geometry, but may be slower for large arrays.
@@ -1643,33 +1645,29 @@ def erode_3D_dt(array, search_distance, xy_scaling=1.0, z_scaling=1.0, preserve_
 
         borders = find_boundaries(array, mode='thick')
         mask = array * invert_array(borders)
-        mask = smart_dilate.compute_distance_transform_distance(mask, sampling = [z_scaling, xy_scaling, xy_scaling])
+        mask = smart_dilate.compute_distance_transform_distance(mask, sampling = [z_scaling, xy_scaling, xy_scaling], fast_dil = fast_dil)
         mask = mask >= search_distance
         array = mask * array
     else:
-        array = smart_dilate.compute_distance_transform_distance(array, sampling = [z_scaling, xy_scaling, xy_scaling])
+        array = smart_dilate.compute_distance_transform_distance(array, sampling = [z_scaling, xy_scaling, xy_scaling], fast_dil = fast_dil)
         # Threshold the distance transform to get eroded result
         # For erosion, we keep only the points that are at least search_distance from the boundary
         array = array > search_distance
-    
-    # Resample back to original dimensions if needed
-    #if rev_factor:
-        #array = ndimage.zoom(array, rev_factor, order=0)  # Use order=0 for binary masks
     
     return array.astype(np.uint8)
 
 
 def dilate_3D(tiff_array, dilated_x, dilated_y, dilated_z):
-    """Internal method to dilate an array in 3D. Dilation this way is much faster than using a distance transform although the latter is theoretically more accurate.
+    """Internal method to dilate an array in 3D. Dilation this way is much faster than using a distance transform although the latter is more accurate.
     Arguments are an array,  and the desired pixel dilation amounts in X, Y, Z. Uses psuedo-3D kernels (imagine a 3D + sign rather than a cube) to approximate 3D neighborhoods but will miss diagonally located things with larger kernels, if those are needed use the distance transform version.
     """
-
-    if tiff_array.shape[0] == 1:
-        return dilate_2D(tiff_array, ((dilated_x - 1) / 2))
 
     if dilated_x == 3 and dilated_y == 3  and dilated_z == 3:
 
         return dilate_3D_old(tiff_array, dilated_x, dilated_y, dilated_z)
+
+    if tiff_array.shape[0] == 1:
+        return dilate_2D(tiff_array, ((dilated_x - 1) / 2))
 
     def create_circular_kernel(diameter):
         """Create a 2D circular kernel with a given radius.
@@ -1802,11 +1800,6 @@ def dilate_3D_old(tiff_array, dilated_x=3, dilated_y=3, dilated_z=3):
     Dilated 3D array
     """
     
-    # Handle special case for 2D arrays
-    if tiff_array.shape[0] == 1:
-        # Call 2D dilation function if needed
-        return dilate_2D(tiff_array, 1)  # For a 3x3 kernel, radius is 1
-    
     # Create a simple 3x3x3 cubic kernel (all ones)
     kernel = np.ones((3, 3, 3), dtype=bool)
     
@@ -1814,107 +1807,6 @@ def dilate_3D_old(tiff_array, dilated_x=3, dilated_y=3, dilated_z=3):
     dilated_array = ndimage.binary_dilation(tiff_array.astype(bool), structure=kernel)
     
     return dilated_array.astype(np.uint8)
-
-
-def erode_3D(tiff_array, eroded_x, eroded_y, eroded_z):
-    """Internal method to erode an array in 3D. Erosion this way is faster than using a distance transform although the latter is theoretically more accurate.
-    Arguments are an array, and the desired pixel erosion amounts in X, Y, Z."""
-
-    if tiff_array.shape[0] == 1:
-        return erode_2D(tiff_array, ((eroded_x - 1) / 2))
-
-    def create_circular_kernel(diameter):
-        """Create a 2D circular kernel with a given radius.
-        Parameters:
-        radius (int or float): The radius of the circle.
-        Returns:
-        numpy.ndarray: A 2D numpy array representing the circular kernel.
-        """
-        # Determine the size of the kernel
-        radius = diameter/2
-        size = radius  # Diameter of the circle
-        size = int(np.ceil(size))  # Ensure size is an integer
-        
-        # Create a grid of (x, y) coordinates
-        y, x = np.ogrid[-radius:radius+1, -radius:radius+1]
-        
-        # Calculate the distance from the center (0,0)
-        distance = np.sqrt(x**2 + y**2)
-        
-        # Create the circular kernel: points within the radius are 1, others are 0
-        kernel = distance <= radius
-        
-        # Convert the boolean array to integer (0 and 1)
-        return kernel.astype(np.uint8)
-
-    def create_ellipsoidal_kernel(long_axis, short_axis):
-        """Create a 2D ellipsoidal kernel with specified axis lengths and orientation.
-        Parameters:
-        long_axis (int or float): The length of the long axis.
-        short_axis (int or float): The length of the short axis.
-        Returns:
-        numpy.ndarray: A 2D numpy array representing the ellipsoidal kernel.
-        """
-        semi_major, semi_minor = long_axis / 2, short_axis / 2
-        # Determine the size of the kernel
-        size_y = int(np.ceil(semi_minor))
-        size_x = int(np.ceil(semi_major))
-        
-        # Create a grid of (x, y) coordinates centered at (0,0)
-        y, x = np.ogrid[-semi_minor:semi_minor+1, -semi_major:semi_major+1]
-        
-        # Ellipsoid equation: (x/a)^2 + (y/b)^2 <= 1
-        ellipse = (x**2 / semi_major**2) + (y**2 / semi_minor**2) <= 1
-        
-        return ellipse.astype(np.uint8)
-
-    z_depth = tiff_array.shape[0]
-
-    # Function to process each slice
-    def process_slice(z):
-        tiff_slice = tiff_array[z].astype(np.uint8)
-        eroded_slice = cv2.erode(tiff_slice, kernel, iterations=1)
-        return z, eroded_slice
-
-    def process_slice_other(y):
-        tiff_slice = tiff_array[:, y, :].astype(np.uint8)
-        eroded_slice = cv2.erode(tiff_slice, kernel, iterations=1)
-        return y, eroded_slice
-
-    # Create empty arrays to store the eroded results for the XY and XZ planes
-    eroded_xy = np.zeros_like(tiff_array, dtype=np.uint8)
-    eroded_xz = np.zeros_like(tiff_array, dtype=np.uint8)
-
-    kernel_x = int(eroded_x)
-    kernel = create_circular_kernel(kernel_x)
-
-    num_cores = mp.cpu_count()
-    with ThreadPoolExecutor(max_workers=num_cores) as executor:
-        futures = {executor.submit(process_slice, z): z for z in range(tiff_array.shape[0])}
-        for future in as_completed(futures):
-            z, eroded_slice = future.result()
-            eroded_xy[z] = eroded_slice
-
-    kernel_x = int(eroded_x)
-    kernel_z = int(eroded_z)
-    kernel = create_ellipsoidal_kernel(kernel_x, kernel_z)
-
-    if z_depth != 2:
-
-        with ThreadPoolExecutor(max_workers=num_cores) as executor:
-            futures = {executor.submit(process_slice_other, y): y for y in range(tiff_array.shape[1])}
-            
-            for future in as_completed(futures):
-                y, eroded_slice = future.result()
-                eroded_xz[:, y, :] = eroded_slice
-
-    # Overlay the results using AND operation instead of OR for erosion
-    if z_depth != 2:
-        final_result = eroded_xy & eroded_xz
-    else:
-        return eroded_xy
-    
-    return final_result
 
 
 def dilation_length_to_pixels(xy_scaling, z_scaling, micronx, micronz):
@@ -2321,12 +2213,13 @@ def dilate(arrayimage, amount, xy_scale = 1, z_scale = 1, directory = None, fast
 def erode(arrayimage, amount, xy_scale = 1, z_scale = 1, mode = 0, preserve_labels = False):
     if not preserve_labels and len(np.unique(arrayimage)) > 2: #binarize
         arrayimage = binarize(arrayimage)
-    erode_xy, erode_z = dilation_length_to_pixels(xy_scale, z_scale, amount, amount)
 
-    if mode == 2:
-        arrayimage = (erode_3D(arrayimage, erode_xy, erode_xy, erode_z)) * 255
+    if mode == 0 or mode == 2:
+        fast_dil = True
     else:
-        arrayimage = erode_3D_dt(arrayimage, amount, xy_scaling=xy_scale, z_scaling=z_scale, preserve_labels = preserve_labels)
+        fast_dil = False
+
+    arrayimage = erode_3D_dt(arrayimage, amount, xy_scaling=xy_scale, z_scaling=z_scale, fast_dil = fast_dil, preserve_labels = preserve_labels)
 
     if np.max(arrayimage) == 1:
         arrayimage = arrayimage * 255
@@ -2378,7 +2271,7 @@ def skeletonize(arrayimage, directory = None):
 
     return arrayimage
 
-def label_branches(array, peaks = 0, branch_removal = 0, comp_dil = 0, max_vol = 0, down_factor = None, directory = None, nodes = None, bonus_array = None, GPU = True, arrayshape = None, compute = False, unify = False, union_val = 10, xy_scale = 1, z_scale = 1):
+def label_branches(array, peaks = 0, branch_removal = 0, comp_dil = 0, max_vol = 0, down_factor = None, directory = None, nodes = None, bonus_array = None, GPU = True, arrayshape = None, compute = False, unify = False, union_val = 10, mode = 0, xy_scale = 1, z_scale = 1):
     """
     Can be used to label branches a binary image. Labelled output will be saved to the active directory if none is specified. Note this works better on already thin filaments and may over-divide larger trunkish objects.
     :param array: (Mandatory, string or ndarray) - If string, a path to a tif file to label. Note that the ndarray alternative is for internal use mainly and will not save its output.
@@ -2419,24 +2312,25 @@ def label_branches(array, peaks = 0, branch_removal = 0, comp_dil = 0, max_vol =
         from . import branch_stitcher
         verts = dilate_3D_old(verts, 3, 3, 3,)
         verts, _ = label_objects(verts)
-        array = branch_stitcher.trace(bonus_array, array, verts, score_thresh = union_val)
+        print("Merging branches...")
+        array = branch_stitcher.trace(bonus_array, array, verts, score_thresh = union_val, xy_scale = xy_scale, z_scale = z_scale)
         verts = None
 
 
     if nodes is None:
 
-        array = smart_dilate.smart_label(array, other_array, GPU = GPU, remove_template = True)
+        array = smart_dilate.smart_label(array, other_array, GPU = GPU, remove_template = True, mode = mode)
         #distance = smart_dilate.compute_distance_transform_distance(array)
         #array = water(-distance, other_array, mask=array) #Tried out skimage watershed as shown and found it did not label branches as well as smart_label (esp combined combined with post-processing label splitting if needed)
 
     else:
         if down_factor is not None:
-            array = smart_dilate.smart_label(bonus_array, array, GPU = GPU, predownsample = down_factor, remove_template = True)
+            array = smart_dilate.smart_label(bonus_array, array, GPU = GPU, predownsample = down_factor, remove_template = True, mode = mode)
             #distance = smart_dilate.compute_distance_transform_distance(bonus_array)
             #array = water(-distance, array, mask=bonus_array)
         else:
 
-            array = smart_dilate.smart_label(bonus_array, array, GPU = GPU, remove_template = True)
+            array = smart_dilate.smart_label(bonus_array, array, GPU = GPU, remove_template = True, mode = mode)
             #distance = smart_dilate.compute_distance_transform_distance(bonus_array)
             #array = water(-distance, array, mask=bonus_array)
 
@@ -2628,19 +2522,18 @@ def label_vertices(array, peaks = 0, branch_removal = 0, comp_dil = 0, max_vol =
     if peaks > 0:
         image_copy = filter_size_by_peaks(image_copy, peaks)
         if comp_dil > 0:
-            image_copy = dilate(image_copy, comp_dil, fast_dil = fastdil)
+            image_copy = dilate_3D_dt(image_copy, comp_dil, fast_dil = fastdil)
 
         labeled_image, num_labels = label_objects(image_copy)
     elif max_vol > 0:
         image_copy = filter_size_by_vol(image_copy, max_vol)
         if comp_dil > 0:
-            image_copy = dilate(image_copy, comp_dil, fast_dil = fastdil)
+            image_copy = dilate_3D_dt(image_copy, comp_dil, fast_dil = fastdil)
 
         labeled_image, num_labels = label_objects(image_copy)
     else:
-
         if comp_dil > 0:
-            image_copy = dilate(image_copy, comp_dil, fast_dil = fastdil)
+            image_copy = dilate_3D_dt(image_copy, comp_dil, fast_dil = fastdil)
         labeled_image, num_labels = label_objects(image_copy)
 
     #if down_factor > 0:
@@ -2775,7 +2668,7 @@ def gray_watershed(image, min_distance = 1, threshold_abs = None):
     return image
 
 
-def watershed(image, directory = None, proportion = 0.1, GPU = True, smallest_rad = None, predownsample = None, predownsample2 = None):
+def watershed(image, directory = None, proportion = 0.1, GPU = True, smallest_rad = None, fast_dil = False, predownsample = None, predownsample2 = None):
     """
     Can be used to 3D watershed a binary image. Watershedding attempts to use an algorithm to split touching objects into seperate labelled components. Labelled output will be saved to the active directory if none is specified.
     This watershed algo essentially uses the distance transform to decide where peaks are and then after thresholding out the non-peaks, uses the peaks as labelling kernels for a smart label. It runs semi slow without GPU accel since it requires two dts to be computed.
@@ -2838,7 +2731,7 @@ def watershed(image, directory = None, proportion = 0.1, GPU = True, smallest_ra
         if GPU:
             print("GPU dt failed or did not detect GPU (cupy must be installed with a CUDA toolkit setup...). Computing CPU distance transform instead.")
             print(f"Error message: {str(e)}")
-        distance = smart_dilate.compute_distance_transform_distance(image)
+        distance = smart_dilate.compute_distance_transform_distance(image, fast_dil = fast_dil)
 
 
     distance = threshold(distance, proportion, custom_rad = smallest_rad)
@@ -4189,10 +4082,7 @@ class Network_3D:
         if search is not None and hasattr(self, '_nodes') and self._nodes is not None and self._search_region is None:
             search_region = binarize(self._nodes)
             dilate_xy, dilate_z = dilation_length_to_pixels(self._xy_scale, self._z_scale, search, search)
-            if fast_dil:
-                search_region = dilate_3D(search_region, dilate_xy, dilate_xy, dilate_z)
-            else:
-                search_region = dilate_3D_dt(search_region, diledge, self._xy_scale, self._z_scale)
+            search_region = dilate_3D_dt(search_region, diledge, self._xy_scale, self._z_scale, fast_dil = fast_dil)
         else:
             search_region = binarize(self._search_region)
 
@@ -4210,10 +4100,8 @@ class Network_3D:
 
             if dilate_xy <= 3 and dilate_z <= 3:
                 outer_edges = dilate_3D_old(outer_edges, dilate_xy, dilate_xy, dilate_z)
-            elif fast_dil:
-                outer_edges = dilate_3D(outer_edges, dilate_xy, dilate_xy, dilate_z)
             else:
-                outer_edges = dilate_3D_dt(outer_edges, diledge, self._xy_scale, self._z_scale)
+                outer_edges = dilate_3D_dt(outer_edges, diledge, self._xy_scale, self._z_scale, fast_dil = fast_dil)
         else:
             outer_edges = dilate_3D_old(outer_edges)
 
@@ -4538,9 +4426,6 @@ class Network_3D:
 
         self._nodes = nodes
         del nodes
-
-        if self._nodes.shape[0] == 1:
-            fast_dil = True #Set this to true because the 2D algo always uses the distance transform and doesnt need this special ver
 
         if label_nodes:
             self._nodes, num_nodes = label_objects(self._nodes)
@@ -4937,7 +4822,17 @@ class Network_3D:
         nodeb = []
         edgec = []
 
-        trunk = stats.mode(edgesc)
+        from collections import Counter
+        counts = Counter(edgesc)
+        if 0 not in edgesc:
+            trunk = stats.mode(edgesc)
+        else:
+            try:
+                sorted_edges = counts.most_common()
+                trunk = sorted_edges[1][0]
+            except:
+                return
+
         addtrunk = max(set(nodesa + nodesb)) + 1
 
         for i in range(len(nodesa)):
@@ -4955,7 +4850,10 @@ class Network_3D:
 
         self.network_lists = [nodea, nodeb, edgec]
 
-        self._node_centroids[addtrunk] = self._edge_centroids[trunk]
+        try:
+            self._node_centroids[addtrunk] = self._edge_centroids[trunk]
+        except:
+            pass
 
         if self._node_identities is None:
             self._node_identities = {}
@@ -5193,7 +5091,7 @@ class Network_3D:
 
     #Methods related to visualizing the network using networkX and matplotlib
 
-    def show_network(self, geometric = False, directory = None):
+    def show_network(self, geometric = False, directory = None, show_labels = True):
         """
         Shows the network property as a simplistic graph, and some basic stats. Does not support viewing edge weights.
         :param geoemtric: (Optional - Val = False; boolean). If False, node placement in the graph will be random. If True, nodes
@@ -5204,19 +5102,19 @@ class Network_3D:
 
         if not geometric:
 
-            simple_network.show_simple_network(self._network_lists, directory = directory)
+            simple_network.show_simple_network(self._network_lists, directory = directory, show_labels = show_labels)
 
         else:
-            simple_network.show_simple_network(self._network_lists, geometric = True, geo_info = [self._node_centroids, self._nodes.shape], directory = directory)
+            simple_network.show_simple_network(self._network_lists, geometric = True, geo_info = [self._node_centroids, self._nodes.shape], directory = directory, show_labels = show_labels)
 
-    def show_communities_flex(self, geometric = False, directory = None, weighted = True, partition = False, style = 0):
-
-
-        self._communities, self.normalized_weights = modularity.show_communities_flex(self._network, self._network_lists, self.normalized_weights, geo_info = [self._node_centroids, self._nodes.shape], geometric = geometric, directory = directory, weighted = weighted, partition = partition, style = style)
+    def show_communities_flex(self, geometric = False, directory = None, weighted = True, partition = False, style = 0, show_labels = True):
 
 
+        self._communities, self.normalized_weights = modularity.show_communities_flex(self._network, self._network_lists, self.normalized_weights, geo_info = [self._node_centroids, self._nodes.shape], geometric = geometric, directory = directory, weighted = weighted, partition = partition, style = style, show_labels = show_labels)
 
-    def show_identity_network(self, geometric = False, directory = None):
+
+
+    def show_identity_network(self, geometric = False, directory = None, show_labels = True):
         """
         Shows the network property, and some basic stats, as a graph where nodes are labelled by colors representing the identity of the node as detailed in the node_identities property. Does not support viewing edge weights.
         :param geoemtric: (Optional - Val = False; boolean). If False, node placement in the graph will be random. If True, nodes
@@ -5225,9 +5123,9 @@ class Network_3D:
         :param directory: (Optional – Val = None; string). An optional string path to a directory to save the network plot image to. If not set, nothing will be saved.
         """
         if not geometric:
-            simple_network.show_identity_network(self._network_lists, self._node_identities, geometric = False, directory = directory)
+            simple_network.show_identity_network(self._network_lists, self._node_identities, geometric = False, directory = directory, show_labels = show_labels)
         else:
-            simple_network.show_identity_network(self._network_lists, self._node_identities, geometric = True, geo_info = [self._node_centroids, self._nodes.shape], directory = directory)
+            simple_network.show_identity_network(self._network_lists, self._node_identities, geometric = True, geo_info = [self._node_centroids, self._nodes.shape], directory = directory, show_labels = show_labels)
 
 
 

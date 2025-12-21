@@ -3,6 +3,7 @@ import networkx as nx
 from . import nettracer as n3d
 from scipy.ndimage import distance_transform_edt, gaussian_filter, binary_fill_holes
 from scipy.spatial import cKDTree
+from . import smart_dilate as sdl
 from skimage.morphology import remove_small_objects, skeletonize
 import warnings
 warnings.filterwarnings('ignore')
@@ -14,9 +15,13 @@ class VesselDenoiser:
     """
     
     def __init__(self, 
-                 score_thresh = 2):
+                 score_thresh = 2,
+                 xy_scale = 1,
+                 z_scale = 1):
 
         self.score_thresh = score_thresh
+        self.xy_scale = xy_scale
+        self.z_scale = z_scale
 
 
     def select_kernel_points_topology(self, data, skeleton):
@@ -336,7 +341,7 @@ class VesselDenoiser:
         # Compute distance transform
         if verbose:
             print("Computing distance transform...")
-        distance_map = distance_transform_edt(data)
+        distance_map = sdl.compute_distance_transform_distance(data, fast_dil = True)
         
         # Extract endpoints
         if verbose:
@@ -390,14 +395,14 @@ class VesselDenoiser:
         return label_dict
 
 
-def trace(data, labeled_skeleton, verts, score_thresh=10, verbose=False):
+def trace(data, labeled_skeleton, verts, score_thresh=10, xy_scale = 1, z_scale = 1, verbose=False):
     """
     Trace and unify skeleton labels using vertex-based endpoint grouping
     """
     skeleton = n3d.binarize(labeled_skeleton)
     
     # Create denoiser
-    denoiser = VesselDenoiser(score_thresh=score_thresh)
+    denoiser = VesselDenoiser(score_thresh=score_thresh, xy_scale = xy_scale, z_scale = z_scale)
     
     # Run label unification
     label_dict = denoiser.denoise(data, skeleton, labeled_skeleton, verts, verbose=verbose)

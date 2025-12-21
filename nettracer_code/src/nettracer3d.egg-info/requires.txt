@@ -11,7 +11,6 @@ tifffile
 qtrangeslider
 PyQt6
 scikit-learn
-nibabel
 setuptools
 umap-learn
 
@@ -24,12 +23,20 @@ cupy-cuda12x
 [all]
 cellpose[GUI]
 napari
+edt
 
 [cellpose]
 cellpose[GUI]
 
 [cupy]
 cupy
+
+[edt]
+edt
+
+[rec]
+napari
+edt
 
 [viz]
 napari

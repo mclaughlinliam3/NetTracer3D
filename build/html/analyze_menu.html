@@ -6,14 +6,14 @@
   <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
 
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>All Analyze Menu Options &mdash; NetTracer3D 1.2.6 documentation</title>
+  <title>All Analyze Menu Options &mdash; NetTracer3D 1.2.8 documentation</title>
       <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=b86133f3" />
       <link rel="stylesheet" type="text/css" href="_static/css/theme.css?v=e59714d7" />
 
   
       <script src="_static/jquery.js?v=5d32c60e"></script>
       <script src="_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
-      <script src="_static/documentation_options.js?v=010db75e"></script>
+      <script src="_static/documentation_options.js?v=4d6f9085"></script>
       <script src="_static/doctools.js?v=9bcbadda"></script>
       <script src="_static/sphinx_highlight.js?v=dc90522c"></script>
     <script src="_static/js/theme.js"></script>
@@ -222,6 +222,7 @@
 </dd>
 </dl>
 </li>
+<li><p>Select ‘Show Node Numerical IDs’ to have each node be labelled on the graph by their internal label value from their image. This is useful for finding specific nodes but may clutter visualization.</p></li>
 <li><dl class="simple">
 <dt>Execution Mode (Menu Includes the following options):</dt><dd><ol class="arabic simple">
 <li><dl class="simple">
@@ -246,14 +247,6 @@
 </dl>
 </li>
 </ol>
-</dd>
-</dl>
-</li>
-<li><dl class="simple">
-<dt>Output directory</dt><dd><ul class="simple">
-<li><p>If a string path is included to a directory, the resulting graph will be autosaved there.</p></li>
-<li><p>Note these graphs can be saved in the matplotlib window anyway.</p></li>
-</ul>
 </dd>
 </dl>
 </li>
@@ -806,14 +799,6 @@
 </dd>
 </dl>
 </li>
-<li><dl class="simple">
-<dt>Output Directory</dt><dd><ul class="simple">
-<li><p>If a string path is included to a directory, the resulting graph will be autosaved there.</p></li>
-<li><p>Note these graphs can be saved in the matplotlib window anyway.</p></li>
-</ul>
-</dd>
-</dl>
-</li>
 </ol>
 <ul class="simple">
 <li><p>Press ‘Get Radial Distribution’ to open a new matplotlib window showing the graph, and also place the obtained data in as a new table in the tabulated data widget.</p></li>
@@ -889,13 +874,6 @@
 </dl>
 </li>
 <li><dl class="simple">
-<dt>Output Directory</dt><dd><ul class="simple">
-<li><p>If a string path is included to a directory, the resulting outputs will be autosaved there.</p></li>
-</ul>
-</dd>
-</dl>
-</li>
-<li><dl class="simple">
 <dt>Mode (Menu Includes the following options):</dt><dd><ol class="arabic simple">
 <li><dl class="simple">
 <dt>From Network - Quantifies Neighbors Based on Adjacent Network Connections</dt><dd><ul class="simple">
@@ -918,6 +896,14 @@
 <li><dl class="simple">
 <dt>Search Radius (if using Mode 2)</dt><dd><ul class="simple">
 <li><p>The distance that nodes will search to characterize their neighborhoods. Option one currently will always just search for immediate network neighbors.</p></li>
+</ul>
+</dd>
+</dl>
+</li>
+<li><dl class="simple">
+<dt>Use Fast Dilation… (Only applies if using mode 2 and have entered a value for param 3)</dt><dd><ul class="simple">
+<li><p>If enabled, the program will attempt to use the edt module to solve the dilation in parallel. If edt is not present or this fails somehow, it will fall back to the scipy method.</p></li>
+<li><p>If disabled, the program will use the scipy distance_transform_edt method to solve the dilation, which may be slower.</p></li>
 </ul>
 </dd>
 </dl>

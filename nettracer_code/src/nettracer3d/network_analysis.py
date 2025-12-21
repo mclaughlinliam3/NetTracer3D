@@ -601,42 +601,35 @@ def _find_centroids_old(nodes, node_list = None, down_factor = None):
 
 
 def _find_centroids(nodes, node_list=None, down_factor=None):
-    """Internal use version to get centroids without saving"""
+    """Parallel version using sum accumulation instead of storing coordinates"""
     
-    
-    def compute_indices_in_chunk(chunk, y_offset):
-        """
-        Alternative approach using np.where for even better performance on sparse arrays.
-        """
-        indices_dict_chunk = {}
+    def compute_sums_in_chunk(chunk, y_offset):
+        """Accumulate sums and counts - much less memory than storing coords"""
+        sums_dict = {}
+        counts_dict = {}
         
-        # Get all coordinates where chunk is non-zero
         z_coords, y_coords, x_coords = np.where(chunk != 0)
         
         if len(z_coords) == 0:
-            return indices_dict_chunk
+            return sums_dict, counts_dict
         
-        # Adjust Y coordinates
         y_coords_adjusted = y_coords + y_offset
-        
-        # Get labels at these coordinates
         labels = chunk[z_coords, y_coords, x_coords]
-        
-        # Group by unique labels
         unique_labels = np.unique(labels)
         
         for label in unique_labels:
-            if label == 0:  # Skip background
+            if label == 0:
                 continue
             mask = (labels == label)
-            # Stack coordinates into the expected format [z, y, x]
-            indices_dict_chunk[label] = np.column_stack((
-                z_coords[mask], 
-                y_coords_adjusted[mask], 
-                x_coords[mask]
-            ))
+            # Just store sums and counts - O(1) memory per label
+            sums_dict[label] = np.array([
+                z_coords[mask].sum(dtype=np.float64),
+                y_coords_adjusted[mask].sum(dtype=np.float64),
+                x_coords[mask].sum(dtype=np.float64)
+            ])
+            counts_dict[label] = mask.sum()
         
-        return indices_dict_chunk
+        return sums_dict, counts_dict
     
     def chunk_3d_array(array, num_chunks):
         """Split the 3D array into smaller chunks along the y-axis."""
@@ -644,49 +637,44 @@ def _find_centroids(nodes, node_list=None, down_factor=None):
         return y_slices
     
     # Handle input processing
-    if isinstance(nodes, str):  # Open into numpy array if filepath
+    if isinstance(nodes, str):
         nodes = tifffile.imread(nodes)
-        if len(np.unique(nodes)) == 2:  # Label if binary
+        if len(np.unique(nodes)) == 2:
             structure_3d = np.ones((3, 3, 3), dtype=int)
             nodes, num_nodes = ndimage.label(nodes)
     
     if down_factor is not None:
         nodes = downsample(nodes, down_factor)
-    else:
-        down_factor = 1
     
-    indices_dict = {}
+    sums_total = {}
+    counts_total = {}
     num_cpus = mp.cpu_count()
     
-    # Chunk the 3D array along the y-axis
     node_chunks = chunk_3d_array(nodes, num_cpus)
-    
-    # Calculate Y offset for each chunk
     chunk_sizes = [chunk.shape[1] for chunk in node_chunks]
     y_offsets = np.cumsum([0] + chunk_sizes[:-1])
     
-    # Parallel computation using the optimized single-pass approach
     with ThreadPoolExecutor(max_workers=num_cpus) as executor:
-        futures = {executor.submit(compute_indices_in_chunk, chunk, y_offset): chunk_id
-                  for chunk_id, (chunk, y_offset) in enumerate(zip(node_chunks, y_offsets))}
+        futures = [executor.submit(compute_sums_in_chunk, chunk, y_offset)
+                  for chunk, y_offset in zip(node_chunks, y_offsets)]
         
         for future in as_completed(futures):
-            indices_chunk = future.result()
-            # Merge indices for each label
-            for label, indices in indices_chunk.items():
-                if label in indices_dict:
-                    indices_dict[label] = np.vstack((indices_dict[label], indices))
+            sums_chunk, counts_chunk = future.result()
+            
+            # Merge is now just addition - O(1) instead of vstack
+            for label in sums_chunk:
+                if label in sums_total:
+                    sums_total[label] += sums_chunk[label]
+                    counts_total[label] += counts_chunk[label]
                 else:
-                    indices_dict[label] = indices
+                    sums_total[label] = sums_chunk[label]
+                    counts_total[label] = counts_chunk[label]
     
-    # Compute centroids from collected indices
-    centroid_dict = {}
-    for label, indices in indices_dict.items():
-        centroid = np.round(np.mean(indices, axis=0)).astype(int)
-        centroid_dict[label] = centroid
-    
-    # Remove background label if it exists
-    centroid_dict.pop(0, None)
+    # Compute centroids from accumulated sums
+    centroid_dict = {
+        label: np.round(sums_total[label] / counts_total[label]).astype(int)
+        for label in sums_total if label != 0
+    }
     
     return centroid_dict
 

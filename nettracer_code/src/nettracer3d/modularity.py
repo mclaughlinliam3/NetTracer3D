@@ -103,7 +103,7 @@ def read_excel_to_lists(file_path, sheet_name=0):
 
 
 
-def show_communities_flex(G, master_list, normalized_weights, geo_info=None, geometric=False, directory=None, weighted=True, partition=None, style=0):
+def show_communities_flex(G, master_list, normalized_weights, geo_info=None, geometric=False, directory=None, weighted=True, partition=None, style=0, show_labels = True):
 
     if normalized_weights is None:
         G, edge_weights = network_analysis.weighted_network(master_list)
@@ -179,7 +179,8 @@ def show_communities_flex(G, master_list, normalized_weights, geo_info=None, geo
                 normalized_weight = G[edge[0]][edge[1]]['weight']
                 nx.draw_networkx_edges(G, pos, edgelist=[edge], width=5 * normalized_weight, edge_color='black')
 
-            nx.draw_networkx_labels(G, pos)
+            if show_labels:
+                nx.draw_networkx_labels(G, pos)
 
         else:
             pos = nx.spring_layout(G)
@@ -195,20 +196,28 @@ def show_communities_flex(G, master_list, normalized_weights, geo_info=None, geo
                 normalized_weight = G[edge[0]][edge[1]]['weight']
                 nx.draw_networkx_edges(G, pos, edgelist=[edge], width=5 * normalized_weight, edge_color='black')
 
-            nx.draw_networkx_labels(G, pos)
+            if show_labels:
+                nx.draw_networkx_labels(G, pos)
 
     else:
         # Create node color list based on partition and the same color mapping
-        node_colors = [colors_matplotlib[partition[node]] for node in G.nodes()]
+        node_colors = []
+        for node in G.nodes():
+            try:
+                node_colors.append(colors_matplotlib[partition[node]])
+            except:
+                node_colors.append((1, 1, 1))
+
+        #node_colors = [colors_matplotlib[partition[node]] for node in G.nodes()]
 
         if geometric:
             pos, z_pos = simple_network.geometric_positions(geo_info[0], geo_info[1])
             node_sizes_list = [z_pos[node] for node in G.nodes()]
-            nx.draw(G, pos, with_labels=True, font_color='black', font_weight='bold', 
+            nx.draw(G, pos, with_labels=show_labels, font_color='black', font_weight='bold', 
                    node_size=node_sizes_list, node_color=node_colors, alpha=0.8, font_size=12)
         else:
             pos = nx.spring_layout(G)
-            nx.draw(G, pos, with_labels=True, font_color='black', font_weight='bold', 
+            nx.draw(G, pos, with_labels=show_labels, font_color='black', font_weight='bold', 
                    node_size=100, node_color=node_colors, alpha=0.8)
 
     plt.axis('off')

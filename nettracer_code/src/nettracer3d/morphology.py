@@ -337,7 +337,7 @@ def search_neighbor_ids(nodes, targets, id_dict, neighborhood_dict, totals, sear
     targets = np.isin(nodes, targets)
     targets = nettracer.binarize(targets)
         
-    dilated = nettracer.dilate(targets, search, xy_scale = xy_scale, z_scale = z_scale, fast_dil = fastdil)
+    dilated = nettracer.dilate_3D_dt(targets, search, xy_scaling = xy_scale, z_scaling = z_scale, fast_dil = fastdil)
     dilated = dilated - targets #technically we dont need the cores
     search_vol = np.count_nonzero(dilated) * xy_scale * xy_scale * z_scale #need this for density
     targets = dilated != 0
