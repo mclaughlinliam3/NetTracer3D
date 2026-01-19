@@ -29,14 +29,15 @@ The NetTracer3D interface consists of:
 * (Left) Canvas/Main Visualization Area: The image viewer window where the 3D stack is displayed as 2D slices.
 * (Bottom) Control Panel: Widgets for quick interaction with the image viewer window.
 * (Top Right) Tabulated Data: Where data tables from analysis will be placed.
-* (Bottom Right) Network Data: Where paired nodes in your network will be organized.
+* (Bottom Right) Network Data: The visualization of your network graph, any subselections, and tables for both.
 * (Top) Menu Bar: Options to load/export data and run analysis.
     * There are a few buttons in the top right to note:
     1. The button that says '⤴' will eject the main canvas window, and the control panel, into a seperate window, in case the user wants them to be larger without the tables getting in the way.
     2. The button with the camera will save a 2D tiff of whatever is being displayed in the canvas.
     3. The button with the file will prompt the user to open a .xlsx/.CSV spreadsheet, to be loaded into the top right data tables. Some tables can be used to interact with the nodes, so being able to reload them may be desirable.
+    4. The menu bar also displays some dynamic information. Namely, your active session on the left if you are working out of a specific directory. On the right you can find information about the xy and z resolutions, the current slice, and if the scalebar is toggled on, the current mouse coordinates.
 
-In addition, since it will be usually run out of the command window, be sure to check your command window for printed updates about what NetTracer3D is actually doing.
+In addition, since it will be usually run out of the command window, be sure to check your command window for printed updates about what NetTracer3D is actually doing. This does not apply to the compiled version.
 
 The Control Panel
 --------------
@@ -49,9 +50,10 @@ Before we start with an example, we'll go over the control panel on the bottom. 
 
 #. The Active Image widget
     * Clicking on the carrot will allow you to select which image is 'Active'. Many processing/analysis functions will by default run on the image that is 'Active'. Furthermore, when clicking or drawing in the Image Viewer Window, the 'Active' image is the one that will be referenced.
-#. The scale bar widget: Click this to add a scale bar to the canvas display. Click it again to remove the scale bar.
+#. The scale bar widget: Click this to add a scale bar to the canvas display. This is scaled based on your xy resolution to represent true distance. Click again to add a tiled grid that is not scaled so it represents voxel positions. Click again to remove the scalebar but retain the grid. Click once more to remove the grid and go back to default.
 #. The home widget: simply resets the view to default, in case you get stuck in a weird zoom state. (Shortcut - 'Shift + Right Click' while in zoom mode.)
 #. The zoom widget (magnifying glass - Shortcut Z)
+    * In any of the modes you can zoom with the mouse wheel, but there's also a dedicated zoom widget for laptops mainly.
     * Press z or click the magnifying glass widget to enter the zoom mode. Clicking the Image Viewer Window in zoom mode will cause you to zoom in. Right clicking will cause you to zoom out. Dragging in zoom mode will zoom in on a specific area.
 #. The pan widget (hand - Shortcut middle mouse)
     * Press middle mouse button or click the hand widget to enter pan mode. Use the mouse to drag along the Image Viewer Window while in pan mode to move around the image.
@@ -63,7 +65,7 @@ Before we start with an example, we'll go over the control panel on the bottom. 
             1. Left click will erase any positive data and write 0 directly into the image.
             2. Ctrl + Mouse Wheel will enlarge the draw/erase area.
             3. Press F to swap to a fill can. Clicking with the fill can will write the val 255 into the entirety of any background (0 value) areas in your image that are connected to the clicked point. While in fill can mode only, ctrl+z will undo the most recent action.
-            4. Press D in either pen or fill can mode to enable the 3D version of these tools. The 3D pen will draw along several image stacks at once. The number of stacks above you are drawing on is indicated by the number above the 3D pen (i.e. a value of 5 will write into the current stack, 2 above, and 2 below). Use the mousewheel to enlarge or decrease this number. The 3D fill can will fill the entirety of a 3D hole (which can be the entire image background if not careful). Like the 2D fill can, use ctrl+z while still in the fill can mode to undo the last fill-can action.
+            4. Press D in either pen or fill can mode to enable the 3D version of these tools. The 3D pen will draw along several image stacks at once. The number of stacks above you are drawing on is indicated by the number above the 3D pen (i.e. a value of 5 will write into the current stack, 2 above, and 2 below). Use the mousewheel to enlarge or decrease this number. The 3D fill can will fill the entirety of a 3D void (essentially fills any continous holes in 3D). Like the 2D fill can, use ctrl+z while still in the fill can mode to undo the last fill-can action.
 #. The threshold/segment widget (pencil)
     * Click the pencil widget to open the menu to either Threshold or use Machine-Learning segmentation. Please see the Threshold/Segment guide for more information.
 #. The channel widgets (Nodes, Edges, Overlay1, Overlay2)
@@ -75,7 +77,7 @@ Before we start with an example, we'll go over the control panel on the bottom. 
 Loading an Image
 --------------
 
-To load an image, select File -> Load. You will see the following options:
+To load an image, select File -> Load. (Note you can also drag images into the active image to load from the file explorer). You will see the following options from the load menu:
 
 1. Load Network3D Object
 2. Load Nodes
@@ -88,7 +90,7 @@ To load an image, select File -> Load. You will see the following options:
 
 Options 2-5 correspond the the four image viewing channels that are supported in NetTracer3D.
 Whenever you are beginning with a new image that you would like to segment, load it into the nodes channel with 'Load Nodes'.
-This will prompt you to browse for an image in the .tif/.tiff (for microscopic data), .nii (for medical images), or .jpg/.png file formats. 
+This will prompt you to browse for an image in the .tif/.tiff (for microscopic data), .nii (if nibabel is installed in your package), or .jpg/.jpeg/.png file formats. 
 
 **Note that if your image has real value scaling (ie microns per pixel), those will not automatically populate and should be assigned in 'Image -> Properties' before any processing occurs.**
 
@@ -134,7 +136,6 @@ In such cases, clicking on an object in the window will select all elements in t
 
 * To zoom in, select the magnifying glass (or press z) and left click. Right clicking will zoom back out. Click and drag with the magnifying glass to zoom in on a specific region.
 * To pan, select the hand (or middle mouse) and drag around in the image viewer window.
-   * Note that entering pan mode will lag in images with very large 2D planes.
 
 .. _segmenting:
 
@@ -272,18 +273,52 @@ This yields the following network:
 
 The nodes/edges images are tweaked based on how the network-search param used them (to ensure consistency with the output). In Overlay1, we have generated a binary overlay displaying the direct network connections (white lines). In the bottom right table, we can see the IDs of the linked nodes in the first two columns, and the ID of each pair's associated edge in the third column.
 In this case, the majority of nodes are joined through a large hub-edge in the center, while nodes along the sides have less direct connections.
-To elucidate the connectivity here, we can convert this central edge trunk into a single node using 'Process -> Modify Network' as shown:
+
+Dealing With Trunks
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+* Often times with biological images, you might see nodes in connectivity networks merging in central trunks (since in biology all nerves and blood vessels eventually go back to a central structure).
+* Trunks may vastly overrepresent connectivity in these sorts of networks - you will have to appraise whether this is true for your particular dataset.
+* You may not actually encounter this issue but here I am bringing up a few ways to smartly handle the trunk.
+
+**Converting All Edges to Nodes**
+
+* One of the easiest and most robust way to handle trunks is to just convert all the edges in your networks to nodes. This can be done when first computing these networks from the previously shown menu if you select the Edge -> Node option. Or you can do it in post using 'Process -> Modify Network' as shown:
+
+.. image:: _static/modifying0.png
+   :width: 800px
+   :alt: Modifying Network 0
+
+* This will give a network that looks like this. All the edges have become nodes but the new 'edge' nodes retain an 'edge' identity in the node_identities property. 
+
+.. image:: _static/edge_connectivity_network.png
+   :width: 800px
+   :alt: Edge Network
+*Using edges as nodes will alter the network dynamics somewhat. Namely, clustered regions will instead become oriented around hubs. Just something to keep in mind when computing stats*
+
+* Another option that can be considered is selecting the 'Auto-Trunk' button in the 'Calculate Connectivity Network' menu. This will auto-handle trunk elements by forcing them to prefer only connections among local nodes while still permitting connections between distant nodes through the trunks, provided no closer nodes are present.
+* This option will be slower if enabled but its a way to logically handle trunk elements without having to convert edges to nodes or arbitrarily convert/remove trunks.
+* Here is what this would look like in this case:
+
+.. image:: _static/auto_connectivity_network.png
+   :width: 800px
+   :alt: Auto Network
+
+
+* Another option is to convert this central edge trunk into a single node using 'Process -> Modify Network' as shown:
 
 .. image:: _static/modifying.png
    :width: 800px
    :alt: Modifying Network
 
-This results in the trunk becoming a node. The resultant image with network overlay alongside a graph of the network is shown below:
+* This results in the trunk becoming a node. The resultant image with network overlay alongside a graph of the network is shown below:
 
 .. image:: _static/final_connectivity_network.png
    :width: 800px
    :alt: Final Network
 *This network was displayed using the 'Analyze -> Show Network' option while selecting louvain community detection*
+
+* You can also remove the trunks entirely in pre- or post-, if there presence seems really unecessary, although I generally prefer the aforementioned options when doing this.
 
 If we load back in the original image with the overlay, we can see how the image information has been compressed to a set of connected integers.
 

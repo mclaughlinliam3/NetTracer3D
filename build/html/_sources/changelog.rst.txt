@@ -150,3 +150,17 @@ Version 1.2.6-1.2.8 updates
 	* Removed dependency on nibabel (which was just being used to open .nii files). .nii files can still be opened if nibabel is installed manually.
 	* Added option to not show numerical labels when displaying network graph.
 	* Bug fixes
+
+Version 1.2.9-1.3.5 updates
+	* Added new option for merging internal branches with the branch labeler.
+	* Added a few more options for alternate network strategies with the connectivity networks. The menu now has an option to auto-simplify trunks (auto reduce their connections to involve more local connectivity as an option to preserve trunk but not have it over-connect the network). It also has an option to auto-convert nodes to edges (this could previously have been done from the modify network menu, but I added an alternate way to access it here as well). Finally, now if you label your edge branches first with the branch labeler and then calculate the connectivity network, there's an option to actually incorporate the edge branches themselves into the node network, yielding a network that has your previous node objects but also shows exactly how nearby branches of edges are connecting them.
+	* Updated GUI to use pyqtgraph for image display rather than matplotlib
+	* Upgraded the network graph visualization to also use pyqtgraph rather than matplotlib - now renders much faster, is embedded in the main window, and interacts with the main image view display.
+	* Added option to view network in a concentric-shell like manner
+	* Added way to batch compute the histogram statistics
+	* Updated the slice refresh rate to be much faster
+	* Added option to do unsupervised endpoint joining of a specified distance for segmentation.
+	* Improved filament segmenter to better consider filament direction and to use state cacheing while in use to regenerate with alternate params. Updated the branch rejoining Class to consider the local direction of branches to join in a more logical manner.
+	* Fixed all the network histogram/stat/community calculations to consider weights properly, provided they are configured for multigraphs in networkx. (In short, edge weights in NetTracer3D are supposed to represent duplicate edges).
+
+

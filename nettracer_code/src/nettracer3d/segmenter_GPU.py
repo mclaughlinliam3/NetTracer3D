@@ -1295,7 +1295,6 @@ class InteractiveSegmenter:
 
         self.speed = speed
         self.cur_gpu = use_gpu
-        #self.realtimechunks = None  # dump ram
         
         self.mem_lock = mem_lock
 

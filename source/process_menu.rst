@@ -36,18 +36,32 @@ Parameter Explanations
     * Keep in mind that all edges get blown up - so if I have two edges that are ten microns apart, entering a value of 5 (microns) here will cause them to merge.
     * This method does NOT erode. It only dilates! This also enables edges to search a bit further than the Node Search parameter suggests, because they can then enter a node's search space!
     * Furthermore, there is an inherent trade off in using dilation to fill hole artifacts, since they also risk merging nearby edges that shouldn't be merged. Use at your own risk!
-    * (FYI if there are holes I do like to use this param a little bit, however a more elegant solution is to independently dilate, then erode the edges before starting this method). It's difficult to create a totally smooth segmentation throughout small, filamentous objects
-    * Note this value is 0 by default, and shouldn't be anything if your edges don't have hole artifacts, or those were already corrected (via dilating them yourself, with optional erosion).
+    * (FYI if there are holes I do like to use this param a little bit, however a more elegant solution is to run the filament tracer instead as it can fill gaps in your filaments without excessive merging).
+    * Note this value is 0 by default, and shouldn't be anything if your edges don't have hole artifacts, or those were already corrected (such as via the filament tracer).
 #. Re-Label Nodes...:
     * Makes NetTracer3D label objects in the nodes channel with a simple adjacency-labeling scheme (ie, all discrete objects in space aquire a unique number).
     * **DISABLE** this option if your nodes were already labeled elsewhere.
 #. Times to remove Edge Trunks (int):
-    * Has NetTracer3D remove the 'edge trunk' prior to network calculation. It will do this a number of times equal to the integer inputted here. So a value of 1 will remove the fattest trunk, then 2 will also remove the second fattest, etc.
+    * Parameters 6-9 mainly represent different ways to handle 'trunks' in your network. Trunks are edges that can be observed to connect to an excessive number of nodes, and will be common in anatomical structures, where all nerves and vessels increasingly merge to an originating central location. In your image, having every node connect through the trunk into a giant glob may not be desirable nor statistically valid. As such, here are some ways to get around that:
+    * This first trunk handler has NetTracer3D remove the 'edge trunk' prior to network calculation. It will do this a number of times equal to the integer inputted here. So a value of 1 will remove the fattest trunk, then 2 will also remove the second fattest, etc.
     * Note: This occurs after NetTracer3D has discretized (split up) the edges. It functions similarly but NOT the same as removing the trunk from the network in-post. It will instead remove the highest-volume (literally, the largest) edge.
     * Meanwhile, removing the trunk from the network in post takes out the most interconnected edge. Many times this will have the same result, but not always. Just make sure you are using the version of trunk removal that you want.
-#. Use Inner Edges:
-    * If enabled, edges that connect nodes that exist soley within said nodes' search regions will be used to make connections.
-    * Note that there is not really a great reason to disable this, but it could be because you only want more distant connections to be considered.
+#. Auto-Simplify Trunk Elements:
+    * Simply removing the trunk can be a good way to ignore it and instead evaluate more legitimate local connections, but at the same time, you may still want to consider local connectivity through the trunk, just not let it connect everything from one end of the image to the other.
+    * Enabling this option will essentially force the trunk to simplify itself to prefer local connections over longer ones, but will still permit distant connections if there aren't other closer nodes available along the path.
+    * It does this by essentially re-computing this entirely 'Calculate Connectivity Network' but with the search regions for the nodes totally maxed out. This will cause all the nodes to systematically partition the trunk based on proximity. However, connections that are made in this new enlarged search that do not exist in your original search distance will then be dropped, ultimately returning a result that is valid for your desired search regions but with a simplified trunk.
+    * Note that since this requires this recomputation, it will at the very minimum double the processing time of this algorithm. Furthemore, the fast-search will not be used for this maxed out search computation (aka voronoi diagram). This is because the fast search strategy of parallel-distance transform into flood labeling is both less accurate and slow at massive dilations. So this has to be computed with the single-core bound scipy.ndimage.distance_transform_edt to get a perfect voronoi and bypass flood labeling.
+#. Use pre-labeled edges...:
+    * This is a niche parameter to enable. Essentially, if you are interested in how your nodes are interacting with specific branches in your edges, you will first have to label your branches with the 'Process -> Generate -> Label Branches' function.
+    * Next, load your nodes and labeled branches and enable this feature. Then, when the network is calculated, rather than connecting the nodes directly, your labeled edges will become nodes as well, and your original nodes will create a network between themselves and all the labeled branches.
+    * The original 'nodes' and new 'edge branch nodes' receive distinct identities so they are still differentiable.
+    * The output tends to be a very dense network in which your original node objects may not be that statistically relevant. But it can be used to evaluate how your nodes interact with discrete branch elements.
+#. Edge -> Node:
+    * The final trunk-handling parameter is probably the most robust one and the one I'd most often enable if I cared about handling the trunks between different images in a statistically-consistent manner.
+    * If you enable this, rather than connecting all your nodes directly, your edges will also be treated as nodes. Trunks will become hub nodes rather than dense webs of connection.
+    * The reason I'd prefer this over just removing the trunk is it's not biased over what a trunk actually is.
+    * However the one downside is it may alter the dynamics of the network. Essentially, the network is forced to be less clustered as groups of nodes that you may consider connected (and thus would bear a high degree) instead all just connect to the edge that is connecting them (each getting a degree + 1). This is just something you should keep in mind when appraising statistics about the network.
+    * You can also run this option in post from the modify network menu.
 #. Downsample for Centroids (int)
     * Temporarily downsamples the image on the step to calculate centroids to speed that up (it can be somewhat slow on overly large images). The downsample will be performed in all three dimensions corresponding to the factor entered here.
     * Note that centroids calculated on downsampled images have to be approximated to the upsampled version, so they may not correspond *perfectly*, although they will generally be close enough.
@@ -262,6 +276,9 @@ Parameter Explanations
     * This method is the reverse of the above, eroding before dilating.
     * It is useful for eliminating noise, smoothing borders of objects, and severing small connections between objects that may not exist.
     * This is at the downside of potentially eliminating true small objects and disfiguring the image if used with very large params.
+#. Connect Endpoints
+    * Will prompt you to provide a distance. Next, all endpoints (as appraised by 3D skeletonization) in your segmentation within the specified distance will connect to each other. The connection will be a tapered cylinder of the same radii as the branches it merges.
+    * This isn't the most useful method compared to 'Trace Filaments' as it will just merge any endpoints within in its distance, but its conceptually simpler and may be sufficient for certain uses.
 #. Fill Holes
     * This just calls the fill holes method. Holes are gaps completely enveloped by a mask from the perspective of the 2D stack. Please reference the fill holes algorithm section for more info.
 #. Trace Filaments
@@ -698,10 +715,6 @@ Parameter Explanations
     * The length (in pixels/voxels, not scaled) of terminal branches (or spines) to remove from the skeleton output.
     * This method only removes terminal branches. Internal branches will never be effected regardless of how large this param is.
     * Branches that are completely removed will not result in a branchpoint. Therefore, this parameter is an effective way to handle artifacts due to spiny skeletons.
-#. Attempt to Auto Correct Skeleton Looping
-    * The skeletonize algo used here has a tendency to leave fat loop artifacts in thick regions of skeletonization.
-    * Enabling this method will have NetTracer3D attempt to remove those artifacts and replace them with simple medial skeletons.
-    * I generally like to leave this enabled.
 #. Amount to expand nodes...
     * If a numbered is entered here, branchpoint nodes will be enlarged before they are labeled, meaning nearby ones will merge. This can be a way to handle an abundance of nearby nodes resulting from odd skeleton structures, although I generally feel like it can be ignored.
 #. Use fast dilation:
@@ -716,10 +729,10 @@ Parameter Explanations
 Algorithm Explanations
 ~~~~~~~~~~~~~~~~~~~~~~~
 1. 3D skeletonization is achieved via the sklearn.morphology.skeletonize() algorithm: https://scikit-image.org/docs/stable/auto_examples/edges/plot_skeleton.html
-2. If param 3 is enabled, NetTracer3D will run its 'Process -> Image -> Fill Holes' method, which will for the most part succesfully fill loop artifacts, returning them into 3D blobs. It will then just run the skeletonization again, which is often able to accurately skeletonize the blobs.
-3. If param 2 is enabled, NetTracer3D will iterate along the skeleton and identify endpoints as those regions that only have one neighbor. It will 'crawl' up from those endpoints along the skeleton a number of times equal to the inputed value (or until it hits a junction), and remove all associated positive voxels.
+2. For 3D volumes, NetTracer3D will run its 'Process -> Image -> Fill Holes' method, which will for the most part succesfully fill loop artifacts, returning them into 3D blobs. It will then just run the skeletonization again, which is often able to accurately skeletonize the blobs.
+3. If param 1 is enabled, NetTracer3D will iterate along the skeleton and identify endpoints as those regions that only have one neighbor. It will 'crawl' up from those endpoints along the skeleton a number of times equal to the inputed value (or until it hits a junction), and remove all associated positive voxels.
 4. NetTracer3D will then iterate through the entire skeleton, exploring the immediate 3x3x3 neighborhood for each voxel. Branchpoints are identified by setting the center skeleton piece of the 3x3x3 neighborhood to 0, then using the scipy.ndimage.label() method to assign distinct IDs to all non-touching elements remaining. If there are at least 3 distinct elements, this location is considered a branchpoint and added to an output array.
-5. If param 4 is enabled, the branchpoints are dilated as described, in order to merge nearby branchpoints. The resulting branchpoints are relabeled.
+5. If param 3 is enabled, the branchpoints are dilated as described, in order to merge nearby branchpoints. The resulting branchpoints are relabeled. Enabling fast dilation utilizes a parallelized (rather than single core) distance transform to calculate this.
 6. The newly labeled branchpoint array is placed in the nodes channel to be used to make branchpoint networks.
 
 .. _label branches:
@@ -737,8 +750,8 @@ Algorithm Explanations
 Parameter Explanations
 ~~~~~~~~~~~~~~~~~~~~~~~
 
-#. Auto-Correct Branches by Collapsing Internal Labels
-    * If enabled, thick branches that get wrongly split up due to the skeletonization not handling them well (Usually due to messy segmentations) get handled by an additional algorithm that attempts to fix them by merging any branches not touching the background with nearby branch regions that are touching the background.
+#. Auto-Correct Internal Branches Mode:
+    * If enabled, thick branches that get wrongly split up due to the skeletonization not handling them well (Usually due to messy segmentations) get handled by an additional algorithm that attempts to fix them by merging any branches not touching the background with nearby branch regions that are touching the background. The default setting 'Merge Internal Labels with All External Neighbors' will just cause any label that is not touching the background to combine, together with the external neighbors they touch, into a single label. This is generally the version that should be enabled. Changing this to 'Merge Internal Labels With Non-Branch-Like External Neighbors' will cause a similar merger, but will leave alone any 'external' branches touching the merging region if those branches appear to be more branch-like (this is based on the ratio of surface area bordering the merging region vs the background). This is particularly useful to set if it seems like the merge is causing obviously separate branches to merge with a label region, which is only really prevelant if param 3 is enabled. This option can also be disabled entirely.
 #. Auto-Correct Nontouching Branches...?
     * Branches essentially get labeled by splitting up their skeleton at the branchpoints and assigning the skeleton pieces labels. The larger branch regions are then labeled just based on what internal filament each nonzero voxel is closest to. What this means is that a very thick branch that has small branches next to it may inadvertently assume the wrong label in its outer regions. I should note this is generally rather uncommon but it can happen. This option is a correction that takes any labels that are not physically joined in space and relabels them. The largest instance of the non-contiguous label keeps its label, but the other pieces inherit the label of the other label they border the most (or they get a new one if they border nothing). 
 #. Reunify Main Branches

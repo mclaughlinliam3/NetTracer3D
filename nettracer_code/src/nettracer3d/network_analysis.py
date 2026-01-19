@@ -867,11 +867,7 @@ def buckets(dists, num_objects, rad_dist, directory = None):
 
     try:
 
-        if directory is None:
-            # Save the DataFrame to an Excel file
-            df.to_excel('radial_distribution.xlsx', index=False)
-            print("Radial distribution saved to radial_distribution.xlsx")
-        else:
+        if directory is not None:
             df.to_excel(f'{directory}/radial_distribution.xlsx', index=False)
             print(f"Radial distribution saved to {directory}/radial_distribution.xlsx")
     except:
@@ -923,8 +919,15 @@ def get_distance_list(centroids, network, xy_scale, z_scale):
     return distance_list
 
 
-def prune_samenode_connections(networkfile, nodeIDs):
-    """Even faster numpy-based version for very large datasets"""
+def prune_samenode_connections(networkfile, nodeIDs, target=None):
+    """Even faster numpy-based version for very large datasets
+    
+    Args:
+        networkfile: Network file path or list of node pairs
+        nodeIDs: Node identity mapping (file path or dict)
+        target: Optional string. If provided, only prunes pairs where BOTH nodes 
+                have this specific identity. If None, prunes all same-identity pairs.
+    """
     import numpy as np
     
     # Handle nodeIDs input
@@ -953,8 +956,13 @@ def prune_samenode_connections(networkfile, nodeIDs):
     idsA = np.array([data_dict.get(node) for node in nodesA])
     idsB = np.array([data_dict.get(node) for node in nodesB])
     
-    # Create boolean mask - keep where IDs are different
-    keep_mask = idsA != idsB
+    # Create boolean mask based on target parameter
+    if target is None:
+        # Original behavior: keep where IDs are different
+        keep_mask = idsA != idsB
+    else:
+        # New behavior: only remove pairs where BOTH nodes have the target identity
+        keep_mask = ~((idsA == target) & (idsB == target))
     
     # Apply filter
     filtered_nodesA = nodesA[keep_mask].tolist()

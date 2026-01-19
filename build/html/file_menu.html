@@ -6,14 +6,14 @@
   <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
 
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>All File Menu Options &mdash; NetTracer3D 1.2.8 documentation</title>
+  <title>All File Menu Options &mdash; NetTracer3D 1.3.5 documentation</title>
       <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=b86133f3" />
       <link rel="stylesheet" type="text/css" href="_static/css/theme.css?v=e59714d7" />
 
   
       <script src="_static/jquery.js?v=5d32c60e"></script>
       <script src="_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
-      <script src="_static/documentation_options.js?v=4d6f9085"></script>
+      <script src="_static/documentation_options.js?v=4720776d"></script>
       <script src="_static/doctools.js?v=9bcbadda"></script>
       <script src="_static/sphinx_highlight.js?v=dc90522c"></script>
     <script src="_static/js/theme.js"></script>
@@ -109,43 +109,43 @@
 <p>The save menu saves everything to the active directory (as referenced by the command window running the program) using generic names. This can be used for quick saving.</p>
 <ol class="arabic simple">
 <li><dl class="simple">
-<dt>‘Save Network 3D Object’</dt><dd><ul class="simple">
-<li><p>Saves all of the active core NetTracer3D properties (see <a class="reference internal" href="properties.html"><span class="doc">Properties of a Network3D Object</span></a>) into a new folder called ‘my_network’.</p></li>
+<dt>‘Save Current Session’</dt><dd><ul class="simple">
+<li><p>Saves all of the active core NetTracer3D properties (see <a class="reference internal" href="properties.html"><span class="doc">Properties of a Network3D Object</span></a>) into the current session folder, or prompts you to create one if you haven’t.</p></li>
 </ul>
 </dd>
 </dl>
 </li>
 <li><dl class="simple">
 <dt>‘Save Nodes’</dt><dd><ul class="simple">
-<li><p>Saves the nodes channel as ‘labelled_nodes.tif’</p></li>
+<li><p>Saves the nodes channel into the current session folder as ‘labelled_nodes.tif’</p></li>
 </ul>
 </dd>
 </dl>
 </li>
 <li><dl class="simple">
 <dt>‘Save Edges’</dt><dd><ul class="simple">
-<li><p>Saves the edges channel as ‘labelled_edges.tif’</p></li>
+<li><p>Saves the edges channel into the current session folder as ‘labelled_edges.tif’</p></li>
 </ul>
 </dd>
 </dl>
 </li>
 <li><dl class="simple">
 <dt>‘Save Overlay 1’</dt><dd><ul class="simple">
-<li><p>Saves Overlay 1 as ‘overlay_1.tif’</p></li>
+<li><p>Saves Overlay 1 into the current session folder as ‘overlay_1.tif’</p></li>
 </ul>
 </dd>
 </dl>
 </li>
 <li><dl class="simple">
 <dt>‘Save Overlay 2’</dt><dd><ul class="simple">
-<li><p>Saves Overlay 2 as ‘overlay_2.tif’</p></li>
+<li><p>Saves Overlay 2 into the current session folder as ‘overlay_2.tif’</p></li>
 </ul>
 </dd>
 </dl>
 </li>
 <li><dl class="simple">
 <dt>‘Save Highlight Overlay’</dt><dd><ul class="simple">
-<li><p>Saves the Highlight Overlay as ‘Highlighted_Element.tif’</p></li>
+<li><p>Saves the Highlight Overlay into the current session folder as ‘Highlighted_Element.tif’</p></li>
 </ul>
 </dd>
 </dl>
@@ -157,8 +157,8 @@
 <p>The save as menu will prompt the user to name files and select a directory while saving.</p>
 <ol class="arabic simple">
 <li><dl class="simple">
-<dt>‘Save Network 3D Object As’</dt><dd><ul class="simple">
-<li><p>Prompt the user to select a folder/directory. Entering nothing will just use the current directory that is displayed in the file search prompt. Once a directory is selected, a new window will appear prompting the user to name the output folder. Next, saves all of the active core NetTracer3D properties (see <a class="reference internal" href="properties.html"><span class="doc">Properties of a Network3D Object</span></a>) into the new folder at the specified directory/folder.</p></li>
+<dt>‘Save Current Session As’</dt><dd><ul class="simple">
+<li><p>Prompt the create a new folder/directory to dump all the properties (see <a class="reference internal" href="properties.html"><span class="doc">Properties of a Network3D Object</span></a>) of the current session. This folder can later be used to reload this session, provided you have not changed any of the filenames within.</p></li>
 </ul>
 </dd>
 </dl>
@@ -205,8 +205,8 @@
 <p>The save as menu will prompt the user to find files to load. Note that when it comes to loading images, NetTracer3D does not like loading channels of different dimensions. If the user tries to do this, they will be prompted to have the image be auto-resized to the same dimensions as previous ones that exist in the Image Viewer Window. The user is advised to accept this, but can ignore it at their own risk of crashing the program.</p>
 <ol class="arabic simple">
 <li><dl class="simple">
-<dt>‘Load Network 3D Object’</dt><dd><ul class="simple">
-<li><p>Prompts the user to find a folder containing the ‘Network 3D object’, which is basically a set of files containing saved versions of the core properties that NetTracer3D references. These folders will typically be generated by the ‘Save(As) Network3D Object’ function. When the Network3D Object is assembling, the program will look for files that have the generic names that were assigned with the ‘Save(As) Network3D Object’ function (Or the generic Save (Not Save As) options in general). Files under different names will be ignored.</p></li>
+<dt>‘Load Previous Session’</dt><dd><ul class="simple">
+<li><p>Prompts the user to find a folder containing the saved outputs from their previous session. These folders will typically be generated by the ‘Save(As) Network3D Object’ function. When the Network3D Object is assembling, the program will look for files that have the generic names that were assigned with the ‘Save(As) Network3D Object’ function (Or the generic Save (Not Save As) options in general). Files under different names will be ignored.</p></li>
 </ul>
 </dd>
 </dl>
@@ -360,7 +360,7 @@
   <hr/>
 
   <div role="contentinfo">
-    <p>&#169; Copyright 2025, Liam McLaughlin.</p>
+    <p>&#169; Copyright 2026, Liam McLaughlin.</p>
   </div>
 
   Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a

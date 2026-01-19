@@ -10,6 +10,7 @@ pandas
 tifffile
 qtrangeslider
 PyQt6
+pyqtgraph
 scikit-learn
 setuptools
 umap-learn

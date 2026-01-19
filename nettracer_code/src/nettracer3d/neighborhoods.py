@@ -10,6 +10,7 @@ from sklearn.neighbors import NearestNeighbors
 import matplotlib.colors as mcolors
 from collections import Counter
 from . import community_extractor
+import random
 
 
 import os
@@ -418,7 +419,7 @@ def visualize_cluster_composition_umap(cluster_data: Dict[int, np.ndarray],
         non_outlier_neighborhoods = {node: neighborhood for node, neighborhood in original_communities.items() if neighborhood != 0}
         
         # Get neighborhoods excluding outliers
-        unique_neighborhoods = set(non_outlier_neighborhoods.values()) if non_outlier_neighborhoods else set()
+        unique_neighborhoods = sorted(set(non_outlier_neighborhoods.values())) if non_outlier_neighborhoods else list()
         
         # Generate colors for non-outlier neighborhoods only (same as assign_community_colors)
         colors = community_extractor.generate_distinct_colors(len(unique_neighborhoods)) if unique_neighborhoods else []
@@ -427,7 +428,7 @@ def visualize_cluster_composition_umap(cluster_data: Dict[int, np.ndarray],
         # Use the ORIGINAL node counts from original_communities
         if non_outlier_neighborhoods:
             neighborhood_sizes = Counter(non_outlier_neighborhoods.values())
-            sorted_neighborhoods = sorted(unique_neighborhoods, key=lambda x: (-neighborhood_sizes[x], x))
+            sorted_neighborhoods = random.Random(42).sample(list(unique_neighborhoods), len(unique_neighborhoods))
             neighborhood_to_color = {neighborhood: colors[i] for i, neighborhood in enumerate(sorted_neighborhoods)}
         else:
             neighborhood_to_color = {}

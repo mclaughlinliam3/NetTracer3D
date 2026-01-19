@@ -7,6 +7,9 @@ Labeling Branches and Branch Networks
 Labeling Branches
 ----------------
 
+Step 1: Segmenting
+~~~~~~~~~~~~~~~~~~~~
+
 To demonstrate branch labeling, I will use a cartoon depiction of a neuron. 
 
 
@@ -14,16 +17,58 @@ To demonstrate branch labeling, I will use a cartoon depiction of a neuron.
    :width: 500px
    :alt: Neuron
 
-1. First, I load my image into the nodes channel and segment the image into a binary mask with the ML-segmenter. 
-2. Next, I save the binary mask and reload it into the edges channel. The edges channel is the staging channel for all branch labeling.
-3. Next, I run 'Process -> Generate -> Label Branches'
-4. I am prompted by a window and select 'Run Branch Label' to use the default settings. 
+* First, I load my image into the nodes channel and segment the image into a binary mask with the ML-segmenter. 
+
+
+.. image:: _static/segmented_neuron.png
+   :width: 500px
+   :alt: Segmented Neuron
+*This is a binary mask for this neuron thing that I made*
+
+Step 2: Cleaning my Segmentation
+~~~~~~~~~~~~~~~~~~~~
+
+* Next, it is important that I clean up my segmentation. This can be very relevant as the branch labeler is quite sensitive to even little branches that might exist, so you want to make sure you get rid of any noise and address any gap-like artifacts.
+* You can use 'Process -> Image -> Clean Segmentation' to get to some useful options for this. Here is the menu it shows:
+
+.. image:: _static/clean_segmentation.png
+   :width: 400px
+   :alt: clean menu
+
+* Some useful options are 'fill holes' to automatically fill any holes in the segmentation, or 'Threshold Noise' to remove small objects.
+* The one that will probably be most relevant to branched images though is 'Trace Filaments' This will filter out noise while also joining branches that look like they should be the same branch but have an artifactual gap in their segmentation.
+* I call trace filaments and get the following menu:
+
+.. image:: _static/filament_menu.png
+   :width: 600px
+   :alt: filament menu
+
+* This menu has a lot of parameters that you can read about in the 'Process -> Generate -> Trace Filaments' section. However, it is usually fine to run on default settings. I didn't do it for this neuron, but here is what it looks like for a segmentation from a real nervous dataset:
+
+.. image:: _static/nerveseg1.png
+   :width: 800px
+   :alt: nerve before
+*Above: My raw segmentation of these nerves*
+
+.. image:: _static/nerveseg2.png
+   :width: 800px
+   :alt: nerve after
+*Above: My segmentation after running trace filaments*
+
+* As you can see, trace filaments is usually a decent way to just clean up these filament segmentations without having to get into any nitty-gritty. If you want to vary the parameters, you can alter them and recompute with cached-computation to rapidly alter the output based on the input parameters.
+
+Step 3: Labeling Branches
+~~~~~~~~~~~~~~~~~~~~
+
+* Next, I save the binary mask and reload it into the edges channel. The edges channel is the staging channel for all branch labeling.
+* I run 'Process -> Generate -> Label Branches'
+* I am prompted by a window and select 'Run Branch Label' to use the default settings. 
 
 .. image:: _static/process6.png
    :width: 500px
    :alt: Default Menu Settings
 
-5. I am prompted by a second window and select 'Run Node Generation' to use its default settings (this is a sub-algorithm that the former uses).
+* I am prompted by a second window and select 'Run Node Generation' to use its default settings (this is a sub-algorithm that the former uses).
 
 With these default settings, my labeled branches look like this:
 
@@ -89,7 +134,7 @@ Branch Merging Corrections
 .. image:: _static/union.png
    :width: 500px
    :alt: Union
-*Note how branches such as the big yellow-green one at the bottom now get labeled over longer ranges. In this case, I didn't enable the 'collapse internal labels' feature, which is why the Soma has become more mosaic looking. I could have enabled it, but this additional correction would then merge a few branches with the Soma itself, so it's a trade off if you have any such non-branched structures. This correction is quite strong for branches themselves, though.*
+*Note how branches such as the big orange one at the bottom now get labeled over longer ranges. In this case, I changed the 'Auto Correct Internal Labels' option to 'Merge Internal Labels with Non-Branch-Like External Neighbors', which tends to handle these branch mergers better so that multiple new long branches don't merge with the central soma structure, although it has caused the soma to become more mosaic-looking. This correction is quite strong for branches themselves, if you are interested in longer branches.*
 
 Morphological Analysis
 ~~~~~~~~~~~~~~~~~~~~~~~~

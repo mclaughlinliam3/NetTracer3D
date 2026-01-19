@@ -9,6 +9,7 @@ from scipy import ndimage
 from scipy.ndimage import zoom
 from networkx.algorithms import community
 import random
+import copy
 from . import node_draw
 
 
@@ -740,7 +741,7 @@ def assign_community_colors(community_dict: Dict[int, int], labeled_array: np.nd
     non_outlier_dict = {node: comm for node, comm in community_dict.items() if comm != 0}
     
     # Get communities excluding outliers
-    communities = set(non_outlier_dict.values()) if non_outlier_dict else set()
+    communities = sorted(set(non_outlier_dict.values())) if non_outlier_dict else list()
     
     # Generate colors for non-outlier communities only
     colors = generate_distinct_colors(len(communities)) if communities else []
@@ -749,7 +750,7 @@ def assign_community_colors(community_dict: Dict[int, int], labeled_array: np.nd
     # Sort communities by size for consistent color assignment
     if non_outlier_dict:
         community_sizes = Counter(non_outlier_dict.values())
-        sorted_communities = sorted(communities, key=lambda x: (-community_sizes[x], x))
+        sorted_communities = random.Random(42).sample(list(communities), len(communities))
         community_to_color = {comm: colors_rgba[i] for i, comm in enumerate(sorted_communities)}
     else:
         community_to_color = {}

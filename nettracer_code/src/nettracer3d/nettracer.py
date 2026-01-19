@@ -785,6 +785,147 @@ def get_surface_areas(labeled, xy_scale=1, z_scale=1):
     result = {int(label): float(surface_areas[label]) for label in labels}
     return result
 
+def get_background_surface_areas(labeled, xy_scale=1, z_scale=1):
+    """Calculate surface area exposed to background (value 0) for each object."""
+    labels = np.unique(labeled)
+    labels = labels[labels > 0]
+    max_label = int(np.max(labeled))
+    
+    surface_areas = np.zeros(max_label + 1, dtype=np.float64)
+    
+    for axis in range(3):
+        if axis == 2:
+            face_area = xy_scale * xy_scale
+        else:
+            face_area = xy_scale * z_scale
+        
+        for direction in [-1, 1]:
+            # Pad with zeros only on the axis we're checking
+            pad_width = [(1, 1) if i == axis else (0, 0) for i in range(3)]
+            padded = np.pad(labeled, pad_width, mode='constant', constant_values=0)
+            
+            # Roll the padded array
+            shifted = np.roll(padded, direction, axis=axis)
+            
+            # Extract the center region (original size) from shifted
+            slices = [slice(1, -1) if i == axis else slice(None) for i in range(3)]
+            shifted_cropped = shifted[tuple(slices)]
+            
+            # Find faces exposed to background (neighbor is 0)
+            exposed_faces = (shifted_cropped == 0) & (labeled > 0)
+            
+            face_counts = np.bincount(labeled[exposed_faces], 
+                                     minlength=max_label + 1)
+            surface_areas += face_counts * face_area
+    
+    result = {int(label): float(surface_areas[label]) for label in labels}
+    return result
+
+
+def get_background_proportion(labeled, xy_scale=1, z_scale=1):
+    """Calculate proportion of surface area exposed to background for each object."""
+    total_areas = get_surface_areas(labeled, xy_scale, z_scale)
+    background_areas = get_background_surface_areas(labeled, xy_scale, z_scale)
+    
+    proportions = {}
+    for label in total_areas:
+        if total_areas[label] > 0:
+            proportions[label] = background_areas[label] / total_areas[label]
+        else:
+            proportions[label] = 0.0
+    
+    return proportions
+
+def get_perimeters(labeled, xy_scale=1):
+    """Calculate total perimeter for each object in a 2D array (pseudo-3D with z=1)."""
+    # Squeeze to 2D without modifying the original array reference
+    labeled_2d = np.squeeze(labeled)
+    
+    labels = np.unique(labeled_2d)
+    labels = labels[labels > 0]
+    max_label = int(np.max(labeled_2d))
+    
+    perimeters = np.zeros(max_label + 1, dtype=np.float64)
+    
+    # Only check 2 axes for 2D
+    for axis in range(2):
+        edge_length = xy_scale
+        
+        for direction in [-1, 1]:
+            # Pad with zeros only on the axis we're checking
+            pad_width = [(1, 1) if i == axis else (0, 0) for i in range(2)]
+            padded = np.pad(labeled_2d, pad_width, mode='constant', constant_values=0)
+            
+            # Roll the padded array
+            shifted = np.roll(padded, direction, axis=axis)
+            
+            # Extract the center region (original size) from shifted
+            slices = [slice(1, -1) if i == axis else slice(None) for i in range(2)]
+            shifted_cropped = shifted[tuple(slices)]
+            
+            # Find exposed edges
+            exposed_edges = (labeled_2d != shifted_cropped) & (labeled_2d > 0)
+            
+            edge_counts = np.bincount(labeled_2d[exposed_edges], 
+                                     minlength=max_label + 1)
+            perimeters += edge_counts * edge_length
+    
+    result = {int(label): float(perimeters[label]) for label in labels}
+    return result
+
+
+def get_background_perimeters(labeled, xy_scale=1):
+    """Calculate perimeter exposed to background (value 0) for each object in a 2D array."""
+    # Squeeze to 2D without modifying the original array reference
+    labeled_2d = np.squeeze(labeled)
+    
+    labels = np.unique(labeled_2d)
+    labels = labels[labels > 0]
+    max_label = int(np.max(labeled_2d))
+    
+    perimeters = np.zeros(max_label + 1, dtype=np.float64)
+    
+    # Only check 2 axes for 2D
+    for axis in range(2):
+        edge_length = xy_scale
+        
+        for direction in [-1, 1]:
+            # Pad with zeros only on the axis we're checking
+            pad_width = [(1, 1) if i == axis else (0, 0) for i in range(2)]
+            padded = np.pad(labeled_2d, pad_width, mode='constant', constant_values=0)
+            
+            # Roll the padded array
+            shifted = np.roll(padded, direction, axis=axis)
+            
+            # Extract the center region (original size) from shifted
+            slices = [slice(1, -1) if i == axis else slice(None) for i in range(2)]
+            shifted_cropped = shifted[tuple(slices)]
+            
+            # Find edges exposed to background (neighbor is 0)
+            exposed_edges = (shifted_cropped == 0) & (labeled_2d > 0)
+            
+            edge_counts = np.bincount(labeled_2d[exposed_edges], 
+                                     minlength=max_label + 1)
+            perimeters += edge_counts * edge_length
+    
+    result = {int(label): float(perimeters[label]) for label in labels}
+    return result
+
+
+def get_background_perimeter_proportion(labeled, xy_scale=1):
+    """Calculate proportion of perimeter exposed to background for each object in a 2D array."""
+    total_perimeters = get_perimeters(labeled, xy_scale)
+    background_perimeters = get_background_perimeters(labeled, xy_scale)
+    
+    proportions = {}
+    for label in total_perimeters:
+        if total_perimeters[label] > 0:
+            proportions[label] = background_perimeters[label] / total_perimeters[label]
+        else:
+            proportions[label] = 0.0
+    
+    return proportions
+
 def break_and_label_skeleton(skeleton, peaks = 1, branch_removal = 0, comp_dil = 0, max_vol = 0, directory = None, return_skele = False, nodes = None, compute = True, unify = False, xy_scale = 1, z_scale = 1):
     """Internal method to break open a skeleton at its branchpoints and label the remaining components, for an 8bit binary array"""
 
@@ -1174,21 +1315,29 @@ def z_project(array3d, method='max'):
     Returns:
         numpy.ndarray: 2D projected array with shape (Y, X)
     """
-    if not isinstance(array3d, np.ndarray) or array3d.ndim != 3:
-        raise ValueError("Input must be a 3D numpy array")
-        
-    if method == 'max':
-        return np.max(array3d, axis=0)
-    elif method == 'mean':
-        return np.mean(array3d, axis=0)
-    elif method == 'min':
-        return np.min(array3d, axis=0)
-    elif method == 'sum':
-        return np.sum(array3d, axis=0)
-    elif method == 'std':
-        return np.std(array3d, axis=0)
+    #if not isinstance(array3d, np.ndarray):
+     #   raise ValueError("Input must be a 3D numpy array")
+    
+
+    if len(array3d.shape) == 3:
+        if method == 'max':
+            return np.max(array3d, axis=0)
+        elif method == 'mean':
+            return np.mean(array3d, axis=0)
+        elif method == 'min':
+            return np.min(array3d, axis=0)
+        elif method == 'sum':
+            return np.sum(array3d, axis=0)
+        elif method == 'std':
+            return np.std(array3d, axis=0)
+        else:
+            raise ValueError("Method must be one of: 'max', 'mean', 'min', 'sum', 'std'")
     else:
-        raise ValueError("Method must be one of: 'max', 'mean', 'min', 'sum', 'std'")
+        array_list = []
+        for i in range(array3d.shape[-1]):
+            array_list.append(z_project(array3d[:, :, :, i], method = method))
+        return np.stack(array_list, axis=-1)
+
 
 def fill_holes_3d(array, head_on = False, fill_borders = True):
     def process_slice(slice_2d, border_threshold=0.08, fill_borders = True):
@@ -1483,24 +1632,6 @@ def hash_inners(search_region, inner_edges, GPU = False):
     from skimage.segmentation import find_boundaries
 
     borders = find_boundaries(search_region, mode='thick')
-
-    inner_edges = inner_edges * borders #And as a result, we can mask out only 'inner edges' that themselves exist within borders
-
-    inner_edges = dilate_3D_old(inner_edges, 3, 3, 3) #Not sure if dilating is necessary. Want to ensure that the inner edge pieces still overlap with the proper nodes after the masking.
-
-    return inner_edges
-
-def hash_inners_old(search_region, inner_edges, GPU = True):
-    """Internal method used to help sort out inner edge connections. The inner edges of the array will not differentiate between what nodes they contact if those nodes themselves directly touch each other.
-    This method allows these elements to be efficiently seperated from each other. Originally this was implemented using the gaussian blur because i didn't yet realize skimage could do the same more efficiently."""
-
-    print("Performing gaussian blur to hash inner edges.")
-
-    blurred_search = smart_dilate.gaussian(search_region, GPU = GPU) 
-
-    borders = binarize((blurred_search - search_region)) #By subtracting the original image from the guassian blurred version, we set all non-border regions to 0
-
-    del blurred_search
 
     inner_edges = inner_edges * borders #And as a result, we can mask out only 'inner edges' that themselves exist within borders
 
@@ -2167,6 +2298,51 @@ def binarize(arrayimage, directory = None):
 
     return arrayimage.astype(np.uint8)
 
+def convert_to_multigraph(G, weight_attr='weight'):
+    """
+    Convert weighted graph to MultiGraph by creating parallel edges.
+    
+    Args:
+        G: NetworkX Graph with edge weights representing multiplicity
+        weight_attr: Name of the weight attribute (default: 'weight')
+    
+    Returns:
+        MultiGraph with parallel edges instead of weights
+    
+    Note:
+        - Weights are rounded to integers
+        - Original node/edge attributes are preserved on first edge
+        - Directed graphs become MultiDiGraphs
+    """
+
+    MG = nx.MultiGraph()
+    
+    # Copy nodes with all their attributes
+    MG.add_nodes_from(G.nodes(data=True))
+    
+    # Convert weighted edges to multiple parallel edges
+    for u, v, data in G.edges(data=True):
+        # Get weight (default to 1 if missing)
+        weight = data.get(weight_attr, 1)
+        
+        # Round to integer for number of parallel edges
+        num_edges = int(round(weight))
+        
+        if num_edges < 1:
+            num_edges = 1  # At least one edge
+        
+        # Create parallel edges
+        for i in range(num_edges):
+            # First edge gets all the original attributes (except weight)
+            if i == 0:
+                edge_data = {k: v for k, v in data.items() if k != weight_attr}
+                MG.add_edge(u, v, **edge_data)
+            else:
+                # Subsequent parallel edges are simple
+                MG.add_edge(u, v)
+    
+    return MG
+
 def dilate(arrayimage, amount, xy_scale = 1, z_scale = 1, directory = None, fast_dil = False, recursive = False, dilate_xy = None, dilate_z = None):
     """
     Can be used to dilate a binary image in 3D. Dilated output will be saved to the active directory if none is specified. Note that dilation is done with single-instance kernels and not iterations, and therefore
@@ -2392,7 +2568,7 @@ def fix_branches_network(array, G, communities, fix_val = None):
 
     return targs
 
-def fix_branches(array, G, max_val):
+def fix_branches(array, G, max_val, consider_prop = True):
     """
     Parameters:
     array: numpy array containing the labeled regions
@@ -2416,8 +2592,29 @@ def fix_branches(array, G, max_val):
     
     # Find all neighbors of not_safe nodes in one pass
     neighbors_of_not_safe = set()
-    for node in not_safe_initial:
-        neighbors_of_not_safe.update(adj[node])
+    if consider_prop:
+        if array.shape[0] != 1:
+            areas = get_background_proportion(array, xy_scale=1, z_scale=1)
+        else:
+            areas = get_background_perimeter_proportion(array, xy_scale=1)
+        valid_areas = {label: proportion for label, proportion in areas.items() if proportion < 0.4}
+        
+        for node in not_safe_initial:
+            # Filter neighbors based on whether they're in the valid areas dict
+            valid_neighbors = [neighbor for neighbor in adj[node] if neighbor in valid_areas]
+            
+            # If no valid neighbors, fall back to the one with lowest proportion
+            if not valid_neighbors:
+                node_neighbors = list(adj[node])
+                if node_neighbors:
+                    # Find neighbor with minimum background proportion
+                    min_neighbor = min(node_neighbors, key=lambda n: areas.get(n, float('inf')))
+                    valid_neighbors = [min_neighbor]
+            
+            neighbors_of_not_safe.update(valid_neighbors)
+    else:
+        for node in not_safe_initial:
+            neighbors_of_not_safe.update(adj[node])
     
     # Remove max_val if present
     neighbors_of_not_safe.discard(max_val)
@@ -2428,7 +2625,7 @@ def fix_branches(array, G, max_val):
     # Update sets
     not_safe = not_safe_initial | nodes_to_move
     
-    # The rest of the function - FIX STARTS HERE
+    # The rest of the function
     targs = np.array(list(not_safe))
     
     if len(targs) == 0:
@@ -2441,16 +2638,10 @@ def fix_branches(array, G, max_val):
     # Get the current maximum label in the array to avoid collisions
     current_max = np.max(array)
     
-    # Assign new unique labels to each connected component
-    for component_id in range(1, num_components + 1):
-        component_mask = labeled == component_id
-        array[component_mask] = current_max + component_id
+    # Vectorized relabeling - single operation instead of loop
+    array[mask] = labeled[mask] + current_max
     
     return array
-
-
-
-
 
 
 def label_vertices(array, peaks = 0, branch_removal = 0, comp_dil = 0, max_vol = 0, down_factor = 0, directory = None, return_skele = False, order = 0, fastdil = True):
@@ -2487,7 +2678,7 @@ def label_vertices(array, peaks = 0, branch_removal = 0, comp_dil = 0, max_vol =
         old_skeleton = copy.deepcopy(array) # The skeleton might get modified in label_vertices so we can make a preserved copy of it to use later
 
     if branch_removal > 0:
-        array = remove_branches(array, branch_removal)
+        array = remove_branches_new(array, branch_removal)
 
     array = np.pad(array, pad_width=1, mode='constant', constant_values=0)
 
@@ -4105,27 +4296,30 @@ class Network_3D:
         else:
             outer_edges = dilate_3D_old(outer_edges)
 
-        labelled_edges, num_edge = label_objects(outer_edges)
+        #labelled_edges, num_edge = ndimage.label(outer_edges)
 
-        if inners:
-            inner_edges = hash_inners(self._search_region, binary_edges, GPU = GPU)
+        inner_edges = hash_inners(self._search_region, binary_edges, GPU = GPU)
 
-            del binary_edges
+        del binary_edges
 
-            inner_labels, num_edge = label_objects(inner_edges)
+        outer_edges = (inner_edges > 0) | (outer_edges > 0)
 
-            del inner_edges
+            #inner_labels, num_edge = ndimage.label(inner_edges)
 
-            labelled_edges = combine_edges(labelled_edges, inner_labels)
+        del inner_edges
 
-            num_edge = np.max(labelled_edges)
+        outer_edges, num_edge = ndimage.label(outer_edges)
 
-            if num_edge < 256:
-                labelled_edges = labelled_edges.astype(np.uint8)
-            elif num_edge < 65536:
-                labelled_edges = labelled_edges.astype(np.uint16)
+            #labelled_edges = combine_edges(labelled_edges, inner_labels)
 
-        self._edges = labelled_edges
+            #num_edge = np.max(labelled_edges)
+
+            #if num_edge < 256:
+             #   labelled_edges = labelled_edges.astype(np.uint8)
+            #elif num_edge < 65536:
+             #   labelled_edges = labelled_edges.astype(np.uint16)
+
+        self._edges = outer_edges
 
     def label_nodes(self):
         """
@@ -4135,21 +4329,37 @@ class Network_3D:
         self._nodes, num_nodes = label_objects(nodes, structure_3d)
 
     def combine_nodes(self, root_nodes, other_nodes, other_ID, identity_dict, root_ID = None, centroids = False, down_factor = None):
-
         """Internal method to merge two labelled node arrays into one"""
-
         print("Combining node arrays")
-
+        
+        # Calculate the maximum value that will exist in the output
+        max_root = np.max(root_nodes)
+        max_other = np.max(other_nodes)
+        max_output = max_root + max_other  # Worst case: all other_nodes shifted by max_root
+        
+        # Determine the minimum dtype needed
+        if max_output <= 255:
+            target_dtype = np.uint8
+        elif max_output <= 65535:
+            target_dtype = np.uint16
+        else:
+            target_dtype = np.uint32
+                
+        # Convert arrays to appropriate dtype
+        root_nodes = root_nodes.astype(target_dtype)
+        other_nodes = other_nodes.astype(target_dtype)
+        
+        # Now perform the merge
         mask = (root_nodes == 0) & (other_nodes > 0)
         if np.any(mask):
-            max_val = np.max(root_nodes)
-            other_nodes[:] = np.where(mask, other_nodes + max_val, 0)
-        if centroids:
-            new_dict = network_analysis._find_centroids(other_nodes, down_factor = down_factor)
-            if down_factor is not None:
-                for item in new_dict:
-                    new_dict[item] = down_factor * new_dict[item]
-            self.node_centroids.update(new_dict)
+            other_nodes_shifted = np.where(other_nodes > 0, other_nodes + max_root, 0)
+            if centroids:
+                new_dict = network_analysis._find_centroids(other_nodes_shifted, down_factor = down_factor)
+                if down_factor is not None:
+                    for item in new_dict:
+                        new_dict[item] = down_factor * new_dict[item]
+                self.node_centroids.update(new_dict)
+            other_nodes = np.where(mask, other_nodes_shifted, 0)
 
         if root_ID is not None:
             rootIDs = list(np.unique(root_nodes)) #Sets up adding these vals to the identitiy dictionary. Gets skipped if this has already been done.
@@ -4188,7 +4398,7 @@ class Network_3D:
 
         return nodes, identity_dict
 
-    def merge_nodes(self, addn_nodes_name, label_nodes = True, root_id = "Root_Nodes", centroids = False, down_factor = None):
+    def merge_nodes(self, addn_nodes_name, label_nodes = True, root_id = "Root_Nodes", centroids = False, down_factor = None, is_array = False):
         """
         Merges the self._nodes attribute with alternate labelled node images. The alternate nodes can be inputted as a string for a filepath to a tif,
         or as a directory address containing only tif images, which will merge the _nodes attribute with all tifs in the folder. The _node_identities attribute
@@ -4215,7 +4425,11 @@ class Network_3D:
                     self.node_centroids[item] = down_factor * self.node_centroids[item]
 
         try: #Try presumes the input is a tif
-            addn_nodes = tifffile.imread(addn_nodes_name) #If not this will fail and activate the except block
+            if not is_array:
+                addn_nodes = tifffile.imread(addn_nodes_name) #If not this will fail and activate the except block
+            else:
+                addn_nodes = addn_nodes_name # Passing it an array directly
+                addn_nodes_name = "Node"
 
             if label_nodes is True:
                 addn_nodes, num_nodes2 = label_objects(addn_nodes) # Label the node objects. Note this presumes no overlap between node masks.
@@ -4227,7 +4441,6 @@ class Network_3D:
                 num_nodes = int(np.max(node_labels))
 
         except: #Exception presumes the input is a directory containing multiple tifs, to allow multi-node stackage.
-
             addn_nodes_list = directory_info(addn_nodes_name)
 
             for i, addn_nodes in enumerate(addn_nodes_list):
@@ -4573,7 +4786,7 @@ class Network_3D:
         Sets the communities attribute by splitting the network into communities
         """
 
-        self._communities, self.normalized_weights, stats = modularity.community_partition(self._network_lists, weighted = weighted, style = style, dostats = dostats, seed = seed)
+        self._communities, self.normalized_weights, stats = modularity.community_partition(self._network, weighted = weighted, style = style, dostats = dostats, seed = seed)
 
         return stats
 
@@ -4587,6 +4800,8 @@ class Network_3D:
         self._network_lists = network_analysis.remove_dupes(self._network_lists)
 
         self._network = network_analysis.open_network(self._network_lists)
+
+
 
 
     def rescale(self, array, directory = None):
@@ -4882,14 +5097,14 @@ class Network_3D:
 
 
 
-    def prune_samenode_connections(self):
+    def prune_samenode_connections(self, target = None):
         """
         If working with a network that has multiple node identities (from merging nodes or otherwise manipulating this property),
         this method will remove from the network and network_lists properties any connections that exist between the same node identity,
         in case we want to investigate only connections between differing objects.
         """
 
-        self._network_lists, self._node_identities = network_analysis.prune_samenode_connections(self._network_lists, self._node_identities)
+        self._network_lists, self._node_identities = network_analysis.prune_samenode_connections(self._network_lists, self._node_identities, target = target)
         self._network, num_weights = network_analysis.weighted_network(self._network_lists)
 
 
@@ -5355,7 +5570,8 @@ class Network_3D:
         Returns:
         dict: Dictionary containing various network statistics
         """
-        G = self._network
+        G_unweighted = self._network
+        G = convert_to_multigraph(self._network)
         stats = {}
         
         # Basic graph properties
@@ -5386,13 +5602,13 @@ class Network_3D:
         try:
             stats['avg_betweenness_centrality'] = np.mean(list(nx.betweenness_centrality(G).values()))
             stats['avg_closeness_centrality'] = np.mean(list(nx.closeness_centrality(G).values()))
-            stats['avg_eigenvector_centrality'] = np.mean(list(nx.eigenvector_centrality(G, max_iter=1000).values()))
+            stats['avg_eigenvector_centrality'] = np.mean(list(nx.eigenvector_centrality(G_unweighted, max_iter=1000).values()))
         except:
             stats['centrality_measures'] = "Failed to compute - graph might be too large or disconnected"
         
         # Clustering and transitivity
-        stats['avg_clustering_coefficient'] = nx.average_clustering(G)
-        stats['transitivity'] = nx.transitivity(G)
+        stats['avg_clustering_coefficient'] = nx.average_clustering(G_unweighted)
+        stats['transitivity'] = nx.transitivity(G_unweighted)
         
         # Path lengths
         if nx.is_connected(G):
@@ -5608,7 +5824,7 @@ class Network_3D:
                 print(f"Using {volume} for the volume measurement (Volume of provided mask as scaled by xy and z scaling)")
                 
                 # Compute distance transform on padded array
-                legal = smart_dilate.compute_distance_transform_distance(legal, sampling = [self.z_scale, self.xy_scale, self.xy_scale])
+                legal = smart_dilate.compute_distance_transform_distance(legal, sampling = [self.z_scale, self.xy_scale, self.xy_scale], fast_dil = True)
                 
                 # Remove padding after distance transform
                 if dim == 2:
@@ -5702,7 +5918,6 @@ class Network_3D:
 
 
     def morph_proximity(self, search = 0, targets = None, fastdil = False):
-
         if type(search) == list:
             search_x, search_z = search #Suppose we just want to directly pass these params
         else:
@@ -5711,7 +5926,6 @@ class Network_3D:
         num_nodes = int(np.max(self._nodes))
 
         my_dict = proximity.create_node_dictionary(self._nodes, num_nodes, search_x, search_z, targets = targets, fastdil = fastdil, xy_scale = self._xy_scale, z_scale = self._z_scale, search = search)
-
         my_dict = proximity.find_shared_value_pairs(my_dict)
 
         my_dict = create_and_save_dataframe(my_dict)

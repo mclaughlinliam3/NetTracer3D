@@ -6,14 +6,14 @@
   <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
 
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>All Analyze Menu Options &mdash; NetTracer3D 1.2.8 documentation</title>
+  <title>All Analyze Menu Options &mdash; NetTracer3D 1.3.5 documentation</title>
       <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=b86133f3" />
       <link rel="stylesheet" type="text/css" href="_static/css/theme.css?v=e59714d7" />
 
   
       <script src="_static/jquery.js?v=5d32c60e"></script>
       <script src="_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
-      <script src="_static/documentation_options.js?v=4d6f9085"></script>
+      <script src="_static/documentation_options.js?v=4720776d"></script>
       <script src="_static/doctools.js?v=9bcbadda"></script>
       <script src="_static/sphinx_highlight.js?v=dc90522c"></script>
     <script src="_static/js/theme.js"></script>
@@ -204,8 +204,14 @@
 <section id="analyze-network-show-network">
 <h2>‘Analyze -&gt; Network -&gt; Show Network’<a class="headerlink" href="#analyze-network-show-network" title="Link to this heading"></a></h2>
 <ul class="simple">
-<li><p>Use this function to visualize the method in an interactable matplotlib graph.</p></li>
-<li><p>Note that this window will be very slow for graphs with a huge number of nodes.</p></li>
+<li><p>Use this function to visualize the method in an interactable network graph for your current network. This graph view is also embedded in the lower right widget by default, although using this version will allow you to open it fullscreen or to use two different simultaneously layouts.</p></li>
+<li><p>The graph this generates will be linked to both the image viewer window and the default network graph viewer in the bottom right. Selecting a node in this will also select it in the main viewer and the bottom right, and vice versa.</p></li>
+</ul>
+<a class="reference internal image-reference" href="_images/network_layout.png"><img alt="Network layout example" src="_images/network_layout.png" style="width: 800px;" />
+</a>
+<p><em>All the graphs are linked so we can use this to easily locate nodes of significance</em></p>
+<ul class="simple">
+<li><p>Depending on the view you use, it may be slow to render for very large networks, although it actually loads in a separate thread so it will not freeze the display while loading.</p></li>
 <li><p>Selecting this displays the following menu:</p></li>
 </ul>
 <a class="reference internal image-reference" href="_images/analyze_1.png"><img alt="Network Vis Menu" src="_images/analyze_1.png" style="width: 300px;" />
@@ -214,26 +220,26 @@
 <h3>Parameter Explanations<a class="headerlink" href="#parameter-explanations" title="Link to this heading"></a></h3>
 <ol class="arabic simple">
 <li><dl class="simple">
-<dt>Enable the ‘geo_layout’ button to have nodes be placed in representative regions of their 3D location.</dt><dd><ul class="simple">
-<li><p>Their XY position in the graph will correspond to the image, while the node size will represent their Z-position (with larger nodes representing smaller Z-vals, ie. closer to the viewer).</p></li>
-<li><p>Note that this method may run rather slowly on graphs with a huge number of nodes.</p></li>
-<li><p>Keeping this unselected will group nodes using the NetworkX spring layout.</p></li>
+<dt>Render mode - Dropdown menu that determines where nodes should be located in the graph menu</dt><dd><ul class="simple">
+<li><p>Spring layout - Tries to place clusters of interconnected nodes together. Useful for evaluating what’s connected to what. Loses clarity with a huge number of nodes.</p></li>
+<li><p>Centroid layout - Places nodes to reflect where they are in the actual image. Requires the node centroids to be computed but loads almost instantly after that no matter the graph size. Useful for correlating nodes in the graph to nodes in the image.</p></li>
+<li><p>Component layout spring - Like the first option, but separately lays out each connected component in the graph (for when your graph has many non-connected pieces). In large graphs with many disconnected components, the default spring layout may place them on top of each other which will make it hard to view what’s connected to what, but this layout does not have that problem.</p></li>
+<li><p>Component layout shell - Also separately lays out each component, but using a shell layout. The shell layout places the most-central node for each component in the middle of its respective component graph. It then places its immediate neighbors in the next circular shell, then those nodes’ neighbors, and so on. Useful for eyeballing things like shortest path length or how dependent your graph is on its central node. Becomes harder to interpret with a huge number of nodes in a component.</p></li>
 </ul>
 </dd>
 </dl>
 </li>
-<li><p>Select ‘Show Node Numerical IDs’ to have each node be labelled on the graph by their internal label value from their image. This is useful for finding specific nodes but may clutter visualization.</p></li>
 <li><dl class="simple">
 <dt>Execution Mode (Menu Includes the following options):</dt><dd><ol class="arabic simple">
 <li><dl class="simple">
 <dt>Default:</dt><dd><ul class="simple">
-<li><p>All nodes are represented by their numerical ID, and nothing else.</p></li>
+<li><p>All nodes are blue circles.</p></li>
 </ul>
 </dd>
 </dl>
 </li>
 <li><dl class="simple">
-<dt>Community Coded (Uses Current…)</dt><dd><ul class="simple">
+<dt>Community Coded</dt><dd><ul class="simple">
 <li><p>Colors nodes by their community, assuming they have already been community partitioned. Will prompt the user to partition if not.</p></li>
 </ul>
 </dd>
@@ -250,9 +256,12 @@
 </dd>
 </dl>
 </li>
+<li><p>Select ‘Show Node Numerical IDs’ to have each node be labelled on the graph by their internal label value from their image. This is useful for finding specific nodes but may clutter visualization.</p></li>
+<li><p>Select ‘Draw weighted edges’ to make any edges that have a weight appear thicker. Nodes that find repeat, distinct connections in ‘connectivity networks’ will have weights, or if you manually add repeat node connections.</p></li>
+<li><p>Select ‘For Centroid Layout…’ to make it so that if you use the centroid layout in param 1, nodes that have lower z values appear larger (allowing you to visually appraise 3D location on the 2D graph). Deselect it to have all the nodes be the same size.</p></li>
 </ol>
 <ul class="simple">
-<li><p>Press Show Network to open a new matplotlib window displaying the graph.</p></li>
+<li><p>Press Show Network to open a new window displaying the interactive graph.</p></li>
 </ul>
 </section>
 </section>
@@ -775,6 +784,14 @@
 <dt>Network Bridges…</dt><dd><ul class="simple">
 <li><p>Identifies edges whose removal would disconnect network components.</p></li>
 <li><p>Use to find critical connections essential for network cohesion.</p></li>
+</ul>
+</dd>
+</dl>
+</li>
+<li><dl class="simple">
+<dt>Compute All Analyses and Export to CSV…</dt><dd><ul class="simple">
+<li><p>This method batch computes all the above csvs and saves them to a directory you pick. It will also save pngs of the associated histograms. Use this for rapid comparison of all these fields if you are looking to compare datasets but unsure what stats may be significant.</p></li>
+<li><p>Its also useful if you want all the histos but your network is large so the computation is slow. You can open an instance of NetTracer3D, just load the network, and run the batch computation as a background task.</p></li>
 </ul>
 </dd>
 </dl>
@@ -1620,7 +1637,7 @@
   <hr/>
 
   <div role="contentinfo">
-    <p>&#169; Copyright 2025, Liam McLaughlin.</p>
+    <p>&#169; Copyright 2026, Liam McLaughlin.</p>
   </div>
 
   Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a

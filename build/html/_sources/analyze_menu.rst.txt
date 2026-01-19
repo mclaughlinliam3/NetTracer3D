@@ -11,8 +11,17 @@ The Analyze Menu offers options for creating graphs and statistical tables.
 'Analyze -> Network -> Show Network'
 -------------------------------
 
-* Use this function to visualize the method in an interactable matplotlib graph.
-* Note that this window will be very slow for graphs with a huge number of nodes.
+* Use this function to visualize the method in an interactable network graph for your current network. This graph view is also embedded in the lower right widget by default, although using this version will allow you to open it fullscreen or to use two different simultaneously layouts.
+* The graph this generates will be linked to both the image viewer window and the default network graph viewer in the bottom right. Selecting a node in this will also select it in the main viewer and the bottom right, and vice versa.
+
+.. image:: _static/network_layout.png
+   :width: 800px
+   :alt: Network layout example
+
+*All the graphs are linked so we can use this to easily locate nodes of significance*
+
+
+* Depending on the view you use, it may be slow to render for very large networks, although it actually loads in a separate thread so it will not freeze the display while loading.
 * Selecting this displays the following menu:
 
 .. image:: _static/analyze_1.png
@@ -22,20 +31,23 @@ The Analyze Menu offers options for creating graphs and statistical tables.
 Parameter Explanations
 ~~~~~~~~~~~~~~~
 
-#. Enable the 'geo_layout' button to have nodes be placed in representative regions of their 3D location.
-    * Their XY position in the graph will correspond to the image, while the node size will represent their Z-position (with larger nodes representing smaller Z-vals, ie. closer to the viewer).
-    * Note that this method may run rather slowly on graphs with a huge number of nodes.
-    * Keeping this unselected will group nodes using the NetworkX spring layout.
-#. Select 'Show Node Numerical IDs' to have each node be labelled on the graph by their internal label value from their image. This is useful for finding specific nodes but may clutter visualization.
+#. Render mode - Dropdown menu that determines where nodes should be located in the graph menu
+    * Spring layout - Tries to place clusters of interconnected nodes together. Useful for evaluating what's connected to what. Loses clarity with a huge number of nodes.
+    * Centroid layout - Places nodes to reflect where they are in the actual image. Requires the node centroids to be computed but loads almost instantly after that no matter the graph size. Useful for correlating nodes in the graph to nodes in the image. 
+    * Component layout spring - Like the first option, but separately lays out each connected component in the graph (for when your graph has many non-connected pieces). In large graphs with many disconnected components, the default spring layout may place them on top of each other which will make it hard to view what's connected to what, but this layout does not have that problem.
+    * Component layout shell - Also separately lays out each component, but using a shell layout. The shell layout places the most-central node for each component in the middle of its respective component graph. It then places its immediate neighbors in the next circular shell, then those nodes' neighbors, and so on. Useful for eyeballing things like shortest path length or how dependent your graph is on its central node. Becomes harder to interpret with a huge number of nodes in a component.
 #. Execution Mode (Menu Includes the following options):
     1. Default:
-        * All nodes are represented by their numerical ID, and nothing else.
-    2. Community Coded (Uses Current...)
+        * All nodes are blue circles.
+    2. Community Coded
         * Colors nodes by their community, assuming they have already been community partitioned. Will prompt the user to partition if not.
     3. Node-ID Coded
         * Display nodes color-coded by their node ID (if it exists).
+#. Select 'Show Node Numerical IDs' to have each node be labelled on the graph by their internal label value from their image. This is useful for finding specific nodes but may clutter visualization.
+#. Select 'Draw weighted edges' to make any edges that have a weight appear thicker. Nodes that find repeat, distinct connections in 'connectivity networks' will have weights, or if you manually add repeat node connections.
+#. Select 'For Centroid Layout...' to make it so that if you use the centroid layout in param 1, nodes that have lower z values appear larger (allowing you to visually appraise 3D location on the 2D graph). Deselect it to have all the nodes be the same size.
 
-* Press Show Network to open a new matplotlib window displaying the graph.
+* Press Show Network to open a new window displaying the interactive graph.
 
 'Analyze -> Network -> Generic Network Report'
 -------------------------------
@@ -315,8 +327,10 @@ Parameter Explanations
 #. Network Bridges...
     * Identifies edges whose removal would disconnect network components.
     * Use to find critical connections essential for network cohesion.
-
-
+#. Compute All Analyses and Export to CSV...
+    * This method batch computes all the above csvs and saves them to a directory you pick. It will also save pngs of the associated histograms. Use this for rapid comparison of all these fields if you are looking to compare datasets but unsure what stats may be significant.
+    * Its also useful if you want all the histos but your network is large so the computation is slow. You can open an instance of NetTracer3D, just load the network, and run the batch computation as a background task.
+    
 
 'Analyze -> Stats -> Network Related -> Radial Distribution Analysis'
 -----------------------------------------

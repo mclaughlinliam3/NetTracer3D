@@ -11,7 +11,7 @@ try:
     import edt
     print("Parallel search functions enabled")
 except:
-    print("Parallel search functions disabled (requires edt package), will fall back to single-threaded")
+    print("Some parallel search functions disabled (requires edt package), will fall back to single-threaded")
 import math
 import re
 from . import nettracer
@@ -297,9 +297,13 @@ def process_chunk(start_idx, end_idx, nodes, ring_mask, nearest_label_indices):
 def smart_dilate(nodes, dilate_xy = 0, dilate_z = 0, directory = None, GPU = True, fast_dil = True, predownsample = None, use_dt_dil_amount = None, xy_scale = 1, z_scale = 1):
 
     if fast_dil:
-        dilated = nettracer.dilate_3D_dt(nodes, use_dt_dil_amount, xy_scale, z_scale, fast_dil = True)
-        return smart_label_watershed(dilated, nodes, directory = None, remove_template = False)
-
+        try:
+            import edt
+            dilated = nettracer.dilate_3D_dt(nodes, use_dt_dil_amount, xy_scale, z_scale, fast_dil = True)
+            return smart_label_watershed(dilated, nodes, directory = None, remove_template = False)
+        except:
+            print("edt package not found. Please use 'pip install edt' if you would like to enable parallel searching.")
+            return smart_dilate_short(nodes, use_dt_dil_amount, directory, xy_scale, z_scale)
     else:
         return smart_dilate_short(nodes, use_dt_dil_amount, directory, xy_scale, z_scale)
 
@@ -703,7 +707,7 @@ def compute_distance_transform_distance(nodes, sampling=[1, 1, 1], fast_dil=Fals
                         str(nodes.dtype),
                         tuple(sampling)
                     )
-                    result_shape, result_dtype = future.result(timeout=300)  # Add timeout
+                    result_shape, result_dtype = future.result()
                 
                 distance = np.ndarray(result_shape, dtype=result_dtype, buffer=output_shm.buf).copy()
                 

@@ -879,28 +879,28 @@ def setup_start_tutorial(window):
 
     # Step 1: Welcome
     tutorial.add_step(
-        window.canvas,
+        window.graphics_widget,
         "Welcome to NetTracer3D! This tutorial will give you a basic overview of this application. Click 'Next' or use Right-Click to continue.",
         highlight_type=None,
         message_position="bottom"
     )
 
     tutorial.add_step(
-        window.canvas,
+        window.graphics_widget,
         "This program is designed to analysis of two or three dimensional images, such as those aquired via microscopy or medical imaging.",
         highlight_type=None,
         message_position="bottom"
     )
 
     tutorial.add_step(
-        window.canvas,
+        window.graphics_widget,
         "The major form of analysis is done by creating undirected networks between objects of interest, called nodes. These can be biological structures such as cells or functional tissue units.",
         highlight_type=None,
         message_position="bottom"
     )
 
     tutorial.add_step(
-        window.canvas,
+        window.graphics_widget,
         "Analysis can also be done on more direct measures of morphology or spatial arrangement, such as analyzing object measures like volumes or making clustering heatmaps.",
         highlight_type=None,
         message_position="bottom"
@@ -915,14 +915,14 @@ def setup_start_tutorial(window):
     )
 
     tutorial.add_step(
-        window.canvas,
+        window.graphics_widget,
         "When it comes to making networks, there are three major modalities that NetTracer3D offers.",
         highlight_type=None,
         message_position="bottom"
     )
 
     tutorial.add_step(
-        window.canvas,
+        window.graphics_widget,
         "The first is the 'connectivity network', where your node objects are connected via a secondary structure, deemed 'edges'. For example, we can evaluate how groups of segmented cell aggregates are connected via vasculature.",
         highlight_type=None,
         message_position="bottom"
@@ -942,7 +942,7 @@ def setup_start_tutorial(window):
         message_position="top")
 
     tutorial.add_step(
-        window.canvas,
+        window.graphics_widget,
         "The second modality is making networks directly from branched structures. First, you would provide a binary segmentation of a branching structure like a nerve or a blood vessel. Next, you can algorithmically label the branches in NetTracer3D.",
         highlight_type=None,
         message_position="bottom"
@@ -962,14 +962,14 @@ def setup_start_tutorial(window):
     )
 
     tutorial.add_step(
-        window.canvas,
+        window.graphics_widget,
         "Labeled branches can be turned into two types of networks. The first way is to connect the branchpoints. The second is to connect the branches themselves, just based on what other branches they come off of.",
         highlight_type=None,
         message_position="bottom"
     )
 
     tutorial.add_step(
-        window.canvas,
+        window.graphics_widget,
         "The final modality is making networks based on proximity. This is an option to evaluate spatial clusters in your image, for example, deciphering what sort of groups a set of cells are arranged in. This would be an ideal way to analyze a multiplexed image with a lot of different channels bearing cellular fluorescent labels, for example.",
         highlight_type=None,
         message_position="bottom"
@@ -1129,7 +1129,7 @@ def setup_basics_tutorial(window):
     
     # Step 1: Welcome
     tutorial.add_step(
-        window.canvas,
+        window.graphics_widget,
         "This tutorial will guide you through the main features of the GUI window. Click 'Next' or use 'Right-Click' to continue.",
         highlight_type="rect",
         message_position="bottom"
@@ -1137,28 +1137,28 @@ def setup_basics_tutorial(window):
 
     # Step 2: Canvas explanation
     tutorial.add_step(
-        window.canvas,
+        window.graphics_widget,
         "This canvas is where your loaded images will render.",
         highlight_type="rect",
         message_position="bottom"
     )
 
     tutorial.add_step(
-        window.canvas,
+        window.graphics_widget,
         "Clicking a node or edge in this canvas will select it (if the nodes or edges channels are set as the 'active channel', respectively). Click and drag to select multiple objects. This is intended mainly for segmented, labeled data rather than interacting directly with raw images.",
         highlight_type="rect",
         message_position="bottom"
     )
 
     tutorial.add_step(
-        window.canvas,
+        window.graphics_widget,
         "Selected objects will be highlighted yellow and can be used for certain functions. Clicking a background val in an image (ie voxel with value 0) will deselect your objects.",
         highlight_type="rect",
         message_position="bottom"
     )
 
     tutorial.add_step(
-        window.canvas,
+        window.graphics_widget,
         "Use right click to interact with highlighted objects (ie, delete them or merge them into one object); or rather to select objects algorithmically (for example, the neighbors of a node in your network)",
         highlight_type="rect",
         message_position="bottom"
@@ -1287,11 +1287,19 @@ def setup_basics_tutorial(window):
         highlight_type="rect",
         message_position="top"
     )
+
+        # Data Tables
+    tutorial.add_step(
+        window.network_graph_button,
+        "Similarly the network graph will allow you top render your network in a dedicated viewer that is interactable and linked with the main display window..",
+        highlight_type="rect",
+        message_position="top"
+    )
     
     # The actual table
     tutorial.add_step(
         window.network_table,
-        "This table displays your network data. You can click rows to highlight corresponding elements in the image, and sort columns by clicking headers. Right click to export any tables in spreadsheet format, or in a format for a few other types of network analysis software.",
+        "This table view displays your network data. You can click rows to highlight corresponding elements in the image, and sort columns by clicking headers. The graph view allows you to evaluate network connectivity and highlight those items in your main display window. Right click to export any tables in spreadsheet format, or in a format for a few other types of network analysis software.",
         highlight_type="rect",
         message_position="left"
     )
@@ -1320,6 +1328,13 @@ def setup_basics_tutorial(window):
     tutorial.add_step(
         window.popup_button,
         "This button can be used to eject the canvas from the main window, to make it larger. Just click back in the main window to return it.",
+        highlight_type="circle",
+        message_position="bottom"
+    )
+
+    tutorial.add_step(
+        window.threed_button,
+        "This button can be used to create a 3D display of the current data. This can be called with additional optional settings from the 'Image' menu as well.",
         highlight_type="circle",
         message_position="bottom"
     )
@@ -1417,7 +1432,7 @@ def setup_file_tutorial(window):
     tutorial.add_step(
         MenuHelper.create_submenu_action_rect_getter(window, "File", "Save As", "Save Nodes As"),
         f"""--Saving occurs from the SaveAs menu.
-        \n\n--Use 'Save Network3D Object As' as the primary save function. This will dump all the relevant properties. First, you will be prompted to select a folder on your computer. Next, you will enter the name of a new folder to create in the aforementioned parent folder. All the outputs will be saved to this new folder.
+        \n\n--Use 'Save Current Session As' as the primary save function. This will dump all the relevant properties to a folder. First, you will be prompted to select a folder on your computer. Next, you will enter the name of a new folder to create in the aforementioned parent folder. All the outputs will be saved to this new folder.
         \n\n--The other SaveAs options can be used to save any of the image channels as a .tif.""",
         highlight_type=None,
         message_position="top_right",
@@ -1431,9 +1446,9 @@ def setup_file_tutorial(window):
     
     # Step 3: Point to Image submenu
     tutorial.add_step(
-        MenuHelper.create_submenu_action_rect_getter(window, "File", "Load", "Load Network3D Object"),
+        MenuHelper.create_submenu_action_rect_getter(window, "File", "Load", "Load Previous Session"),
         f"""--Loading occurs from the load menu. Acceptable image types are .tif, .tiff, .nii, .png, .jpeg, and .jpg.
-        \n\n--'Load Network3D Object' can be used to load in an entire previously saved session, assuming it had been saved with the correspoinding 'Save Network3D Object' method. Navigate your way to the directory the 'Network3D Object' dumped to. Select it to reload all properties within.
+        \n\n--'Load Previous Session' can be used to load in an entire previously saved session, assuming it had been saved with the corresponding 'Save Current Session' method. Navigate your way to the directory the 'Current Session' dumped to. Select it to reload all properties within.
         \n\n--Use 'load nodes' to load an image into the nodes channel. Similarly, use load edges to load edges, and either of the load overlays to load the overlays.
         \n\n--Use 'load network' to load your saved network data from .csv or .xlsx format. Note this will expect to see the corresponding spreadsheet in the layout that NetTracer3D saves it.
         \n\n--'Loading from the excel helper' opens a secondary gui where (mainly node identities) can be reassigned with a set of string keywords. For example, a node with identity 'x' and 'y' can be configured to be loaded as 'identity xy'
@@ -1628,11 +1643,43 @@ def setup_connectivity_tutorial(window):
     )
 
     tutorial.add_step(
+        MenuHelper.create_widget_getter(tutorial, 'con_dialog', 'voronoi_safe'),
+        "The next few options present alternate ways to handle the trunk/edges if desired. Selecting this 'Auto-Trunk' method will make edge elements that exist as plexuses between nodes simplify themselves to make local connections but avoid more distant connections that have more local connectivity available. This is done by first computing the normal network, then computing a second network where the search regions are fully maxed out (and therefore naturally split trunks up; note, this step will not use parallel dilation), then pruning the second network to drop connections that don't exist in the first region. As such, it will be somewhat slower if enabled.",
+        highlight_type=None,
+        message_position="beside",
+        pre_action=MenuHelper.create_widget_interaction(tutorial, 'con_dialog', 'voronoi_safe', 'click()'),
+        action = MenuHelper.create_widget_interaction(tutorial, 'con_dialog', 'voronoi_safe', 'toggle()')
+    )
+
+    tutorial.add_step(
+        MenuHelper.create_widget_getter(tutorial, 'con_dialog', 'labeled_branches'),
+        "The 'Pre-labeled edges' option will allow you to use pre-made edge labels, such as if you had previously labeled the branches of your edges. Instead of just joining nodes together, all edge labels will participate as nodes as well. This can be a way to visualize how branch-like structures in your edges interact with your main node objects.",
+        highlight_type=None,
+        message_position="beside",
+        pre_action=MenuHelper.create_widget_interaction(tutorial, 'con_dialog', 'labeled_branches', 'click()'),
+        action = MenuHelper.create_widget_interaction(tutorial, 'con_dialog', 'labeled_branches', 'toggle()')
+    )
+
+    tutorial.add_step(
+        MenuHelper.create_widget_getter(tutorial, 'con_dialog', 'edge_node'),
+        "The 'Convert Edges to Nodes' option will make your edges become nodes. This can be a good way to visualize direct connectivity paths, and is a robust way to mitigate bias in what is or isn't a trunk. However, the network dynamics will be altered by edge inclusion, resulting in much less node clusters in favor of edge-derived hubs. You can also do this from the modify network after the calculation has been done.",
+        highlight_type=None,
+        message_position="beside",
+        pre_action=MenuHelper.create_widget_interaction(tutorial, 'con_dialog', 'edge_node', 'click()'),
+        action = MenuHelper.create_widget_interaction(tutorial, 'con_dialog', 'edge_node', 'toggle()')
+    )
+
+
+
+    """
+
+    tutorial.add_step(
         MenuHelper.create_widget_getter(tutorial, 'con_dialog', 'inners'),
         "Deselecting this button will have the system not consider 'inner edges'. Inner edges are portions of your edge image that exist solely within nodes (as well as their expanded search regions). You can deselect this to ignore inner connections between within node clusters, for example if you only wanted to consider more distal connections to get a simpler network. However, I would recommend keeping this enabled unless you had a good reason to not.",
         highlight_type=None,
         message_position="beside",
         pre_action=MenuHelper.create_widget_interaction(tutorial, 'con_dialog', 'inners', 'click()'))
+    """
 
     tutorial.add_step(
         MenuHelper.create_widget_getter(tutorial, 'con_dialog', 'down_factor'),
@@ -1645,7 +1692,8 @@ def setup_connectivity_tutorial(window):
 
     tutorial.add_step(
         MenuHelper.create_widget_getter(tutorial, 'con_dialog', 'fastdil'),
-        "Enable the fast search button to use a slightly alternate algorithm for the node search step that is faster. This algorithm uses a parallelized distance transform to create a binary search region which is a lot faster if you have a lot of CPU cores. It then uses flooding to label the binary search region, which leads to slightly rough labeling where two search regions meet. When disabled, a non-parallel distance transform is used, which can be slower but always has exact labels where two search regions meet. I recommend enabling this for larger images and disabling it for smaller ones.",        highlight_type=None,
+        "Enable the fast search button to use a slightly alternate algorithm for the node search step that is faster. This algorithm uses a parallelized distance transform to create a binary search region which is a lot faster if you have a lot of CPU cores. It then uses flooding to label the binary search region, which leads to slightly rough labeling where two search regions meet. When disabled, a non-parallel distance transform is used, which can be slower but always has exact labels where two search regions meet. I recommend enabling this for larger images and disabling it for smaller ones. If your search region is very large the fast search may be actually slower but there isn't often a practical region to use immense search regions anyway.",        
+        highlight_type=None,
         message_position="beside",
         pre_action=MenuHelper.create_widget_interaction(tutorial, 'con_dialog', 'fastdil', 'click()'),
         action=MenuHelper.create_widget_interaction(tutorial, 'con_dialog', 'fastdil', 'toggle()')
@@ -1745,15 +1793,16 @@ def setup_branch_tutorial(window):
 
     tutorial.add_step(
         MenuHelper.create_widget_getter(tutorial, 'branch_dialog', 'fix2'),
-        "The second auto-correction option will automatically merge any internal labels that arise with their outer-neighbors. This is something that can occasionally happen with fat, trunk-like branches that are tricky to algorithmically decipher. I have found that this merge handles these issues quite well, so this option is enabled by default.",
+        "The first auto-correction option will automatically merge any internal labels that arise with their outer-neighbors. This is something that can occasionally happen with fat, trunk-like branches that are tricky to algorithmically decipher. I have found that this merge handles these issues quite well, so this option is enabled by default. An alternate option will make the internal labels only merge with external structures that are not 'branch-like'. This is a good thing to enable if you are also enabling the 'reunify main branches' correction, as it will stop long branches from merging with core-like elements.",
         highlight_type=None,
         message_position="beside",
-        pre_action=MenuHelper.create_widget_interaction(tutorial, 'branch_dialog', 'fix2', 'click()')
+        pre_action=MenuHelper.create_widget_interaction(tutorial, 'branch_dialog', 'fix2', 'showPopup()'),
+        action=MenuHelper.create_widget_interaction(tutorial, 'branch_dialog', 'fix2', 'hidePopup()')
     )
 
     tutorial.add_step(
         MenuHelper.create_widget_getter(tutorial, 'branch_dialog', 'fix3'),
-        "This auto-correction step will automatically correct any branches that aren't contiguous in space. Rarely (Depending on the segmentation, really) a branch can initially be labeled non-contiguously, which is usually not correct. This is because the 'meat' of any branch is at first labeled based on which internal filament it's closest to. So if you have a very wide branch it may rarely aquire labels of nearby smaller branches across gaps. Enabling this will split those labels into seperate regions as to not confound the connectivity graph. The largest component is considered the 'correct one' and keeps its label, while smaller components inherit the label of the largest shared border of a 'real' branch they are bordering. It is enabled here by default to mitigate any potential errors, although note this does not apply to the branchpoint networks since they don't actually utilize the branches themselves.",
+        "The second auto-correction step will automatically correct any branches that aren't contiguous in space. Rarely (Depending on the segmentation, really) a branch can initially be labeled non-contiguously, which is usually not correct. This is because the 'meat' of any branch is at first labeled based on which internal filament it's closest to. So if you have a very wide branch it may rarely aquire labels of nearby smaller branches across gaps. Enabling this will split those labels into seperate regions as to not confound the connectivity graph. The largest component is considered the 'correct one' and keeps its label, while smaller components inherit the label of the largest shared border of a 'real' branch they are bordering. It is enabled here by default to mitigate any potential errors, although note this does not apply to the branchpoint networks since they don't actually utilize the branches themselves.",
         highlight_type=None,
         message_position="beside",
         pre_action=MenuHelper.create_widget_interaction(tutorial, 'branch_dialog', 'fix3', 'click()')
@@ -1847,6 +1896,7 @@ def setup_branch_tutorial(window):
         action=MenuHelper.create_widget_interaction(tutorial, 'gen_dialog', 'branch_removal', 'setText("")')
     )
 
+    """
     tutorial.add_step(
         MenuHelper.create_widget_getter(tutorial, 'gen_dialog', 'auto'),
         "This 'attempt to auto correct skeleton looping' option should generally be enabled for 3D data. In short it applies an extra algorithmic step to improve the branch detection algorithm. However, this does not really apply to 2D data. It will be enabled by default for 3D data and disabled by default for 2D data.",
@@ -1855,6 +1905,7 @@ def setup_branch_tutorial(window):
         pre_action=MenuHelper.create_widget_interaction(tutorial, 'gen_dialog', 'auto', 'click()'),
         action=MenuHelper.create_widget_interaction(tutorial, 'gen_dialog', 'auto', 'toggle()')
     )
+    """
 
     tutorial.add_step(
         MenuHelper.create_widget_getter(tutorial, 'gen_dialog', 'comp_dil'),
@@ -2156,14 +2207,14 @@ def setup_seg_tutorial(window):
     )
 
     tutorial.add_step(
-        window.canvas,
+        window.graphics_widget,
         "You will mark these regions directly on the canvas.",
         highlight_type="rect",
         message_position="top_left"
     )
 
     tutorial.add_step(
-        window.canvas,
+        window.graphics_widget,
         "The program will use your markings to train itself. When you train a model, it will learn to segment out regions that look like those you marked as foreground, while ignoring regions that you marked as background.",
         highlight_type="rect",
         message_position="top_left"
@@ -2224,7 +2275,7 @@ def setup_seg_tutorial(window):
 
     tutorial.add_step(
         None,
-        "At some point you'll reach some kind of ceiling where additional training data won't really help more. This might take 20-40 minutes of training. So try to end the training session by then, or earlier if it looks satisfactory.",
+        "At some point you'll reach some kind of ceiling where additional training data won't really help more. This might take 20 minutes of training or so. So try to end the training session by then, or earlier if it looks satisfactory.",
         highlight_type="rect",
         message_position="top_left"
     )
@@ -2259,7 +2310,7 @@ def setup_seg_tutorial(window):
 
     tutorial.add_step(
         None,
-        "Likewise, 'Load Model' can be used to reopen a saved model. You can train over an old model to have it combine all the training data, although note the model might become more ponderous the more you train over it.",
+        "Likewise, 'Load Model' can be used to reopen a saved model. You can train on top of an old model to have it combine all the training data, although note the model might slow down the more you train on it.",
         highlight_type="rect",
         message_position="top_left"
     )

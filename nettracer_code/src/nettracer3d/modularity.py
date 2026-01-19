@@ -6,6 +6,7 @@ import matplotlib.colors as mcolors
 import os
 from . import network_analysis
 from . import simple_network
+from . import nettracer as n3d
 import numpy as np
 import itertools
 
@@ -230,9 +231,9 @@ def show_communities_flex(G, master_list, normalized_weights, geo_info=None, geo
 
 
 
-def community_partition(master_list, weighted = False, style = 0, dostats = True, seed = None):
+def community_partition(G, weighted = False, style = 0, dostats = True, seed = None):
 
-    def calculate_network_stats(G, communities):
+    def calculate_network_stats(G, unweighted_G, communities):
         """
         Calculate comprehensive network statistics for the graph and its communities.
         
@@ -283,7 +284,7 @@ def community_partition(master_list, weighted = False, style = 0, dostats = True
         
             # Per-community statistics
             for i, com in enumerate(communities):
-                subgraph = G.subgraph(com)
+                subgraph = unweighted_G.subgraph(com)
                 
                 # Basic community metrics
                 stats[f'Community {i+1} Density'] = nx.density(subgraph)
@@ -302,7 +303,7 @@ def community_partition(master_list, weighted = False, style = 0, dostats = True
 
         try:        
             # Global network metrics
-            stats['Global Clustering Coefficient'] = nx.average_clustering(G)
+            stats['Global Clustering Coefficient'] = nx.average_clustering(unweighted_G)
         except:
             pass
         try:
@@ -340,7 +341,7 @@ def community_partition(master_list, weighted = False, style = 0, dostats = True
         
         return stats
 
-    def calculate_louvain_network_stats(G, partition, seed):
+    def calculate_louvain_network_stats(G, unweighted_G, partition, seed):
         """
         Calculate comprehensive network statistics for the graph using Louvain community detection.
         
@@ -371,7 +372,7 @@ def community_partition(master_list, weighted = False, style = 0, dostats = True
             if len(connected_components) > 1:
                 for i, component in enumerate(connected_components):
                     subgraph = G.subgraph(component)
-                    subgraph_partition = nx.community.louvain_communities(G, weight='weight', seed = seed)
+                    subgraph_partition = list(nx.community.louvain_communities(subgraph, seed = seed))
                     modularity = community.modularity(subgraph, subgraph_partition)
                     num_nodes = len(component)
                     stats[f'Modularity of component with {num_nodes} nodes'] = modularity
@@ -396,7 +397,7 @@ def community_partition(master_list, weighted = False, style = 0, dostats = True
         
         # Global network metrics
         try:
-            stats['Global Clustering Coefficient'] = nx.average_clustering(G)
+            stats['Global Clustering Coefficient'] = nx.average_clustering(unweighted_G)
         except:
             pass
         try:
@@ -435,7 +436,7 @@ def community_partition(master_list, weighted = False, style = 0, dostats = True
         try:        
             # Per-community statistics
             for i, com in enumerate(communities):
-                subgraph = G.subgraph(com)
+                subgraph = unweighted_G.subgraph(com)
                 
                 # Basic community metrics
                 stats[f'Community {i+1} Density'] = nx.density(subgraph)
@@ -451,52 +452,16 @@ def community_partition(master_list, weighted = False, style = 0, dostats = True
                 if nx.is_connected(subgraph):
                     stats[f'Community {i+1} Avg Path Length'] = nx.average_shortest_path_length(subgraph)
         except:
-            import traceback
             pass
         
         return stats
 
     stats = {}
-
+    unweighted_G = G
     if weighted:
-        G, edge_weights = network_analysis.weighted_network(master_list)
-        edge_weights = get_edge_weights(G)
+        G = n3d.convert_to_multigraph(G)
 
-    if style == 1 and weighted:
-        G = nx.Graph()
-
-        # Find the maximum and minimum edge weights
-        max_weight = max(weight for edge, weight in edge_weights.items())
-        min_weight = min(weight for edge, weight in edge_weights.items())
-
-        if max_weight > 1:
-            # Normalize edge weights to the range [0.1, 1.0]
-            normalized_weights = {edge: 0.1 + 0.9 * ((weight - min_weight) / (max_weight - min_weight)) for edge, weight in edge_weights.items()}
-        else:
-            normalized_weights = {edge: 0.1 for edge, weight in edge_weights.items()}
-
-        # Add edges to the graph with normalized weights
-        for edge, normalized_weight in normalized_weights.items():
-            G.add_edge(edge[0], edge[1], weight=normalized_weight)
-
-        # Replace Louvain with NetworkX's implementation
-        communities = list(nx.community.louvain_communities(G, weight='weight', seed = seed))
-        
-        # Convert to the same format as community_louvain.best_partition
-        output = {}
-        for i, com in enumerate(communities):
-            for node in com:
-                output[node] = i + 1
-
-        if dostats:
-            stats = calculate_louvain_network_stats(G, communities, seed)
-
-        return output, normalized_weights, stats
-
-    elif style == 1:
-        edges = list(zip(master_list[0], master_list[1]))
-        G = nx.Graph()
-        G.add_edges_from(edges)
+    if style == 1:
 
         # Louvain with NetworkX's implementation
         communities = list(nx.community.louvain_communities(G, seed = seed))
@@ -508,60 +473,13 @@ def community_partition(master_list, weighted = False, style = 0, dostats = True
                 output[node] = i + 1
 
         if dostats:
-            stats = calculate_louvain_network_stats(G, communities, seed)
+            stats = calculate_louvain_network_stats(G, unweighted_G, communities, seed)
 
         return output, None, stats
-
-    elif style == 0 and weighted:
-
-        G = nx.Graph()
-
-        # Find the maximum and minimum edge weights
-        max_weight = max(weight for edge, weight in edge_weights.items())
-        min_weight = min(weight for edge, weight in edge_weights.items())
-
-        if max_weight > 1:
-            # Normalize edge weights to the range [0.1, 1.0]
-            normalized_weights = {edge: 0.1 + 0.9 * ((weight - min_weight) / (max_weight - min_weight)) for edge, weight in edge_weights.items()}
-        else:
-            normalized_weights = {edge: 0.1 for edge, weight in edge_weights.items()}
-
-        # Add edges to the graph with normalized weights
-        for edge, normalized_weight in normalized_weights.items():
-            G.add_edge(edge[0], edge[1], weight=normalized_weight)
-
-        if seed is not None:
-            import random
-            import numpy as np
-            # Set seeds
-            random.seed(seed)
-            np.random.seed(seed)
-
-        # Detect communities using label propagation
-        communities = list(community.label_propagation_communities(G))
-        output = {}
-        for i, com in enumerate(communities):
-            for node in com:
-                output[node] = i + 1
-
-        if dostats:
-
-            stats = calculate_network_stats(G, communities)
-
-        return output, normalized_weights, stats
 
     elif style == 0:
 
 
-        edges = list(zip(master_list[0], master_list[1]))
-
-        # Create a graph
-        G = nx.Graph()
-
-        # Add edges from the DataFrame
-        G.add_edges_from(edges)
-
-
         # Detect communities using label propagation
 
         if seed is not None:
@@ -579,7 +497,7 @@ def community_partition(master_list, weighted = False, style = 0, dostats = True
 
         if dostats:
 
-            stats = calculate_network_stats(G, communities)
+            stats = calculate_network_stats(G, unweighted_G, communities)
 
         return output, None, stats
 

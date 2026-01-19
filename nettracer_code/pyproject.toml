@@ -1,6 +1,6 @@
 [project]
 name = "nettracer3d"
-version = "1.2.8"
+version = "1.3.5"
 authors = [
   { name="Liam McLaughlin", email="liamm@wustl.edu" },
 ]
@@ -19,6 +19,7 @@ dependencies = [
     "tifffile",
     "qtrangeslider",
     "PyQt6",
+    "pyqtgraph",
     "scikit-learn",
     "setuptools",
     "umap-learn"]

@@ -222,13 +222,13 @@ def show_identity_network(excel_file_path, node_identities, geometric=False, geo
     # Node size handling
     node_dict = {}
     for node in G.nodes():
-        try:
+        try: #Perhaps remove this
             if identity_dict[node] == 'Edge':
-                node_dict[node] = 30
+                node_dict[node] = 10
             else:
-                node_dict[node] = 100
+                node_dict[node] = 10
         except:
-            node_dict[node] = 100
+            node_dict[node] = 10
 
     if geometric:
         # Handle geometric positioning

@@ -6,6 +6,7 @@ from PyQt6.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout, QG
                             QLabel, QComboBox, QMessageBox, QTableView, QInputDialog,
                             QMenu, QTabWidget, QGroupBox, QCheckBox, QScrollArea)
 from PyQt6.QtCore import (QPoint, Qt, QAbstractTableModel, QTimer,  QThread, pyqtSignal, QObject, QCoreApplication, QEvent, QEventLoop)
+from PyQt6 import QtCore
 import numpy as np
 import time
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
@@ -34,9 +35,11 @@ import threading
 import queue
 from threading import Lock
 from scipy import ndimage
+import pyqtgraph as pg
 import os
 from . import painting
 from . import stats as net_stats
+from . import network_graph_widget as ngw
 
 
 
@@ -123,7 +126,7 @@ class ImageViewerWindow(QMainWindow):
         self.selection_threshold = 1.0  # Time in seconds before starting rectangle selection
         self.background = None
         self.last_update_time = 0
-        self.update_interval = 0.016  # 60 FPS
+        self.update_interval = 0.008  # 60 FPS
         
         # Initialize zoom mode state
         self.zoom_mode = False
@@ -133,6 +136,7 @@ class ImageViewerWindow(QMainWindow):
 
         # Pan mode state
         self.pan_mode = False
+        #self.pan_modes = True
         self.panning = False
         self.pan_start = None
         self.img_width = None
@@ -204,6 +208,7 @@ class ImageViewerWindow(QMainWindow):
             1: None
 
         }
+        self.stats_dict = {}
 
         self.original_shape = None #For undoing resamples
         
@@ -234,14 +239,14 @@ class ImageViewerWindow(QMainWindow):
 
 
         self.toggle_scale = QPushButton("📏")
-        self.toggle_scale.setFixedSize(20, 20)
+        self.toggle_scale.setFixedSize(32, 32)
         self.toggle_scale.clicked.connect(self.toggle_scalebar)
         self.toggle_scale.setCheckable(True)
         self.toggle_scale.setChecked(False)
         control_layout.addWidget(self.toggle_scale)
 
         self.reset_view = QPushButton("🏠")
-        self.reset_view.setFixedSize(20, 20)
+        self.reset_view.setFixedSize(32, 32)
         self.reset_view.clicked.connect(self.home)
         control_layout.addWidget(self.reset_view)
 
@@ -333,20 +338,132 @@ class ImageViewerWindow(QMainWindow):
         self.setCentralWidget(main_widget)
         main_layout = QHBoxLayout(main_widget)
         
+
+
         # Create left panel for image and controls
         left_panel = QWidget()
         self.left_layout = QVBoxLayout(left_panel)
 
-        
-        # Create matplotlib canvas for image display
-        self.figure = Figure(figsize=(8, 8))
-        self.canvas = FigureCanvas(self.figure)
-        self.ax = self.figure.add_subplot(111)
-        self.left_layout.addWidget(self.canvas)
+        class WheelViewBox(pg.ViewBox):
+            wheel_signal = QtCore.Signal()
+            pan_finished_signal = QtCore.Signal()
+            
+            def __init__(self, parent_window, *args, **kwargs):
+                super().__init__(*args, **kwargs)
+                self.parent_window = parent_window
+                
+            def wheelEvent(self, ev, axis=None):
+                from PyQt6.QtCore import Qt
+                
+                # Get modifiers
+                modifiers = ev.modifiers()
+                ctrl_pressed = bool(modifiers & Qt.KeyboardModifier.ControlModifier)
+                shift_pressed = bool(modifiers & Qt.KeyboardModifier.ShiftModifier)
+                alt_pressed = bool(modifiers & Qt.KeyboardModifier.AltModifier)
+                
+                # Determine scroll direction
+                scroll_up = ev.delta() > 0
+                
+                # Handle different modifier combinations
+                if self.parent_window.brush_mode:
+                    # Alt: adjust 3D threshold
+                    if alt_pressed and self.parent_window.threed and not ctrl_pressed and not shift_pressed:
+                        self.parent_window.on_threed_scroll(scroll_up)
+                        ev.accept()
+                        return
+                    
+                    # Ctrl (no shift): adjust brush size
+                    elif ctrl_pressed and not shift_pressed:
+                        self.parent_window.on_brush_size_scroll(scroll_up)
+                        ev.accept()
+                        return
+                
+                # Shift: scroll through slices
+                if shift_pressed:
+                    step_multiplier = 3 if ctrl_pressed else 1
+                    self.parent_window.on_slice_scroll(scroll_up, step_multiplier)
+                    ev.accept()
+                    return
+                
+                # No modifiers (or unhandled combination): default zoom behavior
+                super().wheelEvent(ev, axis)
+                self.wheel_signal.emit()
+                ev.accept()
+            
+            def mousePressEvent(self, ev):
+                if self.parent_window.pan_mode:
+                    super().mousePressEvent(ev)
+                else:
+                    result = self.parent_window.on_mouse_press(ev)
+                    if result:
+                        super().mousePressEvent(ev)
+                    else:
+                        ev.accept()
+            
+            def mouseMoveEvent(self, ev):
+                if self.parent_window.pan_mode:
+                    super().mouseMoveEvent(ev)
+                    ev.accept()
+                else:
+                    self.parent_window.on_mouse_move(ev.scenePos())
+                    ev.accept()
+            
+            def mouseReleaseEvent(self, ev):
+                if self.parent_window.pan_mode:
+                    super().mouseReleaseEvent(ev)
+                else:
+                    self.parent_window.on_mouse_release(ev)
+                    ev.accept()
 
-        self.canvas.mpl_connect('scroll_event', self.on_mpl_scroll)
 
-        
+        # Create custom ViewBox instance first
+        self.view = WheelViewBox(self)
+        self.view.setAspectLocked(True)
+
+        # Create the graphics widget
+        self.graphics_widget = pg.GraphicsLayoutWidget()
+
+        # Create custom ViewBox instance first
+        self.view = WheelViewBox(self)
+        self.view.setAspectLocked(True)
+
+        # Add a plot item with our custom ViewBox
+        self.plot_item = self.graphics_widget.addPlot(viewBox=self.view)
+
+        self.plot_item.hideAxis('left')
+        self.plot_item.hideAxis('bottom')
+
+        # Add image item to the view
+        self.image_item = pg.ImageItem()
+        self.view.addItem(self.image_item)
+
+        # Add widget to layout
+        self.left_layout.addWidget(self.graphics_widget)
+
+        # Enable drag and drop for the graphics widget
+        self.graphics_widget.setAcceptDrops(True)
+
+        # Connect wheel event
+        self.view.wheel_signal.connect(self.on_wheel_event)
+        self.view.sigRangeChangedManually.connect(self.on_range_changed_manually)
+
+
+        # Create debounce timer for wheel events
+        self.wheel_timer = QTimer()
+        self.previous_zoom_level = None  # Track zoom level to detect direction
+        self.wheel_timer.setSingleShot(True)
+        self.wheel_timer.timeout.connect(self.on_wheel_finished)
+        self.is_wheeling = False
+        # Connect scroll event for pyqtgraph
+        self.graphics_widget.scene().sigMouseMoved.connect(self.on_mouse_move)
+        self.view.pan_finished_signal.connect(self.on_pan_finished)
+
+        self.pan_timer = QTimer()
+        self.pan_timer.setSingleShot(True)
+        self.pan_timer.timeout.connect(self.on_pan_finished)
+        self.is_panning = False
+
+
         self.left_layout.addWidget(control_panel)
 
         # Add timer for debouncing slice updates
@@ -393,51 +510,102 @@ class ImageViewerWindow(QMainWindow):
         # Create right panel
         right_panel = QWidget()
         right_layout = QVBoxLayout(right_panel)
-        
+
         # Create tabbed data widget for top right
         self.tabbed_data = TabbedDataWidget(self)
         right_layout.addWidget(self.tabbed_data)
         # Initialize data_table property to None - it will be set when tabs are added
         self.data_table = []
-        
+
         # Create table control panel
         table_control = QWidget()
         table_control_layout = QHBoxLayout(table_control)
-        
+
         # Create toggle buttons for tables
-        self.network_button = QPushButton("Network")
+        self.network_button = QPushButton("Network Table")
         self.network_button.setCheckable(True)
         self.network_button.setChecked(True)
         self.network_button.clicked.connect(self.show_network_table)
-        
-        self.selection_button = QPushButton("Selection")
+
+        self.network_graph_button = QPushButton("Network Graph")
+        self.network_graph_button.setCheckable(True)
+        self.network_graph_button.setChecked(False)
+        self.network_graph_button.clicked.connect(self.show_network_graph)
+
+        self.selection_button = QPushButton("Selection Table")
         self.selection_button.setCheckable(True)
         self.selection_button.clicked.connect(self.show_selection_table)
-        
+
+        self.selection_graph_button = QPushButton("Selection Graph")
+        self.selection_graph_button.setCheckable(True)
+        self.selection_graph_button.clicked.connect(self.show_selection_graph)
+
         # Add buttons to control layout
         table_control_layout.addWidget(self.network_button)
+        table_control_layout.addWidget(self.network_graph_button)
         table_control_layout.addWidget(self.selection_button)
-        
+        table_control_layout.addWidget(self.selection_graph_button)
+
         # Add control panel to right layout
         right_layout.addWidget(table_control)
-        
+
+        # CREATE A CONTAINER FOR SWITCHABLE VIEWS
+        self.view_container = QWidget()
+        self.view_layout = QVBoxLayout(self.view_container)
+        self.view_layout.setContentsMargins(0, 0, 0, 0)
+
+
+
+        # Create graph widgets
+        self.network_graph_widget = ngw.NetworkGraphWidget(
+            parent=self,
+            weight=False,
+            geometric=False,
+            centroids=None,
+            communities=True,
+            community_dict=None,
+            labels=True,
+            z_size = True
+        )
+
+        self.selection_graph_widget = ngw.NetworkGraphWidget(
+            parent=self,
+            weight=False,
+            geometric=False,
+            centroids=None,
+            communities=False,
+            community_dict=None,
+            labels=True,
+            z_size = True
+        )
+
         # Create both table views
-        self.network_table = CustomTableView(self)
-        self.selection_table = CustomTableView(self)
+        self.network_table = CustomTableView(self, subgraph = self.network_graph_widget)
+        self.selection_table = CustomTableView(self, subgraph = self.selection_graph_widget)
         empty_df = pd.DataFrame(columns=['Node A', 'Node B', 'Edge C'])
         self.selection_table.setModel(PandasModel(empty_df))
         self.network_table.setAlternatingRowColors(True)
         self.selection_table.setAlternatingRowColors(True)
         self.network_table.setSortingEnabled(True)
         self.selection_table.setSortingEnabled(True)
-        
-        # Initially show network table and hide selection table
-        right_layout.addWidget(self.network_table)
-        right_layout.addWidget(self.selection_table)
+
+        # Add all views to the container
+        self.view_layout.addWidget(self.network_table)
+        self.view_layout.addWidget(self.network_graph_widget)
+        self.view_layout.addWidget(self.selection_table)
+        self.view_layout.addWidget(self.selection_graph_widget)
+
+        # Initially show only network table
+        self.network_table.show()
+        self.network_graph_widget.hide()
         self.selection_table.hide()
-        
-        # Store reference to currently active table
-        self.active_table = self.network_table
+        self.selection_graph_widget.hide()
+
+        # Add the container to the right layout
+        right_layout.addWidget(self.view_container)
+
+        # Store reference to currently active view
+        self.active_view = self.network_table
         
         main_layout.addWidget(right_panel)
         
@@ -450,11 +618,6 @@ class ImageViewerWindow(QMainWindow):
             'edges': []
         }
         
-        # Connect mouse events
-        self.canvas.mpl_connect('button_press_event', self.on_mouse_press)
-        self.canvas.mpl_connect('button_release_event', self.on_mouse_release)
-        self.canvas.mpl_connect('motion_notify_event', self.on_mouse_move)
-
         # Initialize measurement tracking
         self.measurement_points = []  # List to store point pairs
         self.angle_measurements = []  # NEW: List to store angle trios
@@ -479,8 +642,6 @@ class ImageViewerWindow(QMainWindow):
         self.excel_manager = ExcelotronManager(self)
         self.excel_manager.data_received.connect(self.handle_excel_data)
         self.prev_coms = None
-
-        self.static_background = None
         
         # Background caching for blitting
         self.paint_session_active = False
@@ -492,6 +653,213 @@ class ImageViewerWindow(QMainWindow):
         self.resume = False
         self._first_pan_done = False
         self.thresh_window_ref = None
+        self.disable_pan = False
+        self.grid_ready = False
+        self.remove_scale = False
+        self.remove_grid = False
+        self.original_dims = None
+        self.thresh_min = None
+        self.thresh_max = None
+
+        #Deprecated:
+        self.figure = Figure(figsize=(8, 8))
+        self.canvas = FigureCanvas(self.figure)
+        self.ax = self.figure.add_subplot(111)
+
+        # Load graph
+        #self.graph_widget.set_graph(my_network.network)
+        #self.graph_widget.load_graph()
+
+    def toggle_grid(self, show=None, alpha=0.3):
+        """Toggle measurement grid with x/y axis labels."""
+        if show is None:
+            show = not getattr(self, 'grid_visible', False)
+        
+        self.grid_visible = show
+        
+        # Show/hide grid
+        self.plot_item.showGrid(x=show, y=show, alpha=alpha)
+        
+        # Show/hide axes
+        self.plot_item.showAxis('left', show=show)
+        self.plot_item.showAxis('bottom', show=show)
+
+    def dragEnterEvent(self, event):
+        """Handle drag enter event to accept file drops"""
+        from PyQt6.QtCore import Qt
+        
+        if event.mimeData().hasUrls():
+            # Check if at least one URL is a local file
+            for url in event.mimeData().urls():
+                if url.isLocalFile():
+                    event.acceptProposedAction()
+                    return
+        event.ignore()
+    
+    def dropEvent(self, event):
+        """Handle drop event to load dragged image files or directories"""
+        from PyQt6.QtCore import Qt
+        import os
+        
+        if event.mimeData().hasUrls():
+            for url in event.mimeData().urls():
+                if url.isLocalFile():
+                    file_path = url.toLocalFile()
+                    
+                    # Check if it's a directory
+                    if os.path.isdir(file_path):
+                        # TODO: Handle directory - specify what to do with directories here
+                        print(f"Loading session: {file_path}")
+                        self.load_from_network_obj(file_path)
+                        break
+                    
+                    # Check if it's a valid image file
+                    valid_extensions = ('.png', '.jpg', '.jpeg', '.tif', '.tiff', '.nii')
+                    if file_path.lower().endswith(valid_extensions):
+                        # Load the image file
+                        self.load_channel(self.active_channel, filename=file_path)
+                        print(f"Loading image: {file_path}")
+                        break  # Load only the first valid image
+                    else:
+                        print(f"Invalid file type: {file_path}")
+            
+            event.acceptProposedAction()
+        else:
+            event.ignore()
+
+    def on_range_changed_manually(self):
+        """Called when view range changes due to user interaction (wheel or pan)."""
+        # If we're wheeling, ignore
+        if self.is_wheeling:
+            return
+        
+        # If we just finished wheeling recently, ignore (prevents false pan detection)
+        if hasattr(self, '_wheel_finished_time'):
+            if time.time() - self._wheel_finished_time < 1:  # grace period
+                return
+
+        if self.pan_mode:
+            self.graphics_widget.setCursor(Qt.CursorShape.ClosedHandCursor)
+
+        # Otherwise it's a pan event
+        if not self.is_panning:
+            self.is_panning = True
+        
+        self.pan_timer.stop()
+        self.pan_timer.start(150)
+
+    def on_wheel_event(self):
+        """Handle wheel scroll - do quick low-res update only when zooming out"""
+        view_range = self.view.viewRange()
+        current_zoom_level = (view_range[0][1] - view_range[0][0]) * (view_range[1][1] - view_range[1][0])
+        
+        zooming_out = self.previous_zoom_level is not None and current_zoom_level > self.previous_zoom_level
+        if zooming_out and not self.is_wheeling:
+            self.update_display(quick_wheel_update=True)
+
+        self.is_wheeling = True
+        if self.machine_window is not None:
+            if self.machine_window.segmentation_worker is not None:
+                if not self.machine_window.segmentation_worker._paused:
+                    self.resume = True
+                self.machine_window.segmentation_worker.pause()
+        
+        self.previous_zoom_level = current_zoom_level
+        
+        self.wheel_timer.stop()
+        self.wheel_timer.start(150)
+
+    def on_pan_finished(self):
+        """Called once when pan finishes (after 150ms of no panning)."""
+        self.is_panning = False
+
+        view_range = self.view.viewRange()
+        current_xlim = view_range[0]
+        current_ylim = view_range[1]
+
+        if self.resume:
+            self.machine_window.segmentation_worker.resume()
+            self.resume = False
+
+        if self.disable_pan:
+            self.pan_button.setChecked(False)
+            self.toggle_pan_mode()
+            self.disable_pan = False
+            if self.penning:
+                self.pen_button.click()
+            return
+    
+        if self.pan_mode:
+            self.graphics_widget.setCursor(Qt.CursorShape.OpenHandCursor)
+        
+        self.update_display()
+
+    def on_wheel_finished(self):
+        """Called after wheel events stop - do high-res update"""
+        import time
+
+        self._wheel_finished_time = time.time()
+        self.is_wheeling = False
+        if self.resume:
+            self.machine_window.segmentation_worker.resume()
+            self.resume = False
+        if self.disable_pan:
+            self.pan_button.setChecked(False)
+            self.toggle_pan_mode()
+            self.disable_pan = False
+            if self.penning:
+                self.pen_button.click()
+            return
+        self.update_display()
+
+    def on_slice_scroll(self, scroll_up, step_multiplier=1):
+        """Handle slice scrolling with mouse wheel."""
+        step = step_multiplier if scroll_up else -step_multiplier
+        
+        new_slice = self.current_slice + step
+        
+        # Check bounds
+        if new_slice < 0 or new_slice > self.slice_slider.maximum():
+            return
+        
+        self.current_slice = new_slice
+        self.slice_slider.setValue(new_slice)
+        
+        view_range = self.view.viewRange()
+        self.update_display(preserve_zoom=(view_range[0], view_range[1]))
+
+    def on_brush_size_scroll(self, scroll_up):
+        """Handle brush size adjustment with mouse wheel."""
+        step = 1 if scroll_up else -1
+        new_size = self.brush_size + step
+        
+        # Clamp to valid range
+        new_size = max(self.min_brush_size, min(self.max_brush_size, new_size))
+        
+        self.brush_size = new_size
+        self.update_brush_cursor()
+
+    def on_threed_scroll(self, scroll_up):
+        """Handle 3D threshold adjustment with mouse wheel."""
+        import math
+        
+        step = 1 if scroll_up else -1
+        self.threedthresh += step
+        
+        # Round to appropriate odd integer
+        if scroll_up:
+            # Round up to nearest odd
+            self.threedthresh = math.ceil(self.threedthresh)
+            if self.threedthresh % 2 == 0:
+                self.threedthresh += 1
+        else:
+            # Round down to nearest odd, but not below 1
+            self.threedthresh = math.floor(self.threedthresh)
+            if self.threedthresh % 2 == 0:
+                self.threedthresh -= 1
+            self.threedthresh = max(1, self.threedthresh)
+        
+        self.update_brush_cursor()
 
 
     def load_file(self):
@@ -598,9 +966,8 @@ class ImageViewerWindow(QMainWindow):
         
         self.is_popped = True
 
-        # Store original figure size and canvas size policy before popping out
-        self.original_figure_size = self.figure.get_size_inches()
-        self.original_canvas_size_policy = self.canvas.sizePolicy()
+        # Store original widget size policy before popping out
+        self.original_widget_size_policy = self.graphics_widget.sizePolicy()
         
         # Create popup window for canvas
         self.popup_window = QMainWindow()
@@ -626,8 +993,8 @@ class ImageViewerWindow(QMainWindow):
         # Set control panel as child of canvas popup for natural stacking
         self.control_popup_window.setParent(self.popup_window, Qt.WindowType.Window)
         
-        # Remove canvas from left panel
-        self.canvas.setParent(None)
+        # Remove graphics widget from left panel
+        self.graphics_widget.setParent(None)
         
         # Remove control panel from left panel
         # First find the control_panel widget
@@ -654,8 +1021,8 @@ class ImageViewerWindow(QMainWindow):
             slider_container.setParent(None)
             self.popped_slider_container = slider_container
         
-        # Move the actual canvas to popup window
-        self.popup_window.setCentralWidget(self.canvas)
+        # Move the graphics widget to popup window
+        self.popup_window.setCentralWidget(self.graphics_widget)
         
         # Create a container widget for the control popup to hold both control panel and slider
         control_container = QWidget()
@@ -710,14 +1077,8 @@ class ImageViewerWindow(QMainWindow):
             self.keyPressEvent(event)
             return True  # Event handled
         
-        # Handle scroll events for popup canvas
-        if obj == self.popup_window and event.type() == QEvent.Type.Wheel:
-            # Forward wheel events to the scroll handler
-            canvas_widget = self.popup_window.centralWidget()
-            if canvas_widget == self.canvas:
-                # Create a mock matplotlib event from the Qt wheel event
-                self.handle_popup_scroll(event)
-                return True
+        # Handle scroll events for popup canvas - PyQtGraph handles this automatically
+        # No need to forward scroll events as the WheelViewBox will handle them
         
         # Existing window stacking code
         if obj == self.popup_window:
@@ -745,7 +1106,7 @@ class ImageViewerWindow(QMainWindow):
             ('Ctrl+L', lambda: self.load_from_network_obj(directory=self.last_load)),
             ('F', lambda: self.toggle_can() if self.brush_mode and self.machine_window is None else None),
             ('D', lambda: self.toggle_threed() if self.brush_mode and self.machine_window is None else None),
-            ('A', lambda: self.machine_window.switch_foreground() if self.machine_window is not None else None),
+            ('A', lambda: self.machine_window.switch_foreground() if self.machine_window is not None else None)
         ]
         
         # Create shortcuts for both popup windows
@@ -762,25 +1123,15 @@ class ImageViewerWindow(QMainWindow):
 
     def handle_undo(self):
         """Handle undo shortcut"""
+
+        if self.brush_mode or self.machine_window is not None:
+            self.pm.undo_last_virtual_stroke()
+            return
+
         try:
             self.load_channel(self.last_change[1], self.last_change[0], True)
         except:
             pass
-
-    def handle_popup_scroll(self, qt_event):
-        """Handle scroll events in popup window"""
-        # Get the matplotlib canvas from the popup window
-        canvas = self.popup_window.centralWidget()
-        if canvas == self.canvas:
-            # Create a mock matplotlib event to pass to your existing scroll handler
-            # You might need to adapt this based on how your on_mpl_scroll method works
-            # For now, we'll try to call it directly with the Qt event
-            try:
-                # If your scroll handler needs a matplotlib event, you may need to 
-                # create a mock event or adapt the handler
-                pass  # You'll need to implement the scroll forwarding here
-            except:
-                pass
 
     def ensure_window_order(self):
         """Ensure control panel and machine window stay above canvas"""
@@ -804,8 +1155,8 @@ class ImageViewerWindow(QMainWindow):
             if hasattr(self, 'control_popup_window'):
                 self.control_popup_window.removeEventFilter(self)
             
-            # Remove canvas from popup
-            self.canvas.setParent(None)
+            # Remove graphics widget from popup
+            self.graphics_widget.setParent(None)
             self.is_popped = False
             
             # Remove control panel from popup
@@ -821,18 +1172,16 @@ class ImageViewerWindow(QMainWindow):
                 self.canvas_placeholder.setParent(None)
                 del self.canvas_placeholder
             
-            # Reset canvas to original size and size policy
-            if hasattr(self, 'original_figure_size'):
-                self.figure.set_size_inches(self.original_figure_size)
-            if hasattr(self, 'original_canvas_size_policy'):
-                self.canvas.setSizePolicy(self.original_canvas_size_policy)
+            # Reset widget size policy
+            if hasattr(self, 'original_widget_size_policy'):
+                self.graphics_widget.setSizePolicy(self.original_widget_size_policy)
             
-            # Reset canvas minimum and maximum sizes to allow proper resizing
-            self.canvas.setMinimumSize(0, 0)  # Remove any minimum size constraints
-            self.canvas.setMaximumSize(16777215, 16777215)  # Reset to Qt's default maximum
+            # Reset graphics widget minimum and maximum sizes to allow proper resizing
+            self.graphics_widget.setMinimumSize(0, 0)
+            self.graphics_widget.setMaximumSize(16777215, 16777215)
             
-            # Return canvas to left panel
-            self.left_layout.insertWidget(0, self.canvas)  # Insert at top
+            # Return graphics widget to left panel
+            self.left_layout.insertWidget(0, self.graphics_widget)  # Insert at top
             
             # Return control panel to left panel (after canvas)
             if hasattr(self, 'popped_control_panel'):
@@ -844,11 +1193,11 @@ class ImageViewerWindow(QMainWindow):
                 self.left_layout.insertWidget(2, self.popped_slider_container)  # Insert after control panel
                 del self.popped_slider_container
             
-            # Force the canvas to redraw with proper sizing
-            self.canvas.draw()
+            # Force layout update
+            self.graphics_widget.updateGeometry()
+            self.graphics_widget.update()
             
             # Reset the main window layout to ensure proper proportions
-            # Get the main widget and force layout recalculation
             main_widget = self.centralWidget()
             if main_widget:
                 main_widget.updateGeometry()
@@ -861,10 +1210,8 @@ class ImageViewerWindow(QMainWindow):
                 del self.control_popup_window
             
             # Clean up stored size references
-            if hasattr(self, 'original_figure_size'):
-                del self.original_figure_size
-            if hasattr(self, 'original_canvas_size_policy'):
-                del self.original_canvas_size_policy
+            if hasattr(self, 'original_widget_size_policy'):
+                del self.original_widget_size_policy
 
     def on_popup_close(self, event):
         """Return canvas when popup is closed"""
@@ -919,11 +1266,62 @@ class ImageViewerWindow(QMainWindow):
         except:
             return False
 
-    def evaluate_mini(self, mode = 'nodes'):
+    def evaluate_mini(self, mode = 'nodes', subgraph_push = False):
         if self.confirm_mini_thresh():
             self.create_mini_overlay(node_indices = self.clicked_values['nodes'], edge_indices = self.clicked_values['edges'])
         else:
             self.create_highlight_overlay(node_indices=self.clicked_values['nodes'], edge_indices = self.clicked_values['edges'])
+        if subgraph_push:
+            self.create_table_node_selection(self.clicked_values['nodes'])
+
+
+    def highlight_in_subgraphs(self, node_indices):
+        if self.network_graph_widget.rendered:
+            try:
+                self.network_graph_widget.select_nodes(node_indices)
+            except:
+                pass
+        if self.selection_graph_widget.rendered:
+            try:
+                self.selection_graph_widget.select_nodes(node_indices)
+            except:
+                pass
+        try:
+            if self.temp_graph_widget.rendered:
+                self.temp_graph_widget.select_nodes(node_indices)
+        except:
+            pass
+
+    def table_subgraph(self, table_widget, table):
+
+        new_model = PandasModel(table)
+        table_widget.setModel(new_model)
+
+        try:
+            list1, list2, list3 = table.T.values.tolist()
+            temp_network = n3d.Network_3D()
+            temp_network.network_lists = [list1, list2, list3]
+            table_widget.subgraph.set_graph(temp_network.network)
+        except:
+            import traceback
+            traceback.print_exc()
+            pass
+
+    def create_table_node_selection(self, nodes):
+
+        # Get the existing DataFrame from the model
+        original_df = self.network_table.model()._data
+
+        # Create mask for rows for nodes in question
+        mask = (
+            (original_df.iloc[:, 0].isin(nodes) & original_df.iloc[:, 1].isin(nodes))
+            )
+        
+        # Filter the DataFrame to only include direct connections
+        filtered_df = original_df[mask].copy()
+        
+        # Create new model with filtered DataFrame and update selection table
+        self.table_subgraph(self.selection_table, filtered_df)
 
     def create_highlight_overlay(self, node_indices=None, edge_indices=None, overlay1_indices = None, overlay2_indices = None, bounds = False):
         """
@@ -962,6 +1360,7 @@ class ImageViewerWindow(QMainWindow):
         if node_indices is not None:
             if 0 in node_indices:
                 node_indices.remove(0)
+            self.highlight_in_subgraphs(node_indices)
         if edge_indices is not None:
             if 0 in edge_indices:
                 edge_indices.remove(0)
@@ -1058,6 +1457,7 @@ class ImageViewerWindow(QMainWindow):
         if overlay2_overlay is not None:
             self.highlight_overlay = np.maximum(self.highlight_overlay, overlay2_overlay).astype(np.uint8)
         
+
         # Update display
         self.update_display(preserve_zoom=(current_xlim, current_ylim))
 
@@ -1131,6 +1531,9 @@ class ImageViewerWindow(QMainWindow):
             # Get results
             overlay = future_highlight.result()
 
+        if self.active_channel == 0:
+            self.highlight_in_subgraphs(indices)
+
         try:
 
             self.highlight_overlay[self.current_slice, :, :] = overlay
@@ -1138,13 +1541,7 @@ class ImageViewerWindow(QMainWindow):
             pass
 
         # Update display
-        self.update_display(preserve_zoom=(current_xlim, current_ylim))
-
-        if self.pan_mode:
-            self.create_pan_background()
-            current_xlim = self.ax.get_xlim()
-            current_ylim = self.ax.get_ylim()
-            self.update_display_pan_mode(current_xlim, current_ylim)
+        self.update_display()
 
         if my_network.network is not None:
             try:
@@ -1162,11 +1559,10 @@ class ImageViewerWindow(QMainWindow):
                     filtered_df = original_df[mask].copy()
                     
                     # Create new model with filtered DataFrame and update selection table
-                    new_model = PandasModel(filtered_df)
-                    self.selection_table.setModel(new_model)
+                    self.table_subgraph(self.selection_table, filtered_df)
                     
                     # Switch to selection table
-                    self.selection_button.click()
+                    #self.selection_button.click()
             except:
                 pass
 
@@ -1203,10 +1599,10 @@ class ImageViewerWindow(QMainWindow):
         if node_indices is not None:
             if 0 in node_indices:
                 node_indices.remove(0)
+            self.highlight_in_subgraphs(node_indices)
         if edge_indices is not None:
             if 0 in edge_indices:
                 edge_indices.remove(0)
-
 
         if node_indices is None:
             node_indices = []
@@ -1446,7 +1842,6 @@ class ImageViewerWindow(QMainWindow):
                 self.measurement_artists = []
             self.measurement_artists.extend([pt, txt])
             
-            self.canvas.draw()
             self.measurement_mode = "distance"
         else:
             # This is the second point
@@ -1480,9 +1875,7 @@ class ImageViewerWindow(QMainWindow):
             if z1 == z2:  # Only draw line if points are on same slice
                 line = self.ax.plot([x1, x2], [y1, y2], 'r--', alpha=0.5)[0]
                 self.measurement_artists.append(line)
-                
-            self.canvas.draw()
-            
+                            
             # Update measurement display
             self.update_measurement_display()
             
@@ -1490,6 +1883,8 @@ class ImageViewerWindow(QMainWindow):
             self.current_point = None
             self.current_pair_index += 1
             self.measurement_mode = "distance"
+
+        self.update_display()
 
     def place_angle_point(self, x, y, z):
         """Place a measurement point for angle measurement."""
@@ -1506,7 +1901,6 @@ class ImageViewerWindow(QMainWindow):
                         color='green', ha='center', va='bottom')
             self.measurement_artists.extend([pt, txt])
             
-            self.canvas.draw()
             self.measurement_mode = "angle"
             
         elif self.current_second_point is None:
@@ -1524,7 +1918,6 @@ class ImageViewerWindow(QMainWindow):
             if z1 == z:
                 line = self.ax.plot([x1, x], [y1, y], 'g--', alpha=0.7)[0]
                 self.measurement_artists.append(line)
-            self.canvas.draw()
             
         else:
             # Third point (C)
@@ -1585,7 +1978,6 @@ class ImageViewerWindow(QMainWindow):
             if z2 == z3:  # Draw line from B to C if on same slice
                 line = self.ax.plot([x2, x3], [y2, y3], 'g--', alpha=0.7)[0]
                 self.measurement_artists.append(line)
-            self.canvas.draw()
             
             # Update measurement display
             self.update_measurement_display()
@@ -1595,6 +1987,9 @@ class ImageViewerWindow(QMainWindow):
             self.current_second_point = None
             self.current_trio_index += 1
             self.measurement_mode = "angle"
+
+        self.update_display()
+
 
 
     def calculate_3d_angle(self, point_a, point_b, point_c):
@@ -1693,15 +2088,71 @@ class ImageViewerWindow(QMainWindow):
             for column in range(angle_table.model().columnCount(None)):
                 angle_table.resizeColumnToContents(column)
 
+    def show_network_graph(self):
+        """Switch to display the network graph."""
+        if not self.network_graph_button.isChecked():
+            self.network_graph_button.setChecked(True)
+            return
+        
+        # Uncheck other buttons
+        self.network_button.setChecked(False)
+        self.selection_button.setChecked(False)
+        self.selection_graph_button.setChecked(False)
+        
+        # Hide all other views
+        self.network_table.hide()
+        self.selection_table.hide()
+        self.selection_graph_widget.hide()
+        
+        # Show network graph
+        self.network_graph_widget.show()
+        
+        # Load graph (check if network exists)
+        self.network_graph_widget.set_graph(my_network.network)
+        
+        self.active_view = self.network_graph_widget
+
+    def show_selection_graph(self):
+        """Switch to display the selection graph."""
+        if not self.selection_graph_button.isChecked():
+            self.selection_graph_button.setChecked(True)
+            return
+        
+        # Uncheck other buttons
+        self.network_button.setChecked(False)
+        self.network_graph_button.setChecked(False)
+        self.selection_button.setChecked(False)
+        
+        # Hide all other views
+        self.network_table.hide()
+        self.network_graph_widget.hide()
+        self.selection_table.hide()
+        
+        # Show selection graph
+        self.selection_graph_widget.show()
+        
+        self.active_view = self.selection_graph_widget
 
     def show_network_table(self):
         """Switch to display the main network table."""
         if not self.network_button.isChecked():
             self.network_button.setChecked(True)
             return
+        
+        # Uncheck other buttons
+        self.network_graph_button.setChecked(False)
         self.selection_button.setChecked(False)
-        self.network_table.show()
+        self.selection_graph_button.setChecked(False)
+        
+        # Hide all other views
+        self.network_graph_widget.hide()
         self.selection_table.hide()
+        self.selection_graph_widget.hide()
+        
+        # Show network table
+        self.network_table.show()
+        
+        self.active_view = self.network_table
         self.active_table = self.network_table
 
     def show_selection_table(self):
@@ -1709,9 +2160,21 @@ class ImageViewerWindow(QMainWindow):
         if not self.selection_button.isChecked():
             self.selection_button.setChecked(True)
             return
+        
+        # Uncheck other buttons
         self.network_button.setChecked(False)
+        self.network_graph_button.setChecked(False)
+        self.selection_graph_button.setChecked(False)
+        
+        # Hide all other views
         self.network_table.hide()
+        self.network_graph_widget.hide()
+        self.selection_graph_widget.hide()
+        
+        # Show selection table
         self.selection_table.show()
+        
+        self.active_view = self.selection_table
         self.active_table = self.selection_table
 
     def handle_show_neighbors(self, edges=False, nodes = True):
@@ -1736,11 +2199,10 @@ class ImageViewerWindow(QMainWindow):
                 filtered_df = original_df[mask].copy()
                 
                 # Create new model with filtered DataFrame and update selection table
-                new_model = PandasModel(filtered_df)
-                self.selection_table.setModel(new_model)
+                self.table_subgraph(self.selection_table, filtered_df)
                 
                 # Switch to selection table
-                self.selection_button.click()
+                #self.selection_button.click()
 
                 print(f"Found {len(filtered_df)} direct connections between nodes {old_nodes} and their neighbors")
                 self.clicked_values['nodes'] = list(set(filtered_df.iloc[:, 0].to_list() + filtered_df.iloc[:, 1].to_list()))
@@ -1791,12 +2253,7 @@ class ImageViewerWindow(QMainWindow):
                 filtered_df = original_df[mask].copy()
 
                 # Create new model with filtered DataFrame and update selection table
-                new_model = PandasModel(filtered_df)
-                self.selection_table.setModel(new_model)
-                
-                # Switch to selection table
-                self.selection_button.click()
-
+                self.table_subgraph(self.selection_table, filtered_df)
 
             else: #If we have clicked any nodes, we get the components of the clicked objects instead
 
@@ -1822,11 +2279,10 @@ class ImageViewerWindow(QMainWindow):
                 filtered_df = original_df[mask].copy()
                 
                 # Create new model with filtered DataFrame and update selection table
-                new_model = PandasModel(filtered_df)
-                self.selection_table.setModel(new_model)
+                self.table_subgraph(self.selection_table, filtered_df)
                 
                 # Switch to selection table
-                self.selection_button.click()
+                #self.selection_button.click()
 
             if not nodes:
                 self.clicked_values['nodes'] = old_nodes
@@ -1883,24 +2339,7 @@ class ImageViewerWindow(QMainWindow):
                 nodes = list(set(nodes))
 
                 try:
-
-                    # Get the existing DataFrame from the model
-                    original_df = self.network_table.model()._data
-
-                    # Create mask for rows for nodes in question
-                    mask = (
-                        (original_df.iloc[:, 0].isin(nodes) & original_df.iloc[:, 1].isin(nodes))
-                        )
-                    
-                    # Filter the DataFrame to only include direct connections
-                    filtered_df = original_df[mask].copy()
-                    
-                    # Create new model with filtered DataFrame and update selection table
-                    new_model = PandasModel(filtered_df)
-                    self.selection_table.setModel(new_model)
-                    
-                    # Switch to selection table
-                    self.selection_button.click()
+                    self.create_table_node_selection(nodes)
                 except:
                     pass
 
@@ -1958,11 +2397,10 @@ class ImageViewerWindow(QMainWindow):
                 filtered_df = original_df[mask].copy()
                 
                 # Create new model with filtered DataFrame and update selection table
-                new_model = PandasModel(filtered_df)
-                self.selection_table.setModel(new_model)
+                self.table_subgraph(self.selection_table, filtered_df)
                 
                 # Switch to selection table
-                self.selection_button.click()
+                #self.selection_button.click()
             except:
                 pass
 
@@ -2063,6 +2501,7 @@ class ImageViewerWindow(QMainWindow):
                             self.parent().clicked_values['nodes'] = coms[value]
                             com = value
                             value = coms[value][0]
+                            self.parent().create_table_node_selection(self.parent().clicked_values['nodes'])
 
 
                         if value in my_network.node_centroids:
@@ -2191,7 +2630,7 @@ class ImageViewerWindow(QMainWindow):
 
                 if my_network.node_centroids is not None:
                     try:
-                        info_dict['Centroid'] = my_network.node_centroids[label]
+                        info_dict['Centroid(Z,Y,X)'] = my_network.node_centroids[label]
                     except:
                         pass
 
@@ -2229,6 +2668,19 @@ class ImageViewerWindow(QMainWindow):
                     except:
                         pass
 
+                try:
+                    for stat, stat_dict in self.stats_dict.items():
+                        try:
+                            info_dict[stat] = stat_dict[label]
+                        except:
+                            import traceback
+                            print(traceback.format_exc())
+                            pass
+                except:
+                    import traceback
+                    print(traceback.format_exc())
+                    pass
+
 
             elif sort == 'edge':
 
@@ -2258,7 +2710,7 @@ class ImageViewerWindow(QMainWindow):
 
                 if my_network.edge_centroids is not None:
                     try:
-                        info_dict['Centroid'] = my_network.edge_centroids[label]
+                        info_dict['Centroid(Z,Y,X)'] = my_network.edge_centroids[label]
                     except:
                         pass
 
@@ -2678,14 +3130,23 @@ class ImageViewerWindow(QMainWindow):
 
                 if my_network.network_lists is not None:
                     for i in range(len(my_network.network_lists[0]) - 1, -1, -1):
-                        if my_network.network_lists[0][i] in self.clicked_values['nodes'] or my_network.network_lists[0][i] in self.clicked_values['nodes']:
+                        if my_network.network_lists[0][i] in self.clicked_values['nodes'] or my_network.network_lists[1][i] in self.clicked_values['nodes']:
                             del my_network.network_lists[0][i]
                             del my_network.network_lists[1][i]
                             del my_network.network_lists[2][i]
-                    for node in self.clicked_values['nodes']:
+                for node in self.clicked_values['nodes']:
+                    try:
                         del my_network.node_centroids[node]
+                    except:
+                        pass
+                    try:
                         del my_network.node_identities[node]
+                    except:
+                        pass
+                    try:
                         del my_network.communities[node]
+                    except:
+                        pass
 
 
             if len(self.clicked_values['edges']) > 0:
@@ -2700,11 +3161,18 @@ class ImageViewerWindow(QMainWindow):
                             del my_network.network_lists[0][i]
                             del my_network.network_lists[1][i]
                             del my_network.network_lists[2][i]
-                    for node in self.clicked_values['edges']:
+                for edge in self.clicked_values['edges']:
+                    try:
                         del my_network.edge_centroids[edge]
+                    except:
+                        pass
 
             my_network.network_lists = my_network.network_lists
-
+            self.network_graph_widget.set_graph(my_network.network)
+            self.selection_graph_widget.set_graph(None)
+            empty_df = pd.DataFrame(columns=['Node A', 'Node B', 'Edge C'])
+            model = PandasModel(empty_df)
+            self.selection_table.setModel(model)
 
             if not hasattr(my_network, 'network_lists') or my_network.network_lists is None:
                 empty_df = pd.DataFrame(columns=['Node A', 'Node B', 'Edge C'])
@@ -2717,7 +3185,6 @@ class ImageViewerWindow(QMainWindow):
                 for column in range(model.columnCount(None)):
                     self.network_table.resizeColumnToContents(column)
 
-            #self.show_centroid_dialog()
         except Exception as e:
             print(f"Error: {e}")
 
@@ -2819,11 +3286,10 @@ class ImageViewerWindow(QMainWindow):
             filtered_df = original_df[mask].copy()
             
             # Create new model with filtered DataFrame and update selection table
-            new_model = PandasModel(filtered_df)
-            self.selection_table.setModel(new_model)
+            self.table_subgraph(self.selection_table, filtered_df)
             
             # Switch to selection table
-            self.selection_button.click()
+            #self.selection_button.click()
 
             print("Selected nodes + edges have been isolated in the selection table, alongside their neighbors")
 
@@ -2833,6 +3299,10 @@ class ImageViewerWindow(QMainWindow):
 
     def home(self):
 
+        if self.original_xlim is None and self.original_dims is not None:
+            self.original_xlim = (0, self.original_dims[1])
+            self.original_ylim = (0, self.original_dims[0])
+        self.view.setRange(xRange=self.original_xlim, yRange=self.original_ylim, padding=0)
         self.update_display()
 
     def toggle_scalebar(self):
@@ -2840,10 +3310,30 @@ class ImageViewerWindow(QMainWindow):
         try:
 
             self.scale_bar = self.toggle_scale.isChecked()
+
+            if self.grid_ready:
+                self.toggle_grid()
+                self.toggle_scale.setChecked(True)
+                self.grid_ready = False
+                self.remove_scale = True
+                return
+            if self.remove_scale:
+                self._remove_scalebar()
+                self.update_display(preserve_zoom=(self.ax.get_xlim(), self.ax.get_ylim()))
+                self.toggle_scale.setChecked(True)
+                self.remove_scale = False
+                self.remove_grid = True
+                return
+
             if self.scale_bar:
+                self.grid_ready = True
                 self._draw_scalebar()
                 self.update_display(preserve_zoom=(self.ax.get_xlim(), self.ax.get_ylim()))
             else:
+                self.coord_label.setText("                                                                                               ")
+                self.grid_ready = False
+                self.remove_grid = False
+                self.toggle_grid()
                 self._remove_scalebar()
                 self.update_display(preserve_zoom=(self.ax.get_xlim(), self.ax.get_ylim()))
         except:
@@ -2870,12 +3360,6 @@ class ImageViewerWindow(QMainWindow):
         
         self.update_display(preserve_zoom=(current_xlim, current_ylim))
 
-        if self.pan_mode:
-            self.create_pan_background()
-            current_xlim = self.ax.get_xlim()
-            current_ylim = self.ax.get_ylim()
-            self.update_display_pan_mode(current_xlim, current_ylim)
-
         
     def toggle_zoom_mode(self):
         """Toggle zoom mode on/off."""
@@ -2883,7 +3367,6 @@ class ImageViewerWindow(QMainWindow):
 
         if self.zoom_mode:
             if self.pan_mode:
-                self.update_display(preserve_zoom=(self.ax.get_xlim(), self.ax.get_ylim()))
                 self.pan_mode = False
                 self.pan_button.setChecked(False)
 
@@ -2894,7 +3377,7 @@ class ImageViewerWindow(QMainWindow):
             self.last_change = None
             if self.machine_window is not None:
                 self.machine_window.silence_button()
-            self.canvas.setCursor(Qt.CursorShape.CrossCursor)
+            self.graphics_widget.setCursor(Qt.CursorShape.CrossCursor)
             if (hasattr(self, 'virtual_draw_operations') and self.virtual_draw_operations) or \
                (hasattr(self, 'virtual_erase_operations') and self.virtual_erase_operations) or \
                (hasattr(self, 'current_operation') and self.current_operation):
@@ -2909,7 +3392,7 @@ class ImageViewerWindow(QMainWindow):
 
         else:
             if self.machine_window is None:
-                self.canvas.setCursor(Qt.CursorShape.ArrowCursor)
+                self.graphics_widget.setCursor(Qt.CursorShape.ArrowCursor)
             else:
                 self.machine_window.toggle_brush_button()
 
@@ -2918,8 +3401,6 @@ class ImageViewerWindow(QMainWindow):
         """Toggle pan mode on/off."""
         self.pan_mode = self.pan_button.isChecked()
         if self.pan_mode:
-
-
             self.zoom_button.setChecked(False)
             self.pen_button.setChecked(False)
             self.zoom_mode = False
@@ -2927,54 +3408,31 @@ class ImageViewerWindow(QMainWindow):
             self.threed = False
             self.last_change = None
             self.brush_mode = False
-            if (hasattr(self, 'virtual_draw_operations') and self.virtual_draw_operations) or \
-               (hasattr(self, 'virtual_erase_operations') and self.virtual_erase_operations) or \
-               (hasattr(self, 'current_operation') and self.current_operation):
-                # Finish current operation first
-                if hasattr(self, 'current_operation') and self.current_operation:
+            if (hasattr(self, 'completed_paint_strokes') and self.completed_paint_strokes) or \
+               (hasattr(self, 'current_stroke_points') and self.current_stroke_points) or \
+               (hasattr(self, 'virtual_paint_items') and self.virtual_paint_items) or \
+               (hasattr(self, 'current_paint_items') and self.current_paint_items):
+                if hasattr(self, 'current_stroke_points') and self.current_stroke_points:
                     self.pm.finish_current_virtual_operation()
-                # Now convert to real data
                 self.pm.convert_virtual_strokes_to_data()
-                current_xlim = self.ax.get_xlim()
-                current_ylim = self.ax.get_ylim()
-                self.update_display(preserve_zoom=(current_xlim, current_ylim))
+                self.update_display()
             if self.machine_window is not None:
                 self.machine_window.silence_button()
-            self.canvas.setCursor(Qt.CursorShape.OpenHandCursor)
+            self.graphics_widget.setCursor(Qt.CursorShape.OpenHandCursor)
 
-            if self.pan_background_image is None:
+            if self.machine_window is not None:
+                if self.machine_window.segmentation_worker is not None:
+                    if not self.machine_window.segmentation_worker._paused:
+                        self.resume = True
+                    self.machine_window.segmentation_worker.pause()
 
-                if self.machine_window is not None:
-                    if self.machine_window.segmentation_worker is not None:
-                        if not self.machine_window.segmentation_worker._paused:
-                            self.resume = True
-                        self.machine_window.segmentation_worker.pause()
-                
-                # Store current channel visibility state
-                self.pre_pan_channel_state = self.channel_visible.copy()
-                
-                current_xlim = self.ax.get_xlim()
-                current_ylim = self.ax.get_ylim()
-
-                # Create static background from currently visible channels
-                self.create_pan_background()
-                
-                # Hide all channels and show only the background
-                self.channel_visible = [False] * 4
-                self.is_pan_preview = True
-                
-                # Get current downsample factor
-                current_xlim = self.ax.get_xlim() if hasattr(self, 'ax') and self.ax.get_xlim() != (0, 1) else None
-                current_ylim = self.ax.get_ylim() if hasattr(self, 'ax') and self.ax.get_ylim() != (0, 1) else None
-                # Update display to show only background
-                self.update_display_pan_mode(current_xlim, current_ylim)
-
+            self.update_display()
 
         else:
             self.setEnabled(True)
-            self.update_display(preserve_zoom=(self.ax.get_xlim(), self.ax.get_ylim()))
+            self.update_display()
             if self.machine_window is None:
-                self.canvas.setCursor(Qt.CursorShape.ArrowCursor)
+                self.graphics_widget.setCursor(Qt.CursorShape.ArrowCursor)
             else:
                 self.machine_window.toggle_brush_button()
 
@@ -2984,9 +3442,10 @@ class ImageViewerWindow(QMainWindow):
         if self.brush_mode:
 
             if self.pan_mode:
-                self.update_display(preserve_zoom=(self.ax.get_xlim(), self.ax.get_ylim()))
                 self.pan_mode = False
                 self.pan_button.setChecked(False)
+            else:
+                print("Pen mode enabled. Left click = Draw, Right click = Erase. 'Ctrl + Mousewheel' = Resize Pen. 'F' = Toggle Fill Can. 'D' = Toggle 3D Drawing. 'Ctrl + Z' = Undo Last")
 
             self.pm = painting.PaintManager(parent = self)
 
@@ -3000,34 +3459,25 @@ class ImageViewerWindow(QMainWindow):
             else:
                 channel = 2
 
-            if self.pan_mode:
-                current_xlim = self.ax.get_xlim()
-                current_ylim = self.ax.get_ylim()
-                self.update_display(preserve_zoom=(current_xlim, current_ylim))
-
             self.pan_button.setChecked(False)
             self.zoom_button.setChecked(False)
             self.pan_mode = False
             self.zoom_mode = False
             self.update_brush_cursor()
         else:
-            if (hasattr(self, 'virtual_draw_operations') and self.virtual_draw_operations) or \
-               (hasattr(self, 'virtual_erase_operations') and self.virtual_erase_operations) or \
-               (hasattr(self, 'current_operation') and self.current_operation):
-                # Finish current operation first
-                if hasattr(self, 'current_operation') and self.current_operation:
+            if (hasattr(self, 'completed_paint_strokes') and self.completed_paint_strokes) or \
+               (hasattr(self, 'current_stroke_points') and self.current_stroke_points) or \
+               (hasattr(self, 'virtual_paint_items') and self.virtual_paint_items) or \
+               (hasattr(self, 'current_paint_items') and self.current_paint_items):
+                if hasattr(self, 'current_stroke_points') and self.current_stroke_points:
                     self.pm.finish_current_virtual_operation()
-                # Now convert to real data
                 self.pm.convert_virtual_strokes_to_data()
-            # Get current zoom and do display update
-            current_xlim = self.ax.get_xlim()
-            current_ylim = self.ax.get_ylim()
-            self.update_display(preserve_zoom=(current_xlim, current_ylim))
+            self.update_display()
 
             self.last_change = None
             self.can = False
             self.threed = False
-            self.canvas.setCursor(Qt.CursorShape.ArrowCursor)
+            self.graphics_widget.setCursor(Qt.CursorShape.ArrowCursor)
 
     def toggle_can(self):
 
@@ -3042,6 +3492,7 @@ class ImageViewerWindow(QMainWindow):
     def toggle_threed(self):
 
         if not self.threed:
+            print("3D Drawing Enabled. 'Alt + Mousewheel' = Alters Number of Slices to Draw On at Once. 'F' = Toggle Void Fill Can (Fills All Holes in the Z Stack Starting Above and Below Click)")
             self.threed = True
             self.threedthresh = 5
             self.update_brush_cursor()
@@ -3050,109 +3501,51 @@ class ImageViewerWindow(QMainWindow):
             self.update_brush_cursor()
 
 
-    def on_mpl_scroll(self, event):
-        """Handle matplotlib canvas scroll events"""
-        #Wheel events
-        if self.brush_mode and event.inaxes == self.ax:
-
-            # Get modifiers
-            modifiers = event.guiEvent.modifiers()
-            ctrl_pressed = bool(modifiers & Qt.ControlModifier)
-            shift_pressed = bool(modifiers & Qt.ShiftModifier)
-            alt_pressed = bool(modifiers & Qt.AltModifier)
-            
-            # Check if threed is enabled and ONLY if no specific modifiers are pressed
-            if self.threed and not ctrl_pressed and not shift_pressed and not alt_pressed:
-                import math
-                step = 1 if event.button == 'up' else -1
-                self.threedthresh += step
-                
-                # Round to appropriate odd integer based on scroll direction
-                if event.button == 'up':
-                    # Round up to nearest odd
-                    self.threedthresh = math.ceil(self.threedthresh)
-                    if self.threedthresh % 2 == 0:
-                        self.threedthresh += 1
-                else:  # event.button == 'down'
-                    # Round down to nearest odd, but not below 1
-                    self.threedthresh = math.floor(self.threedthresh)
-                    if self.threedthresh % 2 == 0:
-                        self.threedthresh -= 1
-                    # Ensure not below minimum value of 1
-                    self.threedthresh = max(1, self.threedthresh)
-                
-                # Update the brush cursor to show the new threshold
-                self.update_brush_cursor()
-                return
-                
-            # Check if Ctrl is pressed
-
-            if event.guiEvent.modifiers() & Qt.ShiftModifier:
-                pass
-
-            elif event.guiEvent.modifiers() & Qt.ControlModifier:
-                # Brush size adjustment code...
-                step = 1 if event.button == 'up' else -1
-                new_size = self.brush_size + step
-                    
-                if new_size < self.min_brush_size:
-                    new_size = self.min_brush_size
-                elif new_size > self.max_brush_size:
-                    new_size = self.max_brush_size
-                    
-                self.brush_size = new_size
-                self.update_brush_cursor()
-                event.guiEvent.accept()
-                return
-
-        # General scrolling code outside the brush mode condition
-        step = 1 if event.button == 'up' else -1
-
-        if event.guiEvent.modifiers() & Qt.ShiftModifier:
-            if event.guiEvent.modifiers() & Qt.ControlModifier:
-                step = step * 3
-            if (self.current_slice + step) < 0 or (self.current_slice + step) > self.slice_slider.maximum():
-                return
-                
-            self.current_slice = self.current_slice + step
-            self.slice_slider.setValue(self.current_slice + step)
-
-            current_xlim = self.ax.get_xlim() if hasattr(self, 'ax') and self.ax.get_xlim() != (0, 1) else None
-            current_ylim = self.ax.get_ylim() if hasattr(self, 'ax') and self.ax.get_ylim() != (0, 1) else None
-            
-            self.update_display(preserve_zoom=(current_xlim, current_ylim))
-
-
     def keyPressEvent(self, event):
 
         """Key press shortcuts for main class"""
 
         if event.key() == Qt.Key_Z and event.modifiers() & Qt.ControlModifier:
-            try:
-                self.load_channel(self.last_change[1], self.last_change[0], True)
-            except:
-                pass
+            if (self.brush_mode or self.machine_window is not None) and not self.can:
+                self.pm.undo_last_virtual_stroke()
+                return
+            else:
+                try:
+                    self.load_channel(self.last_change[1], self.last_change[0], True)
+                except:
+                    pass
 
             return  # Return to prevent triggering the regular Z key action below
-
-        if event.key() == Qt.Key_Z:
+        elif event.key() == Qt.Key_Z:
             self.zoom_button.click()
-        if self.machine_window is not None:
+        elif self.machine_window is not None:
             if event.key() == Qt.Key_A:
                 self.machine_window.switch_foreground()
-        if event.key() == Qt.Key_X:
+            elif event.key() == Qt.Key_T:
+                self.machine_window.train_model()
+        elif event.key() == Qt.Key_X:
             self.high_button.click()
-        if event.key() == Qt.Key_F and event.modifiers() == Qt.ShiftModifier:
+        elif event.key() == Qt.Key_F and event.modifiers() == Qt.ShiftModifier:
             self.handle_find()
-        if event.key() == Qt.Key_S and event.modifiers() == Qt.ControlModifier:
+        elif event.key() == Qt.Key_S and event.modifiers() == Qt.ControlModifier:
             self.handle_resave()
-        if event.key() == Qt.Key_L and event.modifiers() == Qt.ControlModifier:
+        elif event.key() == Qt.Key_L and event.modifiers() == Qt.ControlModifier:
             self.load_from_network_obj(directory = self.last_load)
-        if self.brush_mode and self.machine_window is None:
+        elif self.brush_mode and self.machine_window is None:
             if event.key() == Qt.Key_F:
                 self.toggle_can()
             elif event.key() == Qt.Key_D:
                 self.toggle_threed()
+        elif event.key() == Qt.Key_Delete:
+            self.handle_delete()
+        elif event.key() == Qt.Key.Key_1:
+            self.set_active_channel(0)
+        elif event.key() == Qt.Key.Key_2:
+            self.set_active_channel(1)
+        elif event.key() == Qt.Key.Key_3:
+            self.set_active_channel(2)
+        elif event.key() == Qt.Key.Key_4:
+            self.set_active_channel(3)
 
     def handle_resave(self, asbool = True):
 
@@ -3223,156 +3616,178 @@ class ImageViewerWindow(QMainWindow):
         
         # Create cursor from pixmap
         cursor = QCursor(pixmap)
-        self.canvas.setCursor(cursor)
+        self.graphics_widget.setCursor(cursor)
         
         painter.end()
 
     def get_current_mouse_position(self):
+        """Get current mouse position in data coordinates for PyQtGraph."""
         # Get the main application's current mouse position
         cursor_pos = QCursor.pos()
         
-        # Convert global screen coordinates to canvas widget coordinates
-        canvas_pos = self.canvas.mapFromGlobal(cursor_pos)
+        # Convert global screen coordinates to graphics widget coordinates
+        widget_pos = self.graphics_widget.mapFromGlobal(cursor_pos)
         
-        # Check if the position is within the canvas bounds
-        if not (0 <= canvas_pos.x() < self.canvas.width() and 
-                0 <= canvas_pos.y() < self.canvas.height()):
-            return 0, 0  # Mouse is outside of the matplotlib canvas
+        # Check if the position is within the widget bounds
+        if not (0 <= widget_pos.x() < self.graphics_widget.width() and 
+                0 <= widget_pos.y() < self.graphics_widget.height()):
+            return 0, 0  # Mouse is outside of the graphics widget
         
-        # OPTION 1: Use matplotlib's built-in coordinate conversion
-        # This accounts for figure margins, subplot positioning, etc.
         try:
-            # Get the figure and axes bounds
-            bbox = self.ax.bbox
+            # Convert widget coordinates to scene coordinates
+            scene_pos = self.graphics_widget.mapToScene(widget_pos)
             
-            # Convert widget coordinates to figure coordinates
-            fig_x = canvas_pos.x()
-            fig_y = self.canvas.height() - canvas_pos.y()  # Flip Y coordinate
-            
-            # Check if within axes bounds
-            if (bbox.x0 <= fig_x <= bbox.x1 and bbox.y0 <= fig_y <= bbox.y1):
-                # Transform to data coordinates
-                data_coords = self.ax.transData.inverted().transform((fig_x, fig_y))
-                return data_coords[0], data_coords[1]
-            else:
+            # Check if within view bounds
+            if not self.view.sceneBoundingRect().contains(scene_pos):
                 return 0, 0
-        except:
-            pass
-
-    def on_mouse_press(self, event):
-        """Handle mouse press events."""
-        if event.inaxes != self.ax:
-            return
-
-        if event.button == 2:
-            self.pan_button.click()
-            return
-                
-        if self.pan_mode:
-
-            self.panning = True
-            self.pan_start = (event.xdata, event.ydata)
-            self.canvas.setCursor(Qt.CursorShape.ClosedHandCursor)
-
-
-        elif self.brush_mode:
-            """Handle brush mode with virtual painting."""
-            if event.inaxes != self.ax:
-                return
-
-            current_xlim = self.ax.get_xlim() if hasattr(self, 'ax') and self.ax.get_xlim() != (0, 1) else None
-            current_ylim = self.ax.get_ylim() if hasattr(self, 'ax') and self.ax.get_ylim() != (0, 1) else None
-
-            if self.pen_button.isChecked():
-                channel = self.active_channel
-            else:
-                channel = 2
-
-            self.pm.initiate_paint_session(channel, current_xlim, current_ylim)
-
             
-            if event.button == 1 or event.button == 3:
-                if self.machine_window is not None:
-                    if self.machine_window.segmentation_worker is not None:
-                        if not self.machine_window.segmentation_worker._paused:
-                            self.resume = True
-                        self.machine_window.segmentation_worker.pause()
-                        
-                x, y = int(event.xdata), int(event.ydata)
-                
-                # Get current zoom to preserve it 
-                current_xlim = self.ax.get_xlim() if hasattr(self, 'ax') and self.ax.get_xlim() != (0, 1) else None
-                current_ylim = self.ax.get_ylim() if hasattr(self, 'ax') and self.ax.get_ylim() != (0, 1) else None
-                
-                if event.button == 1 and getattr(self, 'can', False):
-                    self.update_display(preserve_zoom=(current_xlim, current_ylim))
-                    self.handle_can(x, y)
-                    return
-                    
-                # Determine erase mode and foreground/background
-                if event.button == 3:
-                    self.erase = True
-                else:
-                    self.erase = False
-                
-                # Determine foreground/background for machine window mode
-                foreground = getattr(self, 'foreground', True)
-                    
-                self.last_virtual_pos = (x, y)
-                
-                if self.pen_button.isChecked():
-                    channel = self.active_channel
-                else:
-                    channel = 2
-
-                self.pm.start_virtual_paint_session(channel, current_xlim, current_ylim)
-                
-                # Add first virtual paint stroke
-                brush_size = getattr(self, 'brush_size', 5)
-                self.pm.add_virtual_paint_stroke(x, y, brush_size, self.erase, foreground)
-                
-                # Update display with virtual paint
-                self.pm.update_virtual_paint_display()
-        
-        elif not self.zoom_mode and event.button == 3:  # Right click (for context menu)
-            self.create_context_menu(event)
-        
-        elif event.button == 1:  # Left click
-            # Store initial click position but don't start selection yet
-            self.selection_start = (event.xdata, event.ydata)
-            self.selecting = False  # Will be set to True if the mouse moves while button is held
-
+            # Convert scene coordinates to view (data) coordinates
+            view_pos = self.view.mapSceneToView(scene_pos)
+            
+            # Get data coordinates
+            x = view_pos.x()
+            y = view_pos.y()
+            
+            # Check if within image bounds
+            if self.original_dims is not None:
+                if not (0 <= x < self.original_dims[1] and 0 <= y < self.original_dims[0]):
+                    return 0, 0
+            
+            return x, y
+        except:
+            return 0, 0
 
     def handle_can(self, x, y):
 
-        # Update the channel data
-        current_xlim = self.ax.get_xlim() if hasattr(self, 'ax') and self.ax.get_xlim() != (0, 1) else None
-        current_ylim = self.ax.get_ylim() if hasattr(self, 'ax') and self.ax.get_ylim() != (0, 1) else None
-
-        if self.threed:
+        def fill_void_3d(x, y):
+            """
+            Intelligent void filling that propagates through Z-slices.
+            Stops when the fill touches new edges (indicating it's spilling out of the void).
+            """
+            if not self.threed:
+                return
+            
+            # Backup for undo
             ref = copy.deepcopy(self.channel_data[self.active_channel])
             the_slice = self.channel_data[self.active_channel]
             
-            # First invert the boolean array
-            inv = n3d.invert_boolean(the_slice)
+            def fill_2d_slice(slice_data, x, y):
+                """
+                Fill a 2D slice at coordinate (x, y) and return the filled mask.
+                Returns None if the point is already filled or out of bounds.
+                """
+                h, w = slice_data.shape
+                
+                # Check bounds
+                if x < 0 or x >= w or y < 0 or y >= h:
+                    return None
+                
+                # Check if already filled
+                if slice_data[y, x] != 0:
+                    return None
+                
+                # Invert to find voids
+                inv = ~slice_data.astype(bool)
+                
+                # Label connected components
+                labeled_array, num_features = ndimage.label(inv)
+                
+                # Get target label at clicked point
+                target_label = labeled_array[y, x]
+                
+                if target_label > 0:
+                    # Create mask of the clicked component
+                    fill_mask = (labeled_array == target_label) * max(1, np.max(ref))
+                    return fill_mask
+                
+                return None
             
-            # Label the connected components in the inverted array
-            labeled_array, num_features = n3d.label_objects(inv)
+            def get_touched_edges(mask):
+                """
+                Returns set of edges that the mask touches.
+                Edges: 'top', 'bottom', 'left', 'right'
+                """
+                edges = set()
+                h, w = mask.shape
+                
+                if np.any(mask[0, :]):      # Top edge
+                    edges.add('top')
+                if np.any(mask[h-1, :]):    # Bottom edge
+                    edges.add('bottom')
+                if np.any(mask[:, 0]):      # Left edge
+                    edges.add('left')
+                if np.any(mask[:, w-1]):    # Right edge
+                    edges.add('right')
+                
+                return edges
             
-            # Get the target label at the clicked point
-            target_label = labeled_array[self.current_slice][y][x]
+            # Fill the initial slice
+            initial_mask = fill_2d_slice(the_slice[self.current_slice], x, y)
             
-            # Only fill if we clicked on a valid region (target_label > 0)
-            if target_label > 0:
-                # Create a mask of the connected component we clicked on
-                fill_mask = (labeled_array == target_label) * 255
+            if initial_mask is None:
+                return  # Nothing to fill (already filled or out of bounds)
+            
+            # Get the edges touched in the initial fill
+            # These edges are "valid" and won't trigger stopping
+            initial_edges = get_touched_edges(initial_mask)
+            
+            # Apply the initial fill
+            the_slice[self.current_slice] = the_slice[self.current_slice] | initial_mask
+            
+            # Propagate FORWARD in Z (increasing slice numbers)
+            for z in range(self.current_slice + 1, the_slice.shape[0]):
+                # Try to fill at the same (x, y) position on this slice
+                mask = fill_2d_slice(the_slice[z], x, y)
+                
+                if mask is None:
+                    # No void at this position, stop propagating forward
+                    break
+                
+                # Check which edges this mask touches
+                touched_edges = get_touched_edges(mask)
+                
+                # Check if it touches NEW edges (not in initial_edges)
+                new_edges = touched_edges - initial_edges
+                
+                if new_edges:
+                    # Touches new edges - the void is spilling out!
+                    # Don't fill this slice and stop propagating forward
+                    break
+                
+                # Safe to fill this slice
+                the_slice[z] = the_slice[z] | mask
+            
+            # Propagate BACKWARD in Z (decreasing slice numbers)
+            for z in range(self.current_slice - 1, -1, -1):
+                # Try to fill at the same (x, y) position on this slice
+                mask = fill_2d_slice(the_slice[z], x, y)
+                
+                if mask is None:
+                    # No void at this position, stop propagating backward
+                    break
+                
+                # Check which edges this mask touches
+                touched_edges = get_touched_edges(mask)
+                
+                # Check if it touches NEW edges (not in initial_edges)
+                new_edges = touched_edges - initial_edges
+                
+                if new_edges:
+                    # Touches new edges - the void is spilling out!
+                    # Don't fill this slice and stop propagating backward
+                    break
+                
+                # Safe to fill this slice
+                the_slice[z] = the_slice[z] | mask
+            
+            # Save the backup and apply the changes
+            self.last_change = [ref, self.active_channel]
+            self.load_channel(self.active_channel, the_slice, True)
 
-                self.last_change = [ref, self.active_channel]
 
-                # Add this mask to the original slice
-                the_slice = the_slice | fill_mask  # Use logical OR to add the filled region
+        if self.threed:
+            fill_void_3d(x, y)
 
-            self.load_channel(self.active_channel, the_slice, True, preserve_zoom = (current_xlim, current_ylim))
         else:
 
             ref = copy.deepcopy(self.channel_data[self.active_channel])
@@ -3383,7 +3798,7 @@ class ImageViewerWindow(QMainWindow):
             inv = n3d.invert_boolean(the_slice)
             
             # Label the connected components in the inverted array
-            labeled_array, num_features = n3d.label_objects(inv)
+            labeled_array, num_features = ndimage.label(inv)
             
             # Get the target label at the clicked point
             target_label = labeled_array[y][x]
@@ -3391,7 +3806,7 @@ class ImageViewerWindow(QMainWindow):
             # Only fill if we clicked on a valid region (target_label > 0)
             if target_label > 0:
                 # Create a mask of the connected component we clicked on
-                fill_mask = (labeled_array == target_label) * 255
+                fill_mask = (labeled_array == target_label) * max(1, np.max(ref))
 
                 self.last_change = [ref, self.active_channel]
                 
@@ -3400,919 +3815,137 @@ class ImageViewerWindow(QMainWindow):
             
             # Update the channel data
             self.channel_data[self.active_channel][self.current_slice] = the_slice
-            self.load_channel(self.active_channel, self.channel_data[self.active_channel], True, preserve_zoom = (current_xlim, current_ylim))
+            self.load_channel(self.active_channel, self.channel_data[self.active_channel], True)
 
 
-
-
-
-    def on_mouse_move(self, event):
-        if not event.inaxes or event.xdata is None or event.ydata is None:
+    def on_mouse_move(self, pos):
+        """Handle mouse movement in pyqtgraph"""
+        # Map mouse position to view coordinates
+        if not self.view.sceneBoundingRect().contains(pos):
             return
-            
+        
+        mouse_point = self.view.mapSceneToView(pos)
+        x, y = mouse_point.x(), mouse_point.y()
+
+        try:
+            if self.remove_grid or self.remove_scale:
+                self.coord_label.setText(f"Z: {self.current_slice}, Y: {int(y)}, X: {int(x)}")
+        except:
+            pass
+
+        try:
+            # Check if within image bounds
+            if self.original_dims is None:
+                return
+            if not (0 <= x < self.original_dims[1] and 0 <= y < self.original_dims[0]):
+                return
+        except:
+            return
+
         current_time = time.time()
         self.rect_time = current_time
         
+        # Selection rectangle handling
         if self.selection_start and not self.selecting and not self.pan_mode and not self.brush_mode:
-            if (abs(event.xdata - self.selection_start[0]) > 1 or 
-                abs(event.ydata - self.selection_start[1]) > 1):
+            if (abs(x - self.selection_start[0]) > 1 or 
+                abs(y - self.selection_start[1]) > 1):
                 self.selecting = True
-                self.background = self.canvas.copy_from_bbox(self.ax.bbox)
+
+                self.pan_button.setCheckable(False)
                 
-                self.selection_rect = plt.Rectangle(
-                    (self.selection_start[0], self.selection_start[1]), 0, 0,
-                    fill=False, color='white', linestyle='--', animated=True
-                )
-                self.ax.add_patch(self.selection_rect)
+                # Create selection rectangle using ROI
+                width = abs(x - self.selection_start[0])
+                height = abs(y - self.selection_start[1])
+                x_min = min(self.selection_start[0], x)
+                y_min = min(self.selection_start[1], y)
+                
+                self.selection_rect = pg.ROI([x_min, y_min], [width, height], 
+                                             pen=pg.mkPen('w', style=pg.QtCore.Qt.PenStyle.DashLine),
+                                             movable=False, removable=False)
+                self.selection_rect.handleSize = 0  # Hide handles
+                self.selection_rect.handlePen = pg.mkPen(None)
+                self.view.addItem(self.selection_rect)
                 
         if self.selecting and self.selection_rect is not None:
             # Throttle updates
+            self.pan_button.setCheckable(False)
             if current_time - self.last_update_time < self.update_interval:
                 return
             self.last_update_time = current_time
             
-            # Use blitting
-            self.canvas.restore_region(self.background)
+            x_min = min(self.selection_start[0], x)
+            y_min = min(self.selection_start[1], y)
+            width = abs(x - self.selection_start[0])
+            height = abs(y - self.selection_start[1])
             
-            x_min = min(self.selection_start[0], event.xdata)
-            y_min = min(self.selection_start[1], event.ydata)
-            width = abs(event.xdata - self.selection_start[0])
-            height = abs(event.ydata - self.selection_start[1])
-            
-            self.selection_rect.set_bounds(x_min, y_min, width, height)
-            self.ax.draw_artist(self.selection_rect)
-            self.canvas.blit(self.ax.bbox)
+            self.selection_rect.setPos([x_min, y_min])
+            self.selection_rect.setSize([width, height])
 
-        elif self.panning and self.pan_start is not None:
-            # Calculate the movement
-            dx = event.xdata - self.pan_start[0]
-            dy = event.ydata - self.pan_start[1]
-            
-            # Get current view limits
-            xlim = self.ax.get_xlim()
-            ylim = self.ax.get_ylim()
-            
-            # Calculate new limits
-            new_xlim = [xlim[0] - dx, xlim[1] - dx]
-            new_ylim = [ylim[0] - dy, ylim[1] - dy]
-            
-            # Get image bounds using cached dimensions
-            if self.img_width is not None:
-                # Ensure new limits don't go beyond image bounds
-                if new_xlim[0] < 0:
-                    new_xlim = [0, xlim[1] - xlim[0]]
-                elif new_xlim[1] > self.img_width:
-                    new_xlim = [self.img_width - (xlim[1] - xlim[0]), self.img_width]
-                    
-                if new_ylim[0] < 0:
-                    new_ylim = [0, ylim[1] - ylim[0]]
-                elif new_ylim[1] > self.img_height:
-                    new_ylim = [self.img_height - (ylim[1] - ylim[0]), self.img_height]
-            
-            # Apply new limits
-            self.ax.set_xlim(new_xlim)
-            self.ax.set_ylim(new_ylim)
-            
-            self.canvas.draw_idle()
-            
-            # Update pan start position
-            self.pan_start = (event.xdata, event.ydata)
 
         elif self.painting and self.brush_mode:
-            if event.inaxes != self.ax:
-                return
-            
-            # Throttle updates like selection rectangle
+            # Throttle updates
             current_time = time.time()
             if current_time - getattr(self, 'last_paint_update_time', 0) < 0.016:  # ~60fps
                 return
             self.last_paint_update_time = current_time
             
-            x, y = int(event.xdata), int(event.ydata)
+            x_int, y_int = int(x), int(y)
             
             # Determine foreground/background for machine window mode
             foreground = getattr(self, 'foreground', True)
             
             # Add virtual paint stroke with interpolation
             brush_size = getattr(self, 'brush_size', 5)
-            self.pm.add_virtual_paint_stroke(x, y, brush_size, self.erase, foreground)
-            
-            # Update display with virtual paint (super fast)
-            self.pm.update_virtual_paint_display()
-
-
-    def create_pan_background(self):
-            """Create a static background image from currently visible channels with proper rendering"""
-            # Store current zoom state
-            current_xlim = self.ax.get_xlim()
-            current_ylim = self.ax.get_ylim()
-            
-            # Try GPU acceleration first, fallback to CPU
-            try:
-                import cupy as cp
-                self.use_gpu = True
-            except ImportError:
-                self.use_gpu = False
-            
-            # Render all visible channels with proper colors/brightness into a single composite
-            self.channel_visible = self.pre_pan_channel_state.copy()
-            try:
-                if self.use_gpu:
-                    self.pan_background_image = self.create_composite_for_pan_gpu()
-                else:
-                    self.pan_background_image = self.create_composite_for_pan()
-            except Exception as e:
-                print(f'GPU implementation failed: {e}, falling back to CPU')
-                self.use_gpu = False
-                self.pan_background_image = self.create_composite_for_pan()
-            
-            self.pan_zoom_state = (current_xlim, current_ylim)
-
-    def create_composite_for_pan_gpu(self):
-        """Create a properly rendered composite image for panning with GPU acceleration"""
-        import cupy as cp
-        
-        # Get active channels and dimensions (copied from update_display)
-        active_channels = [i for i in range(4) if self.channel_data[i] is not None]
-        if active_channels:
-            dims = [(self.channel_data[i].shape[1:3] if len(self.channel_data[i].shape) >= 3 else 
-                    self.channel_data[i].shape) for i in active_channels]
-            min_height = min(d[0] for d in dims)
-            min_width = min(d[1] for d in dims)
-        else:
-            return None
-        
-        # Store original dimensions for coordinate mapping
-        self.original_dims = (min_height, min_width)
-        
-        # Get current downsample factor
-        current_xlim = self.ax.get_xlim() if hasattr(self, 'ax') and self.ax.get_xlim() != (0, 1) else None
-        current_ylim = self.ax.get_ylim() if hasattr(self, 'ax') and self.ax.get_ylim() != (0, 1) else None
-
-        # Helper function to crop and downsample image on GPU
-        def crop_and_downsample_image_gpu(image_cp, y_start, y_end, x_start, x_end, factor):
-            # Crop first
-            if len(image_cp.shape) == 2:
-                cropped = image_cp[y_start:y_end, x_start:x_end]
-            elif len(image_cp.shape) == 3:
-                cropped = image_cp[y_start:y_end, x_start:x_end, :]
-            else:
-                cropped = image_cp
-            
-            # Then downsample if needed
-            if factor == 1:
-                return cropped
-            
-            if len(cropped.shape) == 2:
-                return cropped[::factor, ::factor]
-            elif len(cropped.shape) == 3:
-                return cropped[::factor, ::factor, :]
-            else:
-                return cropped
-
-        min_height, min_width = self.original_dims
-
-        # Calculate the visible region in pixel coordinates
-        x_min = max(0, int(np.floor(current_xlim[0] + 0.5)))
-        x_max = min(min_width, int(np.ceil(current_xlim[1] + 0.5)))
-        y_min = max(0, int(np.floor(current_ylim[1] + 0.5)))  # Note: y is flipped
-        y_max = min(min_height, int(np.ceil(current_ylim[0] + 0.5)))
-
-        box_len = int((x_max - x_min)/2)
-        box_height = int((y_max - y_min)/2)
-        x_min = max(0, x_min - box_len)
-        x_max = min(self.shape[2], x_max + box_len)
-        y_min = max(0, y_min - box_height)
-        y_max = min(self.shape[1], y_max + box_height)
-
-        size = (x_max - x_min) * (y_max - y_min)
-        val = int(np.ceil(size/(2000 * 2000)))
-        self.validate_downsample_input(text = val, update = False)
-
-        downsample_factor = self.downsample_factor
-
-        # Add some padding to avoid edge artifacts during pan/zoom
-        padding = max(10, downsample_factor * 2)
-        x_min_padded = max(0, x_min - padding)
-        x_max_padded = min(min_width, x_max + padding)
-        y_min_padded = max(0, y_min - padding)
-        y_max_padded = min(min_height, y_max + padding)
-
-        display_height = (y_max_padded - y_min_padded) // downsample_factor
-        display_width = (x_max_padded - x_min_padded) // downsample_factor
-        
-        # Create a blank RGBA composite to accumulate all channels (using display dimensions) - on GPU
-        composite = cp.zeros((display_height, display_width, 4), dtype=cp.float32)
-        
-        # Process each visible channel exactly like update_display does
-        for channel in range(4):
-            if (self.channel_visible[channel] and 
-                self.channel_data[channel] is not None):
-                
-                # Get current slice data (same logic as update_display)
-                is_rgb = len(self.channel_data[channel].shape) == 4 and (self.channel_data[channel].shape[-1] == 3 or self.channel_data[channel].shape[-1] == 4)
-                
-                if len(self.channel_data[channel].shape) == 3 and not is_rgb:
-                    current_image = self.channel_data[channel][self.current_slice, :, :]
-                elif is_rgb:
-                    current_image = self.channel_data[channel][self.current_slice]
-                else:
-                    current_image = self.channel_data[channel]
-
-                # Convert to CuPy array and crop/downsample on GPU
-                current_image_cp = cp.asarray(current_image)
-                display_image_cp = crop_and_downsample_image_gpu(
-                    current_image_cp, y_min_padded, y_max_padded, 
-                    x_min_padded, x_max_padded, downsample_factor)
-
-                if is_rgb and self.channel_data[channel].shape[-1] == 3:
-                    # RGB image - convert to RGBA and blend
-                    rgb_alpha = cp.ones((*display_image_cp.shape[:2], 4), dtype=cp.float32)
-                    rgb_alpha[:, :, :3] = display_image_cp.astype(cp.float32) / 255.0
-                    rgb_alpha[:, :, 3] = 0.7  # Same alpha as update_display
-                    composite = self.blend_layers_gpu(composite, rgb_alpha)
-                    
-                elif is_rgb and self.channel_data[channel].shape[-1] == 4:
-                    # RGBA image - blend directly
-                    rgba_image = display_image_cp.astype(cp.float32) / 255.0
-                    composite = self.blend_layers_gpu(composite, rgba_image)
-                    
-                else:
-                    # Regular channel processing (same logic as update_display)
-                    if self.min_max[channel][0] == None:
-                        self.min_max[channel][0] = cp.asnumpy(cp.min(current_image_cp))
-                    if self.min_max[channel][1] == None:
-                        self.min_max[channel][1] = cp.asnumpy(cp.max(current_image_cp))
-
-                    img_min = self.min_max[channel][0]
-                    img_max = self.min_max[channel][1]
-                    
-                    if img_min == img_max:
-                        vmin = img_min
-                        vmax = img_min + 1
-                    else:
-                        vmin = img_min + (img_max - img_min) * self.channel_brightness[channel]['min']
-                        vmax = img_min + (img_max - img_min) * self.channel_brightness[channel]['max']
-                    
-                    # Normalize the downsampled image on GPU
-                    if vmin == vmax:
-                        normalized_image = cp.zeros_like(display_image_cp)
-                    else:
-                        normalized_image = cp.clip((display_image_cp - vmin) / (vmax - vmin), 0, 1)
-                    
-                    # Apply channel color and alpha
-                    if channel == 2 and self.machine_window is not None:
-                        # Special case for machine window channel 2
-                        channel_rgba = self.apply_machine_colormap_gpu(display_image_cp)
-                    else:
-                        # Regular channel with custom color
-                        color = self.base_colors[channel]
-                        channel_rgba = cp.zeros((*normalized_image.shape, 4), dtype=cp.float32)
-                        channel_rgba[:, :, 0] = normalized_image * color[0]  # R
-                        channel_rgba[:, :, 1] = normalized_image * color[1]  # G  
-                        channel_rgba[:, :, 2] = normalized_image * color[2]  # B
-                        channel_rgba[:, :, 3] = normalized_image * 0.7       # A (same alpha as update_display)
-                    
-                    # Blend this channel into the composite
-                    composite = self.blend_layers_gpu(composite, channel_rgba)
-        
-        # Add highlight overlays if they exist (with downsampling)
-        if self.mini_overlay and self.highlight and self.machine_window is None:
-            mini_overlay_cp = cp.asarray(self.mini_overlay_data)
-            display_overlay = crop_and_downsample_image_gpu(mini_overlay_cp, y_min_padded, y_max_padded, x_min_padded, x_max_padded, downsample_factor)
-            highlight_rgba = self.create_highlight_rgba_gpu(display_overlay, yellow=True)
-            composite = self.blend_layers_gpu(composite, highlight_rgba)
-        elif self.highlight_overlay is not None and self.highlight:
-            highlight_slice = self.highlight_overlay[self.current_slice]
-            highlight_slice_cp = cp.asarray(highlight_slice)
-            display_highlight = crop_and_downsample_image_gpu(highlight_slice_cp, y_min_padded, y_max_padded, x_min_padded, x_max_padded, downsample_factor)
-            if self.machine_window is None:
-                highlight_rgba = self.create_highlight_rgba_gpu(display_highlight, yellow=True)
-            else:
-                highlight_rgba = self.create_highlight_rgba_gpu(display_highlight, yellow=False)
-            composite = self.blend_layers_gpu(composite, highlight_rgba)
-        
-        # Convert back to CPU and to 0-255 range for display
-        composite_cpu = cp.asnumpy(composite)
-        return (composite_cpu * 255).astype(np.uint8)
-
-    def apply_machine_colormap_gpu(self, image_cp):
-        """Apply the special machine window colormap for channel 2 - GPU version"""
-        import cupy as cp
-        
-        rgba = cp.zeros((*image_cp.shape, 4), dtype=cp.float32)
-        
-        # Transparent for 0
-        mask_0 = (image_cp == 0)
-        rgba[mask_0] = cp.array([0, 0, 0, 0])
-        
-        # Light green for 1
-        mask_1 = (image_cp == 1)
-        rgba[mask_1] = cp.array([0.5, 1, 0.5, 0.7])
-        
-        # Light red for 2
-        mask_2 = (image_cp == 2)
-        rgba[mask_2] = cp.array([1, 0.5, 0.5, 0.7])
-        
-        return rgba
-
-    def create_highlight_rgba_gpu(self, highlight_data_cp, yellow=True):
-        """Create RGBA highlight overlay - GPU version"""
-        import cupy as cp
-        
-        rgba = cp.zeros((*highlight_data_cp.shape, 4), dtype=cp.float32)
-        
-        if yellow:
-            # Yellow highlight
-            mask = highlight_data_cp > 0
-            rgba[mask] = cp.array([1, 1, 0, 0.8])  # Yellow with alpha 0.8
-        else:
-            # Multi-color highlight for machine window
-            mask_1 = (highlight_data_cp == 1)
-            mask_2 = (highlight_data_cp == 2)
-            rgba[mask_1] = cp.array([1, 1, 0, 0.5])      # Yellow for 1
-            rgba[mask_2] = cp.array([0, 0.7, 1, 0.5])    # Blue for 2
-        
-        return rgba
-
-    def blend_layers_gpu(self, base_cp, overlay_cp):
-        """Alpha blend two RGBA layers - GPU version"""
-        import cupy as cp
-        
-        def resize_overlay_to_base_gpu(overlay_arr_cp, base_arr_cp):
-            base_height, base_width = base_arr_cp.shape[:2]
-            overlay_height, overlay_width = overlay_arr_cp.shape[:2]
-            
-            # First crop if overlay is larger
-            cropped_overlay = overlay_arr_cp[:base_height, :base_width]
-            
-            # Then pad if still smaller after cropping
-            current_height, current_width = cropped_overlay.shape[:2]
-            pad_height = base_height - current_height
-            pad_width = base_width - current_width
-            
-            if pad_height > 0 or pad_width > 0:
-                cropped_overlay = cp.pad(cropped_overlay,
-                                        ((0, pad_height), (0, pad_width), (0, 0)),
-                                        mode='constant', constant_values=0)
-            
-            return cropped_overlay
-        
-        # Resize the ENTIRE overlay array to match base dimensions
-        if overlay_cp.shape[:2] != base_cp.shape[:2]:
-            overlay_cp = resize_overlay_to_base_gpu(overlay_cp, base_cp)
-        
-        # Now extract alpha channels (they should be the same size)
-        alpha_overlay = overlay_cp[:, :, 3:4]
-        alpha_base = base_cp[:, :, 3:4]
-        
-        # Calculate output alpha
-        alpha_out = alpha_overlay + alpha_base * (1 - alpha_overlay)
-        
-        # Calculate output RGB
-        rgb_out = cp.zeros_like(base_cp[:, :, :3])
-        mask = alpha_out[:, :, 0] > 0
-        
-        rgb_out[mask] = (overlay_cp[mask, :3] * alpha_overlay[mask] + 
-                         base_cp[mask, :3] * alpha_base[mask] * (1 - alpha_overlay[mask])) / alpha_out[mask]
-        
-        # Combine RGB and alpha
-        result = cp.zeros_like(base_cp)
-        result[:, :, :3] = rgb_out
-        result[:, :, 3:4] = alpha_out
-        
-        return result
-
-    def create_composite_for_pan(self):
-        """Create a properly rendered composite image for panning with downsample support"""
-        # Get active channels and dimensions (copied from update_display)
-        active_channels = [i for i in range(4) if self.channel_data[i] is not None]
-        if active_channels:
-            dims = [(self.channel_data[i].shape[1:3] if len(self.channel_data[i].shape) >= 3 else 
-                    self.channel_data[i].shape) for i in active_channels]
-            min_height = min(d[0] for d in dims)
-            min_width = min(d[1] for d in dims)
-        else:
-            return None
-        
-        # Store original dimensions for coordinate mapping
-        self.original_dims = (min_height, min_width)
-        
-        # Get current downsample factor
-        current_xlim = self.ax.get_xlim() if hasattr(self, 'ax') and self.ax.get_xlim() != (0, 1) else None
-        current_ylim = self.ax.get_ylim() if hasattr(self, 'ax') and self.ax.get_ylim() != (0, 1) else None
-
-        # Helper function to crop and downsample image
-        def crop_and_downsample_image(image, y_start, y_end, x_start, x_end, factor):
-            # Crop first
-            if len(image.shape) == 2:
-                cropped = image[y_start:y_end, x_start:x_end]
-            elif len(image.shape) == 3:
-                cropped = image[y_start:y_end, x_start:x_end, :]
-            else:
-                cropped = image
-            
-            # Then downsample if needed
-            if factor == 1:
-                return cropped
-            
-            if len(cropped.shape) == 2:
-                return cropped[::factor, ::factor]
-            elif len(cropped.shape) == 3:
-                return cropped[::factor, ::factor, :]
-            else:
-                return cropped
-
-        min_height, min_width = self.original_dims
-
-        # Calculate the visible region in pixel coordinates
-        x_min = max(0, int(np.floor(current_xlim[0] + 0.5)))
-        x_max = min(min_width, int(np.ceil(current_xlim[1] + 0.5)))
-        y_min = max(0, int(np.floor(current_ylim[1] + 0.5)))  # Note: y is flipped
-        y_max = min(min_height, int(np.ceil(current_ylim[0] + 0.5)))
-
-        box_len = int((x_max - x_min)/2)
-        box_height = int((y_max - y_min)/2)
-        x_min = max(0, x_min - box_len)
-        x_max = min(self.shape[2], x_max + box_len)
-        y_min = max(0, y_min - box_height)
-        y_max = min(self.shape[1], y_max + box_height)
-
-        size = (x_max - x_min) * (y_max - y_min)
-        val = max(2, int(np.ceil(size/(2000 * 2000))))
-        self.validate_downsample_input(text = val, update = False)
-
-        downsample_factor = self.downsample_factor
-
-        # Add some padding to avoid edge artifacts during pan/zoom
-        padding = max(10, downsample_factor * 2)
-        x_min_padded = max(0, x_min - padding)
-        x_max_padded = min(min_width, x_max + padding)
-        y_min_padded = max(0, y_min - padding)
-        y_max_padded = min(min_height, y_max + padding)
-
-        display_height = (y_max_padded - y_min_padded) // downsample_factor
-        display_width = (x_max_padded - x_min_padded) // downsample_factor
-        
-        # Create a blank RGBA composite to accumulate all channels (using display dimensions)
-        composite = np.zeros((display_height, display_width, 4), dtype=np.float32)
-        
-        # Process each visible channel exactly like update_display does
-        for channel in range(4):
-            if (self.channel_visible[channel] and 
-                self.channel_data[channel] is not None):
-                
-                # Get current slice data (same logic as update_display)
-                is_rgb = len(self.channel_data[channel].shape) == 4 and (self.channel_data[channel].shape[-1] == 3 or self.channel_data[channel].shape[-1] == 4)
-                
-                if len(self.channel_data[channel].shape) == 3 and not is_rgb:
-                    current_image = self.channel_data[channel][self.current_slice, :, :]
-                elif is_rgb:
-                    current_image = self.channel_data[channel][self.current_slice]
-                else:
-                    current_image = self.channel_data[channel]
-
-                # Crop and downsample the image for rendering
-                display_image = crop_and_downsample_image(
-                    current_image, y_min_padded, y_max_padded, 
-                    x_min_padded, x_max_padded, downsample_factor)
-
-                if is_rgb and self.channel_data[channel].shape[-1] == 3:
-                    # RGB image - convert to RGBA and blend
-                    rgb_alpha = np.ones((*display_image.shape[:2], 4), dtype=np.float32)
-                    rgb_alpha[:, :, :3] = display_image.astype(np.float32) / 255.0
-                    rgb_alpha[:, :, 3] = 0.7  # Same alpha as update_display
-                    composite = self.blend_layers(composite, rgb_alpha)
-                    
-                elif is_rgb and self.channel_data[channel].shape[-1] == 4:
-                    # RGBA image - blend directly
-                    rgba_image = display_image.astype(np.float32) / 255.0
-                    composite = self.blend_layers(composite, rgba_image)
-                    
-                else:
-                    # Regular channel processing (same logic as update_display)
-                    if self.min_max[channel][0] == None:
-                        self.min_max[channel][0] = np.min(self.channel_data[channel])
-                    if self.min_max[channel][1] == None:
-                        self.min_max[channel][1] = np.max(self.channel_data[channel])
-
-                    img_min = self.min_max[channel][0]
-                    img_max = self.min_max[channel][1]
-                    
-                    if img_min == img_max:
-                        vmin = img_min
-                        vmax = img_min + 1
-                    else:
-                        vmin = img_min + (img_max - img_min) * self.channel_brightness[channel]['min']
-                        vmax = img_min + (img_max - img_min) * self.channel_brightness[channel]['max']
-                    
-                    # Normalize the downsampled image
-                    if vmin == vmax:
-                        normalized_image = np.zeros_like(display_image)
-                    else:
-                        normalized_image = np.clip((display_image - vmin) / (vmax - vmin), 0, 1)
-                    
-                    # Apply channel color and alpha
-                    if channel == 2 and self.machine_window is not None:
-                        # Special case for machine window channel 2
-                        channel_rgba = self.apply_machine_colormap(display_image)
-                    else:
-                        # Regular channel with custom color
-                        color = self.base_colors[channel]
-                        channel_rgba = np.zeros((*normalized_image.shape, 4), dtype=np.float32)
-                        channel_rgba[:, :, 0] = normalized_image * color[0]  # R
-                        channel_rgba[:, :, 1] = normalized_image * color[1]  # G  
-                        channel_rgba[:, :, 2] = normalized_image * color[2]  # B
-                        channel_rgba[:, :, 3] = normalized_image * 0.7       # A (same alpha as update_display)
-                    
-                    # Blend this channel into the composite
-                    composite = self.blend_layers(composite, channel_rgba)
-        
-        # Add highlight overlays if they exist (with downsampling)
-        if self.mini_overlay and self.highlight and self.machine_window is None:
-            try:
-                display_overlay = crop_and_downsample_image(self.mini_overlay_data, y_min_padded, y_max_padded, x_min_padded, x_max_padded, downsample_factor)
-                highlight_rgba = self.create_highlight_rgba(display_overlay, yellow=True)
-                composite = self.blend_layers(composite, highlight_rgba)
-            except:
-                pass
-        elif self.highlight_overlay is not None and self.highlight:
-            try:
-                highlight_slice = self.highlight_overlay[self.current_slice]
-                display_highlight = crop_and_downsample_image(highlight_slice, y_min_padded, y_max_padded, x_min_padded, x_max_padded, downsample_factor)
-                if self.machine_window is None:
-                    highlight_rgba = self.create_highlight_rgba(display_highlight, yellow=True)
-                else:
-                    highlight_rgba = self.create_highlight_rgba(display_highlight, yellow=False)
-                composite = self.blend_layers(composite, highlight_rgba)
-            except:
-                pass
-        
-        # Convert to 0-255 range for display
-        return (composite * 255).astype(np.uint8)
-
-    def apply_machine_colormap(self, image):
-        """Apply the special machine window colormap for channel 2"""
-        rgba = np.zeros((*image.shape, 4), dtype=np.float32)
-        
-        # Transparent for 0
-        mask_0 = (image == 0)
-        rgba[mask_0] = [0, 0, 0, 0]
-        
-        # Light green for 1
-        mask_1 = (image == 1)
-        rgba[mask_1] = [0.5, 1, 0.5, 0.7]
-        
-        # Light red for 2
-        mask_2 = (image == 2)
-        rgba[mask_2] = [1, 0.5, 0.5, 0.7]
-        
-        return rgba
-
-    def create_highlight_rgba(self, highlight_data, yellow=True):
-        """Create RGBA highlight overlay"""
-        rgba = np.zeros((*highlight_data.shape, 4), dtype=np.float32)
-        
-        if yellow:
-            # Yellow highlight
-            mask = highlight_data > 0
-            rgba[mask] = [1, 1, 0, 0.8]  # Yellow with alpha 0.5
-        else:
-            # Multi-color highlight for machine window
-            mask_1 = (highlight_data == 1)
-            mask_2 = (highlight_data == 2)
-            rgba[mask_1] = [1, 1, 0, 0.3]      # Yellow for 1
-            rgba[mask_2] = [0, 0.7, 1, 0.3]    # Blue for 2
-        
-        return rgba
-
-    def blend_layers(self, base, overlay):
-        """Alpha blend two RGBA layers"""
-        
-        def resize_overlay_to_base(overlay_arr, base_arr):
-            base_height, base_width = base_arr.shape[:2]
-            overlay_height, overlay_width = overlay_arr.shape[:2]
-            
-            # First crop if overlay is larger
-            cropped_overlay = overlay_arr[:base_height, :base_width]
-            
-            # Then pad if still smaller after cropping
-            current_height, current_width = cropped_overlay.shape[:2]
-            pad_height = base_height - current_height
-            pad_width = base_width - current_width
-            
-            if pad_height > 0 or pad_width > 0:
-                cropped_overlay = np.pad(cropped_overlay,
-                                        ((0, pad_height), (0, pad_width), (0, 0)),
-                                        mode='constant', constant_values=0)
-            
-            return cropped_overlay
-        
-        # Resize the ENTIRE overlay array to match base dimensions
-        if overlay.shape[:2] != base.shape[:2]:
-            overlay = resize_overlay_to_base(overlay, base)
-        
-        # Now extract alpha channels (they should be the same size)
-        alpha_overlay = overlay[:, :, 3:4]
-        alpha_base = base[:, :, 3:4]
-        
-        # Calculate output alpha
-        alpha_out = alpha_overlay + alpha_base * (1 - alpha_overlay)
-        
-        # Calculate output RGB
-        rgb_out = np.zeros_like(base[:, :, :3])
-        mask = alpha_out[:, :, 0] > 0
-        
-        rgb_out[mask] = (overlay[mask, :3] * alpha_overlay[mask] + 
-                         base[mask, :3] * alpha_base[mask] * (1 - alpha_overlay[mask])) / alpha_out[mask]
-        
-        # Combine RGB and alpha
-        result = np.zeros_like(base)
-        result[:, :, :3] = rgb_out
-        result[:, :, 3:4] = alpha_out
-        
-        return result
-
-    def update_display_pan_mode(self, current_xlim, current_ylim):
-        """Lightweight display update for pan preview mode with downsample support"""
-
-        if self.is_pan_preview and self.pan_background_image is not None:
-            # Clear and setup axes
-            self.ax.clear()
-            self.ax.set_facecolor('black')
-            
-            # Reset measurement artists since we cleared the axes
-            if not hasattr(self, 'measurement_artists'):
-                self.measurement_artists = []
-            else:
-                self.measurement_artists = []  # Reset since ax.clear() removed all artists
-            
-            # Get original dimensions (before downsampling)
-            if hasattr(self, 'original_dims') and self.original_dims:
-                height, width = self.original_dims
-            else:
-                # Fallback to pan background image dimensions
-                height, width = self.pan_background_image.shape[:2]
-                # If we have downsample factor, scale back up
-                downsample_factor = getattr(self, 'downsample_factor', 1)
-                height *= downsample_factor
-                width *= downsample_factor
-
-            downsample_factor = self.downsample_factor
-            min_height, min_width = self.original_dims
-
-            # Calculate the visible region in pixel coordinates
-            x_min = max(0, int(np.floor(current_xlim[0] + 0.5)))
-            x_max = min(min_width, int(np.ceil(current_xlim[1] + 0.5)))
-            y_min = max(0, int(np.floor(current_ylim[1] + 0.5)))  # Note: y is flipped
-            y_max = min(min_height, int(np.ceil(current_ylim[0] + 0.5)))
-
-            box_len = int((x_max - x_min)/2)
-            box_height = int((y_max - y_min)/2)
-            x_min = max(0, x_min - box_len)
-            x_max = min(self.shape[2], x_max + box_len)
-            y_min = max(0, y_min - box_height)
-            y_max = min(self.shape[1], y_max + box_height)
-
-            # Add some padding to avoid edge artifacts during pan/zoom
-            padding = max(10, downsample_factor * 2)
-            x_min_padded = max(0, x_min - padding)
-            x_max_padded = min(min_width, x_max + padding)
-            y_min_padded = max(0, y_min - padding)
-            y_max_padded = min(min_height, y_max + padding)
-
-            # Convert coordinates to downsampled space for cropping
-            downsample_factor = self.downsample_factor
-
-            # Convert to downsampled coordinates for cropping
-            x_min_ds = x_min // downsample_factor
-            x_max_ds = x_max // downsample_factor  
-            y_min_ds = y_min // downsample_factor
-            y_max_ds = y_max // downsample_factor
-
-            # Add padding in downsampled space
-            padding_ds = max(10 // downsample_factor, 2)
-            x_min_padded_ds = max(0, x_min_ds - padding_ds)
-            x_max_padded_ds = min(self.pan_background_image.shape[1], x_max_ds + padding_ds)
-            y_min_padded_ds = max(0, y_min_ds - padding_ds)
-            y_max_padded_ds = min(self.pan_background_image.shape[0], y_max_ds + padding_ds)
-            
-            # Calculate the extent for the cropped region (in original coordinates)
-            crop_extent = (x_min_padded - 0.5, x_max_padded - 0.5, 
-                          y_max_padded - 0.5, y_min_padded - 0.5)
-
-            # Display the composite background with preserved zoom
-            # Use extent to stretch downsampled image back to original coordinate space
-            self.ax.imshow(self.pan_background_image, 
-                          extent=crop_extent,
-                          aspect='equal')
-            
-            # Restore the zoom state from when pan began
-            self.ax.set_xlim(current_xlim)
-            self.ax.set_ylim(current_ylim)
-            
-            # Get downsample factor for title display
-            downsample_factor = getattr(self, 'downsample_factor', 1)
-            
-            # Style the axes (same as update_display)
-            self.ax.set_xlabel('X')
-            self.ax.set_ylabel('Y')
-            if downsample_factor > 1:
-                self.ax.set_title(f'Slice {self.current_slice}')
-            else:
-                self.ax.set_title(f'Slice {self.current_slice}')
-            self.ax.xaxis.label.set_color('black')
-            self.ax.yaxis.label.set_color('black')
-            self.ax.title.set_color('black')
-            self.ax.tick_params(colors='black')
-            for spine in self.ax.spines.values():
-                spine.set_color('black')
-                
-            # Add measurement points if they exist (using the same logic as main update_display)
-            if hasattr(self, 'measurement_points') and self.measurement_points:
-                for point in self.measurement_points:
-                    x1, y1, z1 = point['point1']
-                    x2, y2, z2 = point['point2']
-                    pair_idx = point['pair_index']
-                    point_type = point.get('type', 'distance')  # Default to distance for backward compatibility
-                    
-                    # Determine colors based on type
-                    if point_type == 'angle':
-                        marker_color = 'go'
-                        text_color = 'green'
-                        line_color = 'g--'
-                    else:  # distance
-                        marker_color = 'yo'
-                        text_color = 'yellow'
-                        line_color = 'r--'
-                    
-                    # Check if points are in visible region and on current slice
-                    point1_visible = (z1 == self.current_slice and 
-                                    current_xlim[0] <= x1 <= current_xlim[1] and 
-                                    current_ylim[1] <= y1 <= current_ylim[0])
-                    point2_visible = (z2 == self.current_slice and 
-                                    current_xlim[0] <= x2 <= current_xlim[1] and 
-                                    current_ylim[1] <= y2 <= current_ylim[0])
-                    
-                    # Draw individual points if they're on the current slice
-                    if point1_visible:
-                        pt1 = self.ax.plot(x1, y1, marker_color, markersize=8)[0]
-                        txt1 = self.ax.text(x1, y1+5, str(pair_idx), color=text_color, ha='center', va='bottom')
-                        self.measurement_artists.extend([pt1, txt1])
-                        
-                    if point2_visible:
-                        pt2 = self.ax.plot(x2, y2, marker_color, markersize=8)[0]
-                        txt2 = self.ax.text(x2, y2+5, str(pair_idx), color=text_color, ha='center', va='bottom')
-                        self.measurement_artists.extend([pt2, txt2])
-                        
-                    # Draw connecting line if both points are on the same slice
-                    if z1 == z2 == self.current_slice and (point1_visible or point2_visible):
-                        line = self.ax.plot([x1, x2], [y1, y2], line_color, alpha=0.5)[0]
-                        self.measurement_artists.append(line)
-
-            # Handle angle measurements if they exist
-            if hasattr(self, 'angle_measurements') and self.angle_measurements:
-                for angle in self.angle_measurements:
-                    xa, ya, za = angle['point_a']
-                    xb, yb, zb = angle['point_b']  # vertex
-                    xc, yc, zc = angle['point_c']
-                    trio_idx = angle['trio_index']
-                    
-                    # Check if points are on current slice and visible
-                    point_a_visible = (za == self.current_slice and 
-                                     current_xlim[0] <= xa <= current_xlim[1] and 
-                                     current_ylim[1] <= ya <= current_ylim[0])
-                    point_b_visible = (zb == self.current_slice and 
-                                     current_xlim[0] <= xb <= current_xlim[1] and 
-                                     current_ylim[1] <= yb <= current_ylim[0])
-                    point_c_visible = (zc == self.current_slice and 
-                                     current_xlim[0] <= xc <= current_xlim[1] and 
-                                     current_ylim[1] <= yc <= current_ylim[0])
-                    
-                    # Draw points
-                    if point_a_visible:
-                        pt_a = self.ax.plot(xa, ya, 'go', markersize=8)[0]
-                        txt_a = self.ax.text(xa, ya+5, f"A{trio_idx}", color='green', ha='center', va='bottom')
-                        self.measurement_artists.extend([pt_a, txt_a])
-                        
-                    if point_b_visible:
-                        pt_b = self.ax.plot(xb, yb, 'go', markersize=8)[0]
-                        txt_b = self.ax.text(xb, yb+5, f"B{trio_idx}", color='green', ha='center', va='bottom')
-                        self.measurement_artists.extend([pt_b, txt_b])
-                        
-                    if point_c_visible:
-                        pt_c = self.ax.plot(xc, yc, 'go', markersize=8)[0]
-                        txt_c = self.ax.text(xc, yc+5, f"C{trio_idx}", color='green', ha='center', va='bottom')
-                        self.measurement_artists.extend([pt_c, txt_c])
-                    
-                    # Draw lines only if points are on current slice
-                    if za == zb == self.current_slice and (point_a_visible or point_b_visible):
-                        line_ab = self.ax.plot([xa, xb], [ya, yb], 'g--', alpha=0.7)[0]
-                        self.measurement_artists.append(line_ab)
-                        
-                    if zb == zc == self.current_slice and (point_b_visible or point_c_visible):
-                        line_bc = self.ax.plot([xb, xc], [yb, yc], 'g--', alpha=0.7)[0]
-                        self.measurement_artists.append(line_bc)
-
-            # Handle any partial measurements in progress (individual points without pairs yet)
-            if hasattr(self, 'current_point') and self.current_point is not None:
-                x, y, z = self.current_point
-                if z == self.current_slice:
-                    if hasattr(self, 'measurement_mode') and self.measurement_mode == "angle":
-                        # Show green for angle mode
-                        pt = self.ax.plot(x, y, 'go', markersize=8)[0]
-                        if hasattr(self, 'current_trio_index'):
-                            txt = self.ax.text(x, y+5, f"A{self.current_trio_index}", color='green', ha='center', va='bottom')
-                        else:
-                            txt = self.ax.text(x, y+5, "A", color='green', ha='center', va='bottom')
-                    else:
-                        # Show yellow for distance mode (default)
-                        pt = self.ax.plot(x, y, 'yo', markersize=8)[0]
-                        if hasattr(self, 'current_pair_index'):
-                            txt = self.ax.text(x, y+5, f"D{self.current_pair_index}", color='yellow', ha='center', va='bottom')
-                        else:
-                            txt = self.ax.text(x, y+5, "D", color='yellow', ha='center', va='bottom')
-                    self.measurement_artists.extend([pt, txt])
-
-            # Handle second point in angle measurements
-            if hasattr(self, 'current_second_point') and self.current_second_point is not None:
-                x, y, z = self.current_second_point
-                if z == self.current_slice:
-                    pt = self.ax.plot(x, y, 'go', markersize=8)[0]
-                    if hasattr(self, 'current_trio_index'):
-                        txt = self.ax.text(x, y+5, f"B{self.current_trio_index}", color='green', ha='center', va='bottom')
-                    else:
-                        txt = self.ax.text(x, y+5, "B", color='green', ha='center', va='bottom')
-                    self.measurement_artists.extend([pt, txt])
-                    
-                    # Draw line from A to B if both are on current slice
-                    if (hasattr(self, 'current_point') and self.current_point is not None and 
-                        self.current_point[2] == self.current_slice):
-                        x1, y1, z1 = self.current_point
-                        line = self.ax.plot([x1, x], [y1, y], 'g--', alpha=0.7)[0]
-                        self.measurement_artists.append(line)
-            
-            #self.canvas.setCursor(Qt.CursorShape.ClosedHandCursor)
-
-            self.canvas.draw_idle()
+            self.pm.add_virtual_paint_stroke(x_int, y_int, brush_size, self.erase, foreground)
 
     def on_mouse_release(self, event):
-        """Handle mouse release events"""
-
+        """Handle mouse release events in pyqtgraph"""
+        # Map to view coordinates
+        self.pan_button.setCheckable(True)
+        if not self.view.sceneBoundingRect().contains(event.scenePos()):
+            return
+        
+        mouse_point = self.view.mapSceneToView(event.scenePos())
+        x, y = mouse_point.x(), mouse_point.y()
+        
         if self.zoom_mode:
-            rect_condition = (time.time() - self.rect_time) > 0.01 # This is just to prevent non-deliberate rectangle zooming
+            rect_condition = (time.time() - self.rect_time) > 0.01
         else:
             rect_condition = True
 
-        if self.pan_mode:
-            
-            # Update display to show only background
-            current_xlim = self.ax.get_xlim() if hasattr(self, 'ax') and self.ax.get_xlim() != (0, 1) else None
-            current_ylim = self.ax.get_ylim() if hasattr(self, 'ax') and self.ax.get_ylim() != (0, 1) else None
-            #self.update_display(preserve_zoom = (current_xlim, current_ylim))
-            self.setEnabled(False)
-            
-            try:
-                self.create_pan_background()
-                current_xlim = self.ax.get_xlim()
-                current_ylim = self.ax.get_ylim()
-                self.update_display_pan_mode(current_xlim, current_ylim)
-            finally:
-                # Re-enable the widget when done
-                self.setEnabled(True)
-            
-            self.panning = False
-            self.pan_start = None
-            self.canvas.setCursor(Qt.CursorShape.OpenHandCursor)
-            
-        elif event.button == 1:  # Left button release
+        
+        if event.button() == Qt.MouseButton.LeftButton:
             if rect_condition and self.selecting and self.selection_rect is not None:
                 # Get the rectangle bounds
-                x0 = min(self.selection_start[0], event.xdata)
-                y0 = min(self.selection_start[1], event.ydata)
-                width = abs(event.xdata - self.selection_start[0])
-                height = abs(event.ydata - self.selection_start[1])
-                shift_pressed = 'shift' in event.modifiers
-
+                rect_pos = self.selection_rect.pos()
+                rect_size = self.selection_rect.size()
+                x0 = rect_pos[0]
+                y0 = rect_pos[1]
+                width = rect_size[0]
+                height = rect_size[1]
+                
+                shift_pressed = event.modifiers() & Qt.KeyboardModifier.ShiftModifier
+                
                 if shift_pressed:
-
                     args = int(x0), int(x0 + width), int(y0), int(y0 + height)
-
                     self.show_crop_dialog(args)
 
-                elif self.zoom_mode: #Optional targeted zoom
+                elif self.zoom_mode:  # Rectangle zoom
                     # Calculate aspect ratio to avoid zooming into very thin rectangles
                     aspect_ratio = width / height if height > 0 else float('inf')
                     
-                    # Skip zoom if the rectangle is too narrow/thin (adjust thresholds as needed)
+                    # Skip zoom if the rectangle is too narrow/thin
                     if width > 10 and height > 10 and 0.1 < aspect_ratio < 10:
-                        self.ax.set_xlim([x0, x0 + width])
-                        self.ax.set_ylim([y0 + height, y0])
-
-                    self.zoom_changed = True  # Flag that zoom has changed
+                        new_xlim = [x0, x0 + width]
+                        new_ylim = [y0, y0 + height]
+                        self.view.setRange(xRange=new_xlim, yRange=new_ylim, padding=0)
                     
-                    if not hasattr(self, 'zoom_changed'):
-                        self.zoom_changed = False
+                    self.zoom_changed = True
+                    
+                    # Update display
+                    view_range = self.view.viewRange()
+                    self.previous_zoom_level = (view_range[0][1] - view_range[0][0]) * (view_range[1][1] - view_range[1][0])
+                    self.update_display(preserve_zoom=(view_range[0], view_range[1]))
                 
                 # Get current slice data for active channel
                 elif self.channel_data[self.active_channel] is not None:
@@ -4327,366 +3960,175 @@ class ImageViewerWindow(QMainWindow):
                     # Extract unique non-zero values in selection rectangle
                     selected_region = data[y_min:y_max, x_min:x_max]
                     selected_values = np.unique(selected_region)
-                    selected_values = selected_values[selected_values != 0]  # Remove background
+                    selected_values = selected_values[selected_values != 0]
                     
                     # Check if ctrl is pressed
-                    ctrl_pressed = 'ctrl' in event.modifiers
+                    ctrl_pressed = event.modifiers() & Qt.KeyboardModifier.ControlModifier
                     
                     # Update clicked_values based on active channel
                     if self.active_channel == 0:  # Nodes
                         if not ctrl_pressed:
-                            self.clicked_values['nodes'] = []  # Clear existing selection if ctrl not pressed
+                            self.clicked_values['nodes'] = []
+                            self.clicked_values['edges'] = []
                         self.clicked_values['nodes'].extend(selected_values)
-                        # Remove duplicates while preserving order
                         self.clicked_values['nodes'] = list(dict.fromkeys(self.clicked_values['nodes']))
+                        
                         if self.channel_data[0].shape[0] * self.channel_data[0].shape[1] * self.channel_data[0].shape[2] > self.mini_thresh:
                             self.mini_overlay = True
-                            self.create_mini_overlay(node_indices = self.clicked_values['nodes'], edge_indices = self.clicked_values['edges'])
+                            self.create_mini_overlay(node_indices=self.clicked_values['nodes'], edge_indices=self.clicked_values['edges'])
                         else:
-                            self.create_highlight_overlay(node_indices=self.clicked_values['nodes'])
+                            self.create_highlight_overlay(node_indices=self.clicked_values['nodes'], edge_indices=self.clicked_values['edges'])
                         
-                        # Try to highlight the last selected value in tables
                         if len(self.clicked_values['nodes']) == 1:
                             self.highlight_value_in_tables(self.clicked_values['nodes'][-1])
                             self.handle_info('node')
-                            
+                    
                     elif self.active_channel == 1:  # Edges
                         if not ctrl_pressed:
-                            self.clicked_values['edges'] = []  # Clear existing selection if ctrl not pressed
+                            self.clicked_values['edges'] = []
+                            self.clicked_values['nodes'] = []
                         self.clicked_values['edges'].extend(selected_values)
-                        # Remove duplicates while preserving order
                         self.clicked_values['edges'] = list(dict.fromkeys(self.clicked_values['edges']))
+                        
                         if self.channel_data[1].shape[0] * self.channel_data[1].shape[1] * self.channel_data[1].shape[2] > self.mini_thresh:
                             self.mini_overlay = True
-                            self.create_mini_overlay(node_indices = self.clicked_values['nodes'], edge_indices = self.clicked_values['edges'])
+                            self.create_mini_overlay(node_indices=self.clicked_values['nodes'], edge_indices=self.clicked_values['edges'])
                         else:
-                            self.create_highlight_overlay(edge_indices=self.clicked_values['edges'])
+                            self.create_highlight_overlay(node_indices=self.clicked_values['nodes'], edge_indices=self.clicked_values['edges'])
                         
-                        # Try to highlight the last selected value in tables
                         if len(self.clicked_values['edges']):
                             self.highlight_value_in_tables(self.clicked_values['edges'][-1])
                             self.handle_info('edge')
-
+                    
                     try:
-                        if len(self.clicked_values['nodes']) > 0 or len(self.clicked_values['edges']) > 0:  # Check if we have any nodes selected
-
-                            old_nodes = copy.deepcopy(self.clicked_values['nodes']) 
-
-                            # Get the existing DataFrame from the model
+                        if len(self.clicked_values['nodes']) > 0 or len(self.clicked_values['edges']) > 0:
+                            old_nodes = copy.deepcopy(self.clicked_values['nodes'])
                             original_df = self.network_table.model()._data
                             
-                            # Create mask for rows where one column is any original node AND the other column is any neighbor
                             mask = (
                                 ((original_df.iloc[:, 0].isin(self.clicked_values['nodes'])) &
-                                (original_df.iloc[:, 1].isin(self.clicked_values['nodes']))) |
+                                 (original_df.iloc[:, 1].isin(self.clicked_values['nodes']))) |
                                 (original_df.iloc[:, 2].isin(self.clicked_values['edges']))
-                                )
+                            )
                             
-                            # Filter the DataFrame to only include direct connections
                             filtered_df = original_df[mask].copy()
-                            
-                            # Create new model with filtered DataFrame and update selection table
-                            new_model = PandasModel(filtered_df)
-                            self.selection_table.setModel(new_model)
-                            
-                            # Switch to selection table
-                            self.selection_button.click()
+                            self.table_subgraph(self.selection_table, filtered_df)
                     except:
                         pass
-                
-            elif not self.selecting and self.selection_start:  # If we had a click but never started selection
+            
+            elif not self.selecting and self.selection_start:
                 # Handle as a normal click
-                self.on_mouse_click(event)
+                self.on_mouse_click_pg(event, x, y)
             
             # Clean up selection
             self.selection_start = None
             self.selecting = False
 
-            if self.selection_rect is not None:
-                try:
-                    self.selection_rect.remove()
-                except:
-                    pass
-                self.selection_rect = None
-                current_xlim = self.ax.get_xlim() if hasattr(self, 'ax') and self.ax.get_xlim() != (0, 1) else None
-                current_ylim = self.ax.get_ylim() if hasattr(self, 'ax') and self.ax.get_ylim() != (0, 1) else None
-                self.update_display(preserve_zoom=(current_xlim, current_ylim))  
-                #self.canvas.draw()
-
-        elif self.zoom_mode:
-            # Handle zoom mode press
-            if self.original_xlim is None:
-                self.original_xlim = (-0.5, self.shape[2] - 0.5)
-                self.original_ylim = (self.shape[1] + 0.5, -0.5)
-            
-            current_xlim = self.ax.get_xlim()
-            current_ylim = self.ax.get_ylim()
-            xdata = event.xdata
-            ydata = event.ydata
-            
-            if event.button == 1:  # Left click - zoom in
-                x_range = (current_xlim[1] - current_xlim[0]) / 4
-                y_range = (current_ylim[1] - current_ylim[0]) / 4
-                
-                self.ax.set_xlim([xdata - x_range, xdata + x_range])
-                self.ax.set_ylim([ydata - y_range, ydata + y_range])
-
-                self.zoom_changed = True  # Flag that zoom has changed
-                
-                if not hasattr(self, 'zoom_changed'):
-                    self.zoom_changed = False
-                
-            elif event.button == 3:  # Right click - zoom out
-                x_range = (current_xlim[1] - current_xlim[0])
-                y_range = (current_ylim[1] - current_ylim[0])
-                
-                new_xlim = [xdata - x_range, xdata + x_range]
-                new_ylim = [ydata - y_range, ydata + y_range]
-
-                shift_pressed = 'shift' in event.modifiers
-                
-                if (new_xlim[0] <= 0 or 
-                    new_xlim[1] >= self.shape[2] or
-                    new_ylim[0] <= 0 or
-                    new_ylim[1] >= self.shape[1]) or shift_pressed:
-                    self.ax.set_xlim(self.original_xlim)
-                    self.ax.set_ylim(self.original_ylim)
-                else:
-                    self.ax.set_xlim(new_xlim)
-                    self.ax.set_ylim(new_ylim)
-
-                    self.zoom_changed = False  # Flag that zoom has changed
-                    
-                    if not hasattr(self, 'zoom_changed'):
-                        self.zoom_changed = False
-
-            current_xlim = self.ax.get_xlim() if hasattr(self, 'ax') and self.ax.get_xlim() != (0, 1) else None
-            current_ylim = self.ax.get_ylim() if hasattr(self, 'ax') and self.ax.get_ylim() != (0, 1) else None
-            self.update_display(preserve_zoom=(current_xlim, current_ylim))    
-            #self.canvas.draw()
-
-        #  Handle brush mode cleanup with paint session management
+            for item in list(self.view.addedItems):
+                if isinstance(item, pg.ROI):
+                    self.view.removeItem(item)
+        
+        # Handle brush mode cleanup
         if self.brush_mode and hasattr(self, 'painting') and self.painting:
-
             self.pm.connect_virtual_paint_points()
-            self.pm.update_virtual_paint_display()
-
-
-            # Finish current operation
             self.pm.finish_current_stroke()
             self.pm.finish_current_virtual_operation()
-            
-            # Reset last position for next stroke
-            #self.last_virtual_pos = None
-            
-            # End this stroke but keep session active for continuous painting
             self.painting = False
-
+            
             if self.erase:
-                if (hasattr(self, 'virtual_draw_operations') and self.virtual_draw_operations) or \
-                   (hasattr(self, 'virtual_erase_operations') and self.virtual_erase_operations) or \
-                   (hasattr(self, 'current_operation') and self.current_operation):
-                    # Finish current operation first
-                    if hasattr(self, 'current_operation') and self.current_operation:
+                if (hasattr(self, 'completed_paint_strokes') and self.completed_paint_strokes) or \
+                   (hasattr(self, 'current_stroke_points') and self.current_stroke_points) or \
+                   (hasattr(self, 'virtual_paint_items') and self.virtual_paint_items) or \
+                   (hasattr(self, 'current_paint_items') and self.current_paint_items):
+                    if hasattr(self, 'current_stroke_points') and self.current_stroke_points:
                         self.pm.finish_current_virtual_operation()
-                    # Now convert to real data
                     self.pm.convert_virtual_strokes_to_data()
-                    current_xlim = self.ax.get_xlim()
-                    current_ylim = self.ax.get_ylim()
-                    self.update_display(preserve_zoom=(current_xlim, current_ylim))
-
-            if self.resume:
-                self.machine_window.segmentation_worker.resume()
-                self.resume = False
+                    view_range = self.view.viewRange()
+                    self.update_display()
             
+    
+    def on_mouse_click_pg(self, event, x, y):
+        """Handle mouse clicks for data inspection (called from release if no drag)."""
+        # Not in any special mode - handle value inspection
 
-    def highlight_value_in_tables(self, clicked_value):
-        """Helper method to find and highlight a value in both tables."""
-        
-        if not self.network_table.model() and not self.selection_table.model():
-            return False
-
-        found = False
-        tables_to_check = [self.network_table, self.selection_table]
-        active_table_index = tables_to_check.index(self.active_table)
-        
-        # Reorder tables to check active table first
-        tables_to_check = tables_to_check[active_table_index:] + tables_to_check[:active_table_index]
-        
-        for table in tables_to_check:
-            if table.model() is None:
-                continue
-                
-            df = table.model()._data
-
-            # Create appropriate masks based on active channel
-            if self.active_channel == 0:  # Nodes channel
-                col1_matches = df[df.columns[0]] == clicked_value
-                col2_matches = df[df.columns[1]] == clicked_value
-                all_matches = col1_matches | col2_matches
-
-            elif self.active_channel == 1:  # Edges channel
-                all_matches = df[df.columns[2]] == clicked_value
-
-            else:
-                continue
-
-            if all_matches.any():
-                # Get indices from the current dataframe's index
-                match_indices = df[all_matches].index.tolist()
-                
-                # If this is the active table, handle selection and scrolling
-                if table == self.active_table:
-                    current_row = table.currentIndex().row()
-                    
-                    # Convert match_indices to row numbers (position in the visible table)
-                    row_positions = [df.index.get_loc(idx) for idx in match_indices]
-                    
-                    # Find next match after current position
-                    if current_row >= 0:
-                        next_positions = [pos for pos in row_positions if pos > current_row]
-                        row_pos = next_positions[0] if next_positions else row_positions[0]
-                    else:
-                        row_pos = row_positions[0]
-                    
-                    # Update selection and scroll
-                    model_index = table.model().index(row_pos, 0)
-                    table.scrollTo(model_index)
-                    table.clearSelection()
-                    table.selectRow(row_pos)
-                    table.setCurrentIndex(model_index)
-
-                    # Add highlighting for specific cells based on active channel
-                    if self.active_channel == 0:  # Nodes channel
-                        # Only highlight cells in columns 0 and 1 where the value matches
-                        if df.iloc[row_pos, 0] == clicked_value:
-                            table.model().highlight_cell(row_pos, 0)
-                        if df.iloc[row_pos, 1] == clicked_value:
-                            table.model().highlight_cell(row_pos, 1)
-                    else:  # Edges channel
-                        # Highlight the edge column
-                        table.model().highlight_cell(row_pos, 2)
-                
-                found = True
-
-        return found
-
-    def on_mouse_click(self, event):
-        """Handle mouse clicks for zooming and data inspection."""
-        if event.inaxes != self.ax:
-            return
-            
         if self.zoom_mode:
-            # Existing zoom functionality
-            if self.original_xlim is None:
-                self.original_xlim = (-0.5, self.shape[2] - 0.5)
-                self.original_ylim = (self.shape[1] + 0.5, -0.5)
+            # Initialize original bounds if needed
+            if self.original_xlim is None and self.original_dims is not None:
+                self.original_xlim = (0, self.original_dims[1])
+                self.original_ylim = (0, self.original_dims[0])
             
-            current_xlim = self.ax.get_xlim()
-            current_ylim = self.ax.get_ylim()
-            xdata = event.xdata
-            ydata = event.ydata
+            # Get current view range
+            view_range = self.view.viewRange()
+            current_xlim = view_range[0]
+            current_ylim = view_range[1]
             
-            if event.button == 1:  # Left click - zoom in
+            if event.button() == Qt.MouseButton.LeftButton:  # Left click - zoom in
                 x_range = (current_xlim[1] - current_xlim[0]) / 4
                 y_range = (current_ylim[1] - current_ylim[0]) / 4
                 
-                self.ax.set_xlim([xdata - x_range, xdata + x_range])
-                self.ax.set_ylim([ydata - y_range, ydata + y_range])
-
-                self.zoom_changed = True  # Flag that zoom has changed
+                new_xlim = [x - x_range, x + x_range]
+                new_ylim = [y - y_range, y + y_range]
                 
-                if not hasattr(self, 'zoom_changed'):
-                    self.zoom_changed = False
+                self.view.setRange(xRange=new_xlim, yRange=new_ylim, padding=0)
+                self.zoom_changed = True
+                            
+            # Update display with new zoom
+            view_range = self.view.viewRange()
+            self.update_display()
 
-            elif event.button == 3:  # Right click - zoom out
-                x_range = (current_xlim[1] - current_xlim[0])
-                y_range = (current_ylim[1] - current_ylim[0])
+        elif self.channel_data[self.active_channel] is not None:
+            try:
+                # Get clicked value
+                x_idx = int(round(x))
+                y_idx = int(round(y))
                 
-                new_xlim = [xdata - x_range, xdata + x_range]
-                new_ylim = [ydata - y_range, ydata + y_range]
+                # Check if Ctrl key is pressed
+                ctrl_pressed = event.modifiers() & Qt.KeyboardModifier.ControlModifier
                 
-                if (new_xlim[0] <= self.original_xlim[0] or 
-                    new_xlim[1] >= self.original_xlim[1] or
-                    new_ylim[0] <= self.original_ylim[0] or
-                    new_ylim[1] >= self.original_ylim[1]):
-                    self.ax.set_xlim(self.original_xlim)
-                    self.ax.set_ylim(self.original_ylim)
-                else:
-                    self.ax.set_xlim(new_xlim)
-                    self.ax.set_ylim(new_ylim)
-
-
-            current_xlim = self.ax.get_xlim() if hasattr(self, 'ax') and self.ax.get_xlim() != (0, 1) else None
-            current_ylim = self.ax.get_ylim() if hasattr(self, 'ax') and self.ax.get_ylim() != (0, 1) else None
-            self.update_display(preserve_zoom=(current_xlim, current_ylim))                
-
-            #self.canvas.draw()
-        
-        elif event.button == 3:  # Right click
-            self.create_context_menu(event)
-
-        else:  # Not in zoom mode - handle value inspection
-            if self.channel_data[self.active_channel] is not None:
-                try:
-                    # Get clicked value
-                    x_idx = int(round(event.xdata))
-                    y_idx = int(round(event.ydata))
-                    # Check if Ctrl key is pressed (using matplotlib's key_press system)
-                    ctrl_pressed = 'ctrl' in event.modifiers
-                    if len(self.channel_data[self.active_channel].shape) != 4:  
-                        if self.channel_data[self.active_channel][self.current_slice, y_idx, x_idx] != 0:
-                            clicked_value = self.channel_data[self.active_channel][self.current_slice, y_idx, x_idx]
-                        else:
-                            if not ctrl_pressed:
-                                self.clicked_values = {
-                                    'nodes': [],
-                                    'edges': []
-                                }
-                                self.create_highlight_overlay()
-                            return
-                        
-
-                    starting_vals = copy.deepcopy(self.clicked_values)
-                    
-                    # Store or remove the clicked value in the appropriate list
-                    if self.active_channel == 0:
-                        if ctrl_pressed:
-                            if clicked_value in self.clicked_values['nodes']:
-                                # Remove value if it's already selected
-                                self.clicked_values['nodes'].remove(clicked_value)
-                            else:
-                                # Add value if it's not already selected
-                                self.clicked_values['nodes'].append(clicked_value)
-                        else:
-                            # Reset both lists and start new selection
-                            self.clicked_values = {'nodes': [clicked_value], 'edges': []}
-                        # Get latest value (or the last remaining one if we just removed an item)
-                        latest_value = self.clicked_values['nodes'][-1] if self.clicked_values['nodes'] else None
-                        self.handle_info('node')
-                    elif self.active_channel == 1:
-                        if ctrl_pressed:
-                            if clicked_value in self.clicked_values['edges']:
-                                # Remove value if it's already selected
-                                self.clicked_values['edges'].remove(clicked_value)
-                            else:
-                                # Add value if it's not already selected
-                                self.clicked_values['edges'].append(clicked_value)
-                        else:
-                            # Reset both lists and start new selection
-                            self.clicked_values = {'nodes': [], 'edges': [clicked_value]}
-                        # Get latest value (or the last remaining one if we just removed an item)
-                        latest_value = self.clicked_values['edges'][-1] if self.clicked_values['edges'] else None
-                        self.handle_info('edge')
-
-                    
-                    # Try to find and highlight the latest value in the current table
-                    try:
-                        found = self.highlight_value_in_tables(latest_value)
-                    except:
+                if len(self.channel_data[self.active_channel].shape) != 4:
+                    if self.channel_data[self.active_channel][self.current_slice, y_idx, x_idx] != 0:
+                        clicked_value = self.channel_data[self.active_channel][self.current_slice, y_idx, x_idx]
+                    else:
+                        if not ctrl_pressed:
+                            self.clicked_values = {
+                                'nodes': [],
+                                'edges': []
+                            }
+                            self.create_highlight_overlay()
                         return
-                    
-                    # If not found in current table but it exists in the other table, offer to switch
+                
+                starting_vals = copy.deepcopy(self.clicked_values)
+                
+                # Store or remove the clicked value in the appropriate list
+                if self.active_channel == 0:
+                    if ctrl_pressed:
+                        if clicked_value in self.clicked_values['nodes']:
+                            self.clicked_values['nodes'].remove(clicked_value)
+                        else:
+                            self.clicked_values['nodes'].append(clicked_value)
+                    else:
+                        self.clicked_values = {'nodes': [clicked_value], 'edges': []}
+                    latest_value = self.clicked_values['nodes'][-1] if self.clicked_values['nodes'] else None
+                    self.handle_info('node')
+                elif self.active_channel == 1:
+                    if ctrl_pressed:
+                        if clicked_value in self.clicked_values['edges']:
+                            self.clicked_values['edges'].remove(clicked_value)
+                        else:
+                            self.clicked_values['edges'].append(clicked_value)
+                    else:
+                        self.clicked_values = {'nodes': [], 'edges': [clicked_value]}
+                    latest_value = self.clicked_values['edges'][-1] if self.clicked_values['edges'] else None
+                    self.handle_info('edge')
+                
+                # Try to find and highlight the latest value in the current table
+                try:
+                    found = self.highlight_value_in_tables(latest_value)
+                except:
+                    return
+                
+                # If not found in current table but exists in other table, switch
+                try:
                     if not found:
                         other_table = self.selection_table if self.active_table == self.network_table else self.network_table
                         if other_table.model() is not None:
@@ -4695,33 +4137,242 @@ class ImageViewerWindow(QMainWindow):
                                 exists_in_other = (df[df.columns[0]] == latest_value).any() or (df[df.columns[1]] == latest_value).any()
                             else:
                                 exists_in_other = (df[df.columns[2]] == latest_value).any()
-                                
-                            if exists_in_other:
-                                # Switch to the other table
+                            
+                            if exists_in_other and not (self.network_graph_widget.isVisbile() or self.selection_graph_widget.is_Visible()):
                                 if other_table == self.network_table:
                                     self.network_button.click()
                                 else:
                                     self.selection_button.click()
-                                # Now highlight in the newly active table
                                 self.highlight_value_in_tables(latest_value)
+                except:
+                    pass
+                
+                # Highlight the clicked element in the image
+                if self.active_channel == 0 and starting_vals['nodes'] != self.clicked_values['nodes']:
+                    if self.channel_data[0].shape[0] * self.channel_data[0].shape[1] * self.channel_data[0].shape[2] > self.mini_thresh:
+                        self.mini_overlay = True
+                        self.create_mini_overlay(node_indices=self.clicked_values['nodes'], edge_indices=self.clicked_values['edges'])
+                    else:
+                        self.create_highlight_overlay(node_indices=self.clicked_values['nodes'], edge_indices=self.clicked_values['edges'])
+                elif self.active_channel == 1 and starting_vals['edges'] != self.clicked_values['edges']:
+                    if self.channel_data[1].shape[0] * self.channel_data[1].shape[1] * self.channel_data[1].shape[2] > self.mini_thresh:
+                        self.mini_overlay = True
+                        self.create_mini_overlay(node_indices=self.clicked_values['nodes'], edge_indices=self.clicked_values['edges'])
+                    else:
+                        self.create_highlight_overlay(node_indices=self.clicked_values['nodes'], edge_indices=self.clicked_values['edges'])
+            
+            except IndexError:
+                pass         
 
-                    # Highlight the clicked element in the image using the stored lists                
-                    if self.active_channel == 0 and (starting_vals['nodes']) != (self.clicked_values['nodes']):
-                        if self.channel_data[0].shape[0] * self.channel_data[0].shape[1] * self.channel_data[0].shape[2] > self.mini_thresh:
-                            self.mini_overlay = True
-                            self.create_mini_overlay(node_indices = self.clicked_values['nodes'], edge_indices = self.clicked_values['edges'])
-                        else:
-                            self.create_highlight_overlay(node_indices=self.clicked_values['nodes'], edge_indices=self.clicked_values['edges'])
-                    elif self.active_channel == 1 and starting_vals['edges'] != self.clicked_values['edges']:
-                        if self.channel_data[1].shape[0] * self.channel_data[1].shape[1] * self.channel_data[1].shape[2] > self.mini_thresh:
-                            self.mini_overlay = True
-                            self.create_mini_overlay(node_indices = self.clicked_values['nodes'], edge_indices = self.clicked_values['edges'])
-                        else:
-                            self.create_highlight_overlay(node_indices=self.clicked_values['nodes'], edge_indices=self.clicked_values['edges'])
+    def on_mouse_press(self, event):
+        """Handle mouse press events in pyqtgraph."""
+        # Map to view coordinates
+        if not self.view.sceneBoundingRect().contains(event.scenePos()):
+            return False
+        
+        mouse_point = self.view.mapSceneToView(event.scenePos())
+        x, y = mouse_point.x(), mouse_point.y()
+        
+        # Check bounds
+        if self.original_dims is None:
+            return False
+        if not (0 <= x < self.original_dims[1] and 0 <= y < self.original_dims[0]):
+            return False
+        
 
-                                
-                except IndexError:
-                    pass  # Clicked outside image boundaries
+        # Middle click -> toggle pan mode
+        if event.button() == Qt.MouseButton.MiddleButton and not self.is_wheeling:
+            if self.machine_window is None and self.brush_mode:
+                self.penning = True
+            else:
+                self.penning = False
+            self.pan_button.click()
+            self.disable_pan = True
+            return True
+
+        #self.pan_button.setCheckable(False)
+
+        if self.brush_mode and not (event.button() == Qt.MouseButton.MiddleButton):
+            """Handle brush mode with virtual painting."""
+            view_range = self.view.viewRange()
+            current_xlim = view_range[0]
+            current_ylim = view_range[1]
+            
+            if self.pen_button.isChecked():
+                channel = self.active_channel
+            else:
+                channel = 2
+            
+            self.pm.initiate_paint_session(channel, current_xlim, current_ylim)
+            
+            if event.button() == Qt.MouseButton.LeftButton or event.button() == Qt.MouseButton.RightButton:
+                if self.machine_window is not None:
+                    if self.machine_window.segmentation_worker is not None:
+                        if not self.machine_window.segmentation_worker._paused:
+                            self.resume = True
+                        self.machine_window.segmentation_worker.pause()
+                
+                x_int, y_int = int(x), int(y)
+                
+                # Get current zoom to preserve it
+                view_range = self.view.viewRange()
+                current_xlim = view_range[0]
+                current_ylim = view_range[1]
+                
+                if event.button() == Qt.MouseButton.LeftButton and getattr(self, 'can', False):
+                    self.update_display(preserve_zoom=(current_xlim, current_ylim))
+                    self.handle_can(x_int, y_int)
+                    return
+                
+                # Determine erase mode
+                if event.button() == Qt.MouseButton.RightButton:
+                    self.erase = True
+                else:
+                    self.erase = False
+                
+                # Determine foreground/background for machine window mode
+                foreground = getattr(self, 'foreground', True)
+                
+                self.last_virtual_pos = (x_int, y_int)
+                
+                if self.pen_button.isChecked():
+                    channel = self.active_channel
+                else:
+                    channel = 2
+                
+                self.pm.start_virtual_paint_session(channel, current_xlim, current_ylim)
+                
+                # Add first virtual paint stroke
+                brush_size = getattr(self, 'brush_size', 5)
+                self.pm.add_virtual_paint_stroke(x_int, y_int, brush_size, self.erase, foreground)
+                
+                # Update display with virtual paint
+                self.painting = True
+        
+        elif not self.zoom_mode and event.button() == Qt.MouseButton.RightButton:  # Right click for context menu
+            self.create_context_menu_pg(event, x, y)
+
+        elif self.zoom_mode and event.button() == Qt.MouseButton.RightButton:  # Right click - zoom out
+            
+            if self.original_xlim is None and self.original_dims is not None:
+                self.original_xlim = (0, self.original_dims[1])
+                self.original_ylim = (0, self.original_dims[0])
+
+            view_range = self.view.viewRange()
+            current_xlim = view_range[0]
+            current_ylim = view_range[1]
+
+            x_range = (current_xlim[1] - current_xlim[0])
+            y_range = (current_ylim[1] - current_ylim[0])
+            
+            new_xlim = [x - x_range, x + x_range]
+            new_ylim = [y - y_range, y + y_range]
+            
+            # Check if zooming out would go beyond original bounds
+            if (new_xlim[0] <= self.original_xlim[0] or 
+                new_xlim[1] >= self.original_xlim[1] or
+                new_ylim[0] <= self.original_ylim[0] or
+                new_ylim[1] >= self.original_ylim[1]):
+                # Reset to original view
+                self.view.setRange(xRange=self.original_xlim, yRange=self.original_ylim, padding=0)
+            else:
+                self.view.setRange(xRange=new_xlim, yRange=new_ylim, padding=0)
+
+            view_range = self.view.viewRange()
+            self.update_display()
+        
+        elif event.button() == Qt.MouseButton.LeftButton:  # Left click
+            # Store initial click position but don't start selection yet
+            self.selection_start = (x, y)
+            self.selecting = False
+
+        return False
+
+    def create_context_menu_pg(self, event, x, y):
+        """Wrapper for context menu with pyqtgraph coordinates"""
+        # Create a mock matplotlib-like event for compatibility
+        class MockEvent:
+            def __init__(self, x, y):
+                self.xdata = x
+                self.ydata = y
+        
+        mock_event = MockEvent(x, y)
+        self.create_context_menu(mock_event)
+
+    def highlight_value_in_tables(self, clicked_value):
+        """Helper method to find and highlight a value in both tables."""
+
+        try:
+        
+            if not self.network_table.model() and not self.selection_table.model():
+                return False
+
+            found = False
+            tables_to_check = [self.network_table, self.selection_table]
+            active_table_index = tables_to_check.index(self.active_table)
+            
+            # Reorder tables to check active table first
+            tables_to_check = tables_to_check[active_table_index:] + tables_to_check[:active_table_index]
+            
+            for table in tables_to_check:
+                if table.model() is None:
+                    continue
+                    
+                df = table.model()._data
+
+                # Create appropriate masks based on active channel
+                if self.active_channel == 0:  # Nodes channel
+                    col1_matches = df[df.columns[0]] == clicked_value
+                    col2_matches = df[df.columns[1]] == clicked_value
+                    all_matches = col1_matches | col2_matches
+
+                elif self.active_channel == 1:  # Edges channel
+                    all_matches = df[df.columns[2]] == clicked_value
+
+                else:
+                    continue
+
+                if all_matches.any():
+                    # Get indices from the current dataframe's index
+                    match_indices = df[all_matches].index.tolist()
+                    
+                    # If this is the active table, handle selection and scrolling
+                    if table == self.active_table:
+                        current_row = table.currentIndex().row()
+                        
+                        # Convert match_indices to row numbers (position in the visible table)
+                        row_positions = [df.index.get_loc(idx) for idx in match_indices]
+                        
+                        # Find next match after current position
+                        if current_row >= 0:
+                            next_positions = [pos for pos in row_positions if pos > current_row]
+                            row_pos = next_positions[0] if next_positions else row_positions[0]
+                        else:
+                            row_pos = row_positions[0]
+                        
+                        # Update selection and scroll
+                        model_index = table.model().index(row_pos, 0)
+                        table.scrollTo(model_index)
+                        table.clearSelection()
+                        table.selectRow(row_pos)
+                        table.setCurrentIndex(model_index)
+
+                        # Add highlighting for specific cells based on active channel
+                        if self.active_channel == 0:  # Nodes channel
+                            # Only highlight cells in columns 0 and 1 where the value matches
+                            if df.iloc[row_pos, 0] == clicked_value:
+                                table.model().highlight_cell(row_pos, 0)
+                            if df.iloc[row_pos, 1] == clicked_value:
+                                table.model().highlight_cell(row_pos, 1)
+                        else:  # Edges channel
+                            # Highlight the edge column
+                            table.model().highlight_cell(row_pos, 2)
+                    
+                    found = True
+
+            return found
+        except:
+            pass
                 
     def create_menu_bar(self):
         menubar = self.menuBar()
@@ -4731,7 +4382,7 @@ class ImageViewerWindow(QMainWindow):
 
         # Create Save submenu
         save_menu = file_menu.addMenu("Save")
-        network_save = save_menu.addAction("Save Network3D Object")
+        network_save = save_menu.addAction("Save Current Session")
         network_save.triggered.connect(lambda: self.save_network_3d(False))
         for i in range(4):
             save_action = save_menu.addAction(f"Save {self.channel_names[i]}")
@@ -4741,7 +4392,7 @@ class ImageViewerWindow(QMainWindow):
 
         # Create Save As submenu
         save_as_menu = file_menu.addMenu("Save As")
-        network_saveas = save_as_menu.addAction("Save Network3D Object As")
+        network_saveas = save_as_menu.addAction("Save Current Session As")
         network_saveas.triggered.connect(lambda: self.save_network_3d(True))
         for i in range(4):
             save_action = save_as_menu.addAction(f"Save {self.channel_names[i]} As")
@@ -4751,7 +4402,7 @@ class ImageViewerWindow(QMainWindow):
         
         # Create Load submenu
         load_menu = file_menu.addMenu("Load")
-        network_load = load_menu.addAction("Load Network3D Object")
+        network_load = load_menu.addAction("Load Previous Session")
         network_load.triggered.connect(lambda: self.load_from_network_obj(None))
         for i in range(4):
             load_action = load_menu.addAction(f"Load {self.channel_names[i]}")
@@ -4800,7 +4451,7 @@ class ImageViewerWindow(QMainWindow):
         allstats_action = stats_net_menu.addAction("Calculate Generic Network Stats")
         allstats_action.triggered.connect(self.stats)
         histos_action = stats_net_menu.addAction("Network Statistic Histograms")
-        histos_action.triggered.connect(self.histos)
+        histos_action.triggered.connect(self.histograms)
         radial_action = stats_net_menu.addAction("Radial Distribution Analysis")
         radial_action.triggered.connect(self.show_radial_dialog)
         heatmap_action = stats_net_menu.addAction("Community Cluster Heatmap")
@@ -4967,8 +4618,28 @@ class ImageViewerWindow(QMainWindow):
         corner_widget = QWidget()
         corner_layout = QHBoxLayout(corner_widget)
         corner_layout.setContentsMargins(5, 0, 5, 0)
+
+        self.coord_label = QLabel(f"                                                                                               ")
+        self.coord_label.setText(f"                                                                                               ")
+        corner_layout.addWidget(self.coord_label)
+
+        self.xy_scale_label = QLabel(f"xy_scale: {my_network.xy_scale}                   ")
+        self.xy_scale_label.setText(f"xy_scale: {my_network.xy_scale}                   ")
+        corner_layout.addWidget(self.xy_scale_label)
+
+        self.z_scale_label = QLabel(f"z_scale: {my_network.z_scale}                   ")
+        self.z_scale_label.setText(f"z_scale: {my_network.z_scale}                   ")
+        corner_layout.addWidget(self.z_scale_label)
+
+        self.z_label = QLabel(f"Slice {self.current_slice}")
+        self.z_label.setText(f"Slice {self.current_slice}")
+        corner_layout.addWidget(self.z_label)
         
-        
+        self.threed_button = QPushButton("3D") 
+        self.threed_button.setFixedSize(40, 40)
+        self.threed_button.clicked.connect(self.quick_3d)
+        corner_layout.addWidget(self.threed_button)
+
         # Add after your other buttons
         self.popup_button = QPushButton("⤴") 
         self.popup_button.setFixedSize(40, 40)
@@ -4991,7 +4662,7 @@ class ImageViewerWindow(QMainWindow):
         self.load_button.setStyleSheet("font-size: 24px;")
         self.load_button.clicked.connect(self.load_file)
         corner_layout.addWidget(self.load_button)
-        
+
         # Set as corner widget
         menubar.setCornerWidget(corner_widget, Qt.Corner.TopRightCorner)
 
@@ -5012,6 +4683,8 @@ class ImageViewerWindow(QMainWindow):
     def validate_downsample_input(self, text = None, update = True):
         """Called when user finishes editing (loses focus or presses Enter)"""
         if text:
+            if text < 1:
+                return
             self.downsample_factor = text
         else:
             try: # If enabled for manual display downsampling
@@ -5037,17 +4710,46 @@ class ImageViewerWindow(QMainWindow):
             except:
                 # Invalid input - reset to default
                 self.downsample_factor = 1
-
-        try:
-            self.throttle = self.shape[1] * self.shape[2] > 3000 * 3000 * self.downsample_factor
-        except:
-            self.throttle = False
         
         # Optional: Trigger display update if you want immediate effect
         if update:
             current_xlim = self.ax.get_xlim() if hasattr(self, 'ax') and self.ax.get_xlim() != (0, 1) else None
             current_ylim = self.ax.get_ylim() if hasattr(self, 'ax') and self.ax.get_ylim() != (0, 1) else None
             self.update_display(preserve_zoom=(current_xlim, current_ylim))
+
+    def quick_3d(self):
+
+        arrays_3d = []
+        arrays_4d = []
+
+        color_template = ['red', 'green', 'white', 'cyan', 'yellow']  # color list
+        colors = []
+
+
+        for i, channel in enumerate(self.channel_data):
+            if channel is not None:
+
+                if len(channel.shape) == 3:
+                    visible = self.channel_buttons[i].isChecked()
+                    if visible:
+                        arrays_3d.append(channel)
+                        colors.append(color_template[i])
+                elif len(channel.shape) == 4:
+                    visible = self.channel_buttons[i].isChecked()
+                    if visible:
+                        arrays_4d.append(channel)
+
+        if self.thresh_window_ref is not None:
+            self.thresh_window_ref.make_full_highlight()
+
+        if self.highlight_overlay is not None or self.mini_overlay_data is not None:
+            if self.mini_overlay == True:
+                self.create_highlight_overlay(node_indices = self.clicked_values['nodes'], edge_indices = self.clicked_values['edges'])
+            arrays_3d.append(self.highlight_overlay)
+            colors.append(color_template[4])
+        
+        n3d.show_3d(arrays_3d, arrays_4d, xy_scale = my_network.xy_scale, z_scale = my_network.z_scale, colors = colors)
+
 
     def snap(self):
         try:
@@ -5080,26 +4782,23 @@ class ImageViewerWindow(QMainWindow):
                     filename += '.png'
                     format_type = 'png'
                 
+                # Temporarily render at full resolution if downsampled
                 if self.downsample_factor > 1:
-                    self.pan_mode = True
-                    self.downsample_factor = 1
-                    current_xlim = self.ax.get_xlim() if hasattr(self, 'ax') and self.ax.get_xlim() != (0, 1) else None
-                    current_ylim = self.ax.get_ylim() if hasattr(self, 'ax') and self.ax.get_ylim() != (0, 1) else None
-                    self.update_display(preserve_zoom=(current_xlim, current_ylim))
+                    self.update_display(downsample = False)
                 
-                # Save with axes bbox (scalebar will be included if it's already drawn)
-                bbox = self.ax.get_window_extent().transformed(self.figure.dpi_scale_trans.inverted())
-                self.figure.savefig(filename,
-                                  dpi=300,
-                                  bbox_inches=bbox,
-                                  facecolor='black',
-                                  edgecolor='none',
-                                  format=format_type,
-                                  pad_inches=0)
+                # Export the view as an image
+                from pyqtgraph.exporters import ImageExporter
                 
-                print(f"Axes snapshot saved: {filename}")
-                self.toggle_pan_mode()
+                exporter = ImageExporter(self.view)
                 
+                # Set high resolution
+                exporter.parameters()['width'] = int(self.view.width() * 3)  # 3x resolution for quality
+                
+                # Export to file
+                exporter.export(filename)
+                
+                print(f"View snapshot saved: {filename}")
+        
         except Exception as e:
             print(f"Error saving snapshot: {e}")
 
@@ -5107,28 +4806,35 @@ class ImageViewerWindow(QMainWindow):
         """Remove existing scalebar artists if present."""
         if hasattr(self, 'scalebar_artists') and self.scalebar_artists:
             for artist in self.scalebar_artists:
-                artist.remove()
+                try:
+                    self.view.removeItem(artist)
+                except:
+                    pass
             self.scalebar_artists = None
 
     def _draw_scalebar(self):
         """Draw a scale bar and store artists in self.scalebar_artists."""
         # Remove any existing scalebar first
         self._remove_scalebar()
+        
         # Initialize the list
         self.scalebar_artists = []
-        # Get current axis limits (in pixel coordinates)
-        xlim = self.ax.get_xlim()
-        ylim = self.ax.get_ylim()
+        
+        # Get current view range (in pixel coordinates)
+        view_range = self.view.viewRange()
+        xlim = view_range[0]
+        ylim = view_range[1]
+        
         # Calculate view dimensions
         width_pixels = abs(xlim[1] - xlim[0])
         height_pixels = abs(ylim[1] - ylim[0])
-        # Check if image is large enough for scale bar (minimum 200x100 pixels)
-        #if width_pixels < 200 or height_pixels < 100:
-         #   return
+        
         # Convert to actual units using xy_scale
         width_units = width_pixels * my_network.xy_scale
+        
         # Determine a nice scale bar size (target ~15% of width)
         target_size = width_units * 0.15
+        
         # Round to a nice number (1, 2, 5, 10, 20, 50, 100, etc.)
         magnitude = 10 ** np.floor(np.log10(target_size))
         normalized = target_size / magnitude
@@ -5140,47 +4846,65 @@ class ImageViewerWindow(QMainWindow):
             nice_size = 5 * magnitude
         else:
             nice_size = 10 * magnitude
+        
         # Convert back to pixels for drawing
         bar_length_pixels = nice_size / my_network.xy_scale
+        
         # Position in bottom right corner with padding (5% margins)
         padding_x = width_pixels * 0.05
         padding_y = height_pixels * 0.05
-        # Handle both normal and inverted y-axes (images typically use inverted y)
+        
+        # Calculate position
         x_max = max(xlim)
-        y_bottom = max(ylim)
+        y_max = max(ylim)  # Bottom in inverted Y coordinates
+        
         bar_x_start = x_max - padding_x - bar_length_pixels
         bar_x_end = x_max - padding_x
-        bar_y = y_bottom - padding_y
-        # Draw scale bar with outline for visibility on any background
-        # Black outline
-        outline = self.ax.plot([bar_x_start, bar_x_end], [bar_y, bar_y], 
-                              color='black', linewidth=6, solid_capstyle='butt', 
-                              zorder=999)[0]
+        bar_y = y_max - padding_y
+        
+        # Draw scale bar with outline for visibility
+        # Black outline (thicker)
+        outline = pg.PlotDataItem(
+            [bar_x_start, bar_x_end], [bar_y, bar_y],
+            pen=pg.mkPen(color='k', width=6)
+        )
+        self.view.addItem(outline)
+        self.scalebar_artists.append(outline)
+        
         # White main line
-        line = self.ax.plot([bar_x_start, bar_x_end], [bar_y, bar_y], 
-                            color='white', linewidth=4, solid_capstyle='butt', 
-                            zorder=1000)[0]
+        line = pg.PlotDataItem(
+            [bar_x_start, bar_x_end], [bar_y, bar_y],
+            pen=pg.mkPen(color='w', width=4)
+        )
+        self.view.addItem(line)
+        self.scalebar_artists.append(line)
+        
         # Format the label text
         if nice_size >= 1:
             label_text = f'{nice_size:.0f}'
         else:
             label_text = f'{nice_size:.2f}'
-        # Add text label above the bar (in visual space)
-        # Place text above bar - offset depends on y-axis direction
-        text_offset = height_pixels * 0.03  # Increased offset for better visibility
-        if ylim[0] > ylim[1]:  # Inverted y-axis (typical for images)
-            text_y = bar_y - text_offset  # Subtract to go visually up
-        else:  # Normal y-axis
-            text_y = bar_y + text_offset  # Add to go visually up
         
+        # Add text label above the bar
+        text_offset = height_pixels * 0.03
+        text_y = bar_y + text_offset  # Add to go visually up (Y is inverted)
         text_x = (bar_x_start + bar_x_end) / 2
-        text = self.ax.text(text_x, text_y, label_text,
-                           color='white', fontsize=10, ha='center', va='bottom',
-                           fontweight='bold', zorder=1001,
-                           bbox=dict(boxstyle='round,pad=0.3', facecolor='black', 
-                                    edgecolor='none', alpha=0.7))
-        # Store all artists
-        self.scalebar_artists = [outline, line, text]
+        
+        # Create text with background
+        text = pg.TextItem(
+            text=label_text,
+            color=(255, 255, 255),
+            anchor=(0.5, 1)  # Center, bottom
+        )
+        text.setPos(text_x, text_y)
+        
+        # Add semi-transparent black background to text
+        from PyQt6.QtGui import QColor, QBrush
+        text.fill = QBrush(QColor(0, 0, 0, 180))  # Black brush with alpha
+        text.border = pg.mkPen(None)
+        
+        self.view.addItem(text)
+        self.scalebar_artists.append(text)
 
     def open_cellpose(self):
 
@@ -5248,9 +4972,11 @@ class ImageViewerWindow(QMainWindow):
 
             self.format_for_upperright_table(stats, title = 'Network Stats')
         except Exception as e:
+            import traceback
+            traceback.print_exc()
             print(f"Error finding stats: {e}")
 
-    def histos(self):
+    def histograms(self):
         """
         Show a PyQt6 window with buttons to select which histogram to generate.
         Only calculates the histogram that the user selects.
@@ -5262,7 +4988,8 @@ class ImageViewerWindow(QMainWindow):
                 app = QApplication(sys.argv)
             
             # Create and show the histogram selector window
-            self.histogram_selector = HistogramSelector(self)
+            from . import histos
+            self.histogram_selector = histos.HistogramSelector(self, self.stats_dict, my_network.network)
             self.histogram_selector.show()
             
             # Keep the window open (you might want to handle this differently based on your application structure)
@@ -5543,6 +5270,9 @@ class ImageViewerWindow(QMainWindow):
             self.load_channel(1, my_network.edges, data = True)
             self.load_channel(0, my_network.nodes, data = True)
 
+            self.clear_subgraphs()
+            self.network_graph_widget.set_graph(my_network.network)
+
             self.table_load_attrs()
 
         except Exception as e:
@@ -5580,6 +5310,9 @@ class ImageViewerWindow(QMainWindow):
             self.delete_channel(1, False)
 
             my_network.morph_proximity(search = [3,3], fastdil = True)
+
+            self.clear_subgraphs()
+            self.network_graph_widget.set_graph(my_network.network)
 
             self.table_load_attrs()
 
@@ -5733,7 +5466,7 @@ class ImageViewerWindow(QMainWindow):
 
         try:
 
-            array = sdl.smart_dilate(self.channel_data[self.active_channel], dilate_xy = np.max(self.shape), dilate_z = np.max(self.shape), use_dt_dil_amount = np.max(self.shape), fast_dil = False)
+            array = sdl.smart_dilate(self.channel_data[self.active_channel], use_dt_dil_amount = np.max(self.shape), fast_dil = False)
             self.load_channel(3, array, True)
 
         except Exception as e:
@@ -5866,7 +5599,8 @@ class ImageViewerWindow(QMainWindow):
                 try:
                     if sort == 'Node Identities':
                         my_network.load_node_identities(file_path = filename)
-
+                        self.network_graph_widget.identity_dict = my_network.node_identities
+                        self.selection_graph_widget.identity_dict = my_network.node_identities
 
                         if hasattr(my_network, 'node_identities') and my_network.node_identities is not None:
                             try:
@@ -5876,6 +5610,8 @@ class ImageViewerWindow(QMainWindow):
 
                     elif sort == 'Node Centroids':
                         my_network.load_node_centroids(file_path = filename)
+                        self.network_graph_widget.centroids = my_network.node_centroids
+                        self.selection_graph_widget.centroids = my_network.node_centroids
 
                         if hasattr(my_network, 'node_centroids') and my_network.node_centroids is not None:
                             try:
@@ -5893,6 +5629,9 @@ class ImageViewerWindow(QMainWindow):
                                 print(f"Error loading edge centroid table: {e}")
                     elif sort == 'Communities':
                         my_network.load_communities(file_path = filename)
+
+                        self.network_graph_widget.community_dict = my_network.communities
+                        self.selection_graph_widget.community_dict = my_network.communities
 
                         if hasattr(my_network, 'communities') and my_network.communities is not None:
                             try:
@@ -6018,7 +5757,8 @@ class ImageViewerWindow(QMainWindow):
                         selected_path, 
                         root_id=self.node_name, 
                         centroids=centroids,
-                        down_factor=down_factor
+                        down_factor=down_factor,
+                        label_nodes = False
                     )
                     
                     self.load_channel(0, my_network.nodes, True)
@@ -6040,6 +5780,28 @@ class ImageViewerWindow(QMainWindow):
                 )
 
 
+    def clear_subgraphs(self):
+
+        self.network_graph_widget._clear_graph()
+        self.selection_graph_widget._clear_graph()
+        self.network_graph_widget.set_graph(None)
+        self.network_graph_widget.community_dict = None
+        self.network_graph_widget.identity_dict = None
+        self.network_graph_widget.centroids = None
+        self.selection_graph_widget.set_graph(None)
+        self.selection_graph_widget.community_dict = None
+        self.selection_graph_widget.identity_dict = None
+        self.selection_graph_widget.centroids = None
+
+    def update_graph_fields(self):
+
+        #self.network_graph_widget.set_graph(my_network.network)
+        self.network_graph_widget.community_dict = my_network.communities
+        self.network_graph_widget.identity_dict = my_network.node_identities
+        self.network_graph_widget.centroids = my_network.node_centroids
+        self.selection_graph_widget.community_dict = my_network.communities
+        self.selection_graph_widget.identity_dict = my_network.node_identities
+        self.selection_graph_widget.centroids = my_network.node_centroids
 
     # Modify load_from_network_obj method
     def load_from_network_obj(self, directory = None):
@@ -6056,17 +5818,24 @@ class ImageViewerWindow(QMainWindow):
 
             self.last_load = directory
             self.last_saved = os.path.dirname(directory)
-            self.last_save_name = directory            
+            self.last_save_name = directory
+            self.setWindowTitle(f"NetTracer3D - Session: {self.last_save_name}")            
 
             self.channel_data = [None] * 5
             if directory != "":
 
                 self.reset(network = True, xy_scale = 1, z_scale = 1, nodes = True, edges = True, network_overlay = True, id_overlay = True, update = False)
 
-
+                self.clear_subgraphs()
                 my_network.assemble(directory)
+                self.xy_scale_label.setText(f"xy_scale: {my_network.xy_scale:.2e}                   ")
+                self.z_scale_label.setText(f"z_scale: {my_network.z_scale:.2e}                   ")
+                self.network_graph_widget.set_graph(my_network.network)
+                self.network_graph_widget.centroids = my_network.node_centroids
+                self.selection_graph_widget.centroids = my_network.node_centroids
+                #self.network_graph_widget.load_graph()
 
-                # Load image channels
+                # Load image channelsTrue
                 try:
                     self.load_channel(0, my_network.nodes, True)
                 except Exception as e:
@@ -6083,6 +5852,7 @@ class ImageViewerWindow(QMainWindow):
                     self.load_channel(3, my_network.id_overlay, True)
                 except Exception as e:
                     print(e)
+                self.update_display(home = True)
 
                 # Update slider range based on new data
                 for channel in self.channel_data:
@@ -6133,9 +5903,11 @@ class ImageViewerWindow(QMainWindow):
                         print(f"Error loading node community table: {e}")
 
         except Exception as e:
+            import traceback
+            traceback.print_exc()
             QMessageBox.critical(
                 self,
-                "Error Loading Network 3D Object",
+                "Error Loading Previous Session",
                 f"Failed to load Network 3D Object: {str(e)}"
             )
 
@@ -6154,6 +5926,9 @@ class ImageViewerWindow(QMainWindow):
             )
 
             my_network.load_network(file_path = filename)
+            self.clear_subgraphs()
+            self.network_graph_widget.set_graph(my_network.network)
+            self.network_graph_widget.load_graph()
 
             # Display network_lists in the network table
             try:
@@ -6413,22 +6188,25 @@ class ImageViewerWindow(QMainWindow):
 
         return x_scale, z_scale
 
-    def load_channel(self, channel_index, channel_data=None, data=False, assign_shape = True, preserve_zoom = None, end_paint = False, begin_paint = False, color = False, load_highlight = False):
+    def load_channel(self, channel_index, channel_data=None, data=False, assign_shape = True, preserve_zoom = None, end_paint = False, begin_paint = False, color = False, load_highlight = False, filename = None):
         """Load a channel and enable active channel selection if needed."""
 
         try:
 
-            if not data:  # For solo loading
-                filename, _ = QFileDialog.getOpenFileName(
-                    self,
-                    f"Load Channel {channel_index + 1}",
-                    "",
-                    "Image Files (*.tif *.tiff *.nii *.jpg *.jpeg *.png)"
-                )
+            if not data:  
+
+                if not filename:
+                    # For solo loading
+                    filename, _ = QFileDialog.getOpenFileName(
+                        self,
+                        f"Load Channel {channel_index + 1}",
+                        "",
+                        "Image Files (*.tif *.tiff *.nii *.jpg *.jpeg *.png)"
+                    )
                 
                 if not filename:
                     return
-                    
+                
                 file_extension = filename.lower().split('.')[-1]
 
                 if channel_index == 0:
@@ -6442,6 +6220,8 @@ class ImageViewerWindow(QMainWindow):
                             try:
                                 my_network.xy_scale, my_network.z_scale = self.get_scaling_metadata_only(filename)
                                 print(f"xy_scale property set to {my_network.xy_scale}; z_scale property set to {my_network.z_scale}")
+                                self.xy_scale_label.setText(f"xy_scale: {my_network.xy_scale:.2e}                   ")
+                                self.z_scale_label.setText(f"z_scale: {my_network.z_scale:.2e}                   ")
                             except:
                                 pass
                         test_channel_data = tifffile.imread(filename)
@@ -6479,8 +6259,8 @@ class ImageViewerWindow(QMainWindow):
             else:
                 self.channel_data[channel_index] = channel_data
                 if channel_data is None:
-                    self.channel_buttons[channel_index].setEnabled(False)
-                    self.delete_buttons[channel_index].setEnabled(False) 
+                    self.delete_channel(channel_index, called = False, update = True)
+                    return
 
             try:
                 #if len(self.channel_data[channel_index].shape) == 4:
@@ -6522,21 +6302,17 @@ class ImageViewerWindow(QMainWindow):
                     except:
                         pass
 
-            reset_resize = False
-
             for i in range(4): #Try to ensure users don't load in different sized arrays
                 if self.channel_data[i] is None or i == channel_index or data:
                     if self.highlight_overlay is not None: #Make sure highlight overlay is always the same shape as new images
                         try:
                             if self.channel_data[i].shape[:3] != self.highlight_overlay.shape:
-                                reset_resize = True
                                 self.highlight_overlay = None
                         except:
                             pass
-                    if not data:
-                        self.original_xlim = None
-                        self.original_ylim = None
-                    continue
+                    #if not data:
+                    self.original_xlim = None
+                    self.original_ylim = None
                 else:
                     old_shape = self.channel_data[i].shape[:3] #Ask user to resize images that are shaped differently
                     if old_shape != self.channel_data[channel_index].shape[:3]:
@@ -6615,20 +6391,17 @@ class ImageViewerWindow(QMainWindow):
             except:
                 pass
 
-            if self.shape == self.channel_data[channel_index].shape:
-                preserve_zoom = (self.ax.get_xlim(), self.ax.get_ylim())
+            if self.shape == None:
+                self.last_change = None
                 self.shape = (self.channel_data[channel_index].shape[0], self.channel_data[channel_index].shape[1], self.channel_data[channel_index].shape[2])
-            else:
-                if self.shape is not None:
-                    self.resizing = True
+                home = True
+            elif self.shape[:3] == self.channel_data[channel_index].shape[:3]:
                 self.shape = (self.channel_data[channel_index].shape[0], self.channel_data[channel_index].shape[1], self.channel_data[channel_index].shape[2])
-                ylim, xlim = (self.shape[1] + 0.5, -0.5), (-0.5, self.shape[2] - 0.5)
-                preserve_zoom = (xlim, ylim)
-            if self.shape[1] * self.shape[2] > 3000 * 3000 * self.downsample_factor:
-                self.throttle = True
+                home = False
             else:
-                self.throttle = False
-
+                self.last_change = None
+                self.shape = (self.channel_data[channel_index].shape[0], self.channel_data[channel_index].shape[1], self.channel_data[channel_index].shape[2])
+                home = True
 
             self.img_height, self.img_width = self.shape[1], self.shape[2]
 
@@ -6646,16 +6419,14 @@ class ImageViewerWindow(QMainWindow):
                 self.mini_overlay = False
                 self.channel_data[4] = None
 
-            if self.pan_mode:
-                self.pan_button.click()
-                if self.show_channels:
-                    self.channel_buttons[channel_index].click()
-                    self.channel_buttons[channel_index].click()
             elif not end_paint:
+                self.update_display(home = home)
 
-                self.update_display(reset_resize = reset_resize, preserve_zoom = preserve_zoom)
                 
         except Exception as e:
+
+            #import traceback
+            #traceback.print_exc()
 
             if not data:
                 from PyQt6.QtWidgets import QMessageBox
@@ -6701,6 +6472,7 @@ class ImageViewerWindow(QMainWindow):
             self.channel_buttons[channel_index].setChecked(False)
             self.delete_buttons[channel_index].setEnabled(False)
             self.channel_visible[channel_index] = False
+            self.reset_dicts(channel_index)
             
             # If this was the active channel, switch to the first available channel
             if self.active_channel == channel_index:
@@ -6717,16 +6489,26 @@ class ImageViewerWindow(QMainWindow):
                 # Update display
                 self.update_display(preserve_zoom = (self.ax.get_xlim(), self.ax.get_ylim()))
 
+    def reset_dicts(self, index):
+        self.volume_dict[index] = None
+        self.radii_dict[index] = None
+        self.surface_area_dict[index] = None
+        self.sphericity_dict[index] = None
+        self.branch_dict[index] = None
+
     def reset(self, nodes = False, network = False, xy_scale = 1, z_scale = 1, edges = False, search_region = False, network_overlay = False, id_overlay = False, update = True, node_identities = False):
         """Method to flexibly reset certain fields to free up the RAM as desired"""
         
         # Set scales first before any clearing operations
         my_network.xy_scale = xy_scale
         my_network.z_scale = z_scale
+        self.xy_scale_label.setText(f"xy_scale: {my_network.xy_scale:.2e}                   ")
+        self.z_scale_label.setText(f"z_scale: {my_network.z_scale:.2e}                   ")
 
         if network:
             my_network.network = None
             my_network.communities = None
+            self.stats_dict = {}
 
             # Create empty DataFrame
             empty_df = pd.DataFrame(columns=['Node A', 'Node B', 'Edge C'])
@@ -6736,6 +6518,7 @@ class ImageViewerWindow(QMainWindow):
             
             # Clear selection table
             self.selection_table.setModel(PandasModel(empty_df))
+            self.clear_subgraphs()
 
         if node_identities:
             my_network.node_identities = None
@@ -6762,44 +6545,67 @@ class ImageViewerWindow(QMainWindow):
     def save_network_3d(self, asbool=True):
         try:
             if asbool:  # Save As
-                # First let user select parent directory
-                parent_dir = QFileDialog.getExistingDirectory(
+                # Use getSaveFileName which allows non-existent paths
+                # This lets users navigate to parent AND type the child folder name in one step
+                full_path, _ = QFileDialog.getSaveFileName(
                     self,
-                    "Select Location for Network3D Object Outputs",
+                    "Select Location and Name for Network3D Output Folder",
                     "",
-                    QFileDialog.Option.ShowDirsOnly
-                )
-                if not parent_dir:  # If user canceled the directory selection
-                    return  # Exit the method early
-                    
-                # Prompt user for new folder name
-                new_folder_name, ok = QInputDialog.getText(
-                    self,
-                    "New Folder",
-                    "Enter name for new output folder:"
+                    "Folder (*.folder)",  # Dummy filter, we'll ignore the extension
+                    options=QFileDialog.Option.DontConfirmOverwrite  # Don't warn about overwriting
                 )
                 
-                # Check if user canceled the folder name dialog
-                if not ok or not new_folder_name:
-                    return  # Exit the method early
-            
-            else:  # Save
-                parent_dir = None  # Let the backend handle default save location
+                if not full_path:  # User canceled
+                    return
+                
+                # Parse the result: extract parent directory and folder name
+                import os
+                parent_dir = os.path.dirname(full_path)
+                new_folder_name = os.path.basename(full_path)
+                
+                # Remove any extension the user might have typed (from dummy filter)
+                if new_folder_name.endswith('.folder'):
+                    new_folder_name = new_folder_name[:-7]
+                
+                # Validate parent directory exists
+                if not os.path.isdir(parent_dir):
+                    QMessageBox.critical(
+                        self,
+                        "Invalid Location",
+                        f"Parent directory does not exist: {parent_dir}"
+                    )
+                    return
+                
+                # Validate folder name is not empty
+                if not new_folder_name:
+                    QMessageBox.critical(
+                        self,
+                        "Invalid Name",
+                        "Please enter a name for the output folder."
+                    )
+                    return
 
+            else:  # Save
+                if self.last_saved is None:
+                    self.save_network_3d()
+                    return
+                else:
+                    parent_dir = self.last_saved
+                    new_folder_name = self.last_save_name
+                    
+            # Handle RGB dimension reduction before saving
             if len(self.channel_data[0].shape) == 4:
                 try:
                     self.load_channel(0, self.reduce_rgb_dimension(self.channel_data[0], 'weight'), True)
                 except:
                     pass
-            
+
             # Call appropriate save method
-            if asbool:
-                my_network.dump(parent_dir=parent_dir, name=new_folder_name)
-                self.last_saved = parent_dir
-                self.last_save_name = new_folder_name
-            else:
-                my_network.dump(name='my_network')
-                
+            my_network.dump(parent_dir=parent_dir, name=new_folder_name)
+            self.last_saved = parent_dir
+            self.last_save_name = new_folder_name
+            self.setWindowTitle(f"NetTracer3D - Session: {self.last_save_name}")
+
         except Exception as e:
             QMessageBox.critical(
                 self,
@@ -6825,10 +6631,24 @@ class ImageViewerWindow(QMainWindow):
                     if not filename.endswith(('.tif', '.tiff')):
                         filename += '.tif'
             else:  # Save
-                filename = None  # Let the backend handle default save location
+                if self.last_saved is None:
+                    self.save(ch_index)
+                    return
+                else:
+                    if ch_index == 0:
+                        filename = self.last_save_name + "/labelled_nodes.tif"
+                        print(filename)
+                    elif ch_index == 1:
+                        filename = self.last_save_name + "/labelled_edges.tif"
+                    elif ch_index == 2:
+                        filename = self.last_save_name + "/overlay_1.tif"
+                    elif ch_index == 3:
+                        filename = self.last_save_name + "/overlay_2.tif"
+                    elif ch_index == 4:
+                        filename = self.last_save_name + "/Highlighted_Element.tif"
             
             # Call appropriate save method
-            if filename is not None or not asbool:  # Proceed if we have a filename OR if it's a regular save
+            if (filename is not None and filename != "") or not asbool:  # Proceed if we have a filename OR if it's a regular save
                 if ch_index == 0:
                     my_network.save_nodes(filename=filename)
                 elif ch_index == 1:
@@ -6858,8 +6678,6 @@ class ImageViewerWindow(QMainWindow):
     def toggle_channel(self, channel_index):
         """Toggle visibility of a channel."""
         # Store current zoom settings before toggling
-        if self.pan_mode:
-            self.pan_button.click()
 
         current_xlim = self.ax.get_xlim() if hasattr(self, 'ax') and self.ax.get_xlim() != (0, 1) else None
         current_ylim = self.ax.get_ylim() if hasattr(self, 'ax') and self.ax.get_ylim() != (0, 1) else None
@@ -6880,19 +6698,18 @@ class ImageViewerWindow(QMainWindow):
         self.pending_slice = (self.slice_slider.value(), (current_xlim, current_ylim))
         
         # Reset and restart timer
-        self._slice_update_timer.start(20)  # 20ms delay
+        self._slice_update_timer.start(1)  # 20ms delay
         
     def _do_slice_update(self):
         """Actually perform the slice update after debounce delay."""
         if self.pending_slice is not None:
             slice_value, view_settings = self.pending_slice
-            if (hasattr(self, 'virtual_draw_operations') and self.virtual_draw_operations) or \
-               (hasattr(self, 'virtual_erase_operations') and self.virtual_erase_operations) or \
-               (hasattr(self, 'current_operation') and self.current_operation):
-                # Finish current operation first
-                if hasattr(self, 'current_operation') and self.current_operation:
+            if (hasattr(self, 'completed_paint_strokes') and self.completed_paint_strokes) or \
+               (hasattr(self, 'current_stroke_points') and self.current_stroke_points) or \
+               (hasattr(self, 'virtual_paint_items') and self.virtual_paint_items) or \
+               (hasattr(self, 'current_paint_items') and self.current_paint_items):
+                if hasattr(self, 'current_stroke_points') and self.current_stroke_points:
                     self.pm.finish_current_virtual_operation()
-                # Now convert to real data
                 self.pm.convert_virtual_strokes_to_data()
             self.current_slice = slice_value
             if self.preview:
@@ -6907,9 +6724,8 @@ class ImageViewerWindow(QMainWindow):
                 self.highlight_overlay = None
                 view_settings = ((-0.5, self.shape[2] - 0.5), (self.shape[1] - 0.5, -0.5))
                 self.resizing = False
+            self.z_label.setText(f"Slice {self.current_slice}")
             self.update_display(preserve_zoom=view_settings)
-            if self.pan_mode:
-                self.pan_button.click()
             self.pending_slice = None
 
     def update_brightness(self, channel_index, values):
@@ -6924,42 +6740,24 @@ class ImageViewerWindow(QMainWindow):
         self.channel_brightness[channel_index]['max'] = max_val / 65535
         self.update_display(preserve_zoom = (current_xlim, current_ylim))
 
-    def update_display(self, preserve_zoom=None, dims=None, called=False, reset_resize=False, skip=False):
-        """Optimized display update with view-based cropping for performance."""
+    def update_display(self, preserve_zoom=None, dims=None, called=False, skip=False, quick_wheel_update=False, home = False, downsample = True):
+        """Optimized display update with view-based cropping and downsampling."""
         try:
-            # Initialize reusable components if they don't exist
+            # Initialize reusable components
             if not hasattr(self, 'channel_images'):
                 self.channel_images = {}
                 self.highlight_image = None
                 self.measurement_artists = []
-                self.axes_initialized = False
+                self.view_initialized = False
                 self.original_dims = None
-
-            # Handle special states (pan, static background)
-            if self.pan_background_image is not None and not self.pan_mode:
-                self.channel_visible = self.pre_pan_channel_state.copy()
-                self.is_pan_preview = False
-                self.pan_background_image = None
-                if self.resume:
-                    self.machine_window.segmentation_worker.resume()
-                    self.resume = False
-           
-            if self.static_background is not None:
-                # Your existing virtual strokes conversion logic
-                if (hasattr(self, 'virtual_draw_operations') and self.virtual_draw_operations) or \
-                   (hasattr(self, 'virtual_erase_operations') and self.virtual_erase_operations) or \
-                   (hasattr(self, 'current_operation') and self.current_operation):
-                    if hasattr(self, 'current_operation') and self.current_operation:
-                        self.pm.finish_current_virtual_operation()
-                    self.pm.convert_virtual_strokes_to_data()
-                
-                try:
-                    for i in self.restore_channels:
-                        self.channel_visible[i] = True
-                    self.restore_channels = []
-                except:
-                    pass
-                self.static_background = None
+                       
+            if (hasattr(self, 'completed_paint_strokes') and self.completed_paint_strokes) or \
+               (hasattr(self, 'current_stroke_points') and self.current_stroke_points) or \
+               (hasattr(self, 'virtual_paint_items') and self.virtual_paint_items) or \
+               (hasattr(self, 'current_paint_items') and self.current_paint_items):
+                if hasattr(self, 'current_stroke_points') and self.current_stroke_points:
+                    self.pm.finish_current_virtual_operation()
+                self.pm.convert_virtual_strokes_to_data()
                 
 
             # Get dimensions
@@ -6975,86 +6773,77 @@ class ImageViewerWindow(QMainWindow):
             else:
                 min_height, min_width = dims[:2]
             
-            # Store original dimensions for pixel coordinate conversion
             self.original_dims = (min_height, min_width)
+            if home:
+                if self.original_xlim is None and self.original_dims is not None:
+                    self.original_xlim = (0, self.original_dims[1])
+                    self.original_ylim = (0, self.original_dims[0])
+                self.view.setRange(xRange=self.original_xlim, yRange=self.original_ylim, padding=0)
 
-            # Initialize axes only once or when needed
-            if not self.axes_initialized or not hasattr(self, 'ax') or self.ax is None:
-                self.figure.clear()
-                self.figure.patch.set_facecolor('white')
-                self.ax = self.figure.add_subplot(111)
-                self.ax.set_facecolor('black')
-                self.axes_initialized = True
+            self.img_height, self.img_width = min_height, min_width
+
+            # Initialize view only once
+            if not self.view_initialized:
+                self.view.setRange(xRange=(0, min_width), yRange=(0, min_height), padding=0)
+                self.view.invertY(True)
+                self.view_initialized = True
+
+            # Determine cropping and downsampling based on update type
+            if quick_wheel_update:
+                # Quick update: render full image at low resolution
+                x_min_padded = 0
+                x_max_padded = min_width
+                y_min_padded = 0
+                y_max_padded = min_height
                 
-                # Style the axes once
-                self.ax.set_xlabel('X')
-                self.ax.set_ylabel('Y')
-                self.ax.xaxis.label.set_color('black')
-                self.ax.yaxis.label.set_color('black')
-                self.ax.tick_params(colors='black')
-                for spine in self.ax.spines.values():
-                    spine.set_color('black')
+                # Use aggressive downsampling for speed
+                total_pixels = min_width * min_height
+                downsample_factor = max(1, int(np.sqrt(total_pixels / (1500 * 1500))))
             else:
-                # Clear only the image data, keep axes structure
-                for img in list(self.ax.get_images()):
-                    img.remove()
-                # Clear measurement points
-                if hasattr(self, 'measurement_artists'):
-                    for artist in self.measurement_artists:
-                        try:
-                            artist.remove()
-                        except:
-                            pass  # Artist might already be removed
-                self.measurement_artists = []  # Reset the list
-            # Determine the current view bounds (either from preserve_zoom or current state)
-            if preserve_zoom:
-                current_xlim, current_ylim = preserve_zoom
-            else:
-                current_xlim = (-0.5, self.shape[2] - 0.5)
-                current_ylim = (self.shape[1] - 0.5, -0.5)
-            
-            # Calculate the visible region in pixel coordinates
-            x_min = max(0, int(np.floor(current_xlim[0] + 0.5)))
-            x_max = min(min_width, int(np.ceil(current_xlim[1] + 0.5)))
-            y_min = max(0, int(np.floor(current_ylim[1] + 0.5)))  # Note: y is flipped
-            y_max = min(min_height, int(np.ceil(current_ylim[0] + 0.5)))
-
-            if self.pan_mode:
-                box_len = int((x_max - x_min)/2)
-                box_height = int((y_max - y_min)/2)
-                x_min = max(0, x_min - box_len)
-                x_max = min(self.shape[2], x_max + box_len)
-                y_min = max(0, y_min - box_height)
-                y_max = min(self.shape[1], y_max + box_height)
-
-            size = (x_max - x_min) * (y_max - y_min)
-            val = int(np.ceil(size/(3000 * 3000)))
-            self.validate_downsample_input(text = val, update = False)
-
-            downsample_factor = self.downsample_factor
-
-            # Add some padding to avoid edge artifacts during pan/zoom
-            padding = max(10, downsample_factor * 2)
-            x_min_padded = max(0, x_min - padding)
-            x_max_padded = min(min_width, x_max + padding)
-            y_min_padded = max(0, y_min - padding)
-            y_max_padded = min(min_height, y_max + padding)
-            
-            # Calculate the extent for the cropped region (in original coordinates)
-            crop_extent = (x_min_padded - 0.5, x_max_padded - 0.5, 
-                          y_max_padded - 0.5, y_min_padded - 0.5)
-
-            # Set limits to original dimensions (important for pixel queries)
-            self.ax.set_xlim(-0.5, min_width - 0.5)
-            self.ax.set_ylim(min_height - 0.5, -0.5)
-            self.ax.set_title(f'Slice {self.current_slice}')
-            self.ax.title.set_color('black')
+                # Normal update: use cropping and smart downsampling
+                # Get current visible region from pyqtgraph
+                view_range = self.view.viewRange()
+                x_range, y_range = view_range[0], view_range[1]
+                
+                # Calculate visible region in pixel coordinates
+                x_min = max(0, int(np.floor(x_range[0])))
+                x_max = min(min_width, int(np.ceil(x_range[1])))
+                y_min = max(0, int(np.floor(y_range[0])))
+                y_max = min(min_height, int(np.ceil(y_range[1])))
+                
+                if downsample:
+                    # Calculate downsample factor based on visible area
+                    visible_area = (x_max - x_min) * (y_max - y_min)
+                    val = int(np.ceil(visible_area / (3000 * 3000)))
+                    self.validate_downsample_input(text=val, update=False)
+                    downsample_factor = self.downsample_factor
+                else:
+                    downsample_factor = 1
+                
+                # Determine padding/expansion based on pan mode
+                if self.pan_mode:
+                    # In pan mode, expand the render region to allow smooth panning
+                    box_len = int(1.5 * (x_max - x_min))  # Full width
+                    box_height = int(1.5 * (y_max - y_min))  # Full height
+                    
+                    # Expand the crop region (this is what gets rendered)
+                    x_min_padded = max(0, x_min - box_len)
+                    x_max_padded = min(min_width, x_max + box_len)
+                    y_min_padded = max(0, y_min - box_height)
+                    y_max_padded = min(min_height, y_max + box_height)
+                else:
+                    # In normal mode, just add minimal padding to avoid edge artifacts
+                    padding = max(10, downsample_factor * 2)
+                    x_min_padded = max(0, x_min - padding)
+                    x_max_padded = min(min_width, x_max + padding)
+                    y_min_padded = max(0, y_min - padding)
+                    y_max_padded = min(min_height, y_max + padding)
             
             base_colors = self.base_colors
             
-            # Helper function to crop and downsample image
-            def crop_and_downsample_image(image, y_start, y_end, x_start, x_end, factor):
-                # Crop first
+            # Helper function to crop and downsample
+            def crop_and_downsample(image, y_start, y_end, x_start, x_end, factor):
+                # Crop to visible region
                 if len(image.shape) == 2:
                     cropped = image[y_start:y_end, x_start:x_end]
                 elif len(image.shape) == 3:
@@ -7062,7 +6851,7 @@ class ImageViewerWindow(QMainWindow):
                 else:
                     cropped = image
                 
-                # Then downsample if needed
+                # Downsample if needed
                 if factor == 1:
                     return cropped
                 
@@ -7073,10 +6862,26 @@ class ImageViewerWindow(QMainWindow):
                 else:
                     return cropped
             
-            # Update channel images efficiently with cropping and downsampling
+            # Clear old measurement artists
+            for artist in self.measurement_artists:
+                try:
+                    self.view.removeItem(artist)
+                except (TypeError, RuntimeError):
+                    # Skip items that are matplotlib objects or already removed
+                    pass
+            self.measurement_artists = []
+            
+            # Update channel images
             for channel in range(4):
+                if channel in self.channel_images and not self.channel_visible[channel]:
+                    try:
+                        self.view.removeItem(self.channel_images[channel])
+                    except:
+                        pass
+                    del self.channel_images[channel]
+                    continue
+                    
                 if self.channel_visible[channel] and self.channel_data[channel] is not None:
-                    # Get current image data
                     is_rgb = len(self.channel_data[channel].shape) == 4 and (
                         self.channel_data[channel].shape[-1] in [3, 4])
                     
@@ -7087,13 +6892,17 @@ class ImageViewerWindow(QMainWindow):
                     else:
                         current_image = self.channel_data[channel]
 
-                    # Crop and downsample the image for rendering
-                    display_image = crop_and_downsample_image(
-                        current_image, y_min_padded, y_max_padded, 
+                    # Crop to visible region and downsample
+                    display_image = crop_and_downsample(
+                        current_image, y_min_padded, y_max_padded,
                         x_min_padded, x_max_padded, downsample_factor)
 
+                    # Create or reuse ImageItem
+                    if channel not in self.channel_images:
+                        self.channel_images[channel] = pg.ImageItem()
+                        self.view.addItem(self.channel_images[channel])
+
                     if is_rgb and self.channel_data[channel].shape[-1] in [3, 4]:
-                        # RGB handling (keep your existing logic)
                         brightness_min = self.channel_brightness[channel]['min']
                         brightness_max = self.channel_brightness[channel]['max']
                         alpha_range = brightness_max - brightness_min
@@ -7103,14 +6912,18 @@ class ImageViewerWindow(QMainWindow):
                         if display_image.shape[-1] == 4:
                             img_with_alpha = display_image.copy()
                             img_with_alpha[..., 3] = img_with_alpha[..., 3] * final_alpha
-                            # Use crop_extent to place in correct location
-                            im = self.ax.imshow(img_with_alpha, extent=crop_extent)
+                            self.channel_images[channel].setImage(img_with_alpha.transpose(1, 0, 2))
                         else:
-                            im = self.ax.imshow(display_image, alpha=final_alpha, extent=crop_extent)
+                            img_rgba = np.dstack([display_image, np.ones(display_image.shape[:2]) * final_alpha * 255])
+                            self.channel_images[channel].setImage(img_rgba.transpose(1, 0, 2))
+                        
+                        # Position the cropped region correctly
+                        self.channel_images[channel].setRect(
+                            x_min_padded, y_min_padded,
+                            x_max_padded - x_min_padded, y_max_padded - y_min_padded)
                     else:
-                        # Regular channel processing with optimized normalization
+                        # Regular channel processing
                         if self.min_max[channel][0] is None:
-                            # For very large arrays, consider sampling for min/max
                             if self.channel_data[channel].size > 1000000:
                                 sample = self.channel_data[channel][::max(1, self.channel_data[channel].shape[0]//100)]
                                 self.min_max[channel] = [np.min(sample), np.max(sample)]
@@ -7121,166 +6934,212 @@ class ImageViewerWindow(QMainWindow):
                         img_min, img_max = self.min_max[channel]
                         
                         if img_min == img_max:
-                            vmin, vmax = img_min, img_min + 1
-                            normalized_image = np.zeros_like(display_image)
+                            normalized_image = np.zeros_like(display_image, dtype=np.float32)
                         else:
                             vmin = img_min + (img_max - img_min) * self.channel_brightness[channel]['min']
                             vmax = img_min + (img_max - img_min) * self.channel_brightness[channel]['max']
                             
                             if vmin == vmax:
-                                normalized_image = np.zeros_like(display_image)
+                                normalized_image = np.zeros_like(display_image, dtype=np.float32)
                             else:
                                 normalized_image = np.clip((display_image - vmin) / (vmax - vmin), 0, 1)
                         
                         if channel == 2 and self.machine_window is not None:
-                            custom_cmap = LinearSegmentedColormap.from_list(
-                                f'custom_{channel}',
-                                [(0, 0, 0, 0), (0.5, 1, 0.5, 1), (1, 0.5, 0.5, 1)]
-                            )
-                            im = self.ax.imshow(display_image, cmap=custom_cmap, vmin=0, vmax=2,
-                                              alpha=0.7, interpolation='nearest', extent=crop_extent)
+                            colors = np.array([
+                                [0, 0, 0, 0],
+                                [0.5, 1, 0.5, 1],
+                                [1, 0.5, 0.5, 1]
+                            ])
+                            cmap = pg.ColorMap(pos=np.array([0, 1, 2]), color=colors * 255)
+                            lut = cmap.getLookupTable(0, 2, 256)
+                            self.channel_images[channel].setImage(display_image.T, levels=(0, 2))
+                            self.channel_images[channel].setLookupTable(lut)
+                            self.channel_images[channel].setOpacity(0.7)
                         else:
                             color = base_colors[channel]
-                            custom_cmap = LinearSegmentedColormap.from_list(
-                                f'custom_{channel}', [(0,0,0,0), (*color,1)])
+                            colors = np.array([
+                                [0, 0, 0, 0],
+                                [*color, 1]
+                            ])
+                            cmap = pg.ColorMap(pos=np.array([0, 1]), color=colors * 255)
+                            lut = cmap.getLookupTable(0, 1, 256)
                             
-                            im = self.ax.imshow(normalized_image, alpha=0.7, cmap=custom_cmap,
-                                              vmin=0, vmax=1, extent=crop_extent)
-            # Handle preview, overlays, and measurements (apply cropping here too)
+                            self.channel_images[channel].setImage(normalized_image.T, levels=(0, 1))
+                            self.channel_images[channel].setLookupTable(lut)
+                            self.channel_images[channel].setOpacity(0.7)
+                        
+                        # Position the cropped region correctly
+                        self.channel_images[channel].setRect(
+                            x_min_padded, y_min_padded,
+                            x_max_padded - x_min_padded, y_max_padded - y_min_padded)
 
-            # Overlay handling (optimized with cropping and downsampling)
+            # Handle overlays (with cropping)
+            if not hasattr(self, 'overlay_image'):
+                self.overlay_image = None
+                
+            if self.overlay_image is not None:
+                try:
+                    self.view.removeItem(self.overlay_image)
+                except:
+                    pass
+                self.overlay_image = None
+
             if self.mini_overlay and self.highlight and self.machine_window is None and not self.preview:
-                highlight_cmap = LinearSegmentedColormap.from_list('highlight', [(0, 0, 0, 0), (1, 1, 0, 1)])
-                display_overlay = crop_and_downsample_image(
-                    self.mini_overlay_data, y_min_padded, y_max_padded, 
+                display_overlay = crop_and_downsample(
+                    self.mini_overlay_data, y_min_padded, y_max_padded,
                     x_min_padded, x_max_padded, downsample_factor)
-                self.ax.imshow(display_overlay, cmap=highlight_cmap, alpha=0.8, extent=crop_extent)
+                
+                colors = np.array([[0, 0, 0, 0], [1, 1, 0, 1]])
+                cmap = pg.ColorMap(pos=np.array([0, 1]), color=colors * 255)
+                lut = cmap.getLookupTable(0, 1, 256)
+                
+                self.overlay_image = pg.ImageItem()
+                self.overlay_image.setImage(display_overlay.T)
+                self.overlay_image.setLookupTable(lut)
+                self.overlay_image.setOpacity(0.8)
+                self.overlay_image.setRect(
+                    x_min_padded, y_min_padded,
+                    x_max_padded - x_min_padded, y_max_padded - y_min_padded)
+                self.view.addItem(self.overlay_image)
+                
             elif self.highlight_overlay is not None and self.highlight:
                 highlight_slice = self.highlight_overlay[self.current_slice]
-                display_highlight = crop_and_downsample_image(
-                    highlight_slice, y_min_padded, y_max_padded, 
+                display_highlight = crop_and_downsample(
+                    highlight_slice, y_min_padded, y_max_padded,
                     x_min_padded, x_max_padded, downsample_factor)
+                
                 if self.machine_window is None:
-                    highlight_cmap = LinearSegmentedColormap.from_list('highlight', [(0, 0, 0, 0), (1, 1, 0, 1)])
-                    self.ax.imshow(display_highlight, cmap=highlight_cmap, alpha=0.8, extent=crop_extent)
+                    colors = np.array([[0, 0, 0, 0], [1, 1, 0, 1]])
+                    cmap = pg.ColorMap(pos=np.array([0, 1]), color=colors * 255)
+                    lut = cmap.getLookupTable(0, 1, 256)
+                    opacity = 0.8
+                    levels = (0, 1)
                 else:
-                    highlight_cmap = LinearSegmentedColormap.from_list('highlight', 
-                        [(0, 0, 0, 0), (1, 1, 0, 1), (0, 0.7, 1, 1)])
-                    self.ax.imshow(display_highlight, cmap=highlight_cmap, vmin=0, vmax=2, alpha=0.3, extent=crop_extent)
+                    colors = np.array([[0, 0, 0, 0], [1, 1, 0, 1], [0, 0.7, 1, 1]])
+                    cmap = pg.ColorMap(pos=np.array([0, 1, 2]), color=colors * 255)
+                    lut = cmap.getLookupTable(0, 2, 256)
+                    opacity = 0.3
+                    levels = (0, 2)
+                
+                self.overlay_image = pg.ImageItem()
+                self.overlay_image.setImage(display_highlight.T, levels=levels)
+                self.overlay_image.setLookupTable(lut)
+                self.overlay_image.setOpacity(opacity)
+                self.overlay_image.setRect(
+                    x_min_padded, y_min_padded,
+                    x_max_padded - x_min_padded, y_max_padded - y_min_padded)
+                self.view.addItem(self.overlay_image)
 
-            # Redraw measurement points efficiently
-            # Only draw points that are within the visible region for additional performance
-
+            # Only draw measurement points on detailed updates, not quick wheel updates
+            # Measurement points (unchanged - these are vectors)
             if hasattr(self, 'measurement_points') and self.measurement_points:
                 for point in self.measurement_points:
                     x1, y1, z1 = point['point1']
                     x2, y2, z2 = point['point2']
                     pair_idx = point['pair_index']
-                    point_type = point.get('type', 'distance')  # Default to distance for backward compatibility
+                    point_type = point.get('type', 'distance')
                     
-                    # Determine colors based on type
                     if point_type == 'angle':
-                        marker_color = 'go'
-                        text_color = 'green'
-                        line_color = 'g--'
-                    else:  # distance
-                        marker_color = 'yo'
-                        text_color = 'yellow'
-                        line_color = 'r--'
+                        marker_color = (0, 255, 0)
+                        text_color = (0, 255, 0)
+                        line_color = (0, 255, 0)
+                    else:
+                        marker_color = (255, 255, 0)
+                        text_color = (255, 255, 0)
+                        line_color = (255, 0, 0)
                     
-                    # Check if points are in visible region and on current slice
-                    point1_visible = (z1 == self.current_slice and 
-                                    current_xlim[0] <= x1 <= current_xlim[1] and 
-                                    current_ylim[1] <= y1 <= current_ylim[0])
-                    point2_visible = (z2 == self.current_slice and 
-                                    current_xlim[0] <= x2 <= current_xlim[1] and 
-                                    current_ylim[1] <= y2 <= current_ylim[0])
-                    
-                    # Always draw individual points if they're on the current slice (even without lines)
-                    if point1_visible:
-                        pt1 = self.ax.plot(x1, y1, marker_color, markersize=8)[0]
-                        txt1 = self.ax.text(x1, y1+5, str(pair_idx), color=text_color, ha='center', va='bottom')
-                        self.measurement_artists.extend([pt1, txt1])
+                    if z1 == self.current_slice:
+                        scatter1 = pg.ScatterPlotItem([x1], [y1], size=8, 
+                                                      pen=pg.mkPen(marker_color), 
+                                                      brush=pg.mkBrush(marker_color))
+                        self.view.addItem(scatter1)
+                        self.measurement_artists.append(scatter1)
                         
-                    if point2_visible:
-                        pt2 = self.ax.plot(x2, y2, marker_color, markersize=8)[0]
-                        txt2 = self.ax.text(x2, y2+5, str(pair_idx), color=text_color, ha='center', va='bottom')
-                        self.measurement_artists.extend([pt2, txt2])
+                        text1 = pg.TextItem(str(pair_idx), color=text_color, anchor=(0.5, 1))
+                        text1.setPos(x1, y1 - 5)
+                        self.view.addItem(text1)
+                        self.measurement_artists.append(text1)
                         
-                    # Only draw connecting line if both points are on the same slice AND visible
-                    if z1 == z2 == self.current_slice and (point1_visible or point2_visible):
-                        line = self.ax.plot([x1, x2], [y1, y2], line_color, alpha=0.5)[0]
+                    if z2 == self.current_slice:
+                        scatter2 = pg.ScatterPlotItem([x2], [y2], size=8,
+                                                      pen=pg.mkPen(marker_color),
+                                                      brush=pg.mkBrush(marker_color))
+                        self.view.addItem(scatter2)
+                        self.measurement_artists.append(scatter2)
+                        
+                        text2 = pg.TextItem(str(pair_idx), color=text_color, anchor=(0.5, 1))
+                        text2.setPos(x2, y2 - 5)
+                        self.view.addItem(text2)
+                        self.measurement_artists.append(text2)
+                        
+                    if z1 == z2 == self.current_slice:
+                        line_pen = pg.mkPen(color=line_color, style=pg.QtCore.Qt.PenStyle.DashLine, width=1)
+                        line = pg.PlotDataItem([x1, x2], [y1, y2], pen=line_pen)
+                        line.setOpacity(0.5)
+                        self.view.addItem(line)
                         self.measurement_artists.append(line)
 
-            # Also handle any partial measurements in progress (individual points without pairs yet)
-            # This shows individual points even when a measurement isn't complete
+            # Current point in progress
             if hasattr(self, 'current_point') and self.current_point is not None:
                 x, y, z = self.current_point
                 if z == self.current_slice:
                     if hasattr(self, 'measurement_mode') and self.measurement_mode == "angle":
-                        # Show green for angle mode
-                        pt = self.ax.plot(x, y, 'go', markersize=8)[0]
-                        if hasattr(self, 'current_trio_index'):
-                            txt = self.ax.text(x, y+5, f"A{self.current_trio_index}", color='green', ha='center', va='bottom')
-                        else:
-                            txt = self.ax.text(x, y+5, "A", color='green', ha='center', va='bottom')
+                        marker_color = (0, 255, 0)
+                        text_color = (0, 255, 0)
+                        label = f"A{self.current_trio_index}" if hasattr(self, 'current_trio_index') else "A"
                     else:
-                        # Show yellow for distance mode (default)
-                        pt = self.ax.plot(x, y, 'yo', markersize=8)[0]
-                        if hasattr(self, 'current_pair_index'):
-                            txt = self.ax.text(x, y+5, f"D{self.current_pair_index}", color='yellow', ha='center', va='bottom')
-                        else:
-                            txt = self.ax.text(x, y+5, "D", color='yellow', ha='center', va='bottom')
-                    self.measurement_artists.extend([pt, txt])
+                        marker_color = (255, 255, 0)
+                        text_color = (255, 255, 0)
+                        label = f"D{self.current_pair_index}" if hasattr(self, 'current_pair_index') else "D"
+                    
+                    scatter = pg.ScatterPlotItem([x], [y], size=8,
+                                                pen=pg.mkPen(marker_color),
+                                                brush=pg.mkBrush(marker_color))
+                    self.view.addItem(scatter)
+                    self.measurement_artists.append(scatter)
+                    
+                    text = pg.TextItem(label, color=text_color, anchor=(0.5, 1))
+                    text.setPos(x, y - 5)
+                    self.view.addItem(text)
+                    self.measurement_artists.append(text)
 
-            # Handle second point in angle measurements
+            # Current second point for angle
             if hasattr(self, 'current_second_point') and self.current_second_point is not None:
                 x, y, z = self.current_second_point
                 if z == self.current_slice:
-                    pt = self.ax.plot(x, y, 'go', markersize=8)[0]
-                    if hasattr(self, 'current_trio_index'):
-                        txt = self.ax.text(x, y+5, f"B{self.current_trio_index}", color='green', ha='center', va='bottom')
-                    else:
-                        txt = self.ax.text(x, y+5, "B", color='green', ha='center', va='bottom')
-                    self.measurement_artists.extend([pt, txt])
+                    label = f"B{self.current_trio_index}" if hasattr(self, 'current_trio_index') else "B"
                     
-                    # Draw line from A to B if both are on current slice
+                    scatter = pg.ScatterPlotItem([x], [y], size=8,
+                                                pen=pg.mkPen((0, 255, 0)),
+                                                brush=pg.mkBrush((0, 255, 0)))
+                    self.view.addItem(scatter)
+                    self.measurement_artists.append(scatter)
+                    
+                    text = pg.TextItem(label, color=(0, 255, 0), anchor=(0.5, 1))
+                    text.setPos(x, y - 5)
+                    self.view.addItem(text)
+                    self.measurement_artists.append(text)
+                    
                     if (hasattr(self, 'current_point') and self.current_point is not None and 
                         self.current_point[2] == self.current_slice):
                         x1, y1, z1 = self.current_point
-                        line = self.ax.plot([x1, x], [y1, y], 'g--', alpha=0.7)[0]
+                        line_pen = pg.mkPen(color=(0, 255, 0), style=pg.QtCore.Qt.PenStyle.DashLine, width=1)
+                        line = pg.PlotDataItem([x1, x], [y1, y], pen=line_pen)
+                        line.setOpacity(0.7)
+                        self.view.addItem(line)
                         self.measurement_artists.append(line)
 
-            # Store current view limits for next update
-            self.ax._current_xlim = current_xlim
-            self.ax._current_ylim = current_ylim
 
-            # Handle resizing
-            if self.resizing:
-                self.original_xlim = self.ax.get_xlim()
-                self.original_ylim = self.ax.get_ylim()
-                
-            # Restore zoom (this sets the final view, not the data extent)
-            if current_xlim is not None and current_ylim is not None:
-                self.ax.set_xlim(current_xlim)
-                self.ax.set_ylim(current_ylim)
-
+            # Handle scalebar (skip on quick updates)
             if hasattr(self, 'scalebar_artists') and self.scalebar_artists:
                 self._draw_scalebar()
             else:
                 self._remove_scalebar()
 
-                
-            if reset_resize:
-                self.resizing = False
-            
-            # draw_idle
-            self.canvas.draw_idle()
-
-
         except Exception as e:
             pass
-
+            #import traceback
+            #print(traceback.format_exc())
 
     def get_channel_image(self, channel):
         """Find the matplotlib image object for a specific channel."""
@@ -7293,8 +7152,8 @@ class ImageViewerWindow(QMainWindow):
                     return img
         return None
 
-    def show_netshow_dialog(self):
-        dialog = NetShowDialog(self)
+    def show_netshow_dialog(self, called = False):
+        dialog = NetShowDialog(self, called = called)
         dialog.exec()
 
     def handle_report(self):
@@ -7310,7 +7169,7 @@ class ImageViewerWindow(QMainWindow):
         try:
             # Basic graph properties
             stats['num_nodes'] = my_network.network.number_of_nodes()
-            stats['num_edges'] = my_network.network.number_of_edges()
+            stats['num_edges'] = len(my_network.network_lists[0])
         except:
             try:
                 stats['num_nodes'] = len(np.unique(my_network.nodes)) - 1
@@ -7596,7 +7455,7 @@ class SearchWidget(QWidget):
             print(f"Error during search: {str(e)}")
 
 class CustomTableView(QTableView):
-    def __init__(self, parent=None, is_top_table=False):
+    def __init__(self, parent=None, is_top_table=False, subgraph = None):
         super().__init__(parent)
         self.search_widget = SearchWidget(self)
         self.search_widget.hide()
@@ -7604,6 +7463,7 @@ class CustomTableView(QTableView):
         self.customContextMenuRequested.connect(self.show_context_menu)
         self.parent = parent  # Store reference to parent window
         self.is_top_table = is_top_table  # Flag to distinguish top tables
+        self.subgraph = subgraph
         
     def keyPressEvent(self, event):
         if event.modifiers() == Qt.KeyboardModifier.ControlModifier and event.key() == Qt.Key.Key_F:
@@ -7873,6 +7733,7 @@ class CustomTableView(QTableView):
 
                 new_lists = [list(df.iloc[:, 0]), list(df.iloc[:, 1]), list(df.iloc[:, 2])]
                 my_network.network_lists = new_lists
+                self.parent.network_graph_widget.set_graph(my_network.network)
 
                 model = PandasModel(my_network.network_lists)
                 self.parent.network_table.setModel(model)
@@ -7882,10 +7743,13 @@ class CustomTableView(QTableView):
 
                 #move old model to selection
                 new_lists = [list(old.iloc[:, 0]), list(old.iloc[:, 1]), list(old.iloc[:, 2])]
+                temp_network = n3d.Network_3D()
+                temp_network.network_lists = new_lists
                 model = PandasModel(new_lists)
                 self.parent.selection_table.setModel(model)
                 for column in range(model.columnCount(None)):
                     self.parent.selection_table.resizeColumnToContents(column)
+                self.parent.selection_graph_widget.set_graph(temp_network.network)
 
         except Exception as e:
             print(f"Error setting new network: {e}")
@@ -8411,6 +8275,7 @@ class BrightnessContrastDialog(QDialog):
             slider.setMinimum(0)
             slider.setMaximum(65535)
             slider.setValue((0, 65535))
+            slider.setMinimumWidth(300)
             self.brightness_sliders.append(slider)
             
             # Create max value input
@@ -8432,7 +8297,7 @@ class BrightnessContrastDialog(QDialog):
             self.debounce_timer.setSingleShot(True)
             self.debounce_timer.timeout.connect(self._apply_pending_updates)
             self.pending_updates = {}
-            self.debounce_delay = 20  # 300ms delay
+            self.debounce_delay = 1  # 300ms delay
 
             # Connect signals
             slider.valueChanged.connect(lambda values, ch=i: self.on_slider_change(ch, values))
@@ -8903,6 +8768,7 @@ class MergeNodeIdDialog(QDialog):
 
                 # For loop example - get threshold for multiple images/data
                 results = []
+                thresh_dict = {}
 
                 img_list = n3d.directory_info(selected_path)
                 data_backup = copy.deepcopy(data)
@@ -8917,7 +8783,7 @@ class MergeNodeIdDialog(QDialog):
                     if img.endswith('.tiff') or img.endswith('.tif'):
 
                         print(f"Please threshold {img}")
-
+                        self.parent().setWindowTitle(f"NetTracer3D: Please threshold {img}")
 
                         mask = tifffile.imread(f'{selected_path}/{img}')
                         self.parent().load_channel(2, mask, data = True)
@@ -8927,6 +8793,8 @@ class MergeNodeIdDialog(QDialog):
                         processing_completed = self.wait_for_threshold_processing()
                         
                         if not processing_completed:
+                            self.parent().thresh_min = None
+                            self.parent().thresh_max = None
                             # User cancelled, ask if they want to continue
                             reply = QMessageBox.question(self, 'Continue?', 
                                                        f'Threshold cancelled for item {i+1}. Continue with remaining items?',
@@ -8935,6 +8803,7 @@ class MergeNodeIdDialog(QDialog):
                                 break
                             continue
                         
+                        thresh_dict[img] = [self.parent().thresh_min, self.parent().thresh_max]
                         # At this point, the thresholded image is in the main window's memory
                         # Get the processed/thresholded data from wherever ThresholdWindow stored it
                         thresholded_vals = list(np.unique(self.parent().channel_data[0]))
@@ -8988,8 +8857,10 @@ class MergeNodeIdDialog(QDialog):
                         pass
 
                 my_network.node_identities = modify_dict
-                
+                self.parent().setWindowTitle(f"NetTracer3D")
+
                 self.parent().format_for_upperright_table(my_network.node_identities, 'NodeID', 'Identity')
+                self.parent().format_for_upperright_table(thresh_dict, 'Identity', ['Min Value', 'Max Value'], 'Threshold Information')
 
                 all_keys = id_dicts[0].keys()
                 result = {key: np.array([d[key] for d in id_dicts]) for key in all_keys}
@@ -9438,7 +9309,7 @@ class ShuffleDialog(QDialog):
                     except:
                         self.parent().highlight_overay = None
                 else:
-                    self.parent().load_channel(accepted_mode, channel_data = target_data, data = True, preserve_zoom = (self.parent().ax.get_xlim(), self.parent().ax.get_ylim()))
+                    self.parent().load_channel(accepted_mode, channel_data = target_data, data = True)
             except:
                 pass
 
@@ -9450,14 +9321,14 @@ class ShuffleDialog(QDialog):
                     except:
                         self.parent().highlight_overlay = None
                 else:
-                    self.parent().load_channel(accepted_target, channel_data = active_data, data = True, preserve_zoom = (self.parent().ax.get_xlim(), self.parent().ax.get_ylim()))
+                    self.parent().load_channel(accepted_target, channel_data = active_data, data = True)
             except:
                 pass
 
 
 
 
-            self.parent().update_display(preserve_zoom = (self.parent().ax.get_xlim(), self.parent().ax.get_ylim()))
+            self.parent().update_display()
 
             self.accept()
 
@@ -9475,34 +9346,40 @@ class ShuffleDialog(QDialog):
 # ANALYZE MENU RELATED
 
 class NetShowDialog(QDialog):
-    def __init__(self, parent=None):
+    def __init__(self, parent=None, called = None):
         super().__init__(parent)
         self.setWindowTitle("Display Parameters")
         self.setModal(True)
         
         layout = QFormLayout(self)
-        
-        # geo checkbox (default True)
-        self.geo_layout = QPushButton("geo_layout")
-        self.geo_layout.setCheckable(True)
-        self.geo_layout.setChecked(False)
-        layout.addRow("Use Geographic Layout:", self.geo_layout)
 
-        self.show_labels = QCheckBox("Show Node Numerical IDs?")
-        self.show_labels.setChecked(True)
-        layout.addRow(self.show_labels)
-        
+        self.called = called
+
+        # Add mode selection dropdown
+        self.render_mode = QComboBox()
+        self.render_mode.addItems(["Spring Layout (Try to Logically Group Nodes)", "Centroid Layout (Place Nodes to Match Image)", "Component Layout Spring (Separate All Nontouching Components)", "Component Layout Shell (Centrally Places Important Nodes)"])
+        self.render_mode.setCurrentIndex(0)  # Default to Mode 1
+        layout.addRow("Render Mode:", self.render_mode)
+
         # Add mode selection dropdown
         self.mode_selector = QComboBox()
         self.mode_selector.addItems(["Default", "Community Coded", "Node ID Coded"])
         self.mode_selector.setCurrentIndex(0)  # Default to Mode 1
         layout.addRow("Execution Mode:", self.mode_selector)
 
+        self.show_labels = QCheckBox("Show Node Numerical IDs?")
+        self.show_labels.setChecked(True)
+        layout.addRow(self.show_labels)
+
+        # weighted checkbox
+        self.weighted = QCheckBox("Draw weighted edges (if applicable)")
+        self.weighted.setChecked(False)
+        layout.addRow(self.weighted)
+
         # weighted checkbox (default True)
-        self.weighted = QPushButton("weighted")
-        self.weighted.setCheckable(True)
-        self.weighted.setChecked(True)
-        layout.addRow("Use Weighted Network (Only for community graphs):", self.weighted)
+        self.z_size = QCheckBox("For Centroid Layout: Scale Node Sizes by Z?")
+        self.z_size.setChecked(True)
+        layout.addRow(self.z_size)
         
         # Add Run button
         run_button = QPushButton("Show Network")
@@ -9510,19 +9387,79 @@ class NetShowDialog(QDialog):
         layout.addWidget(run_button)
     
     def show_network(self):
-        # Get parameters and run analysis
 
-        show_labels = self.show_labels.isChecked()
+        try:
+            # Get parameters and run analysis
 
-        geo = self.geo_layout.isChecked()
-        if geo:
-            if my_network.node_centroids is None:
-                self.parent().show_centroid_dialog()
-        accepted_mode = self.mode_selector.currentIndex()  # Convert to 1-based index
-        # Get directory (None if empty)
-        directory = None
+            show_labels = self.show_labels.isChecked()
 
-        weighted = self.weighted.isChecked()
+            geo = False
+            component = False
+            shell = False
+
+            render = self.render_mode.currentIndex()
+            if render == 1:
+                geo = True
+            elif render == 2:
+                component = True
+            elif render == 3:
+                shell = True
+            if geo:
+                if my_network.node_centroids is None:
+                    self.parent().show_centroid_dialog()
+            accepted_mode = self.mode_selector.currentIndex()  # Convert to 1-based index
+            # Get directory (None if empty)
+            directory = None
+
+            weighted = self.weighted.isChecked()
+            z_size = self.z_size.isChecked()
+
+            communities = False
+            identities = False
+
+            if accepted_mode == 1:
+                communities = True
+            elif accepted_mode == 2:
+                identities = True
+
+            if accepted_mode == 1:
+
+                if my_network.communities is None:
+                    self.parent().show_partition_dialog()
+                    if my_network.communities is None:
+                        return
+
+            if not self.called:
+                # Create graph widgets
+                self.parent().temp_graph_widget = ngw.NetworkGraphWidget(
+                    parent=self.parent(),
+                    weight=weighted,
+                    geometric=geo,
+                    component = component,
+                    centroids=my_network.node_centroids,
+                    communities=communities,
+                    community_dict=my_network.communities,
+                    labels=show_labels,
+                    identities = identities,
+                    identity_dict = my_network.node_identities,
+                    z_size = z_size,
+                    shell = shell
+                )
+
+                self.parent().temp_graph_widget.set_graph(my_network.network)
+                self.parent().temp_graph_widget.show_in_window(title="Network Graph", width=1000, height=800)
+                self.parent().temp_graph_widget.load_graph()
+                self.accept()
+            else:
+                self.called.weight, self.called.geometric, self.called.component, self.called.centroids, self.called.communities, self.called.community_dict, self.called.labels, self.called.identities, self.called.identity_dict, self.called.z_size, self.called.shell = weighted, geo, component, my_network.node_centroids, communities, my_network.communities, show_labels, identities, my_network.node_identities, z_size, shell
+                self.called._clear_graph()
+                self.called.load_graph()
+                self.accept()
+
+        except Exception as e:
+            print(f"Error: {e}")
+
+        """
 
         if accepted_mode == 1:
 
@@ -9545,6 +9482,7 @@ class NetShowDialog(QDialog):
             print(f"Error showing network: {e}")
             import traceback
             print(traceback.format_exc())
+        """
 
 class PartitionDialog(QDialog):
     def __init__(self, parent=None):
@@ -9556,7 +9494,7 @@ class PartitionDialog(QDialog):
         layout = QFormLayout(self)
 
         # weighted checkbox (default True)
-        self.weighted = QPushButton("weighted")
+        self.weighted = QPushButton("weighted (Considers Duplicate Connections)")
         self.weighted.setCheckable(True)
         self.weighted.setChecked(True)
         layout.addRow("Use Weighted Network:", self.weighted)
@@ -9737,7 +9675,7 @@ class ComNeighborDialog(QDialog):
         layout.addRow("Return Node Type Distribution Robust Heatmaps (ie, will give two more heatmaps that are not beholden to the total number of nodes of each type, representing which structures are overrepresented in a network):", self.proportional)
 
         self.mode = QComboBox()
-        self.mode.addItems(["KMeans (Better at simplifying data)", "DBSCAN (Better at capturing anomalies)"])
+        self.mode.addItems(["KMeans", "DBSCAN"])
         self.mode.setCurrentIndex(0)
         layout.addRow("Mode", self.mode)
 
@@ -10489,9 +10427,8 @@ class RandomDialog(QDialog):
         _, df = my_network.assign_random(weighted = weighted)
 
         # Create new model with filtered DataFrame and update selection table
-        new_model = PandasModel(df)
-        self.parent().selection_table.setModel(new_model)
-        
+        self.parent().table_subgraph(self.parent().selection_table, df)
+
         # Switch to selection table
         self.parent().selection_button.click()
 
@@ -11748,6 +11685,8 @@ class ResizeDialog(QDialog):
             else:
                 my_network.xy_scale = cardinal
                 my_network.z_scale = cardinal
+            self.parent().xy_scale_label.setText(f"xy_scale: {my_network.xy_scale:.2e}                   ")
+            self.parent().z_scale_label.setText(f"z_scale: {my_network.z_scale:.2e}                   ")
 
             try:
                 if my_network.node_centroids is not None:
@@ -11836,14 +11775,60 @@ class CleanDialog(QDialog):
         layout.addRow("Call the fill holes function:", run_button)
 
         # Add Run button
+        run_button = QPushButton("Connect Endpoints")
+        run_button.clicked.connect(self.endpoints)
+        layout.addRow("Connect Endpoints? (Unsupervised - Weak to noise):", run_button)
+
+        # Add Run button
         run_button = QPushButton("Trace Filaments")
         run_button.clicked.connect(self.fils)
-        layout.addRow("For Segmentations of Blood Vessels/Nerves: ", run_button)
+        layout.addRow("For Segmentations of Blood Vessels/Nerves:", run_button)
 
         # Add Run button
         run_button = QPushButton("Threshold Noise")
         run_button.clicked.connect(self.thresh)
         layout.addRow("Threshold Noise By Volume:", run_button)
+
+    def endpoints(self):
+
+        class CleanDialog(QDialog):
+            def __init__(self, parent=None):
+                super().__init__(parent)
+                self.setWindowTitle("Rote Endpoint Joining - Connects ALL Detectable Endpoints Within Distance")
+                self.setModal(True)
+
+                layout = QFormLayout(self)
+
+                self.amount = QLineEdit("10")
+                layout.addRow("Voxel Distance to Connect Endpoints (Will be slow if large):", self.amount)
+
+                self.spine = QLineEdit("0")
+                layout.addRow("Skeleton Spine Removal Distance:", self.spine)
+
+                run_button = QPushButton("Run")
+                run_button.clicked.connect(self.run)
+                layout.addRow(run_button)
+
+            def run(self):
+                try:
+                    amount = float(self.amount.text())
+                except:
+                    return
+                try:
+                    spine = int(self.spine.text())
+                except:
+                    spine = 0
+
+                try:
+                    from . import endpoint_joiner
+                    joined = endpoint_joiner.connect_endpoints(self.parent().channel_data[self.parent().active_channel], amount, spine)
+                    self.parent().load_channel(3, joined, data = True)
+                    self.accept()
+                except Exception as e:
+                    print(f"Error: {e}")
+
+        dialog = CleanDialog(self.parent())
+        dialog.exec()
 
     def close(self):
 
@@ -12517,8 +12502,8 @@ class MachineWindow(QMainWindow):
             main_widget = QWidget()
             main_layout = QVBoxLayout(main_widget)
 
-            # Group 1: Drawing tools (Brush + Foreground/Background)
-            drawing_group = QGroupBox("Drawing Tools")
+            # Group 1: Drawing tools (Brush + Foreground/Background)c
+            drawing_group = QGroupBox("Drawing Tools (Left Click = Draw, Right Click = Erase, 'Ctrl + Mousewheel' = Resize Brush, 'Ctrl + Z = Undo')")
             drawing_layout = QHBoxLayout()
 
             # Brush button
@@ -12530,7 +12515,7 @@ class MachineWindow(QMainWindow):
 
             # Foreground/Background buttons in their own horizontal layout
             fb_layout = QHBoxLayout()
-            self.fore_button = QPushButton("Foreground")
+            self.fore_button = QPushButton("Foreground ('A' = Toggle)")
             self.fore_button.setCheckable(True)
             self.fore_button.setChecked(True)
             self.fore_button.clicked.connect(self.toggle_foreground)
@@ -12571,12 +12556,13 @@ class MachineWindow(QMainWindow):
             processing_group.setLayout(processing_layout)
 
             # Group 3: Training Options
-            training_group = QGroupBox("Training")
+            self.speed = True
+            training_group = QGroupBox("Training ('T' = Train with Previous Mode)")
             training_layout = QHBoxLayout()
             train_quick = QPushButton("Train Quick Model (When Good SNR)")
-            train_quick.clicked.connect(lambda: self.train_model(speed=True))
+            train_quick.clicked.connect(self.train_quick)
             train_detailed = QPushButton("Train Detailed Model (For Morphology)")
-            train_detailed.clicked.connect(lambda: self.train_model(speed=False))
+            train_detailed.clicked.connect(self.train_det)
             training_layout.addWidget(train_quick)
             training_layout.addWidget(train_detailed)
             training_group.setLayout(training_layout)
@@ -12598,8 +12584,7 @@ class MachineWindow(QMainWindow):
             full_button = QPushButton("Segment All")
             full_button.clicked.connect(self.segment)
             segmentation_layout.addWidget(seg_button)
-            segmentation_layout.addWidget(self.pause_button)   # <--- for some reason the segmenter preview is still running even when killed, may be regenerating itself somewhere. May or may not actually try to resolve this because this feature isnt that necessary.
-            #segmentation_layout.addWidget(self.lock_button)   # Also turned this off
+            segmentation_layout.addWidget(self.pause_button)
             segmentation_layout.addWidget(full_button)
             segmentation_group.setLayout(segmentation_layout)
 
@@ -12853,19 +12838,17 @@ class MachineWindow(QMainWindow):
     def toggle_brush_mode(self):
         """Toggle brush mode on/off"""
         self.parent().brush_mode = self.brush_button.isChecked()
-        if self.parent().pan_mode:
-            self.parent().update_display(preserve_zoom=(self.parent().ax.get_xlim(), self.parent().ax.get_ylim()))
+        
+        #if self.parent().pan_mode:
+         #   self.parent().update_display(preserve_zoom=(self.parent().ax.get_xlim(), self.parent().ax.get_ylim()))
 
         if self.parent().brush_mode:
 
             self.parent().pm = painting.PaintManager(parent = self.parent())
-
             self.parent().pan_button.setChecked(False)
             self.parent().zoom_button.setChecked(False)
             if self.parent().pan_mode:
-                current_xlim = self.parent().ax.get_xlim()
-                current_ylim = self.parent().ax.get_ylim()
-                self.parent().update_display(preserve_zoom=(current_xlim, current_ylim))
+                self.parent().update_display()
             self.parent().pan_mode = False
             self.parent().zoom_mode = False
             self.parent().update_brush_cursor()
@@ -12881,25 +12864,32 @@ class MachineWindow(QMainWindow):
 
         self.brush_button.click()
 
-    def train_model(self, speed = True):
+    def train_quick(self):
+        self.speed = True
+        self.train_model()
+
+    def train_det(self):
+        self.speed = False
+        self.train_model()
+
+    def train_model(self):
 
         self.kill_segmentation()
         # Wait a bit for cleanup
         time.sleep(0.1)
 
-        if (hasattr(self.parent(), 'virtual_draw_operations') and self.parent().virtual_draw_operations) or \
-           (hasattr(self.parent(), 'virtual_erase_operations') and self.parent().virtual_erase_operations) or \
-           (hasattr(self.parent(), 'current_operation') and self.parent().current_operation):
-            # Finish current operation first
-            if hasattr(self.parent(), 'current_operation') and self.parent().current_operation:
+        if (hasattr(self.parent(), 'completed_paint_strokes') and self.parent().completed_paint_strokes) or \
+           (hasattr(self.parent(), 'current_stroke_points') and self.parent().current_stroke_points) or \
+           (hasattr(self.parent(), 'virtual_paint_items') and self.parent().virtual_paint_items) or \
+           (hasattr(self.parent(), 'current_paint_items') and self.parent().current_paint_items):
+            if hasattr(self.parent(), 'current_stroke_points') and self.parent().current_stroke_points:
                 self.parent().pm.finish_current_virtual_operation()
-            # Now convert to real data
             self.parent().pm.convert_virtual_strokes_to_data()
 
         self.previewing = True
         try:
             try:
-                self.segmenter.train_batch(self.parent().channel_data[2], speed = speed, use_gpu = self.use_gpu, use_two = self.use_two, mem_lock = self.mem_lock)
+                self.segmenter.train_batch(self.parent().channel_data[2], speed = self.speed, use_gpu = self.use_gpu, use_two = self.use_two, mem_lock = self.mem_lock)
                 self.trained = True
                 self.start_segmentation()
             except Exception as e:
@@ -13006,9 +12996,6 @@ class MachineWindow(QMainWindow):
         current_time = time.time()
         if current_time - self._last_update >= 1:  # Match worker's interval
             try:
-                # Store current view state
-                current_xlim = self.parent().ax.get_xlim()
-                current_ylim = self.parent().ax.get_ylim()
 
                 try:
                     x, y = self.parent().get_current_mouse_position()
@@ -13018,7 +13005,7 @@ class MachineWindow(QMainWindow):
 
                 if not self.parent().painting:
                     # Only update if view limits are valid
-                    self.parent().update_display(preserve_zoom=(current_xlim, current_ylim))
+                    self.parent().update_display()
                     
                     self._last_update = current_time
             except Exception as e:
@@ -13132,7 +13119,8 @@ class MachineWindow(QMainWindow):
                             pass
                         
                         self.parent().machine_window = None
-                        event.accept()  # IMPORTANT: Accept the close event
+                        self.parent().highlight_overlay = None
+                        event.accept()
                     else:
                         event.ignore()  # User cancelled, ignore the close
                 else:
@@ -13228,17 +13216,11 @@ class SegmentationWorker(QThread):
                 current_time = time.time()
                 if (self.chunks_since_update >= self.chunks_per_update and 
                     current_time - self.last_update >= self.update_interval):
-                    #if self.machine_window.parent().shape[1] * self.machine_window.parent().shape[2] > 3000 * 3000: #arbitrary throttle for large arrays.
-                        #self.msleep(3000)
                     self.chunk_processed.emit()
                     self.chunks_since_update = 0
                     self.last_update = current_time 
-            
-            current_xlim = self.machine_window.parent().ax.get_xlim()
 
-            current_ylim = self.machine_window.parent().ax.get_ylim()
-
-            self.machine_window.parent().update_display(preserve_zoom=(current_xlim, current_ylim))
+            self.machine_window.parent().update_display()
 
             self.finished.emit()
 
@@ -13593,12 +13575,7 @@ class ThresholdWindow(QMainWindow):
                 # Update the line
                 self.max_line.set_xdata([value, value])
                 self.canvas.draw()
-
-
-
-
-
-                
+            
             except ValueError:
                 # If invalid number, reset to current line position
                 self.max.setText(str(round(self.max_line.get_xdata()[0], 2)))
@@ -13668,6 +13645,8 @@ class ThresholdWindow(QMainWindow):
             channel_data = self.parent().channel_data[self.parent().active_channel]
             mask = self.parent().highlight_overlay > 0
             channel_data = channel_data * mask
+            self.parent().thresh_min = self.prev_min
+            self.parent().thresh_max = self.prev_max
             self.parent().load_channel(self.parent().active_channel, channel_data, True)
             self.parent().update_display()
             self.close()
@@ -14022,7 +14001,7 @@ class FilamentDialog(QDialog):
         speedup_group = QGroupBox("Speedup")
         speedup_layout = QFormLayout()
         self.kernel_spacing = QLineEdit("3")
-        speedup_layout.addRow("Kernel Spacing (1 is most accurate, can increase to speed up):", self.kernel_spacing)
+        speedup_layout.addRow("Kernel Spacing (lower is more sensitive to gaps, can increase to speed up or if too many gaps filled):", self.kernel_spacing)
         self.downsample_factor = QLineEdit("1")
         speedup_layout.addRow("Temporary Downsample Factor (Note that the below distances are not adjusted for this):", self.downsample_factor)
         speedup_group.setLayout(speedup_layout)
@@ -14033,7 +14012,7 @@ class FilamentDialog(QDialog):
         reconnection_layout = QFormLayout()
         self.max_distance = QLineEdit("20")
         reconnection_layout.addRow("Max Distance to Consider Connecting Filaments (Will Slow Down a lot if Large):", self.max_distance)
-        self.gap_tolerance = QLineEdit("5")
+        self.gap_tolerance = QLineEdit("6")
         reconnection_layout.addRow("Gap Tolerance. Higher Values Increase Likelihood of Connecting over Larger Gaps:", self.gap_tolerance)
         self.score_threshold = QLineEdit("2")
         reconnection_layout.addRow("Connection Quality Threshold. Lower Values Increase Likelihood of Connecting In General, can be Negative:", self.score_threshold)
@@ -14053,6 +14032,8 @@ class FilamentDialog(QDialog):
         artifact_layout.addRow("Remove Branch Spines Below this Length?", self.spine_removal)
         artifact_group.setLayout(artifact_layout)
         main_layout.addWidget(artifact_group)
+        self.state = None
+        self.first = True
 
     
         # Run Button
@@ -14081,8 +14062,9 @@ class FilamentDialog(QDialog):
 
             if downsample_factor and downsample_factor > 1:
                 data = n3d.downsample(data, downsample_factor)
+                self.state = None
 
-            result = filaments.trace(data, kernel_spacing, max_distance, min_component, gap_tolerance, blob_sphericity, blob_volume, spine_removal, score_threshold, my_network.xy_scale, my_network.z_scale)
+            result, self.state = filaments.trace(data, kernel_spacing, max_distance, min_component, gap_tolerance, blob_sphericity, blob_volume, spine_removal, score_threshold, my_network.xy_scale, my_network.z_scale, cached_state = self.state)
 
             if downsample_factor and downsample_factor > 1:
 
@@ -14091,51 +14073,22 @@ class FilamentDialog(QDialog):
 
             self.parent().load_channel(3, result, True)
 
-            self.accept()
+            if self.first:
+                QMessageBox.information(
+                    self,
+                    "Success",
+                    f"Filaments traced succesfully. Heavy computations are cached while this menu is open and so re-computing with different params will be fast. Feel free to try out other params. Altering kernel spacing, downsampling, or spine removal will reset this cache, however."
+                )
+                self.first = False
 
         except Exception as e:
             import traceback
             print(traceback.format_exc())
             print(f"Error: {e}")
 
-    def wait_for_threshold_processing(self):
-        """
-        Opens ThresholdWindow and waits for user to process the image.
-        Returns True if completed, False if cancelled.
-        The thresholded image will be available in the main window after completion.
-        """
-        # Create event loop to wait for user
-        loop = QEventLoop()
-        result = {'completed': False}
-        
-        # Create the threshold window
-        thresh_window = ThresholdWindow(self.parent(), 0)
-
-        
-        # Connect signals
-        def on_processing_complete():
-            result['completed'] = True
-            loop.quit()
-            
-        def on_processing_cancelled():
-            result['completed'] = False
-            loop.quit()
-        
-        thresh_window.processing_complete.connect(on_processing_complete)
-        thresh_window.processing_cancelled.connect(on_processing_cancelled)
-        
-        # Show window and wait
-        thresh_window.show()
-        thresh_window.raise_()
-        thresh_window.activateWindow()
-        
-        # Block until user clicks "Apply Threshold & Continue" or "Cancel"
-        loop.exec()
-        
-        # Clean up
-        thresh_window.deleteLater()
-        
-        return result['completed']
+    def closeEvent(self, event):
+        self.state = None
+        event.accept()
 
 
 
@@ -15081,8 +15034,8 @@ class GenNodesDialog(QDialog):
                 self.auto.setChecked(True)
         except:
             self.auto.setChecked(True)
-        rec_layout.addWidget(QLabel("Attempt to Auto Correct Skeleton Looping:"), 1, 0)
-        rec_layout.addWidget(self.auto, 1, 1)
+        #rec_layout.addWidget(QLabel("Attempt to Auto Correct Skeleton Looping:"), 1, 0)
+        #rec_layout.addWidget(self.auto, 1, 1)
         
         rec_group.setLayout(rec_layout)
         main_layout.addWidget(rec_group)
@@ -15204,7 +15157,7 @@ class GenNodesDialog(QDialog):
             if auto:
                 my_network.edges = n3d.skeletonize(my_network.edges)
                 my_network.edges = n3d.fill_holes_3d(my_network.edges)
-
+            print(auto)
             
             result, skele = n3d.label_vertices(
                 my_network.edges,
@@ -15223,6 +15176,8 @@ class GenNodesDialog(QDialog):
                 my_network.xy_scale = my_network.xy_scale * down_factor
                 my_network.z_scale = my_network.z_scale * down_factor
                 print("xy_scales and z_scales have been adjusted per downsample. Check image -> properties to manually reset them to 1 if desired.")
+                self.parent().xy_scale_label.setText(f"xy_scale: {my_network.xy_scale:.2e}                   ")
+                self.parent().z_scale_label.setText(f"z_scale: {my_network.z_scale:.2e}                   ")
 
             try: #Resets centroid fields
                 if my_network.node_centroids is not None:
@@ -15293,10 +15248,11 @@ class BranchDialog(QDialog):
         #correction_layout.addWidget(QLabel("Random seed for auto correction (int - optional):"), 2, 0)
         #correction_layout.addWidget(self.seed, 2, 1)
 
-        self.fix2 = QPushButton("Auto-Correct Internal Branches")
-        self.fix2.setCheckable(True)
-        self.fix2.setChecked(True)
-        correction_layout.addWidget(QLabel("Auto-Correct Branches by Collapsing Internal Labels: "), 3, 0)
+        # Add mode selection dropdown
+        self.fix2 = QComboBox()
+        self.fix2.addItems(["Skip This Step", "Merge Internal Labels With All External Neighbors", "Merge Internal Labels With Non-Branch-Like External Neighbors"])
+        self.fix2.setCurrentIndex(1)
+        correction_layout.addWidget(QLabel("Auto-Correct Internal Branches Mode:"), 3, 0)
         correction_layout.addWidget(self.fix2, 3, 1)
 
         self.fix3 = QPushButton("Auto-Correct Nontouching Branches")
@@ -15393,7 +15349,15 @@ class BranchDialog(QDialog):
             nodes = self.nodes.isChecked()
             GPU = self.GPU.isChecked()
             fix = self.fix.isChecked()
-            fix2 = self.fix2.isChecked()
+            fix2 = self.fix2.currentIndex()
+            if fix2 == 0:
+                fix2 == None
+            else:
+                if fix2 == 1:
+                    consider_prop = False
+                else:
+                    consider_prop = True
+
             fix3 = self.fix3.isChecked()
             fix4 = self.fix4.isChecked()
             mode = self.mode.currentIndex()
@@ -15438,7 +15402,7 @@ class BranchDialog(QDialog):
 
                     temp_network.morph_proximity(search = [3,3], fastdil = True) #Detect network of nearby branches
 
-                    output = n3d.fix_branches(output, temp_network.network, max_val)
+                    output = n3d.fix_branches(output, temp_network.network, max_val, consider_prop = consider_prop)
 
 
                 if fix:
@@ -15540,7 +15504,7 @@ class AlterDialog(QDialog):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setWindowTitle("Enter Node/Edge groups to add/remove")
-        self.setModal(True)
+        self.setModal(False)
         layout = QFormLayout(self)
         
         # Node 1
@@ -15582,10 +15546,7 @@ class AlterDialog(QDialog):
                 # Add edge value (0 if none provided)
                 my_network.network_lists[2].append(edge if edge is not None else 0)
                 
-                # Add reverse pair with same edge value
-                my_network.network_lists[0].append(node2)
-                my_network.network_lists[1].append(node1)
-                my_network.network_lists[2].append(edge if edge is not None else 0)
+                my_network.network_lists = my_network.network_lists
             try:
                 if hasattr(my_network, 'network_lists'):
                     model = PandasModel(my_network.network_lists)
@@ -15593,6 +15554,8 @@ class AlterDialog(QDialog):
                     # Adjust column widths to content
                     for column in range(model.columnCount(None)):
                         self.parent().network_table.resizeColumnToContents(column)
+                    self.parent().clear_subgraphs()
+                    self.parent().network_graph_widget.set_graph(my_network.network)
             except Exception as e:
                 print(f"Error showing network table: {e}")
         except ValueError:
@@ -15632,6 +15595,7 @@ class AlterDialog(QDialog):
                     my_network.network_lists[0].pop(i)
                     my_network.network_lists[1].pop(i)
                     my_network.network_lists[2].pop(i)
+                my_network.network_lists = my_network.network_lists
 
             try:
                 if hasattr(my_network, 'network_lists'):
@@ -15640,6 +15604,8 @@ class AlterDialog(QDialog):
                     # Adjust column widths to content
                     for column in range(model.columnCount(None)):
                         self.parent().network_table.resizeColumnToContents(column)
+                    self.parent().clear_subgraphs()
+                    self.parent().network_graph_widget.set_graph(my_network.network)
             except Exception as e:
                 print(f"Error showing network table: {e}")
                     
@@ -15676,13 +15642,13 @@ class ModifyDialog(QDialog):
         self.trunk = QPushButton("Remove Trunk")
         self.trunk.setCheckable(True)
         self.trunk.setChecked(False)
-        layout.addRow("Remove Trunk? (Most connected edge - overrides below):", self.trunk)
+        layout.addRow("Remove Trunk? (Most connected edge basis - overrides below):", self.trunk)
         
         # trunk checkbox (default false)
         self.trunknode = QPushButton("Trunk -> Node")
         self.trunknode.setCheckable(True)
         self.trunknode.setChecked(False)
-        layout.addRow("Convert Trunk to Node? (Most connected edge):", self.trunknode)
+        layout.addRow("Convert Trunk to Node? (Most connected edge basis):", self.trunknode)
         
         # edgenode checkbox (default false)
         self.edgenode = QPushButton("Edges -> Nodes")
@@ -15694,7 +15660,7 @@ class ModifyDialog(QDialog):
         self.edgeweight = QPushButton("Remove weights")
         self.edgeweight.setCheckable(True)
         self.edgeweight.setChecked(False)
-        layout.addRow("Remove network weights?:", self.edgeweight)
+        layout.addRow("Remove network weights (Represent Duplicate Connections)?:", self.edgeweight)
         
         # prune checkbox (default false)
         self.prune = QPushButton("Prune Same Type")
@@ -15738,7 +15704,7 @@ class ModifyDialog(QDialog):
     def show_alter_dialog(self):
 
         dialog = AlterDialog(self.parent())
-        dialog.exec()
+        dialog.show()
 
     def run_changes(self):
 
@@ -15846,6 +15812,8 @@ class ModifyDialog(QDialog):
                     # Adjust column widths to content
                     for column in range(model.columnCount(None)):
                         self.parent().network_table.resizeColumnToContents(column)
+                    self.parent().clear_subgraphs()
+                    self.parent().network_graph_widget.set_graph(my_network.network)
             except Exception as e:
                 print(f"Error showing network table: {e}")
 
@@ -15922,23 +15890,23 @@ class CentroidDialog(QDialog):
                 my_network.calculate_node_centroids(
                     down_factor = downsample
                 )
-                if directory:
-                    my_network.save_node_centroids(directory = directory)
+                self.parent().network_graph_widget.centroids = my_network.node_centroids
+                self.parent().selection_graph_widget.centroids = my_network.node_centroids
+
 
             elif chan == 2:
                 my_network.calculate_edge_centroids(
                     down_factor = downsample
                 )
-                if directory:
-                    my_network.save_edge_centroids(directory = directory)
 
             elif chan == 0:
                 try:
                     my_network.calculate_node_centroids(
                         down_factor = downsample
                     )
-                    if directory:
-                        my_network.save_node_centroids(directory = directory)
+                    self.parent().network_graph_widget.centroids = my_network.node_centroids
+                    self.parent().selection_graph_widget.centroids = my_network.node_centroids
+
                 except:
                     pass
 
@@ -15947,8 +15915,6 @@ class CentroidDialog(QDialog):
                     my_network.calculate_edge_centroids(
                         down_factor = downsample
                     )
-                    if directory:
-                        my_network.save_edge_centroids(directory = directory)
 
                 except:
                     pass
@@ -16000,6 +15966,9 @@ class CalcAllDialog(QDialog):
     prev_fastdil = True
     prev_overlays = False
     prev_updates = True
+    prev_vor = False
+    prev_label_branch = False
+    prev_edge_node = False
     
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -16044,12 +16013,27 @@ class CalcAllDialog(QDialog):
         
         self.remove_trunk = QLineEdit(self.prev_remove_trunk)
         self.remove_trunk.setPlaceholderText("Leave empty for 0")
-        optional_layout.addRow("Times to remove edge trunks (int):", self.remove_trunk)
+        optional_layout.addRow("Times to remove edge trunks (int - Volumetric basis):", self.remove_trunk)
         
         self.inners = QPushButton("Inner Edges")
         self.inners.setCheckable(True)
         self.inners.setChecked(self.prev_inners)
-        optional_layout.addRow("Use Inner Edges:", self.inners)
+        #optional_layout.addRow("Use Inner Edges:", self.inners)
+
+        self.voronoi_safe = QPushButton("Auto-Trunk")
+        self.voronoi_safe.setCheckable(True)
+        self.voronoi_safe.setChecked(self.prev_vor)
+        optional_layout.addRow("Auto-Simplify Trunk Elements (Can be slow):", self.voronoi_safe)
+
+        self.labeled_branches = QPushButton("Use Pre-Labeled Edges")
+        self.labeled_branches.setCheckable(True)
+        self.labeled_branches.setChecked(self.prev_label_branch)
+        optional_layout.addRow("Use pre-labeled edges (edges must be labeled first; ie using label branches). Resets node identities:", self.labeled_branches)
+
+        self.edge_node = QPushButton("Convert Edges to Nodes?")
+        self.edge_node.setCheckable(True)
+        self.edge_node.setChecked(self.prev_edge_node)
+        optional_layout.addRow("Edge -> Node:", self.edge_node)
         
         main_layout.addWidget(optional_group)
         
@@ -16147,6 +16131,10 @@ class CalcAllDialog(QDialog):
                 remove_trunk = int(self.remove_trunk.text()) if self.remove_trunk.text() else 0
             except ValueError:
                 remove_trunk = 0
+
+            voronoi_safe = self.voronoi_safe.isChecked()
+            labeled_branches = self.labeled_branches.isChecked()
+            edge_node = self.edge_node.isChecked()
                 
             # Get button states
             gpu = self.gpu.isChecked()
@@ -16156,11 +16144,51 @@ class CalcAllDialog(QDialog):
             overlays = self.overlays.isChecked()
             update = self.update.isChecked()
 
-            if not update:
+            if voronoi_safe or not update:
                 temp_nodes = my_network.nodes.copy()
                 temp_edges = my_network.edges.copy()
             
-            my_network.calculate_all(
+            if labeled_branches:
+                my_network.node_identities = {}
+                if label_nodes:
+                    my_network.nodes, num_nodes = n3d.label_objects(my_network.nodes)
+                if search:
+                    my_network.nodes = sdl.smart_dilate(my_network.nodes, fast_dil = fastdil, use_dt_dil_amount = search, xy_scale = xy_scale, z_scale = z_scale)
+                if diledge:
+                    my_network.edges = sdl.smart_dilate(my_network.edges, fast_dil = fastdil, use_dt_dil_amount = diledge, xy_scale = xy_scale, z_scale = z_scale)
+
+                temp_array = np.copy(my_network.nodes)
+                my_network.nodes = my_network.edges
+
+                my_network.merge_nodes(
+                    temp_array, 
+                    root_id='Edge', 
+                    label_nodes = False,
+                    is_array = True
+                )
+                del temp_array
+
+                my_network.morph_proximity(search = [3,3], fastdil = True)
+                my_network.xy_scale = xy_scale
+                my_network.z_scale = z_scale
+                my_network.calculate_node_centroids(down_factor)
+                my_network.prune_samenode_connections(target = 'Node')
+
+                components_to_keep = [
+                    comp for comp in nx.connected_components(my_network.network)
+                    if any(my_network.node_identities.get(node) == 'Node' for node in comp)
+                ]
+
+                # Flatten the components to keep
+                nodes_to_keep = set().union(*components_to_keep)
+
+                # Remove all other nodes
+                nodes_to_remove = set(my_network.network.nodes()) - nodes_to_keep
+                my_network.network.remove_nodes_from(nodes_to_remove)
+                my_network.network = my_network.network
+
+            else:
+                my_network.calculate_all(
                 my_network.nodes,
                 my_network.edges,
                 directory=directory,
@@ -16191,7 +16219,32 @@ class CalcAllDialog(QDialog):
             CalcAllDialog.prev_fastdil = self.fastdil.isChecked()
             CalcAllDialog.prev_overlays = self.overlays.isChecked()
             CalcAllDialog.prev_updates = self.update.isChecked()
+            CalcAllDialog.prev_vor = voronoi_safe
+            CalcAllDialog.prev_label_branch = labeled_branches
 
+            if voronoi_safe and not labeled_branches:
+                print("Auto-handling trunk elements by blocking connections beyond voronoi cells... (will have to compute a second network with maxed out search regions without using parallel search)")
+                temp_network = n3d.Network_3D()
+                temp_network.calculate_all(temp_nodes, temp_edges, search=999999999999999, label_nodes=label_nodes, fast_dil=False)
+
+                from . import network_analysis
+
+                new_lists = network_analysis.combine_lists_to_sublists(temp_network.network_lists)
+                old_lists = network_analysis.combine_lists_to_sublists(my_network.network_lists)
+
+                filtered_new_lists = [pair for pair in new_lists if pair not in old_lists]
+
+                list1, list2, list3 = zip(*filtered_new_lists)
+
+                # Convert them back to lists (zip returns tuples by default)
+                filtered_new_lists = [list(list1), list(list2), list(list3)]
+
+                my_network.network_lists = filtered_new_lists
+                del temp_network
+
+            if edge_node and not labeled_branches:
+                my_network.edge_to_node()
+                my_network.calculate_node_centroids(down_factor)
 
             # Update both the display data and the network object
             if update:
@@ -16205,7 +16258,10 @@ class CalcAllDialog(QDialog):
                 self.parent().load_channel(0, my_network.nodes, True)
                 self.parent().load_channel(1, my_network.edges, True)
 
-
+            self.parent().clear_subgraphs()
+            self.parent().network_graph_widget.set_graph(my_network.network)
+            self.parent().xy_scale_label.setText(f"xy_scale: {my_network.xy_scale:.2e}                   ")
+            self.parent().z_scale_label.setText(f"z_scale: {my_network.z_scale:.2e}                   ")
             # Then handle overlays
             if overlays:
                 if directory is None:
@@ -16422,7 +16478,8 @@ class ProxDialog(QDialog):
 
             my_network.xy_scale = xy_scale
             my_network.z_scale = z_scale
-
+            self.parent().xy_scale_label.setText(f"xy_scale: {my_network.xy_scale:.2e}                   ")
+            self.parent().z_scale_label.setText(f"z_scale: {my_network.z_scale:.2e}                   ")
 
             if mode == 1:
                 if len(np.unique(my_network.nodes)) < 3:
@@ -16485,6 +16542,8 @@ class ProxDialog(QDialog):
                     
             self.parent().update_display()
             self.accept()
+            self.parent().clear_subgraphs()
+            self.parent().network_graph_widget.set_graph(my_network.network)
 
             # Display network_lists in the network table
             try:
@@ -16528,614 +16587,6 @@ class ProxDialog(QDialog):
             print(f"Error running proximity network: {str(e)}")
             import traceback
             print(traceback.format_exc())
-
-
-class HistogramSelector(QWidget):
-    def __init__(self, network_analysis_instance):
-        super().__init__()
-        self.network_analysis = network_analysis_instance
-        self.G = my_network.network 
-        self.init_ui()
-        
-    def init_ui(self):
-        self.setWindowTitle('Network Analysis - Histogram Selector')
-        self.setGeometry(300, 300, 400, 700)  # Increased height for more buttons
-        
-        layout = QVBoxLayout()
-        
-        # Title label
-        title_label = QLabel('Select Histogram to Generate:')
-        title_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        title_label.setStyleSheet("font-size: 16px; font-weight: bold; margin: 10px;")
-        layout.addWidget(title_label)
-        
-        # Create buttons for each histogram type
-        self.create_button(layout, "Shortest Path Length Distribution", self.shortest_path_histogram)
-        self.create_button(layout, "Degree Centrality", self.degree_centrality_histogram)
-        self.create_button(layout, "Betweenness Centrality", self.betweenness_centrality_histogram)
-        self.create_button(layout, "Closeness Centrality", self.closeness_centrality_histogram)
-        self.create_button(layout, "Eigenvector Centrality", self.eigenvector_centrality_histogram)
-        self.create_button(layout, "Clustering Coefficient", self.clustering_coefficient_histogram)
-        self.create_button(layout, "Degree Distribution", self.degree_distribution_histogram)
-        self.create_button(layout, "Node Connectivity", self.node_connectivity_histogram)
-        self.create_button(layout, "Eccentricity", self.eccentricity_histogram)
-        self.create_button(layout, "K-Core Decomposition", self.kcore_histogram)
-        self.create_button(layout, "Triangle Count", self.triangle_count_histogram)
-        self.create_button(layout, "Load Centrality", self.load_centrality_histogram)
-        self.create_button(layout, "Communicability Betweenness Centrality", self.communicability_centrality_histogram)
-        self.create_button(layout, "Harmonic Centrality", self.harmonic_centrality_histogram)
-        self.create_button(layout, "Current Flow Betweenness", self.current_flow_betweenness_histogram)
-        self.create_button(layout, "Dispersion", self.dispersion_histogram)
-        self.create_button(layout, "Network Bridges", self.bridges_analysis)
-        
-        # Close button
-        close_button = QPushButton('Close')
-        close_button.clicked.connect(self.close)
-        close_button.setStyleSheet("QPushButton { background-color: #f44336; color: white; font-weight: bold; }")
-        layout.addWidget(close_button)
-        
-        self.setLayout(layout)
-
-    def create_button(self, layout, text, callback):
-        button = QPushButton(text)
-        button.clicked.connect(callback)
-        button.setMinimumHeight(40)
-        button.setStyleSheet("""
-            QPushButton {
-                background-color: #4CAF50;
-                color: white;
-                border: none;
-                padding: 10px;
-                font-size: 14px;
-                font-weight: bold;
-                border-radius: 5px;
-            }
-            QPushButton:hover {
-                background-color: #45a049;
-            }
-            QPushButton:pressed {
-                background-color: #3d8b40;
-            }
-        """)
-        layout.addWidget(button)
-
-
-    def shortest_path_histogram(self):
-        try:
-            # Check if graph has multiple disconnected components
-            components = list(nx.connected_components(self.G))
-            
-            if len(components) > 1:
-                print(f"Warning: Graph has {len(components)} disconnected components. Computing shortest paths within each component separately.")
-                
-                # Initialize variables to collect data from all components
-                all_path_lengths = []
-                max_diameter = 0
-                
-                # Process each component separately
-                for i, component in enumerate(components):
-                    subgraph = self.G.subgraph(component)
-                    
-                    if len(component) < 2:
-                        # Skip single-node components (no paths to compute)
-                        continue
-                    
-                    # Compute shortest paths for this component
-                    shortest_path_lengths = dict(nx.all_pairs_shortest_path_length(subgraph))
-                    component_diameter = max(nx.eccentricity(subgraph, sp=shortest_path_lengths).values())
-                    max_diameter = max(max_diameter, component_diameter)
-                    
-                    # Collect path lengths from this component
-                    for pls in shortest_path_lengths.values():
-                        all_path_lengths.extend(list(pls.values()))
-                
-                # Remove self-paths (length 0) and create histogram
-                all_path_lengths = [pl for pl in all_path_lengths if pl > 0]
-                
-                if not all_path_lengths:
-                    print("No paths found across components (only single-node components)")
-                    return
-                    
-                # Create combined histogram
-                path_lengths = np.zeros(max_diameter + 1, dtype=int)
-                pl, cnts = np.unique(all_path_lengths, return_counts=True)
-                path_lengths[pl] += cnts
-                
-                title_suffix = f" (across {len(components)} components)"
-                
-            else:
-                # Single component
-                shortest_path_lengths = dict(nx.all_pairs_shortest_path_length(self.G))
-                diameter = max(nx.eccentricity(self.G, sp=shortest_path_lengths).values())
-                path_lengths = np.zeros(diameter + 1, dtype=int)
-                for pls in shortest_path_lengths.values():
-                    pl, cnts = np.unique(list(pls.values()), return_counts=True)
-                    path_lengths[pl] += cnts
-                max_diameter = diameter
-                title_suffix = ""
-            
-            # Generate visualization and results (same for both cases)
-            freq_percent = 100 * path_lengths[1:] / path_lengths[1:].sum()
-            fig, ax = plt.subplots(figsize=(15, 8))
-            ax.bar(np.arange(1, max_diameter + 1), height=freq_percent)
-            ax.set_title(
-                f"Distribution of shortest path length in G{title_suffix}", 
-                fontdict={"size": 35}, loc="center"
-            )
-            ax.set_xlabel("Shortest Path Length", fontdict={"size": 22})
-            ax.set_ylabel("Frequency (%)", fontdict={"size": 22})
-            plt.show()
-            
-            freq_dict = {freq: length for length, freq in enumerate(freq_percent, start=1)}
-            self.network_analysis.format_for_upperright_table(
-                freq_dict, 
-                metric='Frequency (%)', 
-                value='Shortest Path Length', 
-                title=f"Distribution of shortest path length in G{title_suffix}"
-            )
-            
-        except Exception as e:
-            print(f"Error generating shortest path histogram: {e}")
-    
-    def degree_centrality_histogram(self):
-        try:
-            degree_centrality = nx.centrality.degree_centrality(self.G)
-            plt.figure(figsize=(15, 8))
-            plt.hist(degree_centrality.values(), bins=25)
-            plt.xticks(ticks=[0, 0.025, 0.05, 0.1, 0.15, 0.2])
-            plt.title("Degree Centrality Histogram ", fontdict={"size": 35}, loc="center")
-            plt.xlabel("Degree Centrality", fontdict={"size": 20})
-            plt.ylabel("Counts", fontdict={"size": 20})
-            plt.show()
-            self.network_analysis.format_for_upperright_table(degree_centrality, metric='Node', 
-                                                            value='Degree Centrality', 
-                                                            title="Degree Centrality Table")
-        except Exception as e:
-            print(f"Error generating degree centrality histogram: {e}")
-
-    def betweenness_centrality_histogram(self):
-        try:
-            # Check if graph has multiple disconnected components
-            components = list(nx.connected_components(self.G))
-            
-            if len(components) > 1:
-                print(f"Warning: Graph has {len(components)} disconnected components. Computing betweenness centrality within each component separately.")
-                
-                # Initialize dictionary to collect betweenness centrality from all components
-                combined_betweenness_centrality = {}
-                
-                # Process each component separately
-                for i, component in enumerate(components):
-                    if len(component) < 2:
-                        # For single-node components, betweenness centrality is 0
-                        for node in component:
-                            combined_betweenness_centrality[node] = 0.0
-                        continue
-                    
-                    # Create subgraph for this component
-                    subgraph = self.G.subgraph(component)
-                    
-                    # Compute betweenness centrality for this component
-                    component_betweenness = nx.centrality.betweenness_centrality(subgraph)
-                    
-                    # Add to combined results
-                    combined_betweenness_centrality.update(component_betweenness)
-                
-                betweenness_centrality = combined_betweenness_centrality
-                title_suffix = f" (across {len(components)} components)"
-                
-            else:
-                # Single component
-                betweenness_centrality = nx.centrality.betweenness_centrality(self.G)
-                title_suffix = ""
-            
-            # Generate visualization and results (same for both cases)
-            plt.figure(figsize=(15, 8))
-            plt.hist(betweenness_centrality.values(), bins=100)
-            plt.xticks(ticks=[0, 0.02, 0.1, 0.2, 0.3, 0.4, 0.5])
-            plt.title(
-                f"Betweenness Centrality Histogram{title_suffix}", 
-                fontdict={"size": 35}, loc="center"
-            )
-            plt.xlabel("Betweenness Centrality", fontdict={"size": 20})
-            plt.ylabel("Counts", fontdict={"size": 20})
-            plt.show()
-            
-            self.network_analysis.format_for_upperright_table(
-                betweenness_centrality, 
-                metric='Node', 
-                value='Betweenness Centrality', 
-                title=f"Betweenness Centrality Table{title_suffix}"
-            )
-            
-        except Exception as e:
-            print(f"Error generating betweenness centrality histogram: {e}")
-    
-    def closeness_centrality_histogram(self):
-        try:
-            closeness_centrality = nx.centrality.closeness_centrality(self.G)
-            plt.figure(figsize=(15, 8))
-            plt.hist(closeness_centrality.values(), bins=60)
-            plt.title("Closeness Centrality Histogram ", fontdict={"size": 35}, loc="center")
-            plt.xlabel("Closeness Centrality", fontdict={"size": 20})
-            plt.ylabel("Counts", fontdict={"size": 20})
-            plt.show()
-            self.network_analysis.format_for_upperright_table(closeness_centrality, metric='Node', 
-                                                            value='Closeness Centrality', 
-                                                            title="Closeness Centrality Table")
-        except Exception as e:
-            print(f"Error generating closeness centrality histogram: {e}")
-    
-    def eigenvector_centrality_histogram(self):
-        try:
-            eigenvector_centrality = nx.centrality.eigenvector_centrality(self.G)
-            plt.figure(figsize=(15, 8))
-            plt.hist(eigenvector_centrality.values(), bins=60)
-            plt.xticks(ticks=[0, 0.01, 0.02, 0.04, 0.06, 0.08])
-            plt.title("Eigenvector Centrality Histogram ", fontdict={"size": 35}, loc="center")
-            plt.xlabel("Eigenvector Centrality", fontdict={"size": 20})
-            plt.ylabel("Counts", fontdict={"size": 20})
-            plt.show()
-            self.network_analysis.format_for_upperright_table(eigenvector_centrality, metric='Node', 
-                                                            value='Eigenvector Centrality', 
-                                                            title="Eigenvector Centrality Table")
-        except Exception as e:
-            print(f"Error generating eigenvector centrality histogram: {e}")
-    
-    def clustering_coefficient_histogram(self):
-        try:
-            clusters = nx.clustering(self.G)
-            plt.figure(figsize=(15, 8))
-            plt.hist(clusters.values(), bins=50)
-            plt.title("Clustering Coefficient Histogram ", fontdict={"size": 35}, loc="center")
-            plt.xlabel("Clustering Coefficient", fontdict={"size": 20})
-            plt.ylabel("Counts", fontdict={"size": 20})
-            plt.show()
-            self.network_analysis.format_for_upperright_table(clusters, metric='Node', 
-                                                            value='Clustering Coefficient', 
-                                                            title="Clustering Coefficient Table")
-        except Exception as e:
-            print(f"Error generating clustering coefficient histogram: {e}")
-    
-    def bridges_analysis(self):
-        try:
-            bridges = list(nx.bridges(self.G))
-            try:
-                # Get the existing DataFrame from the model
-                original_df = self.network_analysis.network_table.model()._data
-                
-                # Create boolean mask
-                mask = pd.Series([False] * len(original_df))
-                
-                for u, v in bridges:
-                    # Check for both (u,v) and (v,u) orientations
-                    bridge_mask = (
-                        ((original_df.iloc[:, 0] == u) & (original_df.iloc[:, 1] == v)) |
-                        ((original_df.iloc[:, 0] == v) & (original_df.iloc[:, 1] == u))
-                    )
-                    mask |= bridge_mask
-                # Filter the DataFrame to only include bridge connections
-                filtered_df = original_df[mask].copy()
-                df_dict = {i: row.tolist() for i, row in enumerate(filtered_df.values)}
-                self.network_analysis.format_for_upperright_table(df_dict, metric='Bridge ID', value = ['NodeA', 'NodeB', 'EdgeC'],
-                                                            title="Bridges")
-            except:
-                self.network_analysis.format_for_upperright_table(bridges, metric='Node Pair', 
-                                                            title="Bridges")
-        except Exception as e:
-            print(f"Error generating bridges analysis: {e}")
-    
-    def degree_distribution_histogram(self):
-        """Raw degree distribution - very useful for understanding network topology"""
-        try:
-            degrees = [self.G.degree(n) for n in self.G.nodes()]
-            plt.figure(figsize=(15, 8))
-            plt.hist(degrees, bins=max(30, int(np.sqrt(len(degrees)))), alpha=0.7)
-            plt.title("Degree Distribution", fontdict={"size": 35}, loc="center")
-            plt.xlabel("Degree", fontdict={"size": 20})
-            plt.ylabel("Frequency", fontdict={"size": 20})
-            plt.yscale('log')  # Often useful for degree distributions
-            plt.show()
-            
-            degree_dict = {node: deg for node, deg in self.G.degree()}
-            self.network_analysis.format_for_upperright_table(degree_dict, metric='Node', 
-                                                            value='Degree', title="Degree Distribution Table")
-        except Exception as e:
-            print(f"Error generating degree distribution histogram: {e}")
-    
-
-    def node_connectivity_histogram(self):
-        """Local node connectivity - minimum number of nodes that must be removed to disconnect neighbors"""
-        try:
-            if self.G.number_of_nodes() > 500:
-                print("Note this analysis may be slow for large network (>500 nodes)")
-                #return
-                
-            connectivity = {}
-            for node in self.G.nodes():
-                neighbors = list(self.G.neighbors(node))
-                if len(neighbors) > 1:
-                    connectivity[node] = nx.node_connectivity(self.G, neighbors[0], neighbors[1])
-                else:
-                    connectivity[node] = 0
-            
-            plt.figure(figsize=(15, 8))
-            plt.hist(connectivity.values(), bins=20, alpha=0.7)
-            plt.title("Node Connectivity Distribution", fontdict={"size": 35}, loc="center")
-            plt.xlabel("Node Connectivity", fontdict={"size": 20})
-            plt.ylabel("Frequency", fontdict={"size": 20})
-            plt.show()
-            self.network_analysis.format_for_upperright_table(connectivity, metric='Node', 
-                                                            value='Connectivity', title="Node Connectivity Table")
-        except Exception as e:
-            print(f"Error generating node connectivity histogram: {e}")
-    
-    def eccentricity_histogram(self):
-        """Eccentricity - maximum distance from a node to any other node"""
-        try:
-            if not nx.is_connected(self.G):
-                print("Graph is not connected. Using largest connected component.")
-                largest_cc = max(nx.connected_components(self.G), key=len)
-                G_cc = self.G.subgraph(largest_cc)
-                eccentricity = nx.eccentricity(G_cc)
-            else:
-                eccentricity = nx.eccentricity(self.G)
-            
-            plt.figure(figsize=(15, 8))
-            plt.hist(eccentricity.values(), bins=20, alpha=0.7)
-            plt.title("Eccentricity Distribution", fontdict={"size": 35}, loc="center")
-            plt.xlabel("Eccentricity", fontdict={"size": 20})
-            plt.ylabel("Frequency", fontdict={"size": 20})
-            plt.show()
-            self.network_analysis.format_for_upperright_table(eccentricity, metric='Node', 
-                                                            value='Eccentricity', title="Eccentricity Table")
-        except Exception as e:
-            print(f"Error generating eccentricity histogram: {e}")
-    
-    def kcore_histogram(self):
-        """K-core decomposition - identifies cohesive subgroups"""
-        try:
-            kcore = nx.core_number(self.G)
-            plt.figure(figsize=(15, 8))
-            plt.hist(kcore.values(), bins=max(5, max(kcore.values())), alpha=0.7)
-            plt.title("K-Core Distribution", fontdict={"size": 35}, loc="center")
-            plt.xlabel("K-Core Number", fontdict={"size": 20})
-            plt.ylabel("Frequency", fontdict={"size": 20})
-            plt.show()
-            self.network_analysis.format_for_upperright_table(kcore, metric='Node', 
-                                                            value='K-Core', title="K-Core Table")
-        except Exception as e:
-            print(f"Error generating k-core histogram: {e}")
-    
-    def triangle_count_histogram(self):
-        """Number of triangles each node participates in"""
-        try:
-            triangles = nx.triangles(self.G)
-            plt.figure(figsize=(15, 8))
-            plt.hist(triangles.values(), bins=30, alpha=0.7)
-            plt.title("Triangle Count Distribution", fontdict={"size": 35}, loc="center")
-            plt.xlabel("Number of Triangles", fontdict={"size": 20})
-            plt.ylabel("Frequency", fontdict={"size": 20})
-            plt.show()
-            self.network_analysis.format_for_upperright_table(triangles, metric='Node', 
-                                                            value='Triangle Count', title="Triangle Count Table")
-        except Exception as e:
-            print(f"Error generating triangle count histogram: {e}")
-    
-    def load_centrality_histogram(self):
-        """Load centrality - fraction of shortest paths passing through each node"""
-        try:
-            if self.G.number_of_nodes() > 1000:
-                print("Note this analysis may be slow for large network (>1000 nodes)")
-                #return
-                
-            load_centrality = nx.load_centrality(self.G)
-            plt.figure(figsize=(15, 8))
-            plt.hist(load_centrality.values(), bins=50, alpha=0.7)
-            plt.title("Load Centrality Distribution", fontdict={"size": 35}, loc="center")
-            plt.xlabel("Load Centrality", fontdict={"size": 20})
-            plt.ylabel("Frequency", fontdict={"size": 20})
-            plt.show()
-            self.network_analysis.format_for_upperright_table(load_centrality, metric='Node', 
-                                                            value='Load Centrality', title="Load Centrality Table")
-        except Exception as e:
-            print(f"Error generating load centrality histogram: {e}")
-    
-    def communicability_centrality_histogram(self):
-        """Communicability centrality - based on communicability between nodes"""
-        try:
-            if self.G.number_of_nodes() > 500:
-                print("Note this analysis may be slow for large network (>500 nodes)")
-                #return
-            
-            # Check if graph has multiple disconnected components
-            components = list(nx.connected_components(self.G))
-            
-            if len(components) > 1:
-                print(f"Warning: Graph has {len(components)} disconnected components. Computing communicability centrality within each component separately.")
-                
-                # Initialize dictionary to collect communicability centrality from all components
-                combined_comm_centrality = {}
-                
-                # Process each component separately
-                for i, component in enumerate(components):
-                    if len(component) < 2:
-                        # For single-node components, communicability betweenness centrality is 0
-                        for node in component:
-                            combined_comm_centrality[node] = 0.0
-                        continue
-                    
-                    # Create subgraph for this component
-                    subgraph = self.G.subgraph(component)
-                    
-                    # Compute communicability betweenness centrality for this component
-                    try:
-                        component_comm_centrality = nx.communicability_betweenness_centrality(subgraph)
-                        # Add to combined results
-                        combined_comm_centrality.update(component_comm_centrality)
-                    except Exception as comp_e:
-                        print(f"Error computing communicability centrality for component {i+1}: {comp_e}")
-                        # Set centrality to 0 for nodes in this component if computation fails
-                        for node in component:
-                            combined_comm_centrality[node] = 0.0
-                
-                comm_centrality = combined_comm_centrality
-                title_suffix = f" (across {len(components)} components)"
-                
-            else:
-                # Single component
-                comm_centrality = nx.communicability_betweenness_centrality(self.G)
-                title_suffix = ""
-            
-            # Generate visualization and results (same for both cases)
-            plt.figure(figsize=(15, 8))
-            plt.hist(comm_centrality.values(), bins=50, alpha=0.7)
-            plt.title(
-                f"Communicability Betweenness Centrality Distribution{title_suffix}", 
-                fontdict={"size": 35}, loc="center"
-            )
-            plt.xlabel("Communicability Betweenness Centrality", fontdict={"size": 20})
-            plt.ylabel("Frequency", fontdict={"size": 20})
-            plt.show()
-            
-            self.network_analysis.format_for_upperright_table(
-                comm_centrality, 
-                metric='Node', 
-                value='Communicability Betweenness Centrality', 
-                title=f"Communicability Betweenness Centrality Table{title_suffix}"
-            )
-            
-        except Exception as e:
-            print(f"Error generating communicability betweenness centrality histogram: {e}")
-    
-    def harmonic_centrality_histogram(self):
-        """Harmonic centrality - better than closeness for disconnected networks"""
-        try:
-            harmonic_centrality = nx.harmonic_centrality(self.G)
-            plt.figure(figsize=(15, 8))
-            plt.hist(harmonic_centrality.values(), bins=50, alpha=0.7)
-            plt.title("Harmonic Centrality Distribution", fontdict={"size": 35}, loc="center")
-            plt.xlabel("Harmonic Centrality", fontdict={"size": 20})
-            plt.ylabel("Frequency", fontdict={"size": 20})
-            plt.show()
-            self.network_analysis.format_for_upperright_table(harmonic_centrality, metric='Node', 
-                                                            value='Harmonic Centrality', 
-                                                            title="Harmonic Centrality Table")
-        except Exception as e:
-            print(f"Error generating harmonic centrality histogram: {e}")
-    
-    def current_flow_betweenness_histogram(self):
-        """Current flow betweenness - models network as electrical circuit"""
-        try:
-            if self.G.number_of_nodes() > 500:  
-                print("Note this analysis may be slow for large network (>500 nodes)")
-                #return
-            
-            # Check if graph has multiple disconnected components
-            components = list(nx.connected_components(self.G))
-            
-            if len(components) > 1:
-                print(f"Warning: Graph has {len(components)} disconnected components. Computing current flow betweenness centrality within each component separately.")
-                
-                # Initialize dictionary to collect current flow betweenness from all components
-                combined_current_flow = {}
-                
-                # Process each component separately
-                for i, component in enumerate(components):
-                    if len(component) < 2:
-                        # For single-node components, current flow betweenness centrality is 0
-                        for node in component:
-                            combined_current_flow[node] = 0.0
-                        continue
-                    
-                    # Create subgraph for this component
-                    subgraph = self.G.subgraph(component)
-                    
-                    # Compute current flow betweenness centrality for this component
-                    try:
-                        component_current_flow = nx.current_flow_betweenness_centrality(subgraph)
-                        # Add to combined results
-                        combined_current_flow.update(component_current_flow)
-                    except Exception as comp_e:
-                        print(f"Error computing current flow betweenness for component {i+1}: {comp_e}")
-                        # Set centrality to 0 for nodes in this component if computation fails
-                        for node in component:
-                            combined_current_flow[node] = 0.0
-                
-                current_flow = combined_current_flow
-                title_suffix = f" (across {len(components)} components)"
-                
-            else:
-                # Single component
-                current_flow = nx.current_flow_betweenness_centrality(self.G)
-                title_suffix = ""
-            
-            # Generate visualization and results (same for both cases)
-            plt.figure(figsize=(15, 8))
-            plt.hist(current_flow.values(), bins=50, alpha=0.7)
-            plt.title(
-                f"Current Flow Betweenness Centrality Distribution{title_suffix}", 
-                fontdict={"size": 35}, loc="center"
-            )
-            plt.xlabel("Current Flow Betweenness Centrality", fontdict={"size": 20})
-            plt.ylabel("Frequency", fontdict={"size": 20})
-            plt.show()
-            
-            self.network_analysis.format_for_upperright_table(
-                current_flow, 
-                metric='Node', 
-                value='Current Flow Betweenness', 
-                title=f"Current Flow Betweenness Table{title_suffix}"
-            )
-            
-        except Exception as e:
-            print(f"Error generating current flow betweenness histogram: {e}")
-    
-    def dispersion_histogram(self):
-        """Dispersion - measures how scattered a node's neighbors are"""
-        try:
-            if self.G.number_of_nodes() > 300:  # Skip for large networks (very computationally expensive)
-                print("Note this analysis may be slow for large network (>300 nodes)")
-                #return
-                
-            # Calculate average dispersion for each node
-            dispersion_values = {}
-            nodes = list(self.G.nodes())
-            
-            for u in nodes:
-                if self.G.degree(u) < 2:  # Need at least 2 neighbors for dispersion
-                    dispersion_values[u] = 0
-                    continue
-                    
-                # Calculate dispersion for node u with all its neighbors
-                neighbors = list(self.G.neighbors(u))
-                if len(neighbors) < 2:
-                    dispersion_values[u] = 0
-                    continue
-                
-                # Get dispersion scores for this node with all neighbors
-                disp_scores = []
-                for v in neighbors:
-                    try:
-                        disp_score = nx.dispersion(self.G, u, v)
-                        disp_scores.append(disp_score)
-                    except:
-                        continue
-                
-                # Average dispersion for this node
-                dispersion_values[u] = sum(disp_scores) / len(disp_scores) if disp_scores else 0
-            
-            plt.figure(figsize=(15, 8))
-            plt.hist(dispersion_values.values(), bins=30, alpha=0.7)
-            plt.title("Average Dispersion Distribution", fontdict={"size": 35}, loc="center")
-            plt.xlabel("Average Dispersion", fontdict={"size": 20})
-            plt.ylabel("Frequency", fontdict={"size": 20})
-            plt.show()
-            self.network_analysis.format_for_upperright_table(dispersion_values, metric='Node', 
-                                                            value='Average Dispersion', 
-                                                            title="Average Dispersion Table")
-        except Exception as e:
-            print(f"Error generating dispersion histogram: {e}")
 
 class TutorialSelectionDialog(QWidget):
     """Dialog for selecting which tutorial to run"""

@@ -6,14 +6,14 @@
   <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
 
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Changelog &mdash; NetTracer3D 1.2.8 documentation</title>
+  <title>Changelog &mdash; NetTracer3D 1.3.5 documentation</title>
       <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=b86133f3" />
       <link rel="stylesheet" type="text/css" href="_static/css/theme.css?v=e59714d7" />
 
   
       <script src="_static/jquery.js?v=5d32c60e"></script>
       <script src="_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
-      <script src="_static/documentation_options.js?v=4d6f9085"></script>
+      <script src="_static/documentation_options.js?v=4720776d"></script>
       <script src="_static/doctools.js?v=9bcbadda"></script>
       <script src="_static/sphinx_highlight.js?v=dc90522c"></script>
     <script src="_static/js/theme.js"></script>
@@ -289,6 +289,19 @@
 <li><p>Bug fixes</p></li>
 </ul>
 </dd>
+<dt>Version 1.2.9-1.3.5 updates</dt><dd><ul class="simple">
+<li><p>Added new option for merging internal branches with the branch labeler.</p></li>
+<li><p>Added a few more options for alternate network strategies with the connectivity networks. The menu now has an option to auto-simplify trunks (auto reduce their connections to involve more local connectivity as an option to preserve trunk but not have it over-connect the network). It also has an option to auto-convert nodes to edges (this could previously have been done from the modify network menu, but I added an alternate way to access it here as well). Finally, now if you label your edge branches first with the branch labeler and then calculate the connectivity network, there’s an option to actually incorporate the edge branches themselves into the node network, yielding a network that has your previous node objects but also shows exactly how nearby branches of edges are connecting them.</p></li>
+<li><p>Updated GUI to use pyqtgraph for image display rather than matplotlib</p></li>
+<li><p>Upgraded the network graph visualization to also use pyqtgraph rather than matplotlib - now renders much faster, is embedded in the main window, and interacts with the main image view display.</p></li>
+<li><p>Added option to view network in a concentric-shell like manner</p></li>
+<li><p>Added way to batch compute the histogram statistics</p></li>
+<li><p>Updated the slice refresh rate to be much faster</p></li>
+<li><p>Added option to do unsupervised endpoint joining of a specified distance for segmentation.</p></li>
+<li><p>Improved filament segmenter to better consider filament direction and to use state cacheing while in use to regenerate with alternate params. Updated the branch rejoining Class to consider the local direction of branches to join in a more logical manner.</p></li>
+<li><p>Fixed all the network histogram/stat/community calculations to consider weights properly, provided they are configured for multigraphs in networkx. (In short, edge weights in NetTracer3D are supposed to represent duplicate edges).</p></li>
+</ul>
+</dd>
 </dl>
 </section>
 
@@ -303,7 +316,7 @@
   <hr/>
 
   <div role="contentinfo">
-    <p>&#169; Copyright 2025, Liam McLaughlin.</p>
+    <p>&#169; Copyright 2026, Liam McLaughlin.</p>
   </div>
 
   Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a

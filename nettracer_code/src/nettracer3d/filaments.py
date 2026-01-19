@@ -9,6 +9,29 @@ from . import smart_dilate as sdl
 warnings.filterwarnings('ignore')
 
 
+class DenoisingState:
+    """
+    Stores intermediate computational results for rapid parameter iteration.
+    This allows users to tweak connection/filtering parameters without 
+    recomputing expensive skeleton and distance transform operations.
+    """
+    def __init__(self):
+        # Heavy computations (cached)
+        self.cleaned = None              # Binary segmentation after small object removal
+        self.skeleton = None             # Skeletonized structure
+        self.distance_map = None         # Distance transform
+        self.kernel_points = None        # Sampled kernel positions
+        self.kernel_features = None      # Extracted features for each kernel
+        self.shape = None                # Original array shape
+        
+        # Parameters used to create this state
+        self.kernel_spacing = None
+        self.spine_removal = None
+        self.trace_length = None
+        self.xy_scale = None
+        self.z_scale = None
+
+
 class VesselDenoiser:
     """
     Denoise vessel segmentations using graph-based geometric features
@@ -19,13 +42,15 @@ class VesselDenoiser:
                  max_connection_distance=20,
                  min_component_size=20,
                  gap_tolerance=5.0,
-                 blob_sphericity = 1.0,
-                 blob_volume = 200,
+                 blob_sphericity=1.0,
+                 blob_volume=200,
                  spine_removal=0,
-                 score_thresh = 2,
-                 xy_scale = 1,
-                 z_scale = 1,
-                 radius_aware_distance=True):
+                 score_thresh=2,
+                 xy_scale=1,
+                 z_scale=1,
+                 radius_aware_distance=True,
+                 trace_length=10,
+                 cached_state=None):
         """
         Parameters:
         -----------
@@ -39,7 +64,14 @@ class VesselDenoiser:
             Maximum gap size relative to vessel radius
         radius_aware_distance : bool
             If True, scale connection distance based on vessel radius
+        trace_length : int
+            How many steps to trace along skeleton when computing direction (default: 10)
+            Higher values give more global direction, lower values more local
+        cached_state : DenoisingState or None
+            If provided, reuses heavy computations from previous run.
+            Set to None for initial computation or if spine_removal changed.
         """
+        # Store all parameters
         self.kernel_spacing = kernel_spacing
         self.max_connection_distance = max_connection_distance
         self.min_component_size = min_component_size
@@ -51,7 +83,15 @@ class VesselDenoiser:
         self.score_thresh = score_thresh
         self.xy_scale = xy_scale
         self.z_scale = z_scale
-
+        self.trace_length = trace_length
+        
+        # Handle cached state
+        # If spine_removal changed, invalidate cache
+        if cached_state is not None and cached_state.spine_removal != spine_removal:
+            print("spine_removal parameter changed - invalidating cache")
+            cached_state = None
+        
+        self.cached_state = cached_state
         self._sphere_cache = {}  # Cache sphere masks for different radii
 
     def filter_large_spherical_blobs(self, binary_array, 
@@ -450,9 +490,9 @@ class VesselDenoiser:
         # Determine if this is an endpoint
         features['is_endpoint'] = self._is_skeleton_endpoint(skeleton, kernel_pos)
         
-        # Local direction vector (principal direction of nearby skeleton points)
+        # Local direction vector
         features['direction'] = self._compute_local_direction(
-            skeleton, kernel_pos, radius
+            skeleton, kernel_pos, radius, trace_length=self.trace_length
         )
         
         # Position
@@ -460,31 +500,127 @@ class VesselDenoiser:
         
         return features
     
-    def _compute_local_direction(self, skeleton, pos, radius=5):
-        """Compute principal direction of skeleton in local neighborhood"""
+    def _compute_local_direction(self, skeleton, pos, radius=5, trace_length=10):
+        """
+        Compute direction by tracing along skeleton from the given position.
+        This follows the actual filament path rather than using PCA on neighborhood points.
+        
+        Parameters:
+        -----------
+        skeleton : ndarray
+            3D binary skeleton
+        pos : tuple or array
+            Position (z, y, x) to compute direction from
+        radius : int
+            Radius for finding immediate neighbors (kept for compatibility)
+        trace_length : int
+            How many steps to trace along skeleton to determine direction
+            
+        Returns:
+        --------
+        direction : ndarray
+            Normalized direction vector representing skeleton path direction
+        """
+        from collections import deque
+        
         z, y, x = pos
         shape = skeleton.shape
         
-        z_min = max(0, z - radius)
-        z_max = min(shape[0], z + radius + 1)
-        y_min = max(0, y - radius)
-        y_max = min(shape[1], y + radius + 1)
-        x_min = max(0, x - radius)
-        x_max = min(shape[2], x + radius + 1)
+        # Build local skeleton graph using 26-connectivity
+        # We need to explore a larger region than just 'radius' to trace properly
+        search_radius = max(radius, trace_length + 5)
+        
+        z_min = max(0, z - search_radius)
+        z_max = min(shape[0], z + search_radius + 1)
+        y_min = max(0, y - search_radius)
+        y_max = min(shape[1], y + search_radius + 1)
+        x_min = max(0, x - search_radius)
+        x_max = min(shape[2], x + search_radius + 1)
         
         local_skel = skeleton[z_min:z_max, y_min:y_max, x_min:x_max]
-        coords = np.argwhere(local_skel)
+        local_coords = np.argwhere(local_skel)
         
-        if len(coords) < 2:
+        if len(local_coords) < 2:
             return np.array([0., 0., 1.])
         
-        # PCA to find principal direction
-        centered = coords - coords.mean(axis=0)
-        cov = np.cov(centered.T)
-        eigenvalues, eigenvectors = np.linalg.eigh(cov)
-        principal_direction = eigenvectors[:, -1]  # largest eigenvalue
+        # Convert to global coordinates
+        offset = np.array([z_min, y_min, x_min])
+        global_coords = local_coords + offset
         
-        return principal_direction / (np.linalg.norm(principal_direction) + 1e-10)
+        # Build coordinate mapping
+        coord_to_idx = {tuple(c): i for i, c in enumerate(global_coords)}
+        
+        # Find the index corresponding to our position
+        pos_tuple = (z, y, x)
+        if pos_tuple not in coord_to_idx:
+            # Position not in skeleton, fall back to nearest skeleton point
+            distances = np.linalg.norm(global_coords - np.array([z, y, x]), axis=1)
+            nearest_idx = np.argmin(distances)
+            pos_tuple = tuple(global_coords[nearest_idx])
+            if pos_tuple not in coord_to_idx:
+                return np.array([0., 0., 1.])
+        
+        start_idx = coord_to_idx[pos_tuple]
+        start_pos = np.array(pos_tuple, dtype=float)
+        
+        # 26-connected neighborhood offsets
+        nbr_offsets = [(dz, dy, dx)
+                       for dz in (-1, 0, 1)
+                       for dy in (-1, 0, 1)
+                       for dx in (-1, 0, 1)
+                       if not (dz == dy == dx == 0)]
+        
+        # BFS to trace along skeleton
+        visited = {start_idx}
+        queue = deque([start_idx])
+        path_positions = []
+        
+        while queue and len(path_positions) < trace_length:
+            current_idx = queue.popleft()
+            current_pos = global_coords[current_idx]
+            
+            # Find neighbors in 26-connected space
+            cz, cy, cx = current_pos
+            for dz, dy, dx in nbr_offsets:
+                nb_pos = (cz + dz, cy + dy, cx + dx)
+                
+                # Check if neighbor exists in our coordinate mapping
+                if nb_pos in coord_to_idx:
+                    nb_idx = coord_to_idx[nb_pos]
+                    
+                    if nb_idx not in visited:
+                        visited.add(nb_idx)
+                        queue.append(nb_idx)
+                        
+                        # Add this position to path
+                        path_positions.append(global_coords[nb_idx].astype(float))
+                        
+                        if len(path_positions) >= trace_length:
+                            break
+        
+        # If we couldn't trace far enough, use what we have
+        if len(path_positions) == 0:
+            # Isolated point or very short skeleton, return arbitrary direction
+            return np.array([0., 0., 1.])
+        
+        # Compute direction as weighted average vector from start to traced positions
+        # Weight more distant points more heavily (they better represent overall direction)
+        path_positions = np.array(path_positions)
+        weights = np.linspace(1.0, 2.0, len(path_positions))
+        weights = weights / weights.sum()
+        
+        # Weighted average position along the path
+        weighted_target = np.sum(path_positions * weights[:, None], axis=0)
+        
+        # Direction from start position toward this weighted position
+        direction = weighted_target - start_pos
+        
+        # Normalize
+        norm = np.linalg.norm(direction)
+        if norm < 1e-10:
+            return np.array([0., 0., 1.])
+        
+        return direction / norm
     
     def compute_edge_features(self, feat_i, feat_j, skeleton):
         """Compute features for potential connection between two kernels"""
@@ -808,7 +944,8 @@ class VesselDenoiser:
             max_radius = np.max(radii)
             avg_degree = np.mean(degrees)
             
-            # Measure linearity using PCA
+            # Measure linearity
+            
             if len(positions) > 2:
                 centered = positions - positions.mean(axis=0)
                 cov = np.cov(centered.T)
@@ -901,81 +1038,150 @@ class VesselDenoiser:
                 0 <= coords[2] < array.shape[2]):
                 array[tuple(coords)] = 1
     
-    def denoise(self, binary_segmentation, verbose=True):
+    def _needs_cache_recomputation(self, state):
         """
-        Main denoising pipeline
+        Determine if we need to recompute cached values based on parameter changes.
+        Returns tuple: (needs_kernel_recompute, needs_feature_recompute)
+        """
+        if state is None:
+            return True, True
+        
+        # Check if parameters that affect cached computations have changed
+        needs_kernel_recompute = (
+            state.kernel_spacing != self.kernel_spacing or
+            state.spine_removal != self.spine_removal
+        )
+        
+        needs_feature_recompute = (
+            needs_kernel_recompute or  # If kernels changed, features must change
+            state.trace_length != self.trace_length
+        )
+        
+        return needs_kernel_recompute, needs_feature_recompute
+    
+    def denoise(self, binary_segmentation=None, verbose=True):
+        """
+        Main denoising pipeline with caching support
         
         Parameters:
         -----------
-        binary_segmentation : ndarray
-            3D binary array of vessel segmentation
+        binary_segmentation : ndarray or None
+            3D binary array of vessel segmentation.
+            Set to None when using cached_state (passed to constructor).
         verbose : bool
             Print progress information
             
         Returns:
         --------
-        denoised : ndarray
+        result : ndarray
             Cleaned vessel segmentation
+        state : DenoisingState
+            Cached state for rapid parameter iteration
         """
-        if verbose:
-            print("Starting vessel denoising pipeline...")
-            print(f"Input shape: {binary_segmentation.shape}")
+        # Determine execution path
+        using_cache = self.cached_state is not None
         
-        # Step 1: Remove very small objects (obvious noise)
-        if verbose:
-            print("Step 1: Removing small noise objects...")
-        cleaned = remove_small_objects(
-            binary_segmentation.astype(bool), 
-            min_size=10
-        )
+        if using_cache:
+            if verbose:
+                print("Using cached state - skipping heavy computations...")
+            state = self.cached_state
+            
+            # Check what needs recomputation
+            needs_kernel_recomp, needs_feature_recomp = self._needs_cache_recomputation(state)
+            
+            if needs_kernel_recomp or needs_feature_recomp:
+                if verbose:
+                    if needs_kernel_recomp:
+                        print("  kernel_spacing changed - recomputing kernel points...")
+                    elif needs_feature_recomp:
+                        print("  trace_length changed - recomputing features...")
+        else:
+            # Fresh computation - create new state
+            if binary_segmentation is None:
+                raise ValueError("binary_segmentation must be provided when not using cached state")
+            
+            state = DenoisingState()
+            needs_kernel_recomp = True
+            needs_feature_recomp = True
         
-        # Step 2: Skeletonize
-        if verbose:
-            print("Step 2: Computing skeleton...")
+        # STAGE 1: Heavy computations (skip if cached and parameters unchanged)
+        if not using_cache or needs_kernel_recomp:
+            if verbose:
+                print("Starting vessel denoising pipeline...")
+                print(f"Input shape: {binary_segmentation.shape}")
+            
+            # Step 1: Remove very small objects (obvious noise)
+            if verbose:
+                print("Step 1: Removing small noise objects...")
+            state.cleaned = remove_small_objects(
+                binary_segmentation.astype(bool), 
+                min_size=10
+            )
+            
+            # Step 2: Skeletonize
+            if verbose:
+                print("Step 2: Computing skeleton...")
 
-        skeleton = n3d.skeletonize(cleaned)
-        if len(skeleton.shape) == 3 and skeleton.shape[0] != 1:
-            skeleton = n3d.fill_holes_3d(skeleton)
-            skeleton = n3d.skeletonize(skeleton)
-        if self.spine_removal > 0:
-            skeleton = n3d.remove_branches_new(skeleton, self.spine_removal)
-            skeleton = n3d.dilate_3D(skeleton, 3, 3, 3)
-            skeleton = n3d.skeletonize(skeleton)
+            state.skeleton = n3d.skeletonize(state.cleaned)
+            if len(state.skeleton.shape) == 3 and state.skeleton.shape[0] != 1:
+                state.skeleton = n3d.fill_holes_3d(state.skeleton)
+                state.skeleton = n3d.skeletonize(state.skeleton)
+            if self.spine_removal > 0:
+                state.skeleton = n3d.remove_branches_new(state.skeleton, self.spine_removal)
+                state.skeleton = n3d.dilate_3D(state.skeleton, 3, 3, 3)
+                state.skeleton = n3d.skeletonize(state.skeleton)
+            
+            if verbose:
+                print("Step 3: Computing distance transform...")
+            state.distance_map = sdl.compute_distance_transform_distance(state.cleaned, fast_dil=True)
+            
+            # Step 3: Sample kernels along skeleton
+            if verbose:
+                print("Step 4: Sampling kernels along skeleton...")
+            
+            state.kernel_points = self.select_kernel_points_topology(state.skeleton)
+            
+            if verbose:
+                print(f"  Extracted {len(state.kernel_points)} kernel points "
+                      f"(topology-aware, spacing={self.kernel_spacing})")
+            
+            # Store shape
+            state.shape = binary_segmentation.shape
+            
+            # Update state parameters
+            state.kernel_spacing = self.kernel_spacing
+            state.spine_removal = self.spine_removal
+            state.trace_length = self.trace_length
+            
+            # Force feature recomputation since kernels changed
+            needs_feature_recomp = True
         
-        if verbose:
-            print("Step 3: Computing distance transform...")
-        distance_map = sdl.compute_distance_transform_distance(cleaned, fast_dil = True)
+        # STAGE 2: Feature extraction (skip if cached and trace_length unchanged)
+        if not using_cache or needs_feature_recomp:
+            if verbose:
+                print("Step 5: Extracting kernel features...")
+            
+            state.kernel_features = []
+            for pt in state.kernel_points:
+                feat = self.extract_kernel_features(state.skeleton, state.distance_map, pt)
+                state.kernel_features.append(feat)
+            
+            if verbose:
+                num_endpoints = sum(1 for f in state.kernel_features if f['is_endpoint'])
+                num_internal = len(state.kernel_features) - num_endpoints
+                print(f"  Identified {num_endpoints} endpoints, {num_internal} internal nodes")
+            
+            # Update trace_length in state
+            state.trace_length = self.trace_length
         
-        # Step 3: Sample kernels along skeleton
+        # STAGE 3: Graph operations (always run - uses current parameters)
         if verbose:
-            print("Step 4: Sampling kernels along skeleton...")
+            if using_cache:
+                print("Step 6: Rebuilding graph with new parameters...")
+            else:
+                print("Step 6: Building skeleton backbone (all immediate neighbors)...")
         
-        skeleton_points = np.argwhere(skeleton)
-
-        # Topology-aware subsampling (safe)
-        kernel_points = self.select_kernel_points_topology(skeleton)
-
-        if verbose:
-            print(f"  Extracted {len(kernel_points)} kernel points "
-                  f"(topology-aware, spacing={self.kernel_spacing})")
-        
-        # Step 4: Extract features
-        if verbose:
-            print("Step 5: Extracting kernel features...")
-        kernel_features = []
-        for pt in kernel_points:
-            feat = self.extract_kernel_features(skeleton, distance_map, pt)
-            kernel_features.append(feat)
-        
-        if verbose:
-            num_endpoints = sum(1 for f in kernel_features if f['is_endpoint'])
-            num_internal = len(kernel_features) - num_endpoints
-            print(f"  Identified {num_endpoints} endpoints, {num_internal} internal nodes")
-        
-        # Step 5: Build graph - Stage 1: Connect skeleton backbone
-        if verbose:
-            print("Step 6: Building skeleton backbone (all immediate neighbors)...")
-        G = self.build_skeleton_backbone(kernel_points, kernel_features, skeleton)
+        G = self.build_skeleton_backbone(state.kernel_points, state.kernel_features, state.skeleton)
         
         if verbose:
             num_components = nx.number_connected_components(G)
@@ -984,7 +1190,7 @@ class VesselDenoiser:
             print(f"  Average degree: {avg_degree:.2f} (branch points have 3+)")
             print(f"  Connected components: {num_components}")
             
-            # Check for isolated nodes after all passes
+            # Check for isolated nodes
             isolated = [n for n in G.nodes() if G.degree(n) == 0]
             if len(isolated) > 0:
                 print(f"  WARNING: {len(isolated)} isolated nodes remain (truly disconnected)")
@@ -996,11 +1202,11 @@ class VesselDenoiser:
             if len(comp_sizes) > 0:
                 print(f"  Component sizes: min={min(comp_sizes)}, max={max(comp_sizes)}, mean={np.mean(comp_sizes):.1f}")
         
-        # Step 6: Connect endpoints across gaps
+        # Step 6: Connect endpoints across gaps (uses current gap_tolerance, score_thresh, etc.)
         if verbose:
             print("Step 7: Connecting endpoints across gaps...")
         initial_edges = G.number_of_edges()
-        G = self.connect_endpoints_across_gaps(G, kernel_points, kernel_features, skeleton)
+        G = self.connect_endpoints_across_gaps(G, state.kernel_points, state.kernel_features, state.skeleton)
         
         if verbose:
             new_edges = G.number_of_edges() - initial_edges
@@ -1008,7 +1214,7 @@ class VesselDenoiser:
             num_components = nx.number_connected_components(G)
             print(f"  Components after bridging: {num_components}")
         
-        # Step 7: Screen entire filaments for noise
+        # Step 7: Screen filaments (uses current min_component_size)
         if verbose:
             print("Step 8: Screening noise filaments...")
         initial_nodes = G.number_of_nodes()
@@ -1022,8 +1228,9 @@ class VesselDenoiser:
         # Step 8: Reconstruct
         if verbose:
             print("Step 9: Reconstructing vessel structure...")
-        result = self.draw_vessel_lines_optimized(G, binary_segmentation.shape)
+        result = self.draw_vessel_lines_optimized(G, state.shape)
 
+        # Step 9: Blob filtering (uses current blob_sphericity, blob_volume)
         if self.blob_sphericity < 1 and self.blob_sphericity > 0:
             if verbose:
                 print("Step 10: Filtering large spherical artifacts...")
@@ -1036,19 +1243,53 @@ class VesselDenoiser:
         
         if verbose:
             print("Denoising complete!")
-            print(f"Output voxels: {np.sum(result)} (input: {np.sum(binary_segmentation)})")
+            original_voxels = np.sum(binary_segmentation) if binary_segmentation is not None else np.sum(state.cleaned)
+            print(f"Output voxels: {np.sum(result)} (input: {original_voxels})")
         
-        return result
+        return result, state
 
 
-def trace(data, kernel_spacing = 1, max_distance = 20, min_component = 20, gap_tolerance = 5, blob_sphericity = 1.0, blob_volume = 200, spine_removal = 0, score_thresh = 2, xy_scale = 1, z_scale = 1):
-
-    """Main function with user prompts"""
+def trace(data, kernel_spacing=1, max_distance=20, min_component=20, gap_tolerance=5, 
+          blob_sphericity=1.0, blob_volume=200, spine_removal=0, score_thresh=2, 
+          xy_scale=1, z_scale=1, trace_length=10, cached_state=None):
+    """
+    Main function with caching support for rapid parameter iteration
     
-    # Convert to binary if needed
-    if data.dtype != bool and data.dtype != np.uint8:
-        print("Converting to binary...")
-        data = (data > 0).astype(np.uint8)
+    Parameters:
+    -----------
+    data : ndarray or None
+        3D binary array of vessel segmentation.
+        Set to None when using cached_state.
+    cached_state : DenoisingState or None
+        Previously computed state for rapid parameter iteration.
+        Pass None for initial computation.
+    ... (other parameters as before)
+    
+    Returns:
+    --------
+    result : ndarray
+        Denoised vessel segmentation
+    state : DenoisingState
+        Cached state for future iterations
+    
+    Usage:
+    ------
+    # Initial run
+    result1, state = trace(data, kernel_spacing=2, gap_tolerance=5.0)
+    
+    # Rapid iteration with new parameters (reuses skeleton & distance transform)
+    result2, state = trace(None, kernel_spacing=2, gap_tolerance=3.0, cached_state=state)
+    result3, state = trace(None, kernel_spacing=2, gap_tolerance=7.0, cached_state=state)
+    
+    # If spine_removal changes, cache is automatically invalidated
+    result4, state = trace(data, spine_removal=5, cached_state=state)  # Will recompute
+    """
+    
+    # Convert to binary if needed (only if data provided)
+    if data is not None:
+        if data.dtype != bool and data.dtype != np.uint8:
+            print("Converting to binary...")
+            data = (data > 0).astype(np.uint8)
     
     # Create denoiser
     denoiser = VesselDenoiser(
@@ -1056,20 +1297,21 @@ def trace(data, kernel_spacing = 1, max_distance = 20, min_component = 20, gap_t
         max_connection_distance=max_distance,
         min_component_size=min_component,
         gap_tolerance=gap_tolerance,
-        blob_sphericity = blob_sphericity,
-        blob_volume = blob_volume,
-        spine_removal = spine_removal,
-        score_thresh = score_thresh,
-        xy_scale = xy_scale,
-        z_scale = z_scale
+        blob_sphericity=blob_sphericity,
+        blob_volume=blob_volume,
+        spine_removal=spine_removal,
+        score_thresh=score_thresh,
+        xy_scale=xy_scale,
+        z_scale=z_scale,
+        trace_length=trace_length,
+        cached_state=cached_state
     )
     
     # Run denoising
-    result = denoiser.denoise(data, verbose=True)
+    result, state = denoiser.denoise(data, verbose=True)
     
-    return result
+    return result, state
 
 
 if __name__ == "__main__":
-    
     print("Test area")

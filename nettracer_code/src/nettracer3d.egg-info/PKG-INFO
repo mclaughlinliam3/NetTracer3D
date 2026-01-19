@@ -1,6 +1,6 @@
 Metadata-Version: 2.4
 Name: nettracer3d
-Version: 1.2.8
+Version: 1.3.5
 Summary: Scripts for intializing and analyzing networks from segmentations of three dimensional images.
 Author-email: Liam McLaughlin <liamm@wustl.edu>
 Project-URL: Documentation, https://nettracer3d.readthedocs.io/en/latest/
@@ -24,6 +24,7 @@ Requires-Dist: pandas
 Requires-Dist: tifffile
 Requires-Dist: qtrangeslider
 Requires-Dist: PyQt6
+Requires-Dist: pyqtgraph
 Requires-Dist: scikit-learn
 Requires-Dist: setuptools
 Requires-Dist: umap-learn
@@ -70,34 +71,26 @@ Please see: https://www.youtube.com/watch?v=_4uDy0mzG94&list=PLsrhxiimzKJMZ3_gTW
 
 	* pip install nettracer3d
 
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 3. **For 3D Displays**: Or if you also want Napari for 3D displays:
 
 	* pip install nettracer3d[viz]
 
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 4. **Optional Performance Boost**: If you are trying to process large images, you may also want to include the 'edt' module in your package. This will allow parallelized CPU calculations for several of the search functions which can increase their speed by an order of magnitude or more depending on how many cores your CPU has. This can be a major benefit if you have a strong CPU and sufficient RAM. It requires an extra pre-installation step, thus is not included by default. You will also have to install the C++ build tools from windows. Please head to this link, then download and run the installer: https://visualstudio.microsoft.com/visual-cpp-build-tools/. In the menu of the installer, select the 'Desktop Development with C++' option, then proceed to download/install it using the installation menu. You will likely want to be using the Python distributed from the actual Python website and not the windows store (or elsewhere) or the edt module may not work properly. To bundle with edt use:
 
 	* pip install nettracer3d[edt]
-
-~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 
 5. **Recommended full package**: Or if you want to just get both edt and napari at once:
 	
 	* pip install nettracer3d[rec]
 
-~~~~~~~~~~~~~~~~~~~~~~~~~~
-
 
 6. Likewise, if you already installed the default version, you can add napari and/or edt with just:
 
 	* pip install edt
 	* pip install napari
-
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
    
 --- Installing as a Python package in Anaconda---
@@ -162,8 +155,8 @@ NetTracer3D is freely available for academic and nonprofit use and can obtained 
 
 NetTracer3D was developed by Liam McLaughlin while working under Dr. Sanjay Jain at Washington University School of Medicine.
 
--- Version 1.2.8 Updates --
+-- Version 1.3.5 Updates --
 
-	* Made edt an optional dependency.
-	* Updated readme
+	* Mainly bug fixes and adjustments.
+	* Most relevantly, fixed all the network histogram/stat/community calculations to consider weights properly, provided they are configured for multigraphs in networkx. (In short, edge weights in NetTracer3D are supposed to represent duplicate edges).
 	

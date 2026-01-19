@@ -1380,7 +1380,7 @@ class InteractiveSegmenter:
         return chunks
 
     def train_batch(self, foreground_array, speed=True, use_gpu=False, use_two=False, mem_lock=False, saving=False):
-        """Updated train_batch with chunked 2D processing"""
+        """Train model for batch of arrays"""
 
         if not saving:
             print("Training model...")
