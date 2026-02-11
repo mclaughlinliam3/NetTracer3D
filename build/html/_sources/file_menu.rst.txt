@@ -74,7 +74,7 @@ The save as menu will prompt the user to find files to load. Note that when it c
 .. _merge_nodes:
 
 Images -> Node Identities
----------
+----------------------------------
 1. 'Load Misc Properties -> Merge Nodes'
     * Prompts the user to find a .tif/.tiff file corresponding to an additional labeled nodes image they would like to merge with the current nodes channel (Alternatively, the user can select a directory containing a set of .tif/.tiff images if they would like to merge many nodes images at once).
     * The point of this function is to allow nodes from several types of images to be compared, for example, heterogenous structures or cell types.
@@ -84,23 +84,33 @@ Images -> Node Identities
     * Merging nodes auto-assigns the nodes IDs based on the name of the .tif/.tiff that is being merged, while the original nodes aquire the name 'root_nodes'.
     * These IDs cannot be changed in NetTracer3D. To change them, please save the Node IDs as described above, then reassign the names with the excel helper, or edit the names directly in a spreadsheet-editing software like Microsoft Excel, then reload the Node IDs with 'Load -> Load Misc Properties -> Load Node IDs'
 2. Assign Node Identities From Overlap With Other Images'
-    * Prompts the user to find a directory containing .tif/.tiff channels corresponding to additional channels from the image that yielded the nodes image.
-    * The following params will be shown:
-        1. Step-out distance - The node markers can search outwards for overlap (estimating a cell radius) based on a user defined distance (or this can be precomputed in 'Process -> Image -> Dilate').
-        2. xy_scale - The true scale of the xy plane of the image.
-        3. z_scale - The true scale of the z-step size of the image (note that for params 2 and 3, if entered correctly you will want to enter a true biological distance in param 1).
-        4. Binarization strategy - Whether to automatically or manually assign node identities.
-             * If automatic, the nodes from the nodes image will be compared to auto-binarized versions of the images in the directory to assess what 'identities' each node has. They can be pre-binarized, but if not, they will be auto binarized with Otsu's method (which predicts the foreground vs bacgkround) - you may want to double check the accuracy of this.
-             * If manual, the user will be prompted to threshold the nodes in each channel based on their mean overlap with the intensity of that channel. Please see :doc:`proximity` for a demonstration of this.
-        5. If using manual threshold: Also generate identity UMAP? - If selected, after the manual identity assignment, shows a UMAP of the intensity Z-score for each node relative to the identity of each channel.
-        6. Include when a node is negative... - If unchecked, nodes missing an ID for a channel will simply not receive any marker from that channel. If checked, they will be assigned a negative marker. Note that this can yield a lot more permutations of identities if checked.
-    * The point of this is compatibility with something like CODEX. The nodes can be created by segmenting, then watershedding/labeling a nuclei marker such as DAPI, or segmenting them directly with something like Cellpose.
-    * The images in the directory must all be seperated into their own channels of equal dimensions to the nodes channel - no hyperstacks or multi-channel images. 
-    * Node markers deemed positive for an image will aquire the title of that image with a + symbol in its node identities property. If the 'include when a node is negative...' option is selected, those without it will aquire the title with a - symbol, although I usually don't use this for simplification.
-    * These identity markers will add to a growing list-string for each node.
-    * At the end, the resultant complete node identities will be shown in the upper right tabulated data widget.
-    * For specific phenotype classification, please save the node identities as .csv, then load them with classifiers from the Excel Helper, see: :doc:`excel_helper`
-    * Note this functionality exists to enable end-to-end pipelines, but it is also something more focused on in a tool like QuPath, whose .csv outputs can be modularly brought to NetTracer3D with the excel helper.
+    * This is going to be the main way to assign node identities for multichannel data. You can either segment your cells or create hexagon nodes from the generate menu, place all desired channels in a folder, and run this.
+    * Essentially, you will have a few options to iterate through the channels in your folder and assigning your cells as having that identity based on min/max thresholds of that cells' fluorescent intensity.
+
+    * Once you have your labeled nodes loaded into the nodes channel, running this will open this menu:
+
+.. image:: _static/iden_assign_menu.png
+   :width: 500px
+   :alt: iden_assign_menu
+
+Parameter Explanations
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+* The first set of options is to optionally expand your nodes' search regions:
+    1. Step-out distance - The node markers can search outwards for overlap (estimating a cell radius) based on a user defined distance (or this can be precomputed in 'Process -> Image -> Dilate').
+    2. xy_scale - The true scale of the xy plane of the image.
+    3. z_scale - The true scale of the z-step size of the image (note that for params 2 and 3, if entered correctly you will want to enter a true biological distance in param 1).
+* The second box (Binarization Strategy) allows you to control how the system will choose to decide to assign your nodes as having an identity. It has these options:
+    1. Auto-Binarize - If you already had binarized your channels or the SNR is particularly good, you can try this one. For pre-binarized, you'd essentially segmente every channel for what you feel is 'real' and arrange those segmented channels in the target folder. If it sees any non-binary data, it will predict the foreground with Otus algorithm, which won't necessarily give you ideal results.
+    2. Manual - This is the default setting and the main way to use this function. If you choose this, every channel will be loaded into the GUI one by one, allowing you to manipulate thresholds to choose which cells get assigned an identity. Please see the tutorial on proximity networks for more info.
+    3. Auto with ML Predictor - You will have to have trained a neural network model on some prior dataset. After that, you can load the ML model back to this window. If you choose this setting, the neural network will predict the threshold bounds based on its training data.
+    4. Using Previous Threshodls - If you've thresholded before for a set of channels, you can reapply these thresholds by loading the same spreadsheet back (That NetTracer3D generates at the end of the thresholding session).
+* The third box (Load Previous) allows you to load a table from a previous session containing the average intensity expression for every cell. Normally, this will have to be calculated for every channel of interest, and you will be prompt to save the resultant spreadsheet. If you are reapplying thresholds or want to add additional channels, you can load that same spreadsheet back here to skip pre-processing for channels that already have data. If you are adding additional channels to a previous session, I recommend loading the old spreadsheet like so. You will be prompted to save a new spreadsheet at the end with the old + new data in it.
+* The fourth box concerns training the ML model. Currently this model is a neural network trained to associate the shape of the curve of the histogram with the thresholds you like. This may be tweaked in the future.
+    1. The top button allows you to enable training an ML model for this session. After training on all your channels, you will be prompted to save the model. If you load a previous model and choose this, you will train atop the old one.
+    2. The bottom button loads a previous model, which will be saved as a .pkl file. Please be aware to not load .pkl files you don't trust (as in you don't know who made them) as they can execute arbitrary code on your system. Once you've loaded a previous model, you can either have the ML model predict every threshold as mentioned above, or you can continue with the manual threshold, and you'll have a new option for each to have the system make an initial guess.
+* The last box (Include Negative IDs) assigns nodes a 'negative' ID for each channel they don't have, in addition to the one's they do. This can bloat your data quite a bit and isn't necessary usually, but the option is available if you want that level of detail.
+* When you're ready, hit 'Select Directory and Start Processing'. You will be prompted to navigate to the directory where you've stored your channels (as either 2D or 3D tiffs). Stored channels should be serial, not all in one tiff. If you already have node identities, any new ones from your thresholding session will be added onto the existing ones, allowing you to add more channels to previous sessions. Any channels that exist in the identities currently that are also in the current session will be overridden by the new thresholds, which can be used to correct past mistakes.
+
 
 Next Steps
 ---------

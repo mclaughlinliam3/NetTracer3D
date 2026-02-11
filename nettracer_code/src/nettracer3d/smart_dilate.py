@@ -302,7 +302,9 @@ def smart_dilate(nodes, dilate_xy = 0, dilate_z = 0, directory = None, GPU = Tru
             dilated = nettracer.dilate_3D_dt(nodes, use_dt_dil_amount, xy_scale, z_scale, fast_dil = True)
             return smart_label_watershed(dilated, nodes, directory = None, remove_template = False)
         except:
-            print("edt package not found. Please use 'pip install edt' if you would like to enable parallel searching.")
+            import traceback
+            print(traceback.format_exc())
+            print("edt package not found, or fast dilation failed somehow. Please use 'pip install edt' if you would like to enable parallel searching.")
             return smart_dilate_short(nodes, use_dt_dil_amount, directory, xy_scale, z_scale)
     else:
         return smart_dilate_short(nodes, use_dt_dil_amount, directory, xy_scale, z_scale)
@@ -376,13 +378,25 @@ def smart_label_watershed(binary_array, label_array, directory = None, remove_te
     
     print("Performing watershed label propagation...")
     
-    # Watershed approach: propagate existing labels into the dilated region
-    # The labels themselves are the "markers" (seeds)
-    # We use the binary mask to define where labels can spread
+    # Determine appropriate dtypes based on array size
+    total_pixels = binary_array.size
+    
+    # Use int64 for markers if array is large enough to overflow int32
+    # int32 max is ~2.1 billion, use int64 if we're anywhere close
+    if total_pixels > 1_000_000_000:  # 1 billion threshold
+        marker_dtype = np.int64
+        float_dtype = np.float64
+        print(f"Large array detected ({total_pixels:,} pixels) - using 64-bit dtypes")
+    else:
+        marker_dtype = np.int32
+        float_dtype = np.float32
+        print(f"Array size: {total_pixels:,} pixels - using 32-bit dtypes for efficiency")
+    
+    # Ensure markers have the correct dtype
+    label_array = label_array.astype(marker_dtype, copy=False)
     
     # Simple elevation map: distance from edges (lower = closer to labeled regions)
-    # This makes watershed flow from labeled regions outward
-    elevation = binary_array.astype(np.float32)
+    elevation = binary_array.astype(float_dtype)
     
     # Apply watershed - labels propagate into binary_array region
     dilated_nodes_with_labels = watershed(

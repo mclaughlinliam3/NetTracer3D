@@ -1,10 +1,10 @@
 [project]
 name = "nettracer3d"
-version = "1.3.5"
+version = "1.4.4"
 authors = [
   { name="Liam McLaughlin", email="liamm@wustl.edu" },
 ]
-description = "Scripts for intializing and analyzing networks from segmentations of three dimensional images."
+description = "GUI for intializing and analyzing networks from segmentations of three dimensional images."
 
 dependencies = [
     "numpy",
@@ -22,7 +22,8 @@ dependencies = [
     "pyqtgraph",
     "scikit-learn",
     "setuptools",
-    "umap-learn"]
+    "umap-learn",
+    "numba"]
 
 readme = "README.md"
 requires-python = ">=3.7"

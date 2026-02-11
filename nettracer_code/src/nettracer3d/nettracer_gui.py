@@ -4,8 +4,10 @@ from PyQt6.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout, QG
                             QHBoxLayout, QSlider, QMenuBar, QMenu, QDialog, 
                             QFormLayout, QLineEdit, QPushButton, QFileDialog,
                             QLabel, QComboBox, QMessageBox, QTableView, QInputDialog,
-                            QMenu, QTabWidget, QGroupBox, QCheckBox, QScrollArea)
-from PyQt6.QtCore import (QPoint, Qt, QAbstractTableModel, QTimer,  QThread, pyqtSignal, QObject, QCoreApplication, QEvent, QEventLoop)
+                            QMenu, QTabWidget, QGroupBox, QCheckBox, QScrollArea,
+                            QListWidget, QListWidgetItem, QRadioButton, QButtonGroup,
+                            QFrame, QSplitter, QWidget, QToolButton)
+from PyQt6.QtCore import (QPoint, Qt, QAbstractTableModel, QTimer,  QThread, pyqtSignal, QObject, QCoreApplication, QEvent, QEventLoop, QMimeData)
 from PyQt6 import QtCore
 import numpy as np
 import time
@@ -19,7 +21,7 @@ from nettracer3d import smart_dilate as sdl
 from matplotlib.colors import LinearSegmentedColormap
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
 import pandas as pd
-from PyQt6.QtGui import (QFont, QCursor, QColor, QPixmap, QFontMetrics, QPainter, QPen, QShortcut, QKeySequence)
+from PyQt6.QtGui import (QFont, QCursor, QColor, QPixmap, QFontMetrics, QPainter, QPen, QShortcut, QKeySequence, QDrag, QAction)
 import tifffile
 import copy
 import multiprocessing as mp
@@ -40,7 +42,8 @@ import os
 from . import painting
 from . import stats as net_stats
 from . import network_graph_widget as ngw
-
+from . import threshold_predictor
+import ast
 
 
 class ImageViewerWindow(QMainWindow):
@@ -169,10 +172,10 @@ class ImageViewerWindow(QMainWindow):
         self.brightness_dialog = BrightnessContrastDialog(self)
         
         self.min_max = {
-            0: [0,0],
-            1: [0,0],
-            2: [0,0],
-            3: [0,0]
+            0: [0,1],
+            1: [0,1],
+            2: [0,1],
+            3: [0,1]
         }
 
         self.volume_dict = {
@@ -228,7 +231,7 @@ class ImageViewerWindow(QMainWindow):
         self.active_channel_combo.setCurrentIndex(0)
         self.active_channel_combo.currentIndexChanged.connect(self.set_active_channel)
         # Initially disable the combo box
-        self.active_channel_combo.setEnabled(False)
+        self.active_channel_combo.setEnabled(True)
         active_channel_layout.addWidget(self.active_channel_combo)
         
         control_layout.addWidget(active_channel_widget)
@@ -559,24 +562,26 @@ class ImageViewerWindow(QMainWindow):
         # Create graph widgets
         self.network_graph_widget = ngw.NetworkGraphWidget(
             parent=self,
-            weight=False,
-            geometric=False,
-            centroids=None,
-            communities=True,
-            community_dict=None,
-            labels=True,
-            z_size = True
-        )
-
-        self.selection_graph_widget = ngw.NetworkGraphWidget(
-            parent=self,
-            weight=False,
+            weight=True,
             geometric=False,
             centroids=None,
             communities=False,
             community_dict=None,
             labels=True,
-            z_size = True
+            z_size = True,
+            popout = True
+        )
+
+        self.selection_graph_widget = ngw.NetworkGraphWidget(
+            parent=self,
+            weight=True,
+            geometric=False,
+            centroids=None,
+            communities=False,
+            community_dict=None,
+            labels=True,
+            z_size = True,
+            popout = True
         )
 
         # Create both table views
@@ -635,6 +640,7 @@ class ImageViewerWindow(QMainWindow):
         self.highlight_overlay = None
         self.highlight_bounds = None  # Store bounds for positioning
         self.mini_overlay = False # If the program is currently drawing the overlay by frame this will be true
+        self.mini_overlay_xy = False
         self.mini_overlay_data = None #Actual data for mini overlay
         self.mini_thresh = (500*500*500) # Array volume to start using mini overlays for
         self.shape = None
@@ -660,6 +666,8 @@ class ImageViewerWindow(QMainWindow):
         self.original_dims = None
         self.thresh_min = None
         self.thresh_max = None
+        self.thresh_vals = None
+        self.temp_graph_widgets = []
 
         #Deprecated:
         self.figure = Figure(figsize=(8, 8))
@@ -1286,11 +1294,13 @@ class ImageViewerWindow(QMainWindow):
                 self.selection_graph_widget.select_nodes(node_indices)
             except:
                 pass
-        try:
-            if self.temp_graph_widget.rendered:
-                self.temp_graph_widget.select_nodes(node_indices)
-        except:
-            pass
+
+        for graph in self.temp_graph_widgets:
+            try:
+                if graph.rendered:
+                    graph.select_nodes(node_indices)
+            except:
+                pass
 
     def table_subgraph(self, table_widget, table):
 
@@ -1323,7 +1333,7 @@ class ImageViewerWindow(QMainWindow):
         # Create new model with filtered DataFrame and update selection table
         self.table_subgraph(self.selection_table, filtered_df)
 
-    def create_highlight_overlay(self, node_indices=None, edge_indices=None, overlay1_indices = None, overlay2_indices = None, bounds = False):
+    def create_highlight_overlay(self, node_indices=None, edge_indices=None, overlay1_indices=None, overlay2_indices=None, bounds=False):
         """
         Create a binary overlay highlighting specific nodes and/or edges using parallel processing.
         
@@ -1332,35 +1342,34 @@ class ImageViewerWindow(QMainWindow):
             edge_indices (list): List of edge indices to highlight
         """
 
-        self.mini_overlay = False #If this method is ever being called, it means we are rendering the entire overlay so mini overlay needs to reset.
+        self.mini_overlay = False
         self.mini_overlay_data = None
 
-
         if not self.high_button.isChecked():
-
             if len(self.clicked_values['edges']) > 0:
-                self.format_for_upperright_table(self.clicked_values['edges'], title = 'Selected Edges')
+                self.format_for_upperright_table(self.clicked_values['edges'], title='Selected Edges')
             if len(self.clicked_values['nodes']) > 0:
-                self.format_for_upperright_table(self.clicked_values['nodes'], title = 'Selected Nodes')
-
+                self.format_for_upperright_table(self.clicked_values['nodes'], title='Selected Nodes')
             return
-
 
         def process_chunk(chunk_data, indices_to_check):
             """Process a single chunk of the array to create highlight mask"""
-            mask = np.isin(chunk_data, indices_to_check)
+            # Make a copy of indices for this thread to avoid cache contention
+            indices_copy = np.array(indices_to_check, copy=True)
+            mask = np.isin(chunk_data, indices_copy)
             return mask * 255
 
         def process_chunk_bounds(chunk_data, indices_to_check):
             """Process a single chunk of the array to create highlight mask"""
-
-            mask = (chunk_data >= indices_to_check[0]) & (chunk_data <= indices_to_check[1])
+            # Make a copy of indices for this thread to avoid cache contention
+            indices_copy = np.array(indices_to_check, copy=True)
+            mask = (chunk_data >= indices_copy[0]) & (chunk_data <= indices_copy[1])
             return mask * 255
 
+        self.highlight_in_subgraphs(node_indices)
         if node_indices is not None:
             if 0 in node_indices:
                 node_indices.remove(0)
-            self.highlight_in_subgraphs(node_indices)
         if edge_indices is not None:
             if 0 in edge_indices:
                 edge_indices.remove(0)
@@ -1420,12 +1429,15 @@ class ImageViewerWindow(QMainWindow):
                 
             # Process chunks in parallel using ThreadPoolExecutor
             if not bounds:
+                # Each thread gets its own copy via the process_chunk function
                 process_func = partial(process_chunk, indices_to_check=indices)
             else:
-                if len(indices) == 1:
-                    indices.insert(0, 0)
-                process_func = partial(process_chunk_bounds, indices_to_check=indices)
-
+                # Prepare bounds indices
+                bounds_indices = list(indices)
+                if len(bounds_indices) == 1:
+                    bounds_indices.insert(0, 0)
+                # Each thread gets its own copy via the process_chunk_bounds function
+                process_func = partial(process_chunk_bounds, indices_to_check=bounds_indices)
             
             with ThreadPoolExecutor(max_workers=num_cores) as executor:
                 chunk_results = list(executor.map(process_func, chunks))
@@ -1440,7 +1452,6 @@ class ImageViewerWindow(QMainWindow):
             future_overlay1 = executor.submit(process_channel, self.channel_data[2], overlay1_indices, full_shape)
             future_overlay2 = executor.submit(process_channel, self.channel_data[3], overlay2_indices, full_shape)
 
-            
             # Get results
             node_overlay = future_nodes.result()
             edge_overlay = future_edges.result()
@@ -1456,28 +1467,38 @@ class ImageViewerWindow(QMainWindow):
             self.highlight_overlay = np.maximum(self.highlight_overlay, overlay1_overlay).astype(np.uint8)
         if overlay2_overlay is not None:
             self.highlight_overlay = np.maximum(self.highlight_overlay, overlay2_overlay).astype(np.uint8)
-        
 
         # Update display
         self.update_display(preserve_zoom=(current_xlim, current_ylim))
 
-    def create_highlight_overlay_slice(self, indices, bounds = False):
+    def create_highlight_overlay_slice(self, indices, bounds = False, update = True):
+
+        def crop_and_downsample(image, y_start, y_end, x_start, x_end, factor):
+            # Crop to visible region
+            if len(image.shape) == 2:
+                cropped = image[y_start:y_end, x_start:x_end]
+            elif len(image.shape) == 3:
+                cropped = image[y_start:y_end, x_start:x_end, :]
+            else:
+                cropped = image
+            
+            # Downsample if needed
+            if factor == 1:
+                return cropped
+            
+            if len(cropped.shape) == 2:
+                return cropped[::factor, ::factor]
+            elif len(cropped.shape) == 3:
+                return cropped[::factor, ::factor, :]
+            else:
+                return cropped
 
         """Highlight overlay generation method specific for the segmenter interactive mode"""
 
         self.mini_overlay_data = None
         self.highlight_overlay = None
-
-        def process_chunk_bounds(chunk_data, indices_to_check):
-            """Process a single chunk of the array to create highlight mask"""
-            mask = (chunk_data >= indices_to_check[0]) & (chunk_data <= indices_to_check[1])
-            return mask * 255
-
-        def process_chunk(chunk_data, indices_to_check):
-            """Process a single chunk of the array to create highlight mask"""
-
-            mask = np.isin(chunk_data, indices_to_check)
-            return mask * 255
+        if self.shape[0] * self.shape[1] * self.shape[2] > self.mini_thresh:
+            self.mini_overlay = True
 
         array = self.channel_data[self.active_channel]
         current_xlim = self.ax.get_xlim() if hasattr(self, 'ax') and self.ax.get_xlim() != (0, 1) else None
@@ -1485,63 +1506,38 @@ class ImageViewerWindow(QMainWindow):
 
         current_slice = array[self.current_slice, :, :]
         full_shape = array.shape
+
+        if self.mini_overlay:
+            current_slice = crop_and_downsample(current_slice, self.y_min_padded, self.y_max_padded,
+            self.x_min_padded, self.x_max_padded, self.downsample_factor)
+        elif self.highlight_overlay is None:
+            self.highlight_overlay = np.zeros(full_shape, dtype=np.uint8)
         slice_shape = current_slice.shape
 
-        if self.highlight_overlay is None:
-
-            self.highlight_overlay = np.zeros(full_shape, dtype=np.uint8)
-
-        # Get number of CPU cores
-        num_cores = mp.cpu_count()
-        
-        # Calculate chunk size along y-axis
-        chunk_size = slice_shape[0] // num_cores
-        if chunk_size < 1:
-            chunk_size = 1
-        
-        def process_channel(channel_data, indices, array_shape):
-            if channel_data is None or not indices:
-                return None
-                
-            # Create chunks
-            chunks = []
-            for i in range(0, array_shape[0], chunk_size):
-                end = min(i + chunk_size, array_shape[0])
-                chunks.append(channel_data[i:end])
-                
-            # Process chunks in parallel using ThreadPoolExecutor
-            if not bounds:
-                process_func = partial(process_chunk, indices_to_check=indices)
-            else:
-                if len(indices) == 1:
-                    indices.insert(0, 0)
-                process_func = partial(process_chunk_bounds, indices_to_check=indices)
-
-            
-            with ThreadPoolExecutor(max_workers=num_cores) as executor:
-                chunk_results = list(executor.map(process_func, chunks))
-                
-            # Reassemble the chunks
-            return np.vstack(chunk_results)
-        
-        # Process nodes and edges in parallel using multiprocessing
-        with ThreadPoolExecutor(max_workers=num_cores) as executor:
-            future_highlight = executor.submit(process_channel, current_slice, indices, slice_shape)
-            
-            # Get results
-            overlay = future_highlight.result()
+        # Process the slice based on bounds parameter
+        if not bounds:
+            mask = np.isin(current_slice, indices)
+            overlay = mask * 255
+        else:
+            if len(indices) == 1:
+                indices.insert(0, 0)
+            mask = (current_slice >= indices[0]) & (current_slice <= indices[1])
+            overlay = mask * 255
 
         if self.active_channel == 0:
             self.highlight_in_subgraphs(indices)
 
         try:
-
-            self.highlight_overlay[self.current_slice, :, :] = overlay
+            if not self.mini_overlay:
+                self.highlight_overlay[self.current_slice, :, :] = overlay
+                self.update_display()
+            else:
+                self.mini_overlay_data = overlay
+                # Update display
+                if update:
+                    self.update_display(needs_mini = False)
         except:
             pass
-
-        # Update display
-        self.update_display()
 
         if my_network.network is not None:
             try:
@@ -1567,8 +1563,7 @@ class ImageViewerWindow(QMainWindow):
                 pass
 
 
-
-    def create_mini_overlay(self, node_indices = None, edge_indices = None):
+    def create_mini_overlay(self, node_indices = None, edge_indices = None, update = True):
 
         """
         Create a highlight overlay one slice at a time.
@@ -1577,6 +1572,28 @@ class ImageViewerWindow(QMainWindow):
             node_indices (list): List of node indices to highlight
             edge_indices (list): List of edge indices to highlight
         """
+
+
+        def crop_and_downsample(image, y_start, y_end, x_start, x_end, factor):
+            # Crop to visible region
+            if len(image.shape) == 2:
+                cropped = image[y_start:y_end, x_start:x_end]
+            elif len(image.shape) == 3:
+                cropped = image[y_start:y_end, x_start:x_end, :]
+            else:
+                cropped = image
+            
+            # Downsample if needed
+            if factor == 1:
+                return cropped
+            
+            if len(cropped.shape) == 2:
+                return cropped[::factor, ::factor]
+            elif len(cropped.shape) == 3:
+                return cropped[::factor, ::factor, :]
+            else:
+                return cropped
+
 
         if not self.high_button.isChecked():
 
@@ -1589,17 +1606,10 @@ class ImageViewerWindow(QMainWindow):
 
             return
 
-
-        def process_chunk(chunk_data, indices_to_check):
-            """Process a single chunk of the array to create highlight mask"""
-            mask = np.isin(chunk_data, indices_to_check)
-            return mask * 255
-
-
+        self.highlight_in_subgraphs(node_indices)
         if node_indices is not None:
             if 0 in node_indices:
                 node_indices.remove(0)
-            self.highlight_in_subgraphs(node_indices)
         if edge_indices is not None:
             if 0 in edge_indices:
                 edge_indices.remove(0)
@@ -1609,80 +1619,43 @@ class ImageViewerWindow(QMainWindow):
         if edge_indices is None:
             edge_indices = []
 
-            
-        current_xlim = self.ax.get_xlim() if hasattr(self, 'ax') and self.ax.get_xlim() != (0, 1) else None
-        current_ylim = self.ax.get_ylim() if hasattr(self, 'ax') and self.ax.get_ylim() != (0, 1) else None
-        
+                    
         if not node_indices and not edge_indices: #Theoretically this can't be called because it uses full highlight overlay method for empty clicks
             self.mini_overlay_data = None
             self.mini_overlay = False
-            self.update_display(preserve_zoom=(current_xlim, current_ylim))
+            self.update_display()
             return
             
-        # Get the shape of the mini array from any existing channel
-        for channel in self.channel_data:
-            if channel is not None:
-                full_shape = channel.shape
-                full_shape = (full_shape[1], full_shape[2]) #Just get (Y, X) shape
-                break
-        else:
-            return  # No valid channels to get shape from
-            
+
+        if self.channel_data[0] is None and self.channel_data[1] is None:
+            return
+        
+        if self.channel_data[0] is not None:
+            slice_node = crop_and_downsample(self.channel_data[0][self.current_slice, :, :], self.y_min_padded, self.y_max_padded,
+            self.x_min_padded, self.x_max_padded, self.downsample_factor)
+            full_shape = slice_node.shape
+        if self.channel_data[1] is not None:
+            slice_edge = crop_and_downsample(self.channel_data[1][self.current_slice, :, :], self.y_min_padded, self.y_max_padded,
+            self.x_min_padded, self.x_max_padded, self.downsample_factor)
+            full_shape = slice_edge.shape
+
         # Initialize full-size overlay
         self.mini_overlay_data = np.zeros(full_shape, dtype=np.uint8)
-        
-        # Get number of CPU cores
-        num_cores = mp.cpu_count()
-        
-        # Calculate chunk size along y-axis
-        chunk_size = full_shape[0] // num_cores
-        if chunk_size < 1:
-            chunk_size = 1
-        
-        def process_channel(channel_data, indices, array_shape):
-            if channel_data is None or not indices:
-                return None
-                
-            # Create chunks
-            chunks = []
-            for i in range(0, array_shape[0], chunk_size):
-                end = min(i + chunk_size, array_shape[0])
-                chunks.append(channel_data[i:end, :])
-                
-            # Process chunks in parallel using ThreadPoolExecutor
-            process_func = partial(process_chunk, indices_to_check=indices)
 
-            
-            with ThreadPoolExecutor(max_workers=num_cores) as executor:
-                chunk_results = list(executor.map(process_func, chunks))
-                
-            # Reassemble the chunks
-            return np.concatenate(chunk_results, axis=0)
-        
-        # Process nodes and edges in parallel using multiprocessing
-        with ThreadPoolExecutor(max_workers=num_cores) as executor:
-            try:
-                slice_node = self.channel_data[0][self.current_slice, :, :] #This is the only major difference to the big highlight... we are only looking at this
-                future_nodes = executor.submit(process_channel, slice_node, node_indices, full_shape)
-                node_overlay = future_nodes.result()
-            except:
-                node_overlay = None
-            try:
-                slice_edge = self.channel_data[1][self.current_slice, :, :]
-                future_edges = executor.submit(process_channel, slice_edge, edge_indices, full_shape)
-                edge_overlay = future_edges.result()
-            except:
-                edge_overlay = None
-                        
-        # Combine results
-        if node_overlay is not None:
+        # Process nodes
+        if self.channel_data[0] is not None and node_indices:
+            node_mask = np.isin(slice_node, node_indices)
+            node_overlay = node_mask * 255
             self.mini_overlay_data = np.maximum(self.mini_overlay_data, node_overlay)
-        if edge_overlay is not None:
+        
+        # Process edges
+        if self.channel_data[1] is not None and edge_indices:
+            edge_mask = np.isin(slice_edge, edge_indices)
+            edge_overlay = edge_mask * 255
             self.mini_overlay_data = np.maximum(self.mini_overlay_data, edge_overlay)
 
-                
-        # Update display
-        self.update_display(preserve_zoom=(current_xlim, current_ylim))
+        if update:
+            self.update_display(needs_mini = False)
 
 
 
@@ -1718,18 +1691,34 @@ class ImageViewerWindow(QMainWindow):
                 show_component_only_edges = component_menu.addAction("Just edges")
                 context_menu.addMenu(component_menu)
 
-                community_menu = QMenu("Show Community(s)", self)
+                community_menu = QMenu("Show Nodes' Community(s)", self)
                 show_community_nodes = community_menu.addAction("Just nodes")
                 show_community_edges = community_menu.addAction("Nodes + Edges")
                 context_menu.addMenu(community_menu)
 
                 if my_network.node_identities is not None:
                     identity_menu = QMenu("Show Identity", self)
-                    idens = list(set(my_network.node_identities.values()))
-                    idens.sort()
+                    
+                    # Collect all unique identities
+                    all_idens = my_network.node_identities.values()
+                    seen = set()
+                    for iden in all_idens:
+                        seen.update(iden)
+                    idens = sorted(seen)
+                    
+                    # Add individual identity options
                     for item in idens:
                         show_identity = identity_menu.addAction(f"ID: {item}")
                         show_identity.triggered.connect(lambda checked, item=item: self.handle_show_identities(sort=item))
+                    
+                    # Add separator before custom option
+                    if idens:  # Only add separator if there are identities
+                        identity_menu.addSeparator()
+                    
+                    # Add custom option
+                    custom_action = identity_menu.addAction("Custom...")
+                    custom_action.triggered.connect(self.show_identity_selection_dialog)
+                    
                     context_menu.addMenu(identity_menu)
 
                 select_all_menu = QMenu("Select All", self)
@@ -2230,7 +2219,7 @@ class ImageViewerWindow(QMainWindow):
             print(f"Error showing neighbors: {e}")
 
     
-    def handle_show_component(self, edges = False, nodes = True):
+    def handle_show_component(self, edges = False, nodes = True, isolate = False):
         """Handle the Show Component action."""
 
         try:
@@ -2295,6 +2284,10 @@ class ImageViewerWindow(QMainWindow):
                 self.evaluate_mini(mode = 'edges')
             else:
                 self.evaluate_mini()
+
+            if isolate:
+                self.selection_table.set_selection_to_active()
+                self.network_graph_widget._clear_graph()
 
 
         except Exception as e:
@@ -2375,9 +2368,18 @@ class ImageViewerWindow(QMainWindow):
 
             nodes = []
 
-            for node in my_network.node_identities:
-                if sort == my_network.node_identities[node]:
-                    nodes.append(node)
+
+            if isinstance(sort, str):
+                for node, idens in my_network.node_identities.items():
+                    if sort in idens:
+                        nodes.append(node)
+            else:
+
+                for node, idens in my_network.node_identities.items():
+                    pos_gate = all(item in idens for item in sort['positive'])
+                    neg_gate = all(item not in idens for item in sort['negative'])
+                    if pos_gate and neg_gate:
+                        nodes.append(node)
 
             neighbors = set()  # Use a set from the start to avoid duplicates
             nodes += self.clicked_values['nodes']
@@ -4436,15 +4438,16 @@ class ImageViewerWindow(QMainWindow):
         netshow_action.triggered.connect(self.show_netshow_dialog)
         report_action = network_menu.addAction("Generic Network Report")
         report_action.triggered.connect(self.handle_report)
-        partition_action = network_menu.addAction("Community Partition + Generic Community Stats")
+        partition_action = network_menu.addAction("Create Communities Based on Network? (Finds spatial or functional clusters)")
         partition_action.triggered.connect(self.show_partition_dialog)
-        com_identity_action = network_menu.addAction("Calculate Composition of Network Communities (and Show UMAP)")
-        com_identity_action.triggered.connect(self.handle_com_id)
-        com_neighbor_action = network_menu.addAction("Convert Network Communities into Neighborhoods? (Also Returns Compositional Heatmaps)")
-        com_neighbor_action.triggered.connect(self.handle_com_neighbor)
-        com_cell_action = network_menu.addAction("Create Communities Based on Cuboidal Proximity Cells?")
+        neigh_com_action = network_menu.addAction("Create Communities Based on Node's Immediate Neighbors? (Finds recurring motifs; would want many node identities first)")
+        neigh_com_action.triggered.connect(self.handle_neigh_com)
+        com_cell_action = network_menu.addAction("Create Communities Based on Cuboidal Proximity Cells? (For chaotic node arrangements)")
         com_cell_action.triggered.connect(self.handle_com_cell)
-
+        com_identity_action = network_menu.addAction("Calculate Composition of Communities (and Show UMAP/Heatmaps)")
+        com_identity_action.triggered.connect(self.handle_com_id)
+        com_neighbor_action = network_menu.addAction("Convert Network Communities into Supercommunities? (ie Further cluster similar communities—Also Returns Compositional Heatmaps)")
+        com_neighbor_action.triggered.connect(self.handle_com_neighbor)
 
         stats_menu = analysis_menu.addMenu("Stats")
         stats_net_menu = stats_menu.addMenu("Network Related")
@@ -4481,7 +4484,7 @@ class ImageViewerWindow(QMainWindow):
 
         sig_action = stats_menu.addAction("Significance Testing")
         sig_action.triggered.connect(self.sig_test)
-        violin_action = stats_menu.addAction("Show Identity Violins/UMAP/Assign Intensity Neighborhoods")
+        violin_action = stats_menu.addAction("Show Identity Violins/UMAP/Assign Intensity Communities")
         violin_action.triggered.connect(self.show_violin_dialog)
 
 
@@ -4572,6 +4575,10 @@ class ImageViewerWindow(QMainWindow):
         filament_action.triggered.connect(self.show_filament_dialog)
         genvor_action = generate_menu.addAction("Generate Voronoi Diagram - goes in Overlay2")
         genvor_action.triggered.connect(self.voronoi)
+        genhull_action = generate_menu.addAction("Generate Convex Hull - goes in Overlay2")
+        genhull_action.triggered.connect(self.convex_hull)
+        genhull_action = generate_menu.addAction("Generate Artificial Hexagonal Nodes - goes in Overlay2")
+        genhull_action.triggered.connect(self.show_hexnode_dialog)
 
         modify_action = process_menu.addAction("Modify Network/Properties")
         modify_action.triggered.connect(self.show_modify_dialog)
@@ -4588,7 +4595,7 @@ class ImageViewerWindow(QMainWindow):
         overlay_menu = image_menu.addMenu("Overlays")
         netoverlay_action = overlay_menu.addAction("Create Network Overlay")
         netoverlay_action.triggered.connect(self.show_netoverlay_dialog)
-        idoverlay_action = overlay_menu.addAction("Create ID Overlay")
+        idoverlay_action = overlay_menu.addAction("Create Node Number Overlay")
         idoverlay_action.triggered.connect(self.show_idoverlay_dialog)
         coloroverlay_action = overlay_menu.addAction("Color Nodes (or Edges)")
         coloroverlay_action.triggered.connect(self.show_coloroverlay_dialog)
@@ -5044,6 +5051,16 @@ class ImageViewerWindow(QMainWindow):
            value: String or list of strings for value column headers (used for dictionaries only)
            title: Optional custom title for the tab
        """
+
+       if 'dentit' in value:
+            try:
+                if type(list(my_network.node_identities.values())[0]) != str:
+                    self.format_identities_for_table(data, node_col='Node', identity_col='Identities', title=title, sort=sort, save=save)
+                    return
+            except:
+                print(type(list(my_network.node_identities.values())[0]))
+                pass
+
        def convert_to_numeric(val):
            """Helper function to convert strings to numeric types when possible"""
            if isinstance(val, str):
@@ -5144,6 +5161,76 @@ class ImageViewerWindow(QMainWindow):
 
        except:
             pass
+
+
+    def format_identities_for_table(self, data, node_col='Node', identity_col='Identities', title=None, sort=True, save=False):
+        """
+        Format node identity dictionary for display where values are lists shown in a single column.
+        
+        Args:
+            data: Dictionary with keys (nodes) and list values (identities)
+            node_col: String for the node column header
+            identity_col: String for the identity column header
+            title: Optional custom title for the tab
+            sort: Whether to sort by first column
+            save: Whether to save as CSV
+        """
+        # Create DataFrame directly - keep lists as lists
+        df = pd.DataFrame({
+            node_col: list(data.keys()),
+            identity_col: list(data.values())
+        })
+        
+        # Create new table
+        table = CustomTableView(self)
+        table.setModel(PandasModel(df))
+        
+        if sort:
+            try:
+                first_column_name = table.model()._data.columns[0]
+                table.sort_table(first_column_name, ascending=True)
+            except:
+                pass
+        
+        # Add to tabbed widget
+        if title is None:
+            self.tabbed_data.add_table(f"{node_col} {identity_col}", table)
+        else:
+            self.tabbed_data.add_table(title, table)
+        
+        # Adjust column widths to content
+        for column in range(table.model().columnCount(None)):
+            table.resizeColumnToContents(column)
+        
+        if save:
+            table.save_table_as('csv')
+        
+        return df
+    
+    def show_identity_selection_dialog(self):
+        """Show dialog for selecting identities with gates"""
+        # Collect all unique identities
+        all_idens = my_network.node_identities.values()
+        seen = set()
+        for iden in all_idens:
+            seen.update(iden)
+        
+        # Create and show dialog
+        dialog = IdentitySelectionDialog(seen, parent=self)
+        
+        if dialog.exec() == QDialog.DialogCode.Accepted:
+            classifier_dict = dialog.get_classifier_data()
+            
+            # Only proceed if at least one gate was added
+            if classifier_dict['positive'] or classifier_dict['negative']:
+                self.handle_show_identities(sort=classifier_dict)
+            else:
+                # Optional: show message if no gates selected
+                QMessageBox.information(
+                    self, 
+                    "No Selection", 
+                    "Please add at least one identity gate to filter nodes."
+                )
 
     def show_merge_node_id_dialog(self):
 
@@ -5328,6 +5415,8 @@ class ImageViewerWindow(QMainWindow):
 
     def handle_identity_net_calc(self):
 
+        """Not implemented - Wasn't useful"""
+
         try:
 
             def confirm_dialog():
@@ -5385,6 +5474,12 @@ class ImageViewerWindow(QMainWindow):
         """show the filament dialog"""
         dialog = FilamentDialog(self)
         dialog.show()
+
+    def show_hexnode_dialog(self):
+        """show the hexnode dialog"""
+        dialog = HexNodeDialog(self)
+        dialog.show()
+
 
     def show_label_dialog(self):
         """Show the label dialog"""
@@ -5471,6 +5566,14 @@ class ImageViewerWindow(QMainWindow):
 
         except Exception as e:
             print(f"Error generating voronoi: {e}")
+
+    def convex_hull(self):
+
+        try:
+            self.load_channel(3, n3d.create_convex_hull_mask(self.channel_data[self.active_channel]), True)
+        except Exception as e:
+            print(f"Error: {e}")
+
 
 
     def show_modify_dialog(self):
@@ -5634,8 +5737,9 @@ class ImageViewerWindow(QMainWindow):
                         self.selection_graph_widget.community_dict = my_network.communities
 
                         if hasattr(my_network, 'communities') and my_network.communities is not None:
+                            self.prev_coms = None
                             try:
-                                self.format_for_upperright_table(my_network.communities, 'NodeID', 'Identity', 'Node Communities')
+                                self.format_for_upperright_table(my_network.communities, 'NodeID', 'Community', 'Node Communities')
                             except Exception as e:
                                 print(f"Error loading edge centroid table: {e}")
 
@@ -5833,6 +5937,8 @@ class ImageViewerWindow(QMainWindow):
                 self.network_graph_widget.set_graph(my_network.network)
                 self.network_graph_widget.centroids = my_network.node_centroids
                 self.selection_graph_widget.centroids = my_network.node_centroids
+                if my_network.communities is not None:
+                    self.prev_coms = None
                 #self.network_graph_widget.load_graph()
 
                 # Load image channelsTrue
@@ -6146,12 +6252,14 @@ class ImageViewerWindow(QMainWindow):
         msg.setStandardButtons(QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No)
         return msg.exec() == QMessageBox.StandardButton.Yes
 
-    def confirm_resize_dialog(self):
+    def confirm_resize_dialog(self, shapes):
         """Shows a dialog asking user to resize image"""
+        old_shape = shapes[0]
+        new_shape = shapes[1]
         msg = QMessageBox()
         msg.setIcon(QMessageBox.Icon.Question)
         msg.setText("Image Format Alert")
-        msg.setInformativeText(f"This image is a different shape than the ones loaded into the viewer window. This program is not designed to accomodate loading of differently sized images.\nPress yes to resize the new image to the other images. Press no to go back.")
+        msg.setInformativeText(f"This image is a different shape (New shape: {new_shape}) than the ones loaded into the viewer window (Current shape: {old_shape}). This program is not designed to accomodate loading of differently sized images.\nPress yes to resize the new image to the other images. Press no to go back.")
         msg.setWindowTitle("Resize")
         msg.setStandardButtons(QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No)
         return msg.exec() == QMessageBox.StandardButton.Yes
@@ -6225,6 +6333,7 @@ class ImageViewerWindow(QMainWindow):
                             except:
                                 pass
                         test_channel_data = tifffile.imread(filename)
+                        #test_channel_data = test_channel_data[:, :, 0] #DELETE THIS
                         if len(test_channel_data.shape) not in (2, 3, 4):
                             print("Invalid Shape")
                             return 
@@ -6316,7 +6425,7 @@ class ImageViewerWindow(QMainWindow):
                 else:
                     old_shape = self.channel_data[i].shape[:3] #Ask user to resize images that are shaped differently
                     if old_shape != self.channel_data[channel_index].shape[:3]:
-                        if self.confirm_resize_dialog():
+                        if self.confirm_resize_dialog([old_shape, self.channel_data[channel_index].shape[:3]]):
                             self.channel_data[channel_index] = n3d.upsample_with_padding(self.channel_data[channel_index], original_shape = old_shape)
                             break
                         else:
@@ -6335,12 +6444,13 @@ class ImageViewerWindow(QMainWindow):
             # Enable the channel button
             if channel_index != 4:
                 self.channel_buttons[channel_index].setEnabled(True)
-                self.delete_buttons[channel_index].setEnabled(True) 
+                for button in self.delete_buttons:
+                    button.setEnabled(True) 
 
             
                 # Enable active channel selector if this is the first channel loaded
-                if not self.active_channel_combo.isEnabled():
-                    self.active_channel_combo.setEnabled(True)
+                #if not self.active_channel_combo.isEnabled():
+                 #   self.active_channel_combo.setEnabled(True)
             
                 # Update slider range if this is the first channel loaded
                 try:
@@ -6377,7 +6487,7 @@ class ImageViewerWindow(QMainWindow):
                     self.channel_buttons[channel_index].click()
 
                 self.min_max[channel_index][0] = np.min(self.channel_data[channel_index])
-                self.min_max[channel_index][1] = np.max(self.channel_data[channel_index])
+                self.min_max[channel_index][1] = max(1, np.max(self.channel_data[channel_index]))
                 self.volume_dict[channel_index] = None #reset volumes
 
             try:
@@ -6412,6 +6522,8 @@ class ImageViewerWindow(QMainWindow):
             self.virtual_erase_operations = []
             self.current_operation = []
             self.current_operation_type = None
+            if self.shape[0] * self.shape[1] * self.shape[2] > self.mini_thresh:
+                self.mini_overlay = True
 
             if load_highlight:
                 self.highlight_overlay = n3d.binarize(self.channel_data[4].astype(np.uint8))
@@ -6439,16 +6551,30 @@ class ImageViewerWindow(QMainWindow):
     def delete_channel(self, channel_index, called = True, update = True):
         """Delete the specified channel and update the display."""
         if called:
-            # Confirm deletion
-            reply = QMessageBox.question(
-                self,
-                'Delete Channel',
-                f'Are you sure you want to delete the {self.channel_names[channel_index]} channel?',
-                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
-                QMessageBox.StandardButton.No
-            )
+            if self.channel_data[channel_index] is not None:
+                # Confirm deletion
+                reply = QMessageBox.question(
+                    self,
+                    'Delete Channel',
+                    f'Are you sure you want to delete the {self.channel_names[channel_index]} channel?',
+                    QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+                    QMessageBox.StandardButton.No
+                )
+            else:
+                # Confirm deletion
+                reply = QMessageBox.question(
+                    self,
+                    'Populate Channel',
+                    f'Would you like to populate the {self.channel_names[channel_index]} channel with an empty array (ie for drawing on)?',
+                    QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+                    QMessageBox.StandardButton.No
+                )
+                if reply == QMessageBox.StandardButton.Yes:
+                    self.load_channel(channel_index, np.zeros(self.shape, dtype = np.uint8), data = True)
+                return
         else:
             reply = False
+
         
         if reply == QMessageBox.StandardButton.Yes or not called:
             # Set channel data to None
@@ -6470,7 +6596,13 @@ class ImageViewerWindow(QMainWindow):
             # Disable buttons
             self.channel_buttons[channel_index].setEnabled(False)
             self.channel_buttons[channel_index].setChecked(False)
-            self.delete_buttons[channel_index].setEnabled(False)
+            all_none = True
+            for chan in self.channel_data:
+                if chan is not None:
+                    all_none = False
+            if all_none:
+                for button in self.delete_buttons:
+                    button.setEnabled(False)
             self.channel_visible[channel_index] = False
             self.reset_dicts(channel_index)
             
@@ -6482,7 +6614,7 @@ class ImageViewerWindow(QMainWindow):
                         break
                 else:
                     # If no channels are available, disable active channel selector
-                    self.active_channel_combo.setEnabled(False)
+                    #self.active_channel_combo.setEnabled(False)
                     self.shape = None # Also there is not an active shape anymore
             
             if update:
@@ -6559,7 +6691,6 @@ class ImageViewerWindow(QMainWindow):
                     return
                 
                 # Parse the result: extract parent directory and folder name
-                import os
                 parent_dir = os.path.dirname(full_path)
                 new_folder_name = os.path.basename(full_path)
                 
@@ -6600,18 +6731,41 @@ class ImageViewerWindow(QMainWindow):
                 except:
                     pass
 
-            # Call appropriate save method
+            # Call save method
             my_network.dump(parent_dir=parent_dir, name=new_folder_name)
             self.last_saved = parent_dir
             self.last_save_name = new_folder_name
             self.setWindowTitle(f"NetTracer3D - Session: {self.last_save_name}")
 
         except Exception as e:
+            import traceback
+            traceback.print_exc()
             QMessageBox.critical(
                 self,
                 "Error Saving File",
                 f"Failed to save file: {str(e)}"
             )
+
+    def save_pickled_net(self):
+
+        # This lets users navigate to parent AND type the child folder name in one step
+        dialog = QFileDialog(self)
+        dialog.setWindowTitle("Please Find your Active Session Folder; Will Make Network Files that Load Faster than CSV")
+        dialog.setOption(QFileDialog.Option.DontUseNativeDialog)
+        dialog.setOption(QFileDialog.Option.ReadOnly)
+        dialog.setFileMode(QFileDialog.FileMode.Directory)
+        dialog.setViewMode(QFileDialog.ViewMode.Detail)
+        
+        if dialog.exec() == QFileDialog.DialogCode.Accepted:
+            selected_path = dialog.directory().absolutePath()
+        else:
+            return  # User cancelled directory selection
+        
+        if not selected_path:  # User canceled
+            return
+        
+        n3d.save_pickle(my_network.network, f'{selected_path}/quickload_network.pkl')
+        n3d.save_pickle(my_network.network_lists, f'{selected_path}/quickload_network_lists.pkl')
 
 
     def save(self, ch_index, asbool=True):
@@ -6740,7 +6894,7 @@ class ImageViewerWindow(QMainWindow):
         self.channel_brightness[channel_index]['max'] = max_val / 65535
         self.update_display(preserve_zoom = (current_xlim, current_ylim))
 
-    def update_display(self, preserve_zoom=None, dims=None, called=False, skip=False, quick_wheel_update=False, home = False, downsample = True):
+    def update_display(self, preserve_zoom=None, dims=None, called=False, skip=False, quick_wheel_update=False, home = False, downsample = True, needs_mini = True):
         """Optimized display update with view-based cropping and downsampling."""
         try:
             # Initialize reusable components
@@ -6758,8 +6912,8 @@ class ImageViewerWindow(QMainWindow):
                 if hasattr(self, 'current_stroke_points') and self.current_stroke_points:
                     self.pm.finish_current_virtual_operation()
                 self.pm.convert_virtual_strokes_to_data()
-                
-
+                self.channel_buttons[self.active_channel].setChecked(True)
+            
             # Get dimensions
             active_channels = [i for i in range(4) if self.channel_data[i] is not None]
             if dims is None:
@@ -6791,14 +6945,14 @@ class ImageViewerWindow(QMainWindow):
             # Determine cropping and downsampling based on update type
             if quick_wheel_update:
                 # Quick update: render full image at low resolution
-                x_min_padded = 0
-                x_max_padded = min_width
-                y_min_padded = 0
-                y_max_padded = min_height
+                self.x_min_padded = 0
+                self.x_max_padded = min_width
+                self.y_min_padded = 0
+                self.y_max_padded = min_height
                 
                 # Use aggressive downsampling for speed
                 total_pixels = min_width * min_height
-                downsample_factor = max(1, int(np.sqrt(total_pixels / (1500 * 1500))))
+                self.downsample_factor = max(1, int(np.sqrt(total_pixels / (1500 * 1500))))
             else:
                 # Normal update: use cropping and smart downsampling
                 # Get current visible region from pyqtgraph
@@ -6818,7 +6972,7 @@ class ImageViewerWindow(QMainWindow):
                     self.validate_downsample_input(text=val, update=False)
                     downsample_factor = self.downsample_factor
                 else:
-                    downsample_factor = 1
+                    self.downsample_factor = 1
                 
                 # Determine padding/expansion based on pan mode
                 if self.pan_mode:
@@ -6827,17 +6981,17 @@ class ImageViewerWindow(QMainWindow):
                     box_height = int(1.5 * (y_max - y_min))  # Full height
                     
                     # Expand the crop region (this is what gets rendered)
-                    x_min_padded = max(0, x_min - box_len)
-                    x_max_padded = min(min_width, x_max + box_len)
-                    y_min_padded = max(0, y_min - box_height)
-                    y_max_padded = min(min_height, y_max + box_height)
+                    self.x_min_padded = max(0, x_min - box_len)
+                    self.x_max_padded = min(min_width, x_max + box_len)
+                    self.y_min_padded = max(0, y_min - box_height)
+                    self.y_max_padded = min(min_height, y_max + box_height)
                 else:
                     # In normal mode, just add minimal padding to avoid edge artifacts
                     padding = max(10, downsample_factor * 2)
-                    x_min_padded = max(0, x_min - padding)
-                    x_max_padded = min(min_width, x_max + padding)
-                    y_min_padded = max(0, y_min - padding)
-                    y_max_padded = min(min_height, y_max + padding)
+                    self.x_min_padded = max(0, x_min - padding)
+                    self.x_max_padded = min(min_width, x_max + padding)
+                    self.y_min_padded = max(0, y_min - padding)
+                    self.y_max_padded = min(min_height, y_max + padding)
             
             base_colors = self.base_colors
             
@@ -6861,7 +7015,6 @@ class ImageViewerWindow(QMainWindow):
                     return cropped[::factor, ::factor, :]
                 else:
                     return cropped
-            
             # Clear old measurement artists
             for artist in self.measurement_artists:
                 try:
@@ -6870,7 +7023,6 @@ class ImageViewerWindow(QMainWindow):
                     # Skip items that are matplotlib objects or already removed
                     pass
             self.measurement_artists = []
-            
             # Update channel images
             for channel in range(4):
                 if channel in self.channel_images and not self.channel_visible[channel]:
@@ -6894,8 +7046,8 @@ class ImageViewerWindow(QMainWindow):
 
                     # Crop to visible region and downsample
                     display_image = crop_and_downsample(
-                        current_image, y_min_padded, y_max_padded,
-                        x_min_padded, x_max_padded, downsample_factor)
+                        current_image, self.y_min_padded, self.y_max_padded,
+                        self.x_min_padded, self.x_max_padded, self.downsample_factor)
 
                     # Create or reuse ImageItem
                     if channel not in self.channel_images:
@@ -6919,8 +7071,8 @@ class ImageViewerWindow(QMainWindow):
                         
                         # Position the cropped region correctly
                         self.channel_images[channel].setRect(
-                            x_min_padded, y_min_padded,
-                            x_max_padded - x_min_padded, y_max_padded - y_min_padded)
+                            self.x_min_padded, self.y_min_padded,
+                            self.x_max_padded - self.x_min_padded, self.y_max_padded - self.y_min_padded)
                     else:
                         # Regular channel processing
                         if self.min_max[channel][0] is None:
@@ -6937,8 +7089,11 @@ class ImageViewerWindow(QMainWindow):
                             normalized_image = np.zeros_like(display_image, dtype=np.float32)
                         else:
                             vmin = img_min + (img_max - img_min) * self.channel_brightness[channel]['min']
-                            vmax = img_min + (img_max - img_min) * self.channel_brightness[channel]['max']
-                            
+                            if self.channel_brightness[channel]['max'] < 2/65535:
+                                vmax = 0.5
+                            else:
+                                vmax = img_min + (img_max - img_min) * self.channel_brightness[channel]['max']
+
                             if vmin == vmax:
                                 normalized_image = np.zeros_like(display_image, dtype=np.float32)
                             else:
@@ -6970,43 +7125,45 @@ class ImageViewerWindow(QMainWindow):
                         
                         # Position the cropped region correctly
                         self.channel_images[channel].setRect(
-                            x_min_padded, y_min_padded,
-                            x_max_padded - x_min_padded, y_max_padded - y_min_padded)
+                            self.x_min_padded, self.y_min_padded,
+                            self.x_max_padded - self.x_min_padded, self.y_max_padded - self.y_min_padded)
 
             # Handle overlays (with cropping)
             if not hasattr(self, 'overlay_image'):
                 self.overlay_image = None
-                
             if self.overlay_image is not None:
-                try:
-                    self.view.removeItem(self.overlay_image)
-                except:
-                    pass
-                self.overlay_image = None
+                if self.overlay_image.scene() == self.view.scene():
+                    try:
+                        self.view.removeItem(self.overlay_image)
+                    except:
+                        pass
+                    self.overlay_image = None
 
-            if self.mini_overlay and self.highlight and self.machine_window is None and not self.preview:
-                display_overlay = crop_and_downsample(
-                    self.mini_overlay_data, y_min_padded, y_max_padded,
-                    x_min_padded, x_max_padded, downsample_factor)
-                
+            if self.mini_overlay and self.highlight and self.machine_window is None:
+                if needs_mini and not self.preview:
+                    self.create_mini_overlay(node_indices = self.clicked_values['nodes'], edge_indices = self.clicked_values['edges'], update = False)
+                elif needs_mini and self.preview:
+                    self.create_highlight_overlay_slice(self.thresh_window_ref.targs, self.thresh_window_ref.bounds, update = False)
+
+                display_overlay = self.mini_overlay_data
                 colors = np.array([[0, 0, 0, 0], [1, 1, 0, 1]])
                 cmap = pg.ColorMap(pos=np.array([0, 1]), color=colors * 255)
                 lut = cmap.getLookupTable(0, 1, 256)
-                
+
                 self.overlay_image = pg.ImageItem()
                 self.overlay_image.setImage(display_overlay.T)
                 self.overlay_image.setLookupTable(lut)
                 self.overlay_image.setOpacity(0.8)
                 self.overlay_image.setRect(
-                    x_min_padded, y_min_padded,
-                    x_max_padded - x_min_padded, y_max_padded - y_min_padded)
+                    self.x_min_padded, self.y_min_padded,
+                    self.x_max_padded - self.x_min_padded, self.y_max_padded - self.y_min_padded)
                 self.view.addItem(self.overlay_image)
                 
             elif self.highlight_overlay is not None and self.highlight:
                 highlight_slice = self.highlight_overlay[self.current_slice]
                 display_highlight = crop_and_downsample(
-                    highlight_slice, y_min_padded, y_max_padded,
-                    x_min_padded, x_max_padded, downsample_factor)
+                    highlight_slice, self.y_min_padded, self.y_max_padded,
+                    self.x_min_padded, self.x_max_padded, self.downsample_factor)
                 
                 if self.machine_window is None:
                     colors = np.array([[0, 0, 0, 0], [1, 1, 0, 1]])
@@ -7026,8 +7183,8 @@ class ImageViewerWindow(QMainWindow):
                 self.overlay_image.setLookupTable(lut)
                 self.overlay_image.setOpacity(opacity)
                 self.overlay_image.setRect(
-                    x_min_padded, y_min_padded,
-                    x_max_padded - x_min_padded, y_max_padded - y_min_padded)
+                    self.x_min_padded, self.y_min_padded,
+                    self.x_max_padded - self.x_min_padded, self.y_max_padded - self.y_min_padded)
                 self.view.addItem(self.overlay_image)
 
             # Only draw measurement points on detailed updates, not quick wheel updates
@@ -7128,14 +7285,11 @@ class ImageViewerWindow(QMainWindow):
                         line.setOpacity(0.7)
                         self.view.addItem(line)
                         self.measurement_artists.append(line)
-
-
             # Handle scalebar (skip on quick updates)
             if hasattr(self, 'scalebar_artists') and self.scalebar_artists:
                 self._draw_scalebar()
             else:
                 self._remove_scalebar()
-
         except Exception as e:
             pass
             #import traceback
@@ -7214,6 +7368,11 @@ class ImageViewerWindow(QMainWindow):
     def handle_com_cell(self):
 
         dialog = ComCellDialog(self)
+        dialog.exec()
+
+    def handle_neigh_com(self):
+
+        dialog = NeighComDialog(self)
         dialog.exec()
 
     def show_radial_dialog(self):
@@ -7543,6 +7702,7 @@ class CustomTableView(QTableView):
                 save_gephi = save_menu.addAction("Gephi")
                 save_graphml = save_menu.addAction("GraphML")
                 save_pajek = save_menu.addAction("Pajek")
+                save_quick_load = save_menu.addAction("Pickle (For Quickload)")
                 
                 # Connect the actions - ensure we're saving the active table
                 save_csv.triggered.connect(lambda: self.parent.active_table.save_table_as('csv'))
@@ -7550,6 +7710,7 @@ class CustomTableView(QTableView):
                 save_gephi.triggered.connect(lambda: self.parent.active_table.save_table_as('gexf'))
                 save_graphml.triggered.connect(lambda: self.parent.active_table.save_table_as('graphml'))
                 save_pajek.triggered.connect(lambda: self.parent.active_table.save_table_as('net'))
+                save_quick_load.triggered.connect(self.parent.save_pickled_net)
 
 
                 if self == self.parent.selection_table:
@@ -8639,40 +8800,199 @@ class ArbitraryDialog(QDialog):
 
 class MergeNodeIdDialog(QDialog):
     def __init__(self, parent=None):
-
         super().__init__(parent)
-
-        self.setWindowTitle("Merging Node Identities From Folder Dialog.\nNote that you should prelabel or prewatershed your current node objects before doing this. (See Process -> Image) It does not label them for you.")
+        self.setWindowTitle("Merge Node Identities From Folder")
         self.setModal(True)
         
-        layout = QFormLayout(self)
-        self.search = QLineEdit("")
-        layout.addRow("Step-out distance (from current nodes image - ignore if you dilated them previously or don't want):", self.search)
-        self.xy_scale = QLineEdit(f"{my_network.xy_scale}")
-        layout.addRow("xy_scale:", self.xy_scale)
-        self.z_scale = QLineEdit(f"{my_network.z_scale}")
-        layout.addRow("z_scale:", self.z_scale)
-
-        self.search_mode = QComboBox()
-        self.search_mode.addItems(["Standard", "Fast (May be Rougher at Handling Adjacent Expanded Borders - Use for Very Large 3D Images)"])
-        self.search_mode.setCurrentIndex(0)  # Default to Mode 1
-        layout.addRow("Step-out algorithm:", self.search_mode)
-
-        self.mode_selector = QComboBox()
-        self.mode_selector.addItems(["Auto-Binarize(Otsu)/Presegmented", "Manual (Interactive Thresholder)"])
-        self.mode_selector.setCurrentIndex(1)  # Default to Mode 1
-        layout.addRow("Binarization Strategy:", self.mode_selector)
+        main_layout = QVBoxLayout(self)
         
-        self.include = QPushButton("Include When a Node is Negative for an ID?")
+        # Info label at top
+        info_label = QLabel(
+            "Note: You should prelabel [ie via cellpose or similar] or prewatershed your current node objects before doing this.\n"
+            "(See Process → Image) This tool does not label them for you."
+        )
+        info_label.setWordWrap(True)
+        #info_label.setStyleSheet("QLabel { background-color: #ffffcc; padding: 8px; border: 1px solid #ccccaa; }")
+        main_layout.addWidget(info_label)
+        
+        # ===== GROUP 1: Step-out Parameters =====
+        stepout_group = QGroupBox("Step-out Parameters")
+        stepout_layout = QFormLayout()
+        
+        self.search = QLineEdit("")
+        stepout_layout.addRow("Step-out distance:", self.search)
+        stepout_layout.addRow("(Leave empty to skip dilation)", QLabel())
+        
+        self.xy_scale = QLineEdit(f"{my_network.xy_scale}")
+        stepout_layout.addRow("xy_scale:", self.xy_scale)
+        
+        self.z_scale = QLineEdit(f"{my_network.z_scale}")
+        stepout_layout.addRow("z_scale:", self.z_scale)
+        
+        self.search_mode = QComboBox()
+        self.search_mode.addItems([
+            "Standard", 
+            "Fast (May be rougher - use for very large 3D images)"
+        ])
+        self.search_mode.setCurrentIndex(0)
+        stepout_layout.addRow("Algorithm:", self.search_mode)
+        
+        stepout_group.setLayout(stepout_layout)
+        main_layout.addWidget(stepout_group)
+        
+        # ===== GROUP 2: Binarization Strategy =====
+        binarization_group = QGroupBox("Binarization Strategy")
+        binarization_layout = QVBoxLayout()
+        
+        self.mode_selector = QComboBox()
+        self.mode_selector.addItems([
+            "Auto-Binarize (Otsu) / Presegmented", 
+            "Manual (Interactive Thresholder)", 
+            "Auto with ML Predictor (must load model first)",
+            "Using Previous Thresholds (will prompt for spreadsheet)"
+        ])
+        self.mode_selector.setCurrentIndex(1)
+        binarization_layout.addWidget(self.mode_selector)
+        
+        binarization_group.setLayout(binarization_layout)
+        main_layout.addWidget(binarization_group)
+
+        # ===== GROUP 3: Processing Options =====
+        process_group = QGroupBox("Continue Processing Options")
+        process_layout = QFormLayout()
+
+        self.load_label = QLabel("Click below to load previous mean intensities spreadsheet; skipping initial computation:")
+        self.load_label.setStyleSheet("QLabel { font-size: 9pt; color: #666; }")
+        process_layout.addWidget(self.load_label)
+        self.load_dict = QPushButton("📁 Load Previous")
+        self.load_dict.setStyleSheet("""
+            QPushButton {
+                background-color: #4A90E2;
+                color: white;
+                font-weight: bold;
+                padding: 8px;
+                border-radius: 4px;
+            }
+            QPushButton:hover {
+                background-color: #357ABD;
+            }
+        """)
+        self.load_dict.setChecked(False)
+        self.load_dict.clicked.connect(self.load_prev)
+        process_layout.addWidget(self.load_dict)
+        self.id_dicts = None
+        self.all_list = None
+
+        process_group.setLayout(process_layout)
+        main_layout.addWidget(process_group)
+
+        
+        # ===== GROUP 4: ML Model Options =====
+        ml_group = QGroupBox("ML Model Options")
+        ml_layout = QVBoxLayout()
+        
+        self.train = QPushButton("Train ML Model")
+        self.train.setCheckable(True)
+        self.train.setChecked(False)
+        train_label = QLabel("Enable to train/update a model during processing:")
+        train_label.setStyleSheet("QLabel { font-size: 9pt; color: #666; }")
+        ml_layout.addWidget(train_label)
+        ml_layout.addWidget(self.train)
+        
+        ml_layout.addSpacing(10)
+        
+        # DISTINCT: Load Model Button
+        self.model_button = QPushButton("📁 Load ML Model")
+        self.model_button.setStyleSheet("""
+            QPushButton {
+                background-color: #4A90E2;
+                color: white;
+                font-weight: bold;
+                padding: 8px;
+                border-radius: 4px;
+            }
+            QPushButton:hover {
+                background-color: #357ABD;
+            }
+        """)
+        self.model_button.clicked.connect(self.get_model)
+        ml_layout.addWidget(self.model_button)
+        
+        ml_group.setLayout(ml_layout)
+        main_layout.addWidget(ml_group)
+        
+        # ===== OUTPUT OPTIONS =====
+        output_group = QGroupBox("Output Options")
+        output_layout = QVBoxLayout()
+        
+        self.include = QPushButton("Include Negative IDs (mark nodes without signal as '-')")
         self.include.setCheckable(True)
         self.include.setChecked(False)
-        layout.addWidget(self.include)
+        output_layout.addWidget(self.include)
         
-        run_button = QPushButton("Get Directory")
+        output_group.setLayout(output_layout)
+        main_layout.addWidget(output_group)
+        
+        main_layout.addStretch()
+        
+        # ===== DISTINCT: Run Button =====
+        run_button = QPushButton("▶ Select Directory and Start Processing")
+        run_button.setStyleSheet("""
+            QPushButton {
+                background-color: #5CB85C;
+                color: white;
+                font-weight: bold;
+                font-size: 11pt;
+                padding: 12px;
+                border-radius: 4px;
+            }
+            QPushButton:hover {
+                background-color: #4CAF50;
+            }
+        """)
         run_button.clicked.connect(self.run)
-        layout.addWidget(run_button)
+        main_layout.addWidget(run_button)
+        
+        self.predictor = False
+        
+        # Set reasonable dialog size
+        self.setMinimumWidth(500)
 
-    def wait_for_threshold_processing(self):
+    def load_prev(self):
+        try:
+            filename, _ = QFileDialog.getOpenFileName(
+                self,
+                f"Load Intensity Spreadsheet",
+                "",
+                "Spreadsheets (*.xlsx *.csv)"
+            )
+            # Read the CSV file
+            if filename.endswith('csv'):
+                df = pd.read_csv(filename)
+            else:
+                df = pd.read_excel(filename)
+            # Get the headers (column names)
+            headers = df.columns.tolist()
+            del headers[0]
+            nodes = df.iloc[:, 0].values  
+            output = {}
+            for col_idx in range(1, len(df.columns)):  # Changed variable name
+                new_data = {}
+                column_data = df.iloc[:, col_idx].values
+                for row_idx in range(len(column_data)):  # Changed variable name
+                    new_data[nodes[row_idx]] = column_data[row_idx]
+                output[headers[col_idx - 1]] = new_data
+            self.id_dicts = output
+            self.all_list = headers
+            self.load_dict.setText("Previous Data Loaded!")
+            self.load_label.setText(f"Loaded: {filename}")
+
+        except:
+            return
+
+
+
+    def wait_for_threshold_processing(self, nohigh = False, title = "", histo_dict = {}, img = "", automated = False):
         """
         Opens ThresholdWindow and waits for user to process the image.
         Returns True if completed, False if cancelled.
@@ -8683,7 +9003,7 @@ class MergeNodeIdDialog(QDialog):
         result = {'completed': False}
         
         # Create the threshold window
-        thresh_window = ThresholdWindow(self.parent(), 4)
+        thresh_window = ThresholdWindow(self.parent(), 4, nohigh = nohigh, title = title, has_model = self.predictor, automated = automated)
         
         # Connect signals
         def on_processing_complete():
@@ -8701,10 +9021,13 @@ class MergeNodeIdDialog(QDialog):
         thresh_window.show()
         thresh_window.raise_()
         thresh_window.activateWindow()
+
+        histo_dict[img] = [thresh_window.counts, thresh_window.bin_edges]
         
         # Block until user clicks "Apply Threshold & Continue" or "Cancel"
         loop.exec()
-        
+
+    
         # Clean up
         thresh_window.deleteLater()
         
@@ -8720,6 +9043,7 @@ class MergeNodeIdDialog(QDialog):
             include = self.include.isChecked()
             umap = True
             search_mode = self.search_mode.currentIndex()
+            train = self.train.isChecked()
 
             if search_mode == 0:
                 fast_dil = False
@@ -8728,7 +9052,42 @@ class MergeNodeIdDialog(QDialog):
             
             if data is None:
                 return
-                
+
+            automated = False
+
+            if self.mode_selector.currentIndex() == 2:
+                if not self.predictor:
+                    print("Please load a model first (or train one if you don't have one)")
+                    return
+                else:
+                    automated = True
+                    self.parent().old_thresh = None
+                    train = False # Don't let user make the model train itself
+            
+            if self.mode_selector.currentIndex() == 3:
+                filename, _ = QFileDialog.getOpenFileName(
+                    self,
+                    f"Load Previous Thresholds (Formatted How this Program Saves Them)",
+                    "",
+                    "Spreadsheets (*.csv *.xlsx)"
+                )
+
+                if filename:
+
+                    # Read the CSV file
+                    df = pd.read_csv(filename)
+                    
+                    # Create dictionary using first column as keys
+                    # and columns 2 and 3 as list values
+                    self.parent().old_thresh = {
+                        row[0]: [float(row[1]), float(row[2])]
+                        for row in df.values
+                    }
+                    automated = True
+                else:
+                    return
+                    
+
             dialog = QFileDialog(self)
             dialog.setOption(QFileDialog.Option.DontUseNativeDialog)
             dialog.setOption(QFileDialog.Option.ReadOnly)
@@ -8744,8 +9103,10 @@ class MergeNodeIdDialog(QDialog):
                 data = sdl.smart_dilate(data, fast_dil=fast_dil, 
                                       use_dt_dil_amount=search, xy_scale=xy_scale, z_scale=z_scale)
             
+
+
             # Check if manual mode is selected
-            if self.mode_selector.currentIndex() == 1:  # Manual mode
+            if self.mode_selector.currentIndex() > 0:  # Manual mode
 
                 if my_network.node_identities is None: # Prepare modular dict
 
@@ -8756,114 +9117,183 @@ class MergeNodeIdDialog(QDialog):
                         del nodes[0]
                     for node in nodes:
 
-                        my_network.node_identities[node] = [] # Assign to lists at first
-                else:
-                    for node, iden in my_network.node_identities.items():
-                        try:
-                            my_network.node_identities[node] = ast.literal_eval(iden)
-                        except:
-                            my_network.node_identities[node] = [iden]
+                        my_network.node_identities[node] = [] # Assign to lists
 
-                id_dicts = my_network.get_merge_node_dictionaries(selected_path, data)
-
-                # For loop example - get threshold for multiple images/data
-                results = []
-                thresh_dict = {}
 
                 img_list = n3d.directory_info(selected_path)
-                data_backup = copy.deepcopy(data)
                 self.parent().load_channel(0, data, data = True)
                 self.hide()
                 self.parent().highlight_overlay = None
 
-                good_list = []
-                
+
+                real_list = []
+                for img in img_list: # Filter out non images
+                    if img.endswith('tiff') or img.endswith('.tif'):
+                        real_list.append(img)
+                img_list = real_list
+                all_list = []
+
+                for img_file in img_list:
+
+                    if img_file.endswith('.tiff'):
+                        base_name = img_file[:-5]
+                    elif img_file.endswith('.tif'):
+                        base_name = img_file[:-4]
+                    else:
+                        base_name = img_file
+                    all_list.append(base_name)
+
+                if not self.id_dicts:
+
+                    id_dicts = my_network.get_merge_node_dictionaries(selected_path, data, img_list)
+                    all_keys = list(id_dicts.values())[0].keys()
+                    result = {key: np.array([d[key] for d in list(id_dicts.values())]) for key in all_keys}
+
+                    print("Please save your identity table if desired for use with the violin plot and intensity communities function")
+                    self.parent().format_for_upperright_table(result, 'NodeID', all_list, 'Mean Intensity (Save this Table for "Analyze -> Stats -> Show Violins")', save = True)
+
+                else: # Preloaded condition
+                    need_data = []
+                    for img_file in img_list: # Add any new data
+
+                        if img_file.endswith('.tiff'):
+                            base_name = img_file[:-5]
+                        elif img_file.endswith('.tif'):
+                            base_name = img_file[:-4]
+                        else:
+                            base_name = img_file
+                        if base_name not in self.id_dicts:
+                            need_data.append(img_file)
+                    if need_data:
+                        id_dicts = my_network.get_merge_node_dictionaries(selected_path, data, need_data)
+                        id_dicts = id_dicts | self.id_dicts
+                    else:
+                        id_dicts = self.id_dicts
+                    all_keys = list(id_dicts.values())[0].keys()
+                    result = {key: np.array([d[key] for d in list(id_dicts.values())]) for key in all_keys}
+
+                    if need_data:
+                        print("Please save your identity table if desired for use with the violin plot and intensity communities function")
+                        self.parent().format_for_upperright_table(result, 'NodeID', all_list, 'Mean Intensity (Save this Table for "Analyze -> Stats -> Show Violins")', save = True)
+
+
+                histo_dict = {}
+                thresh_dict = {}
                 for i, img in enumerate(img_list):
 
-                    if img.endswith('.tiff') or img.endswith('.tif'):
+                    print(f"Please threshold {img}")
+                    self.parent().setWindowTitle(f"NetTracer3D: Please threshold {img}")
 
-                        print(f"Please threshold {img}")
-                        self.parent().setWindowTitle(f"NetTracer3D: Please threshold {img}")
+                    mask = tifffile.imread(f'{selected_path}/{img}')
+                    if img.endswith('.tiff'):
+                        base_name = img[:-5]
+                    elif img.endswith('.tif'):
+                        base_name = img[:-4]
+                    else:
+                        base_name = img
+                    self.parent().load_channel(2, mask, data = True)
 
-                        mask = tifffile.imread(f'{selected_path}/{img}')
-                        self.parent().load_channel(2, mask, data = True)
+                    # Wait for user to threshold this data
+                    self.parent().special_dict = id_dicts[base_name]
+                    processing_completed = self.wait_for_threshold_processing(nohigh = True, title = img, histo_dict = histo_dict, img = img, automated = automated)
+                    
+                    if not processing_completed:
+                        self.parent().thresh_min = None
+                        self.parent().thresh_max = None
+                        # User cancelled, ask if they want to continue
+                        reply = QMessageBox.question(self, 'Continue?', 
+                                                   f'Threshold cancelled for item {i+1}. Continue with remaining items?',
+                                                   QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No)
+                        if reply == QMessageBox.StandardButton.No:
+                            self.parent().old_thresh = None
+                            break
+                        continue
+                    
+                    thresh_dict[img] = [self.parent().thresh_min, self.parent().thresh_max]
+                    # At this point, the thresholded image is in the main window's memory
+                    # Get the processed/thresholded data from wherever ThresholdWindow stored it
+                    thresholded_vals = self.parent().thresh_vals
 
-                        # Wait for user to threshold this data
-                        self.parent().special_dict = id_dicts[i]
-                        processing_completed = self.wait_for_threshold_processing()
-                        
-                        if not processing_completed:
-                            self.parent().thresh_min = None
-                            self.parent().thresh_max = None
-                            # User cancelled, ask if they want to continue
-                            reply = QMessageBox.question(self, 'Continue?', 
-                                                       f'Threshold cancelled for item {i+1}. Continue with remaining items?',
-                                                       QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No)
-                            if reply == QMessageBox.StandardButton.No:
-                                break
+                    assigned = {}
+                    thresholded_set = set(thresholded_vals)
+
+                    pos_marker = f'{base_name}+'
+                    neg_marker = f'{base_name}-'
+
+                    for node in my_network.node_identities.keys():
+                        try:
+                            node_int = int(node)
+                        except (ValueError, TypeError):
                             continue
                         
-                        thresh_dict[img] = [self.parent().thresh_min, self.parent().thresh_max]
-                        # At this point, the thresholded image is in the main window's memory
-                        # Get the processed/thresholded data from wherever ThresholdWindow stored it
-                        thresholded_vals = list(np.unique(self.parent().channel_data[0]))
-                        if 0 in thresholded_vals:
-                            del thresholded_vals[0]
-
-                        if img.endswith('.tiff'):
-                            base_name = img[:-5]
-                        elif img.endswith('.tif'):
-                            base_name = img[:-4]
-                        else:
-                            base_name = img
-
-                        assigned = {}
-
-                        for node in my_network.node_identities.keys():
-
-                            try:
-
-                                if int(node) in thresholded_vals:
-
-                                    my_network.node_identities[node].append(f'{base_name}+')
-
-                                elif include:
-
-                                    my_network.node_identities[node].append(f'{base_name}-')
-
-                            except:
-                                pass
+                        node_ids = my_network.node_identities[node]
                         
-                        # Process the thresholded data
-                        self.parent().highlight_overlay = None
-                        self.parent().load_channel(0, data_backup, data = True)
-                        good_list.append(base_name)
+                        # Remove if present
+                        if pos_marker in node_ids:
+                            node_ids.remove(pos_marker)
+                        elif neg_marker in node_ids:
+                            node_ids.remove(neg_marker)
+                        
+                        if node_int in thresholded_set:
+                            node_ids.append(pos_marker)
+                        elif include:
+                            node_ids.append(neg_marker)
+                    
+                    # Process the thresholded data
+                    self.parent().highlight_overlay = None
 
-                modify_dict = copy.deepcopy(my_network.node_identities)
 
-                for node, iden in my_network.node_identities.items():
+                my_network.node_identities = {node: iden for node, iden in my_network.node_identities.items() if iden != []}
+                self.parent().old_thresh = None
 
-                    try:
-
-                        if len(iden) == 1:
-
-                            modify_dict[node] = str(iden[0]) # Singleton lists become bare strings
-                        elif len(iden) == 0:
-                            del modify_dict[node]
-                        else:
-                            modify_dict[node] = str(iden) # We hold multi element lists as strings for compatibility
-
-                    except:
-                        pass
-
-                my_network.node_identities = modify_dict
+                if my_network.node_identities == {}:
+                    my_network.node_identities = None
+                    return
                 self.parent().setWindowTitle(f"NetTracer3D")
 
                 self.parent().format_for_upperright_table(my_network.node_identities, 'NodeID', 'Identity')
                 self.parent().format_for_upperright_table(thresh_dict, 'Identity', ['Min Value', 'Max Value'], 'Threshold Information')
 
-                all_keys = id_dicts[0].keys()
-                result = {key: np.array([d[key] for d in id_dicts]) for key in all_keys}
+
+                if train:
+                    try:
+                        train_data = {}
+                        for key, val in histo_dict.items():
+                            if key in thresh_dict:
+                                train_data[key] = val + [thresh_dict[key]]
+
+                        filename, _ = QFileDialog.getSaveFileName(
+                            self,
+                            f"Save Model As",
+                            "",  # Default directory
+                            "PKL Files (*.pkl);;All Files (*)"  # File type filter
+                        )
+                        
+                        if filename:  # Only proceed if user didn't cancel
+                            # If user didn't type an extension, add .tif
+                            if not filename.endswith('.pkl'):
+                                filename += '.pkl'
+
+                            if self.predictor:
+                                self.predictor.train(
+                                    training_data=train_data,
+                                    epochs=100,
+                                    from_scratch=False,  # Important: False means incremental!
+                                    save_path=filename
+                                )
+                            else:
+                                self.predictor = threshold_predictor.ThresholdPredictor(hidden_layers=(128, 64, 32))
+                                self.predictor.train(
+                                    training_data=train_data,
+                                    epochs=100,              # Number of training iterations
+                                    batch_size=4,            # Samples per batch
+                                    learning_rate=0.001,     # Learning rate
+                                    from_scratch=True,       # Start fresh (not incremental)
+                                    save_path=filename
+                                )
+                    except Exception as e:
+                        print(f"Error Training: {e}")
+
 
                 QMessageBox.information(
                     self,
@@ -8871,17 +9301,18 @@ class MergeNodeIdDialog(QDialog):
                     "Node Identities Merged. New IDs represent presence of corresponding img foreground with +, absence with -. If desired, please save your new identities as csv, then use File -> Load -> Load From Excel Helper to bulk search and rename desired combinations. If desired, please save the outputted mean intensity table to use with 'Analyze -> Stats -> Show Violins'. (Press Help [above] for more info)"
                 )
 
-                print("Please save your identity table if desired for use with the violin plot and intensity neighborhoods function")
-                self.parent().format_for_upperright_table(result, 'NodeID', good_list, 'Mean Intensity (Save this Table for "Analyze -> Stats -> Show Violins")', save = True)
+
+                """
                 try:
                     self.parent().show_violin_dialog(called = True)
                     QMessageBox.information(
                         self,
                         "FYI",
-                        "Here is the violin plot/intensity neighborhoods function control window for the aforementioned table. Feel free to close these windows if you do not desire to use this analysis, however you will need to reference the saved table to get back here."
+                        "Here is the violin plot/intensity communities function control window for the aforementioned table. Feel free to close these windows if you do not desire to use this analysis, however you will need to reference the saved table to get back here."
                     )
                 except:
                     pass
+                """
                 self.accept()
             else:
                 my_network.merge_node_ids(selected_path, data, include)
@@ -8900,6 +9331,26 @@ class MergeNodeIdDialog(QDialog):
             import traceback
             print(traceback.format_exc())
             #print(f"Error: {e}")
+
+    def get_model(self):
+
+        try:
+
+            filename, _ = QFileDialog.getOpenFileName(
+                self,
+                f"Load Model",
+                "",
+                "Pickled_model (*.pkl)"
+            )
+
+            self.predictor = threshold_predictor.ThresholdPredictor.load(filename)
+            self.model_button.setText("Load ML Model (Currently Has One Loaded!)")
+        except:
+            import traceback
+            print(traceback.format_exc())
+            self.model_button.setText("Load ML Model (For Auto-Predict)")
+            self.predictor = False
+
 
 class MultiChanDialog(QDialog):
 
@@ -9129,7 +9580,7 @@ class IdOverlayDialog(QDialog):
     def __init__(self, parent=None):
 
         super().__init__(parent)
-        self.setWindowTitle("Generate ID Overlay?")
+        self.setWindowTitle("Generate Node Number Overlay?")
         self.setModal(True)
 
         layout = QFormLayout(self)
@@ -9351,40 +9802,68 @@ class NetShowDialog(QDialog):
         self.setWindowTitle("Display Parameters")
         self.setModal(True)
         
-        layout = QFormLayout(self)
+        main_layout = QVBoxLayout(self)
 
         self.called = called
+
+        layout_group = QGroupBox("Layout")
+        layout_layout = QFormLayout(layout_group)
 
         # Add mode selection dropdown
         self.render_mode = QComboBox()
         self.render_mode.addItems(["Spring Layout (Try to Logically Group Nodes)", "Centroid Layout (Place Nodes to Match Image)", "Component Layout Spring (Separate All Nontouching Components)", "Component Layout Shell (Centrally Places Important Nodes)"])
         self.render_mode.setCurrentIndex(0)  # Default to Mode 1
-        layout.addRow("Render Mode:", self.render_mode)
+        layout_layout.addRow("Render Mode:", self.render_mode)
 
         # Add mode selection dropdown
         self.mode_selector = QComboBox()
         self.mode_selector.addItems(["Default", "Community Coded", "Node ID Coded"])
         self.mode_selector.setCurrentIndex(0)  # Default to Mode 1
-        layout.addRow("Execution Mode:", self.mode_selector)
+        layout_layout.addRow("Execution Mode:", self.mode_selector)
+
+        main_layout.addWidget(layout_group)
+
+        render_group = QGroupBox("Node/Edge Rendering")
+        render_layout = QFormLayout(render_group)
+
+        # Add mode selection dropdown
+        self.edge_color = QComboBox()
+        self.edge_color.addItems(["Translucent Gray", "Solid Black"])
+        self.edge_color.setCurrentIndex(0)  # Default to Mode 1
+        render_layout.addRow("Edge Color:", self.edge_color)
+
+        self.node_size = QLineEdit("10")
+        render_layout.addRow("Node Sizes", self.node_size)
+
+        self.edge_size = QLineEdit("1")
+        render_layout.addRow("Edge Sizes", self.edge_size)
+
+        main_layout.addWidget(render_group)
+
+        misc_group = QGroupBox("Misc")
+        misc_layout = QFormLayout(misc_group)
 
         self.show_labels = QCheckBox("Show Node Numerical IDs?")
         self.show_labels.setChecked(True)
-        layout.addRow(self.show_labels)
+        misc_layout.addRow(self.show_labels)
 
         # weighted checkbox
         self.weighted = QCheckBox("Draw weighted edges (if applicable)")
-        self.weighted.setChecked(False)
-        layout.addRow(self.weighted)
+        self.weighted.setChecked(True)
+        misc_layout.addRow(self.weighted)
 
         # weighted checkbox (default True)
         self.z_size = QCheckBox("For Centroid Layout: Scale Node Sizes by Z?")
         self.z_size.setChecked(True)
-        layout.addRow(self.z_size)
+        misc_layout.addRow(self.z_size)
+
+        main_layout.addWidget(misc_group)
+
         
         # Add Run button
         run_button = QPushButton("Show Network")
         run_button.clicked.connect(self.show_network)
-        layout.addWidget(run_button)
+        main_layout.addWidget(run_button)
     
     def show_network(self):
 
@@ -9398,6 +9877,9 @@ class NetShowDialog(QDialog):
             shell = False
 
             render = self.render_mode.currentIndex()
+
+            edge_color = self.edge_color.currentIndex()
+
             if render == 1:
                 geo = True
             elif render == 2:
@@ -9410,6 +9892,17 @@ class NetShowDialog(QDialog):
             accepted_mode = self.mode_selector.currentIndex()  # Convert to 1-based index
             # Get directory (None if empty)
             directory = None
+
+            try:
+                node_size = min(abs(int(self.node_size.text())), 100)
+            except:
+                node_size = 10
+
+            try:
+                edge_size = min(abs(int(self.edge_size.text())), 100)
+            except:
+                edge_size = 1
+
 
             weighted = self.weighted.isChecked()
             z_size = self.z_size.isChecked()
@@ -9428,10 +9921,14 @@ class NetShowDialog(QDialog):
                     self.parent().show_partition_dialog()
                     if my_network.communities is None:
                         return
+            if edge_color == 0:
+                black_edges = False
+            else:
+                black_edges = True
 
             if not self.called:
                 # Create graph widgets
-                self.parent().temp_graph_widget = ngw.NetworkGraphWidget(
+                temp_graph_widget = ngw.NetworkGraphWidget(
                     parent=self.parent(),
                     weight=weighted,
                     geometric=geo,
@@ -9443,15 +9940,19 @@ class NetShowDialog(QDialog):
                     identities = identities,
                     identity_dict = my_network.node_identities,
                     z_size = z_size,
-                    shell = shell
+                    shell = shell,
+                    node_size = node_size,
+                    black_edges = black_edges,
+                    edge_size = edge_size
                 )
 
-                self.parent().temp_graph_widget.set_graph(my_network.network)
-                self.parent().temp_graph_widget.show_in_window(title="Network Graph", width=1000, height=800)
-                self.parent().temp_graph_widget.load_graph()
+                temp_graph_widget.set_graph(my_network.network)
+                temp_graph_widget.show_in_window(title="Network Graph", width=1000, height=800)
+                temp_graph_widget.load_graph()
+                self.parent().temp_graph_widgets.append(temp_graph_widget)
                 self.accept()
             else:
-                self.called.weight, self.called.geometric, self.called.component, self.called.centroids, self.called.communities, self.called.community_dict, self.called.labels, self.called.identities, self.called.identity_dict, self.called.z_size, self.called.shell = weighted, geo, component, my_network.node_centroids, communities, my_network.communities, show_labels, identities, my_network.node_identities, z_size, shell
+                self.called.weight, self.called.geometric, self.called.component, self.called.centroids, self.called.communities, self.called.community_dict, self.called.labels, self.called.identities, self.called.identity_dict, self.called.z_size, self.called.shell, self.called.node_size, self.called.black_edges, self.called.edge_size = edge_size = weighted, geo, component, my_network.node_centroids, communities, my_network.communities, show_labels, identities, my_network.node_identities, z_size, shell, node_size, black_edges, edge_size
                 self.called._clear_graph()
                 self.called.load_graph()
                 self.accept()
@@ -9459,30 +9960,6 @@ class NetShowDialog(QDialog):
         except Exception as e:
             print(f"Error: {e}")
 
-        """
-
-        if accepted_mode == 1:
-
-            if my_network.communities is None:
-                self.parent().show_partition_dialog()
-                if my_network.communities is None:
-                    return
-
-        try:
-            if accepted_mode == 0:
-                my_network.show_network(geometric=geo, show_labels = show_labels)
-            elif accepted_mode == 1:
-                my_network.show_communities_flex(geometric=geo, weighted = weighted, partition = my_network.communities, show_labels = show_labels)
-                self.parent().format_for_upperright_table(my_network.communities, 'NodeID', 'CommunityID')
-            elif accepted_mode == 2:
-                my_network.show_identity_network(geometric=geo, show_labels = show_labels)
-            
-            self.accept()
-        except Exception as e:
-            print(f"Error showing network: {e}")
-            import traceback
-            print(traceback.format_exc())
-        """
 
 class PartitionDialog(QDialog):
     def __init__(self, parent=None):
@@ -9568,14 +10045,25 @@ class ComIdDialog(QDialog):
         self.mode.setCurrentIndex(0)
         layout.addRow("Mode", self.mode)
 
-        # umap checkbox (default True)
+        # umap checkbox (default False)
         self.umap = QPushButton("UMAP")
         self.umap.setCheckable(True)
-        self.umap.setChecked(True)
+        self.umap.setChecked(False)
         layout.addRow("Generate UMAP?:", self.umap)
 
+        # Heatmaps checkbox
+        self.heatmaps = QPushButton("Heatmaps")
+        self.heatmaps.setCheckable(True)
+        self.heatmaps.setChecked(True)
+        layout.addRow("Generate Heatmaps?:", self.heatmaps)
+
+        self.style = QPushButton("Treat Multi-Identity Nodes as Unique Identities?")
+        self.style.setChecked(False)
+        self.style.setCheckable(True)
+        layout.addRow("Heatmaps will be cluttered if too many permutations ^^:", self.style)
+
         self.label = QComboBox()
-        self.label.addItems(["No Label", "By Community", "By Neighborhood (If already calculated via 'Analyze -> Network -> Convert Network Communities...')"])
+        self.label.addItems(["No Label", "By Community", "By Supercommunity (If already calculated via 'Analyze -> Network -> Convert Network Communities...')"])
         self.label.setCurrentIndex(0)
         layout.addRow("Label UMAP Points How?:", self.label)
 
@@ -9586,7 +10074,7 @@ class ComIdDialog(QDialog):
         self.proportional = QPushButton("Robust")
         self.proportional.setCheckable(True)
         self.proportional.setChecked(False)
-        layout.addRow("Return Node Type Distribution Robust UMAP (ie, communities will show how much they overrepresent a node type rather than just their proportional composition):", self.proportional)
+        #layout.addRow("Return Node Type Distribution Robust UMAP (ie, communities will show how much they overrepresent a node type rather than just their proportional composition):", self.proportional)
 
         # Add Run button
         run_button = QPushButton("Get Community ID Info")
@@ -9613,8 +10101,9 @@ class ComIdDialog(QDialog):
                     return
 
             mode = self.mode.currentIndex()
-
+            heatmaps = self.heatmaps.isChecked()
             umap = self.umap.isChecked()
+            style = self.style.isChecked()
 
             label = self.label.currentIndex()
 
@@ -9630,13 +10119,20 @@ class ComIdDialog(QDialog):
 
             else:
 
-                info, names = my_network.community_id_info_per_com(umap = umap, label = label, limit = limit, proportional = proportional, neighbors = temp)
+                if not heatmaps: 
+                    info, names = my_network.community_id_info_per_com(umap = umap, label = label, limit = limit, proportional = proportional, neighbors = temp, unique = style)
+                    self.parent().format_for_upperright_table(info, 'Community', names, 'Average of Community Makeup')
+                else:
+                    if umap:
+                        info, names = my_network.community_id_info_per_com(umap = umap, label = label, limit = limit, proportional = proportional, neighbors = temp, unique = style)
+                    matrixes, id_set = my_network.community_heatmaps(unique = style)
 
-                self.parent().format_for_upperright_table(info, 'Community', names, 'Average of Community Makeup')
+                    for i, matrix in enumerate(matrixes):
+                        self.parent().format_for_upperright_table(matrix, 'CommunityID', id_set, title = f'Community Heatmap {i + 1}')
 
             if self.parent().prev_coms is not None:
                 my_network.communities = temp
-
+ 
             self.accept()
 
         except Exception as e:
@@ -9659,20 +10155,30 @@ class ComNeighborDialog(QDialog):
         layout = QFormLayout(self)
 
         self.neighborcount = QLineEdit("")
-        self.neighborcount.setPlaceholderText("KMeans Only. Empty = auto-predict (between 1 and 20)")
-        layout.addRow("Num Neighborhoods:", self.neighborcount)
+        self.neighborcount.setPlaceholderText("Enter any number; KMeans Only. Empty = auto-predict (between 2 and 20)")
+        layout.addRow("Num Supercommunities:", self.neighborcount)
 
         self.seed = QLineEdit("")
         layout.addRow("Clustering Seed:", self.seed)
 
         self.limit = QLineEdit("")
-        layout.addRow("Min Community Size to be grouped (Smaller communities will be placed in neighborhood 0 - does not apply if empty)", self.limit)
+        layout.addRow("Min Community Size to be grouped (Smaller communities will be placed in supercommunity 0 - does not apply if empty)", self.limit)
 
         # weighted checkbox (default True)
         self.proportional = QPushButton("Robust")
         self.proportional.setCheckable(True)
         self.proportional.setChecked(True)
-        layout.addRow("Return Node Type Distribution Robust Heatmaps (ie, will give two more heatmaps that are not beholden to the total number of nodes of each type, representing which structures are overrepresented in a network):", self.proportional)
+        #layout.addRow("Return Node Type Distribution Robust Heatmaps (ie, will give two more heatmaps that are not beholden to the total number of nodes of each type, representing which structures are overrepresented in a network):", self.proportional)
+
+        self.heatmaps = QPushButton("Heatmaps")
+        self.heatmaps.setCheckable(True)
+        self.heatmaps.setChecked(True)
+        layout.addRow("Return Heatmaps Showing Supercommunity Composition?:", self.heatmaps)
+
+        self.style = QPushButton("Treat Multi-Identity Nodes as Unique Identities?")
+        self.style.setChecked(False)
+        self.style.setCheckable(True)
+        layout.addRow("Heatmaps will be cluttered if too many permutations ^^:", self.style)
 
         self.mode = QComboBox()
         self.mode.addItems(["KMeans", "DBSCAN"])
@@ -9680,7 +10186,7 @@ class ComNeighborDialog(QDialog):
         layout.addRow("Mode", self.mode)
 
         # Add Run button
-        run_button = QPushButton("Get Neighborhoods")
+        run_button = QPushButton("Get Supercommunities")
         run_button.clicked.connect(self.run)
         layout.addWidget(run_button)
 
@@ -9707,22 +10213,25 @@ class ComNeighborDialog(QDialog):
 
             neighborcount = int(self.neighborcount.text()) if self.neighborcount.text().strip() else None
 
+            unique = self.style.isChecked()
+            heatmaps = self.heatmaps.isChecked()
+
             if self.parent().prev_coms is None:
 
                 self.parent().prev_coms = copy.deepcopy(my_network.communities)
-                len_dict, matrixes, id_set = my_network.assign_neighborhoods(seed, neighborcount, limit = limit, proportional = proportional, mode = mode)
+                len_dict, matrixes, id_set = my_network.assign_neighborhoods(seed, neighborcount, limit = limit, proportional = proportional, mode = mode, unique = unique, heatmaps = heatmaps)
             else:
-                len_dict, matrixes, id_set = my_network.assign_neighborhoods(seed, neighborcount, limit = limit, prev_coms = self.parent().prev_coms, proportional = proportional, mode = mode)
+                len_dict, matrixes, id_set = my_network.assign_neighborhoods(seed, neighborcount, limit = limit, prev_coms = self.parent().prev_coms, proportional = proportional, mode = mode, unique = unique, heatmaps = heatmaps)
+
+            if matrixes is not None:
+                for i, matrix in enumerate(matrixes):
+                    self.parent().format_for_upperright_table(matrix, 'SupercommunityID', id_set, title = f'Supercommunity Heatmap {i + 1}')
 
 
-            for i, matrix in enumerate(matrixes):
-                self.parent().format_for_upperright_table(matrix, 'NeighborhoodID', id_set, title = f'Neighborhood Heatmap {i + 1}')
+            self.parent().format_for_upperright_table(len_dict, 'SupercommunityID', ['Number of Communities', 'Proportion of Total Nodes'], title = 'Supercommunity Counts')
+            self.parent().format_for_upperright_table(my_network.communities, 'NodeID', 'SupercommunityID', title = 'Supercommunity Partition')
 
-
-            self.parent().format_for_upperright_table(len_dict, 'NeighborhoodID', ['Number of Communities', 'Proportion of Total Nodes'], title = 'Neighborhood Counts')
-            self.parent().format_for_upperright_table(my_network.communities, 'NodeID', 'NeighborhoodID', title = 'Neighborhood Partition')
-
-            print("Neighborhoods have been assigned to communities based on similarity")
+            print("Supercommunities have been assigned to communities based on similarity")
 
             self.accept()
 
@@ -9731,7 +10240,7 @@ class ComNeighborDialog(QDialog):
             import traceback
             print(traceback.format_exc())
 
-            print(f"Error assigning neighborhoods: {e}")
+            print(f"Error assigning supercommunities: {e}")
 
 class ComCellDialog(QDialog):
 
@@ -9786,10 +10295,238 @@ class ComCellDialog(QDialog):
             print(f"Error: {e}")
 
 
+class NeighComDialog(QDialog):
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle("Assign Communities Based on Neighbor Identities")
+        self.setModal(True)
+        
+        # Main layout
+        main_layout = QVBoxLayout(self)
+        main_layout.setSpacing(15)
+        
+        # Description label
+        desc = QLabel("Assigns communities based on kmeans clustering of each cell's neighbor distribution.\n"
+                     "May first want to find proximity network for desired neighbor count/distance.")
+        desc.setWordWrap(True)
+        desc.setStyleSheet("color: #666; font-style: italic;")
+        main_layout.addWidget(desc)
+        
+        # === Clustering Parameters Group ===
+        cluster_group = QGroupBox("Clustering Parameters")
+        cluster_layout = QFormLayout()
+        
+        self.comcount = QLineEdit("")
+        self.comcount.setPlaceholderText("Can pick any number. Empty = auto-predict (between 2 and 20)")
+        cluster_layout.addRow("Num Communities:", self.comcount)
+        
+        self.seed = QLineEdit("")
+        cluster_layout.addRow("Clustering Seed:", self.seed)
+        
+        self.limit = QLineEdit("")
+        self.limit.setPlaceholderText("Empty = no minimum")
+        cluster_layout.addRow("Min Neighbor Count:", self.limit)
+        
+        cluster_group.setLayout(cluster_layout)
+        main_layout.addWidget(cluster_group)
+        
+        # === Quick Network Generation Group ===
+        network_group = QGroupBox("Network Generation (Optional - More Proximity Network Options in Calculate Menu. Skip these to use current network.)")
+        network_layout = QFormLayout()
+        
+        self.quicknet = QLineEdit("")
+        self.quicknet.setPlaceholderText("e.g., 10")
+        network_layout.addRow("N Nearest Neighbors:", self.quicknet)
+        
+        self.quicknet2 = QLineEdit("")
+        self.quicknet2.setPlaceholderText("e.g., 50.0")
+        network_layout.addRow("Max Distance (Uses scalings):", self.quicknet2)
+        
+        network_group.setLayout(network_layout)
+        main_layout.addWidget(network_group)
+        
+        # === Visualization Options Group ===
+        viz_group = QGroupBox("Visualization Options")
+        viz_layout = QFormLayout()
+        
+        self.umap = QPushButton("Generate UMAP")
+        self.umap.setCheckable(True)
+        self.umap.setChecked(False)
+        viz_layout.addRow("Community UMAP:", self.umap)
+        
+        self.label = QPushButton("Label Points")
+        self.label.setCheckable(True)
+        self.label.setChecked(False)
+        # Can add this row if needed: viz_layout.addRow("Label UMAP:", self.label)
+        
+        self.heatmaps = QPushButton("Generate Heatmaps")
+        self.heatmaps.setCheckable(True)
+        self.heatmaps.setChecked(False)
+        viz_layout.addRow("Neighborhood Heatmaps (Slightly Different than actual communities that result):", self.heatmaps)
+        
+        viz_group.setLayout(viz_layout)
+        main_layout.addWidget(viz_group)
+        
+        # === Style Option ===
+        self.style = QPushButton("Treat Multi-Identity Nodes as Unique Identities")
+        self.style.setCheckable(True)
+        self.style.setChecked(False)
+        main_layout.addWidget(self.style)
+        
+        # === Run Button ===
+        run_button = QPushButton("Get Communities")
+        run_button.clicked.connect(self.run)
+        run_button.setStyleSheet("QPushButton { font-weight: bold; padding: 8px; }")
+        main_layout.addWidget(run_button)
+
+    def run(self):
+
+        try:
+
+            try:
+                comcount = int(self.comcount.text())
+            except:
+                comcount = None
+
+            try:
+                seed = int(self.seed.text())
+            except:
+                seed = 42
+
+            try:
+                limit = int(self.limit.text())
+            except:
+                limit = 0
+
+            unique = self.style.isChecked()
 
 
+            try:
+                quicknet = int(self.quicknet.text())
+            except:
+                quicknet = None
+            try:
+                quicknet2 = int(self.quicknet2.text())
+            except:
+                quicknet2 = None
+
+            if quicknet or quicknet2:
+                if my_network.node_centroids is None:
+                    self.parent().show_centroid_dialog()
+                    if my_network.node_centroids is None:
+                        return
+                my_network.kd_network(distance = quicknet2, max_neighbors = quicknet)
+            G = my_network.network
+            nodes = list(G.nodes())
+            umap = self.umap.isChecked()
+            label = self.label.isChecked()
+            heatmaps = self.heatmaps.isChecked()
+            all_idens = my_network.node_identities.values()
+            iden_set = set()
+            for iden in all_idens:
+                iden_set.update(iden)
+            if unique:
+                unique_set = list(set(str(iden) for iden in my_network.node_identities.values() if len(iden) > 1))
+                iden_set = iden_set.union(unique_set)
+                del unique_set
+            iden_set = sorted(iden_set)
+            iden_index = {}
+            for i, iden in enumerate(iden_set): # Dict to assist indexing the identities to array
+                iden_index[iden] = i
+
+            kmean_dict = {} # Dict to hold arrays for clustering
 
 
+            for node in nodes: 
+                neighbors = list(G.neighbors(node))
+                array = np.zeros(len(iden_set))
+                if len(neighbors) < limit:
+                    continue
+                for neighbor in neighbors:
+                    try:
+                        iden = my_network.node_identities[neighbor]
+                    except:
+                        continue
+                    if unique:
+                        if len(iden) < 2:
+                            array[iden_index[iden[0]]] += 1 # Add up totality of available neighbor identity counts and store in array
+                        else:
+                            array[iden_index[str(iden)]] += 1
+                    else:
+                        for sub_iden in iden:
+                            array[iden_index[sub_iden]] += 1 # Check list for multi identities
+                kmean_dict[node] = array/len(neighbors)
+
+            from . import neighborhoods # Do kmean clustering
+            clusters = neighborhoods.cluster_arrays(kmean_dict, n_clusters=comcount, seed=seed) # This returns a list of lists where each is a community of nodes
+
+            if heatmaps: # Graphs to characterize neighborhood specifically
+                heatmap_dict = {}
+                for i, cluster in enumerate(clusters):
+                    cluster_avg = np.zeros(len(iden_set))
+                    for node in cluster:
+                        cluster_avg = cluster_avg + kmean_dict[node]
+                    heatmap_dict[i + 1] = cluster_avg/len(cluster) # Just get average composition of neighborhood. Scale invariant because that's how the kmean cluster-er saw them in the first place. Nodes should have similar neighbor counts anyway.
+
+            com_dict = {}
+            for i, cluster in enumerate(clusters): #Unpack output
+                com_dict[i + 1] = cluster
+            my_network.communities = n3d.revert_dict(com_dict) # This just reverses the dict to be {node: com}
+            old_to_new = my_network.com_by_size()
+
+            if heatmaps:
+
+                rearranged = {}
+                for com, new_com in old_to_new.items():
+                    rearranged[new_com] = heatmap_dict[com]
+                heatmap_dict = rearranged
+                del rearranged
+
+                output, sorted_id_set = neighborhoods.plot_dict_heatmap(heatmap_dict, iden_set, title = "Neighborhood Heatmap by Proportional Composition of Nodes Neighboring Nodes in Community", sublabel = "Neighborhood of Community")
+
+                try: # Image itself represents more accurate node counts
+                    node_count = np.unique(my_network.nodes)
+                    if 0 in node_count:
+                        np.delete(node_count, 0)
+                    node_count = len(node_count)
+                except: # But if user is working with a pure network we can try referencing that instead. They should have centroids in this situation.
+                    try:
+                        node_count = len(list(my_network.node_centroids.keys()))
+                    except: # No centroids, we can try the network itself
+                        node_count = len(list(my_network.network.nodes()))
+
+                if unique:
+                    idens = n3d.invert_dict(my_network.node_identities)
+                else:
+                    idens = n3d.invert_dict_special(my_network.node_identities)
+                iden_count = np.zeros(len(iden_set))
+
+                for iden, nodes in idens.items(): # Indexed array counting total instance of all identities in image
+                    iden_count[iden_index[iden]] = len(nodes)/node_count
+
+                for neighborhood in heatmap_dict:
+                    heatmap_dict[neighborhood] = heatmap_dict[neighborhood]/iden_count
+
+                output2, sorted_id_set = neighborhoods.plot_dict_heatmap(heatmap_dict, iden_set, title = "Over/Underrepresentation of Node Identities per Neighborhood (val < 1 = underrepresented, val > 1 = overrepresented)", sublabel = "Neighborhood of Community", center_at_one = True)
+
+                try:
+                    self.parent().format_for_upperright_table(output, 'CommunityID', sorted_id_set, title = f'Community-Neighborhood Heatmap 1')
+                    self.parent().format_for_upperright_table(output2, 'CommunityID', sorted_id_set, title = f'Community-Neighborhood Heatmap 3')
+                except:
+                    pass
+
+            self.parent().format_for_upperright_table(my_network.communities, 'NodeID', 'Community', 'Node Communities')
+
+            if umap:
+                neighborhoods.visualize_cluster_composition_umap(kmean_dict, iden_set, neighborhoods = my_network.communities, original_communities = my_network.communities, title = 'UMAP Visualization of Node Neighborhood Communities (Have similar neighbors)', label = label, subname = 'Community')
+
+
+            self.accept()
+
+        except Exception as e:
+            import traceback
+            print(traceback.format_exc())
+            print(f"Error: {e}")
 
 class RadialDialog(QDialog):
 
@@ -9846,16 +10583,30 @@ class NearNeighDialog(QDialog):
         if my_network.node_identities is not None:
 
             self.root = QComboBox()
-            roots = list(set(my_network.node_identities.values()))
-            roots.sort()
+            # Get unique identities <-- Commented this out because it is lag on a huge number of permutations. (The lag is adding to the QComboBox). Would need to reformat the architecture to use a lazy loading type of widget. Not sure how relevant these combos even are so i am just disabling this at the moment.
+            #unique_idens = set(tuple(iden) for iden in my_network.node_identities.values())
+
+            # Sort by length (number of elements)
+            #sorted_idens = sorted(unique_idens, key=len)
+
+            # Convert back to strings
+            #roots = [str(list(iden)) for iden in sorted_idens]
+
+            all_idens = list(my_network.node_identities.values())
+            seen = set()
+            for iden in all_idens:
+                seen.update(iden)
+            roots = list(seen)
+            roots = ["['" + iden + "']" for iden in roots] # In the future can update downstream components to expect a pure string but would only minorly increase performance
+
+            neighs = copy.copy(roots)
+
             roots.append("All (Excluding Targets)")
             self.root.addItems(roots)  
             self.root.setCurrentIndex(0)
             identities_layout.addRow("Root Identity to Search for Neighbor's IDs?", self.root)
             
             self.targ = QComboBox()
-            neighs = list(set(my_network.node_identities.values()))
-            neighs.sort()
             neighs.append("All Others (Excluding Self)")
             self.targ.addItems(neighs)  
             self.targ.setCurrentIndex(0)
@@ -9942,10 +10693,26 @@ class NearNeighDialog(QDialog):
         # Get All Averages group box - ENHANCED STYLING (only if node_identities exists)
         if my_network.node_identities is not None:
             averages_group = QGroupBox("Get All Averages")
-            averages_layout = QVBoxLayout(averages_group)
+            averages_layout = QVBoxLayout(averages_group)  # Changed to QVBoxLayout for better control
             
-            run_button2 = QPushButton("📊 Get Average Nearest All ID Combinations (No Distribution, No Heatmap)")
-            # Style for secondary action - green with different styling
+            # Create a horizontal layout for the label and combobox
+            mode_layout = QHBoxLayout()
+            mode_label = QLabel("Include Multi-Identity Node Comparisons (Note - all multi-iden nodes contribute to the single identity instances in the output regardless)?")
+            mode_label.setWordWrap(True)
+            self.mode2 = QComboBox()
+            self.mode2.addItems(["Include these", "Exclude these"])
+            self.mode2.setCurrentIndex(1)
+            self.mode2.setMinimumWidth(150)
+            
+            mode_layout.addWidget(mode_label, stretch=1)
+            mode_layout.addWidget(self.mode2)
+            averages_layout.addLayout(mode_layout)
+            
+            # Add some spacing
+            averages_layout.addSpacing(10)
+            
+            # Add the button with full width
+            run_button2 = QPushButton("📊 Get Average Nearest All ID Combinations (Returns Matrix Graph rather than Heatmap)")
             run_button2.setStyleSheet("""
                 QPushButton {
                     background-color: #4CAF50;
@@ -10012,9 +10779,9 @@ class NearNeighDialog(QDialog):
                 num = 1
 
             if root is not None and targ is not None:
-                title = f"Nearest {num} Neighbor(s) Distance of {targ} from {root}"
+                title = f"Nearest {num} Neighbor(s) Distance of includes: {targ} from includes: {root}"
                 header = f"Avg Shortest Distance to Closest {num} {targ}(s)"
-                header2 = f"{root} Node ID"
+                header2 = f"Includes: {root} Node ID"
                 header3 = f'Theoretical Uniform Distance to Closest {num} {targ}(s)'
             else:
                 title = f"Nearest {num} Neighbor(s) Distance Between Nodes"
@@ -10031,10 +10798,10 @@ class NearNeighDialog(QDialog):
                 avg, output, quant_overlay, pred = my_network.nearest_neighbors_avg(root, targ, my_network.xy_scale, my_network.z_scale, num = num, heatmap = heatmap, threed = threed, quant = quant, centroids = centroids, mask = mask)
             else:
                 avg, output, overlay, quant_overlay, pred = my_network.nearest_neighbors_avg(root, targ, my_network.xy_scale, my_network.z_scale, num = num, heatmap = heatmap, threed = threed, numpy = True, quant = quant, centroids = centroids, mask = mask)
-                self.parent().load_channel(3, overlay, data = True, preserve_zoom = (self.parent().ax.get_xlim(), self.parent().ax.get_ylim()))
+                self.parent().load_channel(3, overlay, data = True)
 
             if quant_overlay is not None:
-                self.parent().load_channel(2, quant_overlay, data = True, preserve_zoom = (self.parent().ax.get_xlim(), self.parent().ax.get_ylim()))
+                self.parent().load_channel(2, quant_overlay, data = True)
 
             avg = {header:avg}
 
@@ -10055,7 +10822,28 @@ class NearNeighDialog(QDialog):
 
     def run2(self):
         try:
-            available = list(set(my_network.node_identities.values()))
+            if my_network.node_centroids is None:
+                self.parent().show_centroid_dialog()
+                if my_network.node_centroids is None:
+                    return
+            mode2 = self.mode2.currentIndex()
+            if mode2 == 1:
+                all_idens = list(my_network.node_identities.values())
+                seen = set()
+                for iden in all_idens:
+                    seen.update(iden)
+                available = list(seen)
+            else:
+                # Get unique identities
+                unique_idens = set(tuple(iden) for iden in my_network.node_identities.values()) # This can stay because it's not tied to a widget
+
+                # Sort by length (number of elements)
+                sorted_idens = sorted(unique_idens, key=len)
+
+                # Convert back to strings
+                available = [str(list(iden)) for iden in sorted_idens]
+
+
             num = int(self.num.text()) if self.num.text().strip() else 1
 
             centroids = self.centroids.isChecked()
@@ -10064,20 +10852,31 @@ class NearNeighDialog(QDialog):
 
             output_dict = {}
 
-            while len(available) > 1:
+            while len(available) > 0:
                 root = available[0]
 
                 for targ in available:
                     avg, _, _, _ = my_network.nearest_neighbors_avg(root, targ, my_network.xy_scale, my_network.z_scale, num = num, centroids = centroids)
-                    output_dict[f"{root} vs {targ}"] = avg
+                    if avg is not None:
+                        output_dict[f"Includes: {root} vs Neighbors: Includes {targ}"] = avg
+                    if root != targ:
+                        avg, _, _, _ = my_network.nearest_neighbors_avg(targ, root, my_network.xy_scale, my_network.z_scale, num = num, centroids = centroids)
+                        if avg is not None:
+                            output_dict[f"Includes: {targ} vs Neighbors: Includes {root}"] = avg
 
                 del available[0]
 
-            self.parent().format_for_upperright_table(output_dict, "ID Combo", "Avg Distance to Nearest", title = "Average Distance to Nearest Neighbors for All ID Combos")
+            self.parent().format_for_upperright_table(output_dict, "ID Combo", f"Avg Distance to Nearest {num}", title = "Average Distance to Nearest Neighbors for All ID Combos")
+
+            from . import neighborhoods
+
+            neighborhoods.create_neighbor_heatmap(output_dict)
 
             self.accept()
 
         except Exception as e:
+            import traceback
+            print(traceback.format_exc())
             print(f"Error: {e}")
 
 
@@ -10092,8 +10891,27 @@ class NeighborIdentityDialog(QDialog):
         layout = QFormLayout(self)
 
         if my_network.node_identities is not None:
+            # Get unique identities <-- Commented this out because it is lag on a huge number of permutations. (The lag is adding to the QComboBox). Would need to reformat the architecture to use a lazy loading type of widget. Not sure how relevant these combos even are so i am just disabling this at the moment.
+            #unique_idens = set(tuple(iden) for iden in my_network.node_identities.values())
+
+            # Sort by length (number of elements)
+            #sorted_idens = sorted(unique_idens, key=len)
+
+            # Convert back to strings
+            #all_idens = [str(list(iden)) for iden in sorted_idens]
+
+
+            all_idens = list(my_network.node_identities.values())
+            seen = set()
+            for iden in all_idens:
+                seen.update(iden)
+            all_idens = list(seen)
+
+            all_idens = ["['" + iden + "']" for iden in all_idens] # In the future can update downstream components to expect a pure string but would only minorly increase performance
+
+            
             self.root = QComboBox()
-            self.root.addItems(list(set(my_network.node_identities.values())))  
+            self.root.addItems(all_idens)  
             self.root.setCurrentIndex(0)
             layout.addRow("Root Identity to Search for Neighbor's IDs (search uses nodes of this ID, finds what IDs they connect to", self.root)
         else:
@@ -10168,13 +10986,29 @@ class RipleyDialog(QDialog):
             node_group = QGroupBox("Node Parameters")
             node_layout = QFormLayout(node_group)
             
+            # Get unique identities <-- Commented this out because it is lag on a huge number of permutations. (The lag is adding to the QComboBox). Would need to reformat the architecture to use a lazy loading type of widget. Not sure how relevant these combos even are so i am just disabling this at the moment.
+            #unique_idens = set(tuple(iden) for iden in my_network.node_identities.values())
+
+            # Sort by length (number of elements)
+            #sorted_idens = sorted(unique_idens, key=len)
+
+            # Convert back to strings
+            #all_idens = [str(list(iden)) for iden in sorted_idens]
+
+            all_idens = list(my_network.node_identities.values())
+            seen = set()
+            for iden in all_idens:
+                seen.update(iden)
+            all_idens = list(seen)
+            all_idens = ["['" + iden + "']" for iden in all_idens] # In the future can update downstream components to expect a pure string but would only minorly increase performance
+
             self.root = QComboBox()
-            self.root.addItems(list(set(my_network.node_identities.values())))  
+            self.root.addItems(all_idens)  
             self.root.setCurrentIndex(0)
             node_layout.addRow("Root Identity to Search for Neighbors:", self.root)
             
             self.targ = QComboBox()
-            self.targ.addItems(list(set(my_network.node_identities.values())))  
+            self.targ.addItems(all_idens)  
             self.targ.setCurrentIndex(0)
             node_layout.addRow("Target Identity to be Searched For:", self.targ)
             
@@ -10649,7 +11483,38 @@ class ViolinDialog(QDialog):
         try:
             if not called:
                 try:
-                    self.df = self.parent().load_file()
+                    # Open file dialog
+                    file_filter = "Spreadsheet Files (*.csv *.xlsx);;CSV Files (*.csv);;Excel Files (*.xlsx)"
+                    filename, _ = QFileDialog.getOpenFileName(
+                        self,
+                        "Load File",
+                        "",
+                        file_filter
+                    )
+                    
+                    if not filename:
+                        return
+                    
+                    # Read the file
+                    if filename.endswith('.csv'):
+                        self.df = pd.read_csv(filename)
+                    elif filename.endswith('.xlsx'):
+                        self.df = pd.read_excel(filename)
+                    
+                    try:
+                        valid_nodes_list = list(np.unique(my_network.nodes))
+                        if valid_nodes_list[0] == 0:
+                            del valid_nodes_list[0]
+                        print("Filtering out nodes that do not exist in current node image")
+
+                        valid_nodes_list = []  # <-- Add your list of valid node IDs here
+                        
+                        if valid_nodes_list:  # Only filter if list is not empty
+                            first_col = self.df.columns[0]
+                            self.df = self.df[self.df[first_col].isin(valid_nodes_list)]
+                    except:
+                        pass
+                    
                 except:
                     return
             else:
@@ -10667,17 +11532,17 @@ class ViolinDialog(QDialog):
                 self.df = self.normalize_df_with_identity_centerpoints(self.df, identity_lists)
             except:
                 pass
-            self.setWindowTitle("Violin/Neighborhood Parameters")
+            self.setWindowTitle("Violin/Community Parameters")
             self.setModal(False)
             layout = QFormLayout(self)
             
             if my_network.node_identities is not None:
                 self.idens = QComboBox()
-                all_idens = list(set(my_network.node_identities.values()))
-                idens = []
+                all_idens = list(my_network.node_identities.values())
+                seen = set()
                 for iden in all_idens:
-                    if '[' not in iden:
-                        idens.append(iden)
+                    seen.update(iden)
+                idens = list(seen)
                 idens.sort()
                 idens.insert(0, "None")
                 self.idens.addItems(idens)  
@@ -10692,7 +11557,7 @@ class ViolinDialog(QDialog):
                 coms = [str(x) for x in coms]
                 self.coms.addItems(coms)  
                 self.coms.setCurrentIndex(0)
-                layout.addRow("Return Neighborhood/Community Violin Plots?", self.coms)
+                layout.addRow("Return Community Violin Plots?", self.coms)
             
             # Add Run button
             run_button = QPushButton("Show Z-score-like Violin")
@@ -10702,32 +11567,36 @@ class ViolinDialog(QDialog):
             run_button2 = QPushButton("Show Z-score UMAP")
             run_button2.clicked.connect(self.run2)
             self.mode_selector = QComboBox()
-            self.mode_selector.addItems(["Label UMAP By Identity", "Label UMAP By Neighborhood/Community"])
+            self.mode_selector.addItems(["Label UMAP By Identity", "Label UMAP By Community"])
             self.mode_selector.setCurrentIndex(0)  # Default to Mode 1
             layout.addRow("Execution Mode:", self.mode_selector)
             layout.addRow(self.mode_selector, run_button2)
             
             # Add separator to visually group the clustering options
-            from PyQt6.QtWidgets import QFrame
             separator = QFrame()
             separator.setFrameShape(QFrame.Shape.HLine)
             separator.setFrameShadow(QFrame.Shadow.Sunken)
             layout.addRow(separator)
             
             # Clustering options section (visually grouped)
-            clustering_label = QLabel("<b>Clustering Options:</b>")
+            clustering_label = QLabel("<b>Clustering Options (Based on Shared Identities):</b>")
             layout.addRow(clustering_label)
             
             # KMeans clustering
-            run_button3 = QPushButton("Assign Neighborhoods via KMeans Clustering")
+            run_button3 = QPushButton("Assign Communities via KMeans Clustering")
             run_button3.clicked.connect(self.run3)
             self.kmeans_num_input = QLineEdit()
-            self.kmeans_num_input.setPlaceholderText("Auto (num neighborhoods)")
+            self.kmeans_num_input.setPlaceholderText("Auto (num communities)")
             self.kmeans_num_input.setMaximumWidth(150)
             from PyQt6.QtGui import QIntValidator
             self.kmeans_num_input.setValidator(QIntValidator(1, 1000))
             layout.addRow(run_button3, self.kmeans_num_input)
             
+            # Reassign identities checkbox
+            self.heatmap = QCheckBox("Generate Intensity Heatmap?")
+            self.heatmap.setChecked(True)
+            layout.addRow(self.heatmap)
+
             # Reassign identities checkbox
             self.reassign_identities_checkbox = QCheckBox("Reassign Identities Based on Clustering Results?")
             self.reassign_identities_checkbox.setChecked(False)
@@ -10745,37 +11614,8 @@ class ViolinDialog(QDialog):
         Returns:
         dict: Dictionary where keys are identity names and values are lists of node IDs
         """
-        identity_lists = {}
         
-        # Get all unique identities
-        all_identities = set()
-        import ast
-        for item in my_network.node_identities:
-            try:
-                parse = ast.literal_eval(my_network.node_identities[item])
-                if isinstance(parse, (list, tuple, set)):
-                    all_identities.update(parse)
-                else:
-                    all_identities.add(str(parse))
-            except:
-                all_identities.add(str(my_network.node_identities[item]))
-        
-        # For each identity, get the list of nodes that have it
-        for identity in all_identities:
-            iden_list = []
-            for item in my_network.node_identities:
-                try:
-                    parse = ast.literal_eval(my_network.node_identities[item])
-                    if identity in parse:
-                        iden_list.append(item)
-                except:
-                    if identity == str(my_network.node_identities[item]):
-                        iden_list.append(item)
-            
-            if iden_list:  # Only add if we found nodes
-                identity_lists[identity] = iden_list
-        
-        return identity_lists
+        return n3d.invert_dict_special(my_network.node_identities)
 
     def prepare_data_for_umap(self, df, node_identities=None):
         """
@@ -10855,42 +11695,51 @@ class ViolinDialog(QDialog):
         # Convert all remaining columns to float type (batch conversion)
         df_copy = df_copy.astype(float)
         
-        # First, calculate the centerpoint for each column by finding the min across all identity groups
+        # Convert index to set for O(1) lookup
+        index_set = set(df_copy.index)
+        
+        # PRE-FILTER: Process identity_lists once and store valid nodes
+        identity_filtered = {}
+        for identity, node_list in identity_lists.items():
+            valid_nodes = [node for node in node_list if node in index_set]
+            if valid_nodes:
+                identity_filtered[str(identity)] = valid_nodes
+        
+        # Calculate centerpoints for all columns
         column_centerpoints = {}
         
         for column in df_copy.columns:
+            column_str = str(column)
             centerpoint = None
             
-            for identity, node_list in identity_lists.items():
-                # Get nodes that exist in both the identity list and the dataframe
-                valid_nodes = [node for node in node_list if node in df_copy.index]
-                if valid_nodes and ((str(identity) == str(column)) or str(identity) == f'{str(column)}+'):
-                    # Get the min value for this identity in this column
-                    identity_min = df_copy.loc[valid_nodes, column].min()
-                    centerpoint = identity_min
-                    break  # Found the match, no need to continue
+            # Try exact match first (e.g., column "CD4" matches identity "CD4")
+            if column_str in identity_filtered:
+                valid_nodes = identity_filtered[column_str]
+                centerpoint = df_copy.loc[valid_nodes, column].min()
+            # Then try with '+' appended (e.g., column "CD4" matches identity "CD4+")
+            elif f'{column_str}+' in identity_filtered:
+                valid_nodes = identity_filtered[f'{column_str}+']
+                centerpoint = df_copy.loc[valid_nodes, column].min()
             
             if centerpoint is not None:
-                # Use the identity-specific centerpoint
                 column_centerpoints[column] = centerpoint
             else:
-                # Fallback: if no matching identity, use column median
-                print(f"Could not find {str(column)} in node identities. As a fallback, using the median of all values in this channel rather than the minimum of user-designated valid values.")
+                # Fallback: use column median
                 column_centerpoints[column] = df_copy[column].median()
         
-        # Now normalize each column using Z-score-like calculation with identity centerpoint
-        df_normalized = df_copy.copy()
-        for column in df_copy.columns:
-            centerpoint = column_centerpoints[column]
-            # Calculate standard deviation of the column
-            std_dev = df_copy[column].std()
-            
-            if std_dev > 0:  # Avoid division by zero
-                # Z-score-like: (value - centerpoint) / std_dev
-                df_normalized[column] = (df_copy[column] - centerpoint) / std_dev
-            else:
-                # If std_dev is 0, just subtract centerpoint
-                df_normalized[column] = df_copy[column] - centerpoint
+        # Vectorized normalization: subtract all centerpoints at once
+        centerpoints_series = pd.Series(column_centerpoints)
+        
+        # Calculate standard deviations for all columns at once
+        std_devs = df_copy.std()
+        
+        # Perform vectorized normalization
+        df_normalized = (df_copy - centerpoints_series) / std_devs
+        
+        # Handle columns with zero std_dev (where division would give NaN/inf)
+        zero_std_cols = std_devs[std_devs == 0].index
+        if len(zero_std_cols) > 0:
+            df_normalized[zero_std_cols] = df_copy[zero_std_cols] - centerpoints_series[zero_std_cols]
         
         # Convert back to original format with first column as regular column
         df_normalized = df_normalized.reset_index()
@@ -10969,9 +11818,9 @@ class ViolinDialog(QDialog):
 
                 com_list = com_dict[int(com)]
 
-                violin_dict = df_to_dict_by_rows(self.df, com_list, f"Z-Score-like Channel Intensities of Community/Neighborhood {com}, {len(com_list)} Nodes")
+                violin_dict = df_to_dict_by_rows(self.df, com_list, f"Z-Score-like Channel Intensities of Community {com}, {len(com_list)} Nodes")
 
-                neighborhoods.create_violin_plots(violin_dict, graph_title=f"Z-Score-like Channel Intensities of Community/Neighborhood {com}, {len(com_list)} Nodes")
+                neighborhoods.create_violin_plots(violin_dict, graph_title=f"Z-Score-like Channel Intensities of Community {com}, {len(com_list)} Nodes")
 
                 return
         except:
@@ -10983,17 +11832,11 @@ class ViolinDialog(QDialog):
 
                 iden = self.idens.currentText()
                 iden_list = []
-                import ast
 
                 for item in my_network.node_identities:
 
-                    try:
-                        parse = ast.literal_eval(my_network.node_identities[item])
-                        if iden in parse:
-                            iden_list.append(item)
-                    except:
-                        if (iden == my_network.node_identities[item]):
-                            iden_list.append(item)
+                    if iden in my_network.node_identities[item]:
+                        iden_list.append(item)
 
                 violin_dict = df_to_dict_by_rows(self.df, iden_list, f"Z-Score-like Channel Intensities of Identity {iden}, {len(iden_list)} Nodes")
 
@@ -11010,9 +11853,9 @@ class ViolinDialog(QDialog):
 
                 com_list = com_dict[int(com)]
 
-                violin_dict = df_to_dict_by_rows(self.df, com_list, f"Z-Score-like Channel Intensities of Community/Neighborhood {com}, {len(com_list)} Nodes")
+                violin_dict = df_to_dict_by_rows(self.df, com_list, f"Z-Score-like Channel Intensities of Community {com}, {len(com_list)} Nodes")
 
-                neighborhoods.create_violin_plots(violin_dict, graph_title=f"Z-Score-like Channel Intensities of Community/Neighborhood {com}, {len(com_list)} Nodes")
+                neighborhoods.create_violin_plots(violin_dict, graph_title=f"Z-Score-like Channel Intensities of Community {com}, {len(com_list)} Nodes")
         except:
             pass
 
@@ -11029,6 +11872,7 @@ class ViolinDialog(QDialog):
 
     def run3(self):
         num_clusters_text = self.kmeans_num_input.text()
+        heatmap = self.heatmap.isChecked()
         
         if num_clusters_text:
             num_clusters = int(num_clusters_text)
@@ -11040,7 +11884,23 @@ class ViolinDialog(QDialog):
         try:
             cluster_dict = self.prepare_data_for_umap(self.backup_df)
             my_network.group_nodes_by_intensity(cluster_dict, count = num_clusters)
-            
+            if heatmap:
+                marker_names = self.backup_df.columns[1:].tolist()
+                #print(marker_names)
+                heatmap_dict = {}
+                com_dict = n3d.invert_dict(my_network.communities)
+                for com in com_dict:
+                    com_array = np.zeros(len(marker_names))
+                    counter = 0
+                    for node in com_dict[com]:
+                        if node in cluster_dict:
+                            counter += 1
+                            com_array += cluster_dict[node]
+                    com_array = np.copy(com_array)/counter
+                    com_dict[com] = com_array
+                from . import neighborhoods
+                output, sorted_id_set = neighborhoods.plot_dict_heatmap(com_dict, marker_names, title = "Average Normalized Node Marker Expression per Community", center_at_zero = True, sublabel = "Community")
+                self.parent().format_for_upperright_table(output, 'CommunityID', sorted_id_set, title = f'Community Intensity Heatmap')
             try:
                 # Check if user wants to reassign identities
                 if self.reassign_identities_checkbox.isChecked():
@@ -11113,10 +11973,14 @@ class ViolinDialog(QDialog):
                 else:
                     # No renaming needed, proceed directly
                     self.parent().format_for_upperright_table(my_network.communities, 'NodeID', 'Community', title = 'Node Communities')
-                    self.accept()
+                    self.coms.setCurrentIndex(0)
+                    self.coms.setEnabled(False)
+                    #self.accept()
             except:
                 self.parent().format_for_upperright_table(my_network.communities, 'NodeID', 'Community', title = 'Node Communities')
-                self.accept()
+                self.coms.setCurrentIndex(0)
+                self.coms.setEnabled(False)
+                #self.accept()
         except:
             import traceback
             print(traceback.format_exc())
@@ -11125,16 +11989,16 @@ class ViolinDialog(QDialog):
 class NeighborhoodRenameDialog(QDialog):
     def __init__(self, neighborhood_id, averages, node_count, parent=None):
         super().__init__(parent)
-        self.setWindowTitle(f"Rename Neighborhood {neighborhood_id}")
+        self.setWindowTitle(f"Rename Community {neighborhood_id}")
         self.setModal(False)
         
         layout = QVBoxLayout(self)
         
         # Instructions
         instructions = QLabel(
-            f"<b>Neighborhood {neighborhood_id}</b><br>"
+            f"<b>Community {neighborhood_id}</b><br>"
             f"Contains {node_count} nodes<br><br>"
-            f"Please review the normalized average marker intensities below and provide a name for this neighborhood:"
+            f"Please review the normalized average marker intensities below and provide a name for this community:"
         )
         instructions.setWordWrap(True)
         layout.addWidget(instructions)
@@ -11156,9 +12020,9 @@ class NeighborhoodRenameDialog(QDialog):
         layout.addWidget(scroll)
         
         # Text input for new name
-        layout.addWidget(QLabel("<b>New Neighborhood Name:</b>"))
+        layout.addWidget(QLabel("<b>New Community Name:</b>"))
         self.name_input = QLineEdit()
-        self.name_input.setPlaceholderText(f"Leave blank to not overwrite node identities for this neighborhood'")
+        self.name_input.setPlaceholderText(f"Leave blank to not overwrite node identities for this community'")
         layout.addWidget(self.name_input)
         
         # Buttons
@@ -12253,11 +13117,6 @@ class ThresholdDialog(QDialog):
         ML.clicked.connect(lambda: self.start_ml(GPU = False))
         layout.addRow(ML)
 
-        # Add ML button
-        #ML2 = QPushButton("Machine Learning (GPU)")
-        #ML2.clicked.connect(lambda: self.start_ml(GPU = True))
-        #layout.addRow(ML2)
-
 
     def thresh_mode(self):
 
@@ -12959,28 +13818,6 @@ class MachineWindow(QMainWindow):
         return msg.exec() == QMessageBox.StandardButton.Yes
 
 
-
-    def check_for_z_change(self):
-        current_z = self.parent().current_slice
-        if not hasattr(self, '_last_z'):
-            self._last_z = current_z
-            return False
-        
-        changed = (self._last_z != current_z)
-        self._last_z = current_z
-        
-        if changed and self.previewing and self.segmentation_worker is not None:
-            self.segmentation_worker.stop()
-            time.sleep(0.1)
-            
-            # Force regeneration of chunks
-            self.segmenter.realtimechunks = None
-            
-            # Restart the worker
-            self.start_segmentation()
-            
-        return changed
-
     def update_display(self):
         if not hasattr(self, '_last_update'):
             self._last_update = 0
@@ -13220,8 +14057,6 @@ class SegmentationWorker(QThread):
                     self.chunks_since_update = 0
                     self.last_update = current_time 
 
-            self.machine_window.parent().update_display()
-
             self.finished.emit()
 
             
@@ -13235,13 +14070,21 @@ class ThresholdWindow(QMainWindow):
     processing_complete = pyqtSignal()  # Emitted when user finishes and images are modified
     processing_cancelled = pyqtSignal()  # Emitted when user cancels
 
-    def __init__(self, parent=None, accepted_mode=0):
+    def __init__(self, parent=None, accepted_mode=0, nohigh = False, title = None, has_model = False, automated = False):
         super().__init__(parent)
         self.parent().thresh_window_ref = self
-        self.setWindowTitle("Threshold")
+        if title:
+            self.setWindowTitle(f"Threshold - {title}")
+            self.title = title
+        else:
+            self.setWindowTitle("Threshold")
+
 
         self.accepted_mode = accepted_mode
         self.preview = True
+        self.nohigh = nohigh
+        self.has_model = has_model
+        self.automated = automated
         
         # Create central widget and layout
         central_widget = QWidget()
@@ -13262,11 +14105,13 @@ class ThresholdWindow(QMainWindow):
             self.parent().set_active_channel(0)
             nodes = list(my_network.network.nodes())
             img_nodes = list(np.unique(my_network.nodes))
+            from . import histos
+            G = histos.convert_to_multigraph(my_network.network)
             if 0 in img_nodes:
                 del img_nodes[0]
             for node in img_nodes:
                 if node in nodes:
-                    self.parent().degree_dict[int(node)] = my_network.network.degree(node)
+                    self.parent().degree_dict[int(node)] = G.degree(node)
                 else:
                     self.parent().degree_dict[int(node)] = 0
 
@@ -13303,7 +14148,7 @@ class ThresholdWindow(QMainWindow):
             n_bins = int(np.ceil(np.log2(nonzero_data_sampled.size)) + 1)
             n_bins = np.clip(n_bins, MIN_HISTOGRAM_BINS, MAX_HISTOGRAM_BINS)
 
-            counts, bin_edges = np.histogram(nonzero_data_sampled, bins=n_bins, density=False)
+            self.counts, self.bin_edges = np.histogram(nonzero_data_sampled, bins=n_bins, density=False)
             
             self.bounds = True
             self.parent().bounds = True
@@ -13318,25 +14163,137 @@ class ThresholdWindow(QMainWindow):
         
         # Pre-compute histogram with numpy
         if accepted_mode != 0:
-            counts, bin_edges = np.histogram(self.histo_list, bins=50)
-            bin_centers = (bin_edges[:-1] + bin_edges[1:]) / 2
-                    # Store histogram bounds
+            # First create initial histogram to analyze data distribution
+            initial_counts, initial_edges = np.histogram(self.histo_list, bins=50)
+            
+            # Detect empty region on the right
+            max_count = np.max(initial_counts)
+            
+            if max_count > 0:
+                # Use a threshold - buckets with very few counts relative to max
+                threshold = max(2, 0.01 * max_count)
+                significant_buckets = np.where(initial_counts >= threshold)[0]
+                
+                if len(significant_buckets) > 0:
+                    last_significant_idx = significant_buckets[-1]
+                    empty_buckets = len(initial_counts) - last_significant_idx - 1
+                    
+                    if empty_buckets >= 3:
+                        # There's a significant empty region, use special binning
+                        visible_max = initial_edges[last_significant_idx + 1]
+                        actual_max = max(self.histo_list)
+                        data_min_val = min(self.histo_list)
+                        
+                        # Create 49 equal-width bins from min to visible_max
+                        visible_bin_edges = np.linspace(data_min_val, visible_max, 50)
+                        
+                        # Create 21 equal-width bins from visible_max to actual_max
+                        tail_bin_edges = np.linspace(visible_max, actual_max, 22)[1:]  # Skip first edge (duplicate)
+                        
+                        # Combine all edges
+                        all_bin_edges = np.concatenate([visible_bin_edges, tail_bin_edges])
+                        
+                        # Compute histogram with these custom bins (49 + 21 = 70 bins total)
+                        self.counts, self.bin_edges = np.histogram(self.histo_list, bins=all_bin_edges)
+                        
+                        # Store info for non-linear x-axis
+                        self.has_nonuniform_bins = True
+                        self.visible_max = visible_max
+                        
+                        # Visual positions: 70 total positions, proportional spacing
+                        # First 49 bins: positions 0-49 (each gets width 1)
+                        # Last 21 bins: positions 49-70 (each gets width 1)
+                        visible_positions = np.arange(49)  # 0, 1, 2, ..., 48
+                        tail_positions = np.arange(49, 70)  # 49, 50, 51, ..., 69
+                        self.visual_positions = np.concatenate([visible_positions, tail_positions])
+                    else:
+                        self.counts, self.bin_edges = initial_counts, initial_edges
+                        self.has_nonuniform_bins = False
+                        self.visual_positions = None
+                else:
+                    self.counts, self.bin_edges = initial_counts, initial_edges
+                    self.has_nonuniform_bins = False
+                    self.visual_positions = None
+            else:
+                self.counts, self.bin_edges = initial_counts, initial_edges
+                self.has_nonuniform_bins = False
+                self.visual_positions = None
+            
+            # Store histogram bounds
             if self.bounds:
                 self.data_min = 0
             else:
                 self.data_min = min(self.histo_list)
             self.data_max = max(self.histo_list)
         else:
-            bin_centers = (bin_edges[:-1] + bin_edges[1:]) / 2
-            bin_width = bin_edges[1] - bin_edges[0]
-        
+            bin_centers = (self.bin_edges[:-1] + self.bin_edges[1:]) / 2
+            bin_width = self.bin_edges[1] - self.bin_edges[0]
+            self.has_nonuniform_bins = False
+            self.visual_positions = None
+
         # Plot pre-computed histogram
         self.ax = fig.add_subplot(111)
-        self.ax.bar(bin_centers, counts, width=bin_edges[1] - bin_edges[0], alpha=0.5)
-        
-        # Add vertical lines for thresholds
-        self.min_line = self.ax.axvline(self.data_min, color='r')
-        self.max_line = self.ax.axvline(self.data_max, color='b')
+
+        if self.has_nonuniform_bins:
+            # Plot using visual positions - all bins have width 1.0 in visual space
+            self.ax.bar(self.visual_positions, self.counts, width=1.0, alpha=0.5, align='center')
+            
+            # Set x-axis limits with padding (total visual range is 0-70)
+            self.ax.set_xlim(-3.5, 73.5)
+            
+            # Create custom tick labels to show actual values
+            self.ax.set_xticks([])  # Remove default ticks
+            
+            # Add text annotations - visible_max above, others below
+            y_min, y_max = self.ax.get_ylim()
+            text_y_below = y_min - 0.08 * (y_max - y_min)  # Below the axis
+            text_y_above = y_max + 0.05 * (y_max - y_min)  # Above the histogram
+            
+            # Min label (below)
+            self.ax.text(0, text_y_below, f'{self.data_min:.1f}', 
+                        ha='center', va='top', fontsize=9, color='black')
+            
+            # Visible_max label (above, in white space) - positioned at boundary between regions
+            self.ax.text(49, text_y_above, f'Long Tail Start: {self.visible_max:.1f}', 
+                        ha='center', va='bottom', fontsize=9, color='green',
+                        bbox=dict(boxstyle='round,pad=0.3', facecolor='white', edgecolor='green', alpha=0.8))
+            
+            # Max label (below)
+            self.ax.text(69, text_y_below, f'{self.data_max:.1f}', 
+                        ha='center', va='top', fontsize=9, color='black')
+            
+            # Add grid lines at these positions for clarity (subtle)
+            for pos in [0, 49, 69]:
+                self.ax.axvline(pos, color='lightgray', linestyle=':', alpha=0.5, linewidth=0.8)
+            
+            # Add vertical line for visible_max (green, prominent) - at position 49
+            self.visible_max_line = self.ax.axvline(49, color='green', linestyle='--', 
+                                                   linewidth=2.5, alpha=0.7, zorder=9, 
+                                                   label='Tail Start')
+            
+            # Add vertical lines for thresholds (in visual space initially, more prominent)
+            self.min_line = self.ax.axvline(self.value_to_visual(self.data_min), color='r', 
+                                           linewidth=2.5, alpha=0.8, zorder=10, label='Min')
+            self.max_line = self.ax.axvline(self.value_to_visual(self.data_max), color='b', 
+                                           linewidth=2.5, alpha=0.8, zorder=10, label='Max')
+            
+            #self.ax.legend(loc='best', fontsize='small')
+        else:
+            # Standard linear plotting
+            bin_centers = (self.bin_edges[:-1] + self.bin_edges[1:]) / 2
+            bin_widths = self.bin_edges[1:] - self.bin_edges[:-1]
+            self.ax.bar(bin_centers, self.counts, width=bin_widths, alpha=0.5, align='center')
+            
+            # Add padding (5% on each side)
+            data_range = self.data_max - self.data_min
+            padding = 0.05 * data_range
+            self.ax.set_xlim(self.data_min - padding, self.data_max + padding)
+            
+            # Add vertical lines for thresholds (in actual value space, more prominent)
+            self.min_line = self.ax.axvline(self.data_min, color='r', linewidth=2.5, alpha=0.8, 
+                                           zorder=10, label='Min')
+            self.max_line = self.ax.axvline(self.data_max, color='b', linewidth=2.5, alpha=0.8, 
+                                           zorder=10, label='Max')
         
         # Connect events for dragging
         self.canvas.mpl_connect('button_press_event', self.on_press)
@@ -13371,9 +14328,14 @@ class ThresholdWindow(QMainWindow):
 
 
         # Keep your existing Apply Threshold button, but modify its behavior
-        run_button = QPushButton("Apply Threshold/Continue")
-        run_button.clicked.connect(self.apply_and_continue)  # New method
-        button_layout.addWidget(run_button)
+        self.run_button = QPushButton("Apply Threshold/Continue")
+        self.run_button.clicked.connect(self.apply_and_continue)  # New method
+        button_layout.addWidget(self.run_button)
+
+        if self.has_model:
+            self.model_button = QPushButton("Predict Bounds with Current Model")
+            self.model_button.clicked.connect(self.predict)
+            button_layout.addWidget(self.model_button)
         
         # Add Cancel button for external dialog use
         cancel_button = QPushButton("Cancel/Skip (Retains Selection)")
@@ -13386,6 +14348,83 @@ class ThresholdWindow(QMainWindow):
         # Set a reasonable default size
         self.setMinimumWidth(400)
         self.setMinimumHeight(400)
+
+    def value_to_visual(self, value):
+        """Convert actual data value to visual x-axis position"""
+        if not self.has_nonuniform_bins:
+            return value
+        
+        # Clamp value to valid range
+        value = np.clip(value, self.data_min, self.data_max)
+        
+        if value <= self.visible_max:
+            # Linear mapping in the visible region (0-49)
+            visual_pos = (value - self.data_min) / (self.visible_max - self.data_min) * 49
+        else:
+            # Map to the tail region (49-70)
+            visual_pos = 49 + (value - self.visible_max) / (self.data_max - self.visible_max) * 21
+        
+        return visual_pos
+
+    def visual_to_value(self, visual_pos):
+        """Convert visual x-axis position to actual data value"""
+        if not self.has_nonuniform_bins:
+            return visual_pos
+        
+        # Clamp to valid visual range
+        visual_pos = np.clip(visual_pos, 0, 70)
+        
+        if visual_pos <= 49:
+            # Linear mapping from visible region
+            value = self.data_min + (visual_pos / 49) * (self.visible_max - self.data_min)
+        else:
+            # Map from tail region
+            value = self.visible_max + ((visual_pos - 49) / 21) * (self.data_max - self.visible_max)
+        
+        return value
+
+    def showEvent(self, event):
+        """Called when window is shown - trigger automation here"""
+        super().showEvent(event)
+        
+        if self.automated:
+            # Disable all user interaction
+            self.setEnabled(False)
+            
+            # Optionally update title to show it's automated
+            self.setWindowTitle(f"{self.windowTitle()} [AUTO-PROCESSING...]")
+            
+            # Use QTimer to execute after window is fully shown and event loop is running
+            def auto_execute():
+                if not self.parent().old_thresh:
+                    if self.has_model:
+                        self.predict()
+                else:
+                    self.parent().old_thresh[self.title]
+                    min_thresh, max_thresh = self.parent().old_thresh[self.title]
+                    self.max.setText(str(max_thresh))
+                    self.min.setText(str(min_thresh))
+                    self.max_value_changed()
+                    self.min_value_changed()
+                self.apply_and_continue()
+            
+            QTimer.singleShot(200, auto_execute)
+        else:
+            self.min.setText(str((self.data_min + self.data_max)/50))
+
+            self.min_value_changed()
+
+    def predict(self):
+        try:
+            data_dict = {'chan1': [self.counts, self.bin_edges]}
+            bounds = self.has_model.predict(data_dict)
+            min_thresh, max_thresh = bounds['chan1']
+            self.max.setText(str(max_thresh))
+            self.min.setText(str(min_thresh))
+            self.max_value_changed()
+            self.min_value_changed()
+        except Exception as e:
+            print(f"Error predicting: {e}")
 
     def apply_and_continue(self):
         """Apply threshold, modify main window images, then signal completion"""
@@ -13440,50 +14479,64 @@ class ThresholdWindow(QMainWindow):
         self.parent().targs = None
         self.parent().bounds = False
         self.parent().thresh_window_ref = None
+        self.counts = None
+        self.bin_edges = None
         self.make_full_highlight()
+        self.processing_cancelled.emit()
 
 
     def get_values_in_range_all_vols(self, chan, min_val, max_val):
-        output = []
+        # Select the appropriate dictionary based on mode
         if self.accepted_mode == 1:
-            for node, vol in self.parent().volume_dict[chan].items():
-                if min_val <= vol <= max_val:
-                    output.append(node)
+            data_dict = self.parent().volume_dict[chan]
         elif self.accepted_mode == 2:
-            for node, vol in self.parent().radii_dict[chan].items():
-                if min_val <= vol <= max_val:
-                    output.append(node)
+            data_dict = self.parent().radii_dict[chan]
         elif self.accepted_mode == 3:
-            for node, vol in self.parent().degree_dict.items():
-                if min_val <= vol <= max_val:
-                    output.append(node)
+            data_dict = self.parent().degree_dict
         elif self.accepted_mode == 4:
-            for node, vol in self.parent().special_dict.items():
-                if min_val <= vol <= max_val:
-                    output.append(node)
-        return output
+            data_dict = self.parent().special_dict
+        else:
+            return []
+        
+        # Convert to numpy arrays once
+        nodes = np.array(list(data_dict.keys()))
+        values = np.array(list(data_dict.values()))
+        
+        # Vectorized range check (much faster than loop)
+        mask = (values >= min_val) & (values <= max_val)
+        # Return filtered nodes
+        return nodes[mask].tolist()
 
     def get_values_in_range(self, lst, min_val, max_val):
-        values = [x for x in lst if min_val <= x <= max_val]
-        output = []
-        if self.accepted_mode == 1:
-            for item in self.parent().volume_dict[self.parent().active_channel]:
-                if self.parent().volume_dict[self.parent().active_channel][item] in values:
-                    output.append(item)
-        elif self.accepted_mode == 2:
-            for item in self.parent().radii_dict[self.parent().active_channel]:
-                if self.parent().radii_dict[self.parent().active_channel][item] in values:
-                    output.append(item)
-        elif self.accepted_mode == 3:
-            for item in self.parent().degree_dict:
-                if self.parent().degree_dict[item] in values:
-                    output.append(item)
-        elif self.accepted_mode == 4:
-            for item in self.parent().special_dict:
-                if self.parent().special_dict[item] in values:
-                    output.append(item)
+        # Vectorized range filtering
 
-        return output
+        lst_array = np.array(lst)
+        values = lst_array[(lst_array >= min_val) & (lst_array <= max_val)]
+        
+        # If no values in range, return early
+        if len(values) == 0:
+            return []
+        
+        # Select appropriate dictionary
+        if self.accepted_mode == 1:
+            data_dict = self.parent().volume_dict[self.parent().active_channel]
+        elif self.accepted_mode == 2:
+            data_dict = self.parent().radii_dict[self.parent().active_channel]
+        elif self.accepted_mode == 3:
+            data_dict = self.parent().degree_dict
+        elif self.accepted_mode == 4:
+            data_dict = self.parent().special_dict
+        else:
+            return []
+        
+        # Convert to arrays
+        nodes = np.array(list(data_dict.keys()))
+        dict_values = np.array(list(data_dict.values()))
+        
+        # Vectorized membership test (much faster than 'in values' loop)
+        mask = np.isin(dict_values, values)
+        
+        return nodes[mask].tolist()
 
 
     def min_value_changed(self):
@@ -13505,7 +14558,11 @@ class ThresholdWindow(QMainWindow):
                 if value > max_val:
                     # If min would exceed max, set max to its highest possible value
                     self.max.setText(str(round(self.data_max, 2)))
-                    self.max_line.set_xdata([self.data_max, self.data_max])
+                    if self.has_nonuniform_bins:
+                        self.max_line.set_xdata([self.value_to_visual(self.data_max), 
+                                                self.value_to_visual(self.data_max)])
+                    else:
+                        self.max_line.set_xdata([self.data_max, self.data_max])
                     # And set min to the previous max value
                     value = max_val
                     self.min.setText(str(round(value, 2)))
@@ -13523,15 +14580,23 @@ class ThresholdWindow(QMainWindow):
                         self.parent().highlight_overlay = None
                         self.parent().create_highlight_overlay_slice(self.targs, bounds = self.bounds)
                 
-                # Update the line
-                self.min_line.set_xdata([value, value])
+                # Update the line (convert to visual coordinates if needed)
+                if self.has_nonuniform_bins:
+                    visual_pos = self.value_to_visual(value)
+                    self.min_line.set_xdata([visual_pos, visual_pos])
+                else:
+                    self.min_line.set_xdata([value, value])
+                
                 self.canvas.draw()
-
-
                 
             except ValueError:
                 # If invalid number, reset to current line position
-                self.min.setText(str(round(self.min_line.get_xself.data_mindata()[0], 2)))
+                current_x = self.min_line.get_xdata()[0]
+                if self.has_nonuniform_bins:
+                    actual_value = self.visual_to_value(current_x)
+                else:
+                    actual_value = current_x
+                self.min.setText(str(round(actual_value, 2)))
         except:
             pass
 
@@ -13554,7 +14619,11 @@ class ThresholdWindow(QMainWindow):
                 if value < min_val:
                     # If max would go below min, set min to its lowest possible value
                     self.min.setText(str(round(self.data_min, 2)))
-                    self.min_line.set_xdata([self.data_min, self.data_min])
+                    if self.has_nonuniform_bins:
+                        self.min_line.set_xdata([self.value_to_visual(self.data_min), 
+                                                self.value_to_visual(self.data_min)])
+                    else:
+                        self.min_line.set_xdata([self.data_min, self.data_min])
                     # And set max to the previous min value
                     value = min_val
                     self.max.setText(str(round(value, 2)))
@@ -13572,13 +14641,23 @@ class ThresholdWindow(QMainWindow):
                         self.parent().highlight_overlay = None
                         self.parent().create_highlight_overlay_slice(self.targs, bounds = self.bounds)
                 
-                # Update the line
-                self.max_line.set_xdata([value, value])
+                # Update the line (convert to visual coordinates if needed)
+                if self.has_nonuniform_bins:
+                    visual_pos = self.value_to_visual(value)
+                    self.max_line.set_xdata([visual_pos, visual_pos])
+                else:
+                    self.max_line.set_xdata([value, value])
+                
                 self.canvas.draw()
             
             except ValueError:
                 # If invalid number, reset to current line position
-                self.max.setText(str(round(self.max_line.get_xdata()[0], 2)))
+                current_x = self.max_line.get_xdata()[0]
+                if self.has_nonuniform_bins:
+                    actual_value = self.visual_to_value(current_x)
+                else:
+                    actual_value = current_x
+                self.max.setText(str(round(actual_value, 2)))
         except:
             pass
         
@@ -13600,20 +14679,36 @@ class ThresholdWindow(QMainWindow):
         try:
             if not self.dragging or event.inaxes != self.ax:
                 return
+            
+            # Convert visual position to actual value
+            if self.has_nonuniform_bins:
+                actual_value = self.visual_to_value(event.xdata)
+            else:
+                actual_value = event.xdata
                 
             if self.dragging == 'min':
-                if event.xdata < self.max_line.get_xdata()[0]:
-                    self.min_line.set_xdata([event.xdata, event.xdata])
-                    self.min.setText(str(round(event.xdata, 2)))
-            else:
-                if event.xdata > self.min_line.get_xdata()[0]:
-                    self.max_line.set_xdata([event.xdata, event.xdata])
-                    self.max.setText(str(round(event.xdata, 2)))
+                max_val = float(self.max.text()) if self.max.text() else self.data_max
+                if actual_value < max_val:
+                    if self.has_nonuniform_bins:
+                        visual_pos = self.value_to_visual(actual_value)
+                        self.min_line.set_xdata([visual_pos, visual_pos])
+                    else:
+                        self.min_line.set_xdata([actual_value, actual_value])
+                    self.min.setText(str(round(actual_value, 2)))
+            else: 
+                min_val = float(self.min.text()) if self.min.text() else self.data_min
+                if actual_value > min_val:
+                    if self.has_nonuniform_bins:
+                        visual_pos = self.value_to_visual(actual_value)
+                        self.max_line.set_xdata([visual_pos, visual_pos])
+                    else:
+                        self.max_line.set_xdata([actual_value, actual_value])
+                    self.max.setText(str(round(actual_value, 2)))
                     
             self.canvas.draw()
         except:
             pass
-        
+            
     def on_release(self, event):
         self.min_value_changed()
         self.max_value_changed()
@@ -13633,22 +14728,26 @@ class ThresholdWindow(QMainWindow):
     def thresh(self):
         try:
 
-            if self.parent().active_channel == 0:
-                self.parent().create_highlight_overlay(node_indices = self.targs, bounds = self.bounds)
-            elif self.parent().active_channel == 1:
-                self.parent().create_highlight_overlay(edge_indices = self.targs, bounds = self.bounds)
-            elif self.parent().active_channel == 2:
-                self.parent().create_highlight_overlay(overlay1_indices = self.targs, bounds = self.bounds)
-            elif self.parent().active_channel == 3:
-                self.parent().create_highlight_overlay(overlay2_indices = self.targs, bounds = self.bounds)
+            if not self.nohigh:
 
-            channel_data = self.parent().channel_data[self.parent().active_channel]
-            mask = self.parent().highlight_overlay > 0
-            channel_data = channel_data * mask
+                if self.parent().active_channel == 0:
+                    self.parent().create_highlight_overlay(node_indices = self.targs, bounds = self.bounds)
+                elif self.parent().active_channel == 1:
+                    self.parent().create_highlight_overlay(edge_indices = self.targs, bounds = self.bounds)
+                elif self.parent().active_channel == 2:
+                    self.parent().create_highlight_overlay(overlay1_indices = self.targs, bounds = self.bounds)
+                elif self.parent().active_channel == 3:
+                    self.parent().create_highlight_overlay(overlay2_indices = self.targs, bounds = self.bounds)
+                channel_data = self.parent().channel_data[self.parent().active_channel]
+                mask = self.parent().highlight_overlay > 0
+                channel_data = channel_data * mask
+                self.parent().load_channel(self.parent().active_channel, channel_data, True)
+                self.parent().update_display()
+            else:
+                self.parent().thresh_vals = self.targs
+
             self.parent().thresh_min = self.prev_min
             self.parent().thresh_max = self.prev_max
-            self.parent().load_channel(self.parent().active_channel, channel_data, True)
-            self.parent().update_display()
             self.close()
             
         except Exception as e:
@@ -13988,6 +15087,104 @@ class HoleDialog(QDialog):
                 "Error",
                 f"Error running fill holes: {str(e)}"
             )
+
+class HexNodeDialog(QDialog):
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle("Generate Hexagonal Nodes (Can serve as artificial cells to be labeled for channel identity). Dimensions match current image (requires any image to be loaded).")
+        self.setModal(False)
+        
+        main_layout = QFormLayout(self)
+
+        self.side_length = QLineEdit("")
+        self.side_length.setPlaceholderText("Enter number...")
+        main_layout.addRow("Hexagon Side Length?: ", self.side_length)
+
+        self.xy_scale = QLineEdit(f"{my_network.xy_scale}")
+        main_layout.addRow("xy scale for side length?: ", self.xy_scale)
+
+        self.z_scale = QLineEdit(f"{my_network.z_scale}")
+        main_layout.addRow("z scale for side depth?: ", self.z_scale)
+
+        self.down_factor = QLineEdit("")
+        main_layout.addRow("(Optional) - Internal Downsample Factor?: ", self.down_factor)
+
+        # Add mode selection dropdown
+        self.mode = QComboBox()
+        self.mode.addItems(["Dodecahedrons (More 3D)", "Prisms (Faster)"])
+        self.mode.setCurrentIndex(0)
+        main_layout.addRow("For 3D Data:", self.mode)
+
+        self.mask = QPushButton("Mask")
+        self.mask.setCheckable(True)
+        self.mask.setChecked(False)
+        main_layout.addRow("Mask Hexagons by Binary Mask in Nodes Channel?: ", self.mask)
+
+        run_button = QPushButton("Create Hexagons")
+        run_button.clicked.connect(self.run)
+        main_layout.addWidget(run_button)
+
+    def run(self):
+
+        try:
+            side_length = float(self.side_length.text())
+        except:
+            return
+
+        try:
+            xy_scale = float(self.xy_scale)
+        except:
+            xy_scale = 1
+
+        try:
+            z_scale = float(self.z_scale)
+        except:
+            z_scale = 1
+
+        try:
+            down_factor = float(self.down_factor.text())
+        except:
+            down_factor = None
+
+        shape = self.parent().shape
+
+        if down_factor:
+            shape = (max(1, int(shape[0]/down_factor)), max(1, int(shape[1]/down_factor)), max(1, int(shape[2]/down_factor)))
+            #side_length = side_length/down_factor
+            xy_scale = xy_scale * down_factor
+            z_scale = z_scale * down_factor
+
+
+        mask = self.mask.isChecked()
+
+        if mask:
+            nodes = my_network.nodes != 0
+            if down_factor:
+                nodes = n3d.downsample(nodes, down_factor)
+                shape = nodes.shape
+        else:
+            nodes = None
+
+        if self.mode.currentIndex() == 0:
+            mode = 'dodecahedron'
+        else:
+            mode = 'prism'
+
+        from . import hexagons
+
+        overlay_2 = hexagons.generate_hexagonal_labels(side_length, shape, xy_scale = xy_scale, z_scale = z_scale, shape_3d = mode)
+
+        if nodes is not None:
+            overlay_2 = overlay_2 * nodes
+
+        if down_factor:
+            overlay_2 = n3d.upsample_with_padding(overlay_2, original_shape = self.parent().shape)
+
+
+        self.parent().load_channel(3, overlay_2, True)
+
+        self.accept()
+
 
 class FilamentDialog(QDialog):
     def __init__(self, parent=None):
@@ -15632,6 +16829,11 @@ class ModifyDialog(QDialog):
         self.revdupeid.setChecked(False)
         layout.addRow("Force Any Multiple IDs to Pick a Random Single ID?:", self.revdupeid)
 
+        self.revnegid = QPushButton("Remove Negative IDs")
+        self.revnegid.setCheckable(True)
+        self.revnegid.setChecked(False)
+        layout.addRow("Remove All Negative Identities (those that end with a -)?:", self.revnegid)
+
 
         self.remove = QPushButton("Remove Missing")
         self.remove.setCheckable(True)
@@ -15686,6 +16888,10 @@ class ModifyDialog(QDialog):
         self.comcollapse.setChecked(False)
         layout.addRow("Convert communities to nodes?:", self.comcollapse)
 
+        iden_button = QPushButton("Change/Remove Identities")
+        iden_button.clicked.connect(lambda: self.show_alter_iden_dialog(parent = self.parent()))
+        layout.addRow(iden_button)
+
         #change button
         change_button = QPushButton("Add/Remove Network Pairs")
         change_button.clicked.connect(self.show_alter_dialog)
@@ -15712,6 +16918,7 @@ class ModifyDialog(QDialog):
 
             revid = self.revid.isChecked()
             revdupeid = self.revdupeid.isChecked()
+            revnegid = self.revnegid.isChecked()
             trunk = self.trunk.isChecked()
             if not trunk:
                 trunknode = self.trunknode.isChecked()
@@ -15740,15 +16947,25 @@ class ModifyDialog(QDialog):
                 try:
                     for node, iden in my_network.node_identities.items():
                         try:
-                            import ast
                             import random
-                            iden = ast.literal_eval(iden)
                             my_network.node_identities[node] = random.choice(iden)
                         except:
                             pass
                     self.parent().format_for_upperright_table(my_network.node_identities, 'NodeID', 'Identity', 'Node Identities')
                 except:
                     pass
+
+            if revnegid:
+                new_idens = {}
+                for node, idens in my_network.node_identities.items():
+                        new_subidens = []
+                        for subiden in idens:
+                            if not subiden.endswith('-'):
+                                new_subidens.append(subiden)
+                        if new_subidens != []:
+                            new_idens[node] = new_subidens
+                my_network.node_identities = new_idens
+                self.parent().format_for_upperright_table(my_network.node_identities, 'NodeID', 'Identity', 'Node Identities')
 
 
             if remove:
@@ -15763,6 +16980,19 @@ class ModifyDialog(QDialog):
                     pass
                 try:
                     self.parent().format_for_upperright_table(my_network.communities, 'NodeID', 'Community', 'Node Communities')
+                except:
+                    pass
+                try:
+                    if not hasattr(my_network, 'network_lists') or my_network.network_lists is None:
+                        empty_df = pd.DataFrame(columns=['Node A', 'Node B', 'Edge C'])
+                        model = PandasModel(empty_df)
+                        self.parent().network_table.setModel(model)
+                    else:
+                        model = PandasModel(my_network.network_lists)
+                        self.parent().network_table.setModel(model)
+                        # Adjust column widths to content
+                        for column in range(model.columnCount(None)):
+                            self.parent().network_table.resizeColumnToContents(column)
                 except:
                     pass
 
@@ -15823,6 +17053,11 @@ class ModifyDialog(QDialog):
                 except Exception as e:
                     print(f"Error loading node identity table: {e}")
 
+            self.parent().clear_subgraphs()
+
+            self.parent().network_graph_widget.set_graph(my_network.network)
+            self.parent().update_graph_fields()
+
             self.parent().update_display()
             self.accept()
 
@@ -15832,7 +17067,705 @@ class ModifyDialog(QDialog):
             print(f"An error occurred: {e}")
 
 
+    def show_alter_iden_dialog(self, parent=None):
+        """
+        Enhanced dialog to remove or rename identities
+        
+        Args:
+            parent: Optional parent widget for the dialog
+        
+        Returns:
+            tuple: (accepted: bool, classifiers: list of dicts)
+        """
+        all_idens = my_network.node_identities.values()
+        seen = set()
+        for iden in all_idens:
+            seen.update(iden)
+        string_list = sorted(seen)
+        
+        dialog = QDialog(parent)
+        dialog.setWindowTitle("Manage Identities")
+        dialog.setMinimumWidth(900)
+        dialog.setMinimumHeight(600)
+        
+        main_layout = QVBoxLayout()
+        
+        # Create tab widget
+        tab_widget = QTabWidget()
+        
+        # ============= DELETE TAB =============
+        delete_tab = QWidget()
+        delete_layout = QVBoxLayout()
+        
+        delete_label = QLabel(f"Manage items ({len(string_list)} unique items):")
+        delete_layout.addWidget(delete_label)
+        
+        # Instructions
+        instructions = QLabel(
+            "Left: Select items to REMOVE | Right: Select items to KEEP (overrides remove)\n"
+            "Tip: Click and drag to select multiple items, or use Ctrl/Shift+Click"
+        )
+        instructions.setStyleSheet("color: #666; font-style: italic;")
+        delete_layout.addWidget(instructions)
+        
+        # Two-column layout for remove/keep
+        columns_layout = QHBoxLayout()
+        
+        # Remove column
+        remove_column = QVBoxLayout()
+        remove_label = QLabel("Items to REMOVE:")
+        remove_label.setStyleSheet("font-weight: bold;")
+        remove_column.addWidget(remove_label)
+        
+        remove_list = QListWidget()
+        remove_list.setSelectionMode(QListWidget.SelectionMode.ExtendedSelection)
+        for item in sorted(string_list):
+            list_item = QListWidgetItem(item)
+            list_item.setFlags(list_item.flags() | Qt.ItemFlag.ItemIsUserCheckable)
+            list_item.setCheckState(Qt.CheckState.Unchecked)
+            remove_list.addItem(list_item)
+        remove_column.addWidget(remove_list)
+        
+        # Quick select buttons for remove
+        remove_buttons = QHBoxLayout()
+        check_selected_remove = QPushButton("Check Selected")
+        uncheck_selected_remove = QPushButton("Uncheck Selected")
+        check_all_remove = QPushButton("Check All")
+        uncheck_all_remove = QPushButton("Uncheck All")
+        
+        remove_buttons.addWidget(check_selected_remove)
+        remove_buttons.addWidget(uncheck_selected_remove)
+        remove_buttons.addWidget(check_all_remove)
+        remove_buttons.addWidget(uncheck_all_remove)
+        remove_column.addLayout(remove_buttons)
+        
+        columns_layout.addLayout(remove_column)
+        
+        # Keep column
+        keep_column = QVBoxLayout()
+        keep_label = QLabel("Items to KEEP (priority):")
+        keep_label.setStyleSheet("font-weight: bold; color: green;")
+        keep_column.addWidget(keep_label)
+        
+        keep_list = QListWidget()
+        keep_list.setSelectionMode(QListWidget.SelectionMode.ExtendedSelection)
+        for item in sorted(string_list):
+            list_item = QListWidgetItem(item)
+            list_item.setFlags(list_item.flags() | Qt.ItemFlag.ItemIsUserCheckable)
+            list_item.setCheckState(Qt.CheckState.Unchecked)
+            keep_list.addItem(list_item)
+        keep_column.addWidget(keep_list)
+        
+        # Quick select buttons for keep
+        keep_buttons = QHBoxLayout()
+        check_selected_keep = QPushButton("Check Selected")
+        uncheck_selected_keep = QPushButton("Uncheck Selected")
+        check_all_keep = QPushButton("Check All")
+        uncheck_all_keep = QPushButton("Uncheck All")
+        
+        keep_buttons.addWidget(check_selected_keep)
+        keep_buttons.addWidget(uncheck_selected_keep)
+        keep_buttons.addWidget(check_all_keep)
+        keep_buttons.addWidget(uncheck_all_keep)
+        keep_column.addLayout(keep_buttons)
+        
+        columns_layout.addLayout(keep_column)
+        delete_layout.addLayout(columns_layout)
+        
+        # Connect quick select buttons
+        def check_selected_items(list_widget):
+            for item in list_widget.selectedItems():
+                item.setCheckState(Qt.CheckState.Checked)
+        
+        def uncheck_selected_items(list_widget):
+            for item in list_widget.selectedItems():
+                item.setCheckState(Qt.CheckState.Unchecked)
+        
+        def check_all_items(list_widget):
+            for i in range(list_widget.count()):
+                list_widget.item(i).setCheckState(Qt.CheckState.Checked)
+        
+        def uncheck_all_items(list_widget):
+            for i in range(list_widget.count()):
+                list_widget.item(i).setCheckState(Qt.CheckState.Unchecked)
+        
+        check_selected_remove.clicked.connect(lambda: check_selected_items(remove_list))
+        uncheck_selected_remove.clicked.connect(lambda: uncheck_selected_items(remove_list))
+        check_all_remove.clicked.connect(lambda: check_all_items(remove_list))
+        uncheck_all_remove.clicked.connect(lambda: uncheck_all_items(remove_list))
+        
+        check_selected_keep.clicked.connect(lambda: check_selected_items(keep_list))
+        uncheck_selected_keep.clicked.connect(lambda: uncheck_selected_items(keep_list))
+        check_all_keep.clicked.connect(lambda: check_all_items(keep_list))
+        uncheck_all_keep.clicked.connect(lambda: uncheck_all_items(keep_list))
+        
+        delete_tab.setLayout(delete_layout)
+        tab_widget.addTab(delete_tab, "Delete Identities")
+        
+        # ============= RENAME TAB =============
+        rename_tab = QWidget()
+        rename_layout = QVBoxLayout()
+        
+        rename_label = QLabel("Create classifiers to rename identities:")
+        rename_label.setStyleSheet("font-weight: bold; font-size: 12px;")
+        rename_layout.addWidget(rename_label)
+        
+        # Instructions for rename
+        rename_instructions = QLabel(
+            "• Drag identities from left into classifier rows\n"
+            "• Toggle 'Include/Exclude' before dragging to set gate type\n"
+            "• Green gates = nodes WITH these identities | Red gates = nodes WITHOUT these identities\n"
+            "• Combine multiple gates in one classifier for complex conditions\n"
+            "• Classifiers are applied sequentially from top to bottom"
+        )
+        rename_instructions.setStyleSheet(
+            "color: #666; font-style: italic; background-color: #f0f0f0; "
+            "padding: 8px; border-radius: 4px; font-size: 10px;"
+        )
+        rename_layout.addWidget(rename_instructions)
+        
+        # Three-column layout
+        three_column_layout = QHBoxLayout()
+        
+        # Left: Available identities
+        left_layout = QVBoxLayout()
+        left_label = QLabel("Available Identities:")
+        left_label.setStyleSheet("font-weight: bold;")
+        left_layout.addWidget(left_label)
+        
+        identity_list = DraggableListWidget()
+        for item in sorted(string_list):
+            identity_list.addItem(item)
+        left_layout.addWidget(identity_list)
+        
+        three_column_layout.addLayout(left_layout, stretch=1)
+        
+        # Right: Classifier rows in scrollable area
+        classifier_container = QWidget()
+        classifier_layout = QVBoxLayout()
+        classifier_layout.setAlignment(Qt.AlignmentFlag.AlignTop)
+        classifier_layout.setSpacing(10)
+        
+        classifier_rows = []
+        
+        def add_classifier_row():
+            row = ClassifierRow()
+            row.remove_requested.connect(remove_classifier_row)
+            classifier_rows.append(row)
+            # Insert before the add button
+            classifier_layout.insertWidget(len(classifier_rows) - 1, row)
+        
+        def remove_classifier_row(row):
+            if row in classifier_rows:
+                classifier_rows.remove(row)
+                classifier_layout.removeWidget(row)
+                row.deleteLater()
+        
+        # Add initial classifier row
+        add_classifier_row()
+        
+        # Add classifier button
+        add_classifier_btn = QPushButton("+ Add Classifier Row")
+        add_classifier_btn.setStyleSheet(
+            "QPushButton { background-color: #007bff; color: white; "
+            "padding: 8px; border-radius: 4px; font-weight: bold; }"
+            "QPushButton:hover { background-color: #0056b3; }"
+        )
+        add_classifier_btn.clicked.connect(add_classifier_row)
+        classifier_layout.addWidget(add_classifier_btn)
+        
+        classifier_container.setLayout(classifier_layout)
+        
+        scroll_area = QScrollArea()
+        scroll_area.setWidget(classifier_container)
+        scroll_area.setWidgetResizable(True)
+        scroll_area.setMinimumWidth(600)
+        
+        three_column_layout.addWidget(scroll_area, stretch=4)
+        
+        rename_layout.addLayout(three_column_layout)
+        rename_tab.setLayout(rename_layout)
+        tab_widget.addTab(rename_tab, "Rename Identities")
+        
+        main_layout.addWidget(tab_widget)
+        
+        # ============= DIALOG BUTTONS =============
+        button_layout = QHBoxLayout()
+        run_button = QPushButton("Run")
+        run_button.setStyleSheet(
+            "QPushButton { background-color: #28a745; color: white; "
+            "padding: 10px 20px; font-weight: bold; border-radius: 4px; }"
+            "QPushButton:hover { background-color: #218838; }"
+        )
+        cancel_button = QPushButton("Cancel")
+        cancel_button.setStyleSheet("padding: 10px 20px;")
+        
+        button_layout.addStretch()
+        button_layout.addWidget(run_button)
+        button_layout.addWidget(cancel_button)
+        main_layout.addLayout(button_layout)
+        
+        dialog.setLayout(main_layout)
+        
+        # Store results
+        result = {'accepted': False, 'classifiers': []}
+        
+        def on_run():
+            result['accepted'] = True
+            current_tab = tab_widget.currentIndex()
+            
+            if current_tab == 0:  # Delete tab
+                # Get items to keep (priority)
+                items_to_keep = set()
+                for i in range(keep_list.count()):
+                    item = keep_list.item(i)
+                    if item.checkState() == Qt.CheckState.Checked:
+                        items_to_keep.add(item.text())
+                
+                # Get items to remove
+                items_to_remove = set()
+                for i in range(remove_list.count()):
+                    item = remove_list.item(i)
+                    if item.checkState() == Qt.CheckState.Checked:
+                        items_to_remove.add(item.text())
+                
+                # Apply keep priority: if keep has items, remove everything not in keep
+                if items_to_keep:
+                    all_items = set(string_list)
+                    items_to_remove = all_items - items_to_keep
+                
+                # Remove identities
+                if items_to_remove:
+                    string_list[:] = [s for s in string_list if s not in items_to_remove]
+                    new_identities = {}
+                    for node, idens in my_network.node_identities.items():
+                        new_idens = [iden for iden in idens if iden in string_list]
+                        if new_idens:
+                            new_identities[node] = new_idens
+                    my_network.node_identities = new_identities
+                    self.parent().format_for_upperright_table(
+                        my_network.node_identities, 'NodeID', 'Identity', 'Node Identities'
+                    )
+            
+            elif current_tab == 1:  # Rename tab
+                # Collect classifier data
+                classifiers = []
+                for row in classifier_rows:
+                    data = row.get_classifier_data()
+                    # Only include rows that have at least one gate and a rename value
+                    if (data['positive'] or data['negative']) and data['rename'].strip():
+                        classifiers.append(data)
+                
+                result['classifiers'] = classifiers
+                
+                if classifiers:
+                    print("Classifiers to apply (in order):")
+                    for i, classifier in enumerate(classifiers, 1):
+                        print(f"  {i}. Rename to '{classifier['rename']}':")
+                        if classifier['positive']:
+                            print(f"     ✓ WITH: {classifier['positive']}")
+                        if classifier['negative']:
+                            print(f"     ✗ WITHOUT: {classifier['negative']}")
+                    for classifier in classifiers:
+                        if not classifier['positive'] and not classifier['negative']:
+                            continue
+                        for node, idens in my_network.node_identities.items():
+                            pos_gate = all(item in idens for item in classifier['positive'])
+                            neg_gate = all(item not in idens for item in classifier['negative'])
+                            if pos_gate and neg_gate:
+                                my_network.node_identities[node] = [classifier['rename']]
+                    self.parent().format_for_upperright_table(
+                        my_network.node_identities, 'NodeID', 'Identity', 'Node Identities'
+                    )
+            
+            dialog.accept()
+        
+        run_button.clicked.connect(on_run)
+        cancel_button.clicked.connect(dialog.reject)
+        
+        dialog.exec()
+        
+        return result['accepted'], result.get('classifiers', [])
 
+class IdentityGate(QWidget):
+    """Widget representing a single identity gate (positive or negative)"""
+    remove_requested = pyqtSignal(object)
+    
+    def __init__(self, identity, is_positive=True, parent=None):
+        super().__init__(parent)
+        self.identity = identity
+        self.is_positive = is_positive
+        
+        layout = QHBoxLayout()
+        layout.setContentsMargins(2, 2, 2, 2)
+        layout.setSpacing(2)
+        
+        # Identity label with color coding
+        self.label = QLabel(identity)
+        self.update_style()
+        
+        layout.addWidget(self.label)
+        
+        # Small remove button
+        remove_btn = QToolButton()
+        remove_btn.setText("×")
+        remove_btn.setMaximumWidth(20)
+        remove_btn.setMaximumHeight(20)
+        remove_btn.clicked.connect(lambda: self.remove_requested.emit(self))
+        layout.addWidget(remove_btn)
+        
+        self.setLayout(layout)
+        self.setMaximumHeight(30)
+    
+    def update_style(self):
+        if self.is_positive:
+            self.label.setStyleSheet(
+                "background-color: #d4edda; color: #155724; "
+                "border: 1px solid #c3e6cb; border-radius: 3px; padding: 2px 6px;"
+            )
+        else:
+            self.label.setStyleSheet(
+                "background-color: #f8d7da; color: #721c24; "
+                "border: 1px solid #f5c6cb; border-radius: 3px; padding: 2px 6px;"
+            )
+
+
+class ClassifierRow(QFrame):  # Changed from QWidget to QFrame
+    """Widget representing a classifier with multiple identity gates and rename field"""
+    remove_requested = pyqtSignal(object)
+    
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.gates = {}  # {identity: is_positive}
+        self.current_mode_positive = True
+        
+        main_layout = QHBoxLayout()
+        main_layout.setContentsMargins(4, 4, 4, 4)
+        
+        # Left side: Mode toggle
+        toggle_layout = QVBoxLayout()
+        toggle_label = QLabel("Add as:")
+        toggle_label.setStyleSheet("font-size: 10px; color: #666;")
+        toggle_layout.addWidget(toggle_label)
+        
+        self.positive_radio = QRadioButton("Include")
+        self.negative_radio = QRadioButton("Exclude")
+        self.positive_radio.setChecked(True)
+        self.positive_radio.setToolTip("Next dragged identity will be a positive gate (WITH)")
+        self.negative_radio.setToolTip("Next dragged identity will be a negative gate (WITHOUT)")
+        
+        button_group = QButtonGroup(self)
+        button_group.addButton(self.positive_radio)
+        button_group.addButton(self.negative_radio)
+        
+        self.positive_radio.toggled.connect(
+            lambda checked: setattr(self, 'current_mode_positive', checked)
+        )
+        
+        toggle_layout.addWidget(self.positive_radio)
+        toggle_layout.addWidget(self.negative_radio)
+        toggle_layout.addStretch()
+        
+        main_layout.addLayout(toggle_layout)
+        
+        # Middle: Drop zone with gates display
+        drop_zone_container = QVBoxLayout()
+        
+        # Drop instruction
+        drop_instruction = QLabel("Drop identities here →")
+        drop_instruction.setStyleSheet("color: #999; font-style: italic; font-size: 10px;")
+        drop_zone_container.addWidget(drop_instruction)
+        
+        # Gates container with flow layout
+        self.gates_widget = QWidget()
+        self.gates_layout = QVBoxLayout()
+        self.gates_layout.setContentsMargins(5, 5, 5, 5)
+        self.gates_layout.setSpacing(3)
+        self.gates_layout.setAlignment(Qt.AlignmentFlag.AlignTop)
+        self.gates_widget.setLayout(self.gates_layout)
+        
+        # Scroll area for gates
+        gates_scroll = QScrollArea()
+        gates_scroll.setWidget(self.gates_widget)
+        gates_scroll.setWidgetResizable(True)
+        gates_scroll.setMinimumWidth(250)
+        gates_scroll.setMaximumHeight(100)
+        gates_scroll.setFrameStyle(QFrame.Shape.Box | QFrame.Shadow.Sunken)
+        gates_scroll.setAcceptDrops(True)
+        gates_scroll.setStyleSheet("QScrollArea { background-color: #f8f9fa; }")
+        
+        drop_zone_container.addWidget(gates_scroll)
+        
+        # Legend
+        legend = QLabel("🟢 Include (WITH) | 🔴 Exclude (WITHOUT)")
+        legend.setStyleSheet("font-size: 9px; color: #666;")
+        drop_zone_container.addWidget(legend)
+        
+        main_layout.addLayout(drop_zone_container, stretch=3)
+        
+        # Right side: Rename field
+        rename_layout = QVBoxLayout()
+        rename_label = QLabel("Rename to:")
+        rename_label.setStyleSheet("font-size: 10px; color: #666;")
+        rename_layout.addWidget(rename_label)
+        
+        self.rename_field = QLineEdit()
+        self.rename_field.setPlaceholderText("New identity name...")
+        self.rename_field.setMinimumWidth(150)
+        rename_layout.addWidget(self.rename_field)
+        rename_layout.addStretch()
+        
+        main_layout.addLayout(rename_layout, stretch=1)
+        
+        # Remove row button
+        remove_btn = QPushButton("✕")
+        remove_btn.setMaximumWidth(30)
+        remove_btn.setToolTip("Remove this classifier")
+        remove_btn.clicked.connect(lambda: self.remove_requested.emit(self))
+        main_layout.addWidget(remove_btn)
+        
+        self.setLayout(main_layout)
+        self.setFrameStyle(QFrame.Shape.Box | QFrame.Shadow.Raised)
+        self.setAcceptDrops(True)
+    
+    def dragEnterEvent(self, event):
+        if event.mimeData().hasText():
+            event.acceptProposedAction()
+    
+    def dropEvent(self, event):
+        identity = event.mimeData().text()
+        if identity and identity not in self.gates:
+            self.add_gate(identity, self.current_mode_positive)
+        event.acceptProposedAction()
+    
+    def add_gate(self, identity, is_positive):
+        """Add a new identity gate to this classifier"""
+        self.gates[identity] = is_positive
+        
+        gate_widget = IdentityGate(identity, is_positive)
+        gate_widget.remove_requested.connect(self.remove_gate)
+        self.gates_layout.addWidget(gate_widget)
+    
+    def remove_gate(self, gate_widget):
+        """Remove an identity gate from this classifier"""
+        if gate_widget.identity in self.gates:
+            del self.gates[gate_widget.identity]
+        self.gates_layout.removeWidget(gate_widget)
+        gate_widget.deleteLater()
+    
+    def get_classifier_data(self):
+        """Return dict with positive, negative, and rename keys"""
+        positive_gates = [iden for iden, is_pos in self.gates.items() if is_pos]
+        negative_gates = [iden for iden, is_pos in self.gates.items() if not is_pos]
+        
+        return {
+            'positive': positive_gates,
+            'negative': negative_gates,
+            'rename': self.rename_field.text()
+        }
+
+class IdentitySelectionDialog(QDialog):
+    """Simplified dialog for selecting identities with positive/negative gates"""
+    
+    def __init__(self, available_identities, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle("Select Identities to Show")
+        self.setMinimumWidth(700)
+        self.setMinimumHeight(400)
+        
+        self.gates = {}  # {identity: is_positive}
+        self.current_mode_positive = True
+        self.available_identities = sorted(available_identities)
+        
+        main_layout = QVBoxLayout()
+        
+        # Title and instructions
+        title = QLabel("Select which nodes to display:")
+        title.setStyleSheet("font-weight: bold; font-size: 12px;")
+        main_layout.addWidget(title)
+        
+        instructions = QLabel(
+            "• Drag identities from left to center to add gates\n"
+            "• Toggle 'Include/Exclude' before dragging\n"
+            "• Green = nodes WITH identity | Red = nodes WITHOUT identity\n"
+            "• Combine multiple gates for complex filtering"
+        )
+        instructions.setStyleSheet(
+            "color: #666; font-style: italic; background-color: #f0f0f0; "
+            "padding: 8px; border-radius: 4px; font-size: 10px;"
+        )
+        main_layout.addWidget(instructions)
+        
+        # Two-column layout
+        content_layout = QHBoxLayout()
+        
+        # Left: Available identities
+        left_layout = QVBoxLayout()
+        left_label = QLabel("Available Identities:")
+        left_label.setStyleSheet("font-weight: bold;")
+        left_layout.addWidget(left_label)
+        
+        self.identity_list = DraggableListWidget()
+        for item in self.available_identities:
+            self.identity_list.addItem(item)
+        left_layout.addWidget(self.identity_list)
+        
+        content_layout.addLayout(left_layout, stretch=1)
+        
+        # Right: Classifier section
+        right_layout = QVBoxLayout()
+        
+        # Mode toggle
+        mode_layout = QHBoxLayout()
+        mode_label = QLabel("Add gates as:")
+        mode_label.setStyleSheet("font-weight: bold;")
+        mode_layout.addWidget(mode_label)
+        
+        self.positive_radio = QRadioButton("Include")
+        self.negative_radio = QRadioButton("Exclude")
+        self.positive_radio.setChecked(True)
+        self.positive_radio.setToolTip("Drag identities to add positive gates (WITH)")
+        self.negative_radio.setToolTip("Drag identities to add negative gates (WITHOUT)")
+        
+        button_group = QButtonGroup(self)
+        button_group.addButton(self.positive_radio)
+        button_group.addButton(self.negative_radio)
+        
+        self.positive_radio.toggled.connect(
+            lambda checked: setattr(self, 'current_mode_positive', checked)
+        )
+        
+        mode_layout.addWidget(self.positive_radio)
+        mode_layout.addWidget(self.negative_radio)
+        mode_layout.addStretch()
+        right_layout.addLayout(mode_layout)
+        
+        # Drop zone label
+        drop_label = QLabel("Gates:")
+        drop_label.setStyleSheet("font-weight: bold; margin-top: 10px;")
+        right_layout.addWidget(drop_label)
+        
+        # Gates container
+        self.gates_widget = QWidget()
+        self.gates_layout = QVBoxLayout()
+        self.gates_layout.setContentsMargins(5, 5, 5, 5)
+        self.gates_layout.setSpacing(3)
+        self.gates_layout.setAlignment(Qt.AlignmentFlag.AlignTop)
+        self.gates_widget.setLayout(self.gates_layout)
+        
+        # Scroll area for gates
+        gates_scroll = QScrollArea()
+        gates_scroll.setWidget(self.gates_widget)
+        gates_scroll.setWidgetResizable(True)
+        gates_scroll.setMinimumWidth(300)
+        gates_scroll.setFrameStyle(QFrame.Shape.Box | QFrame.Shadow.Sunken)
+        gates_scroll.setAcceptDrops(True)
+        gates_scroll.setStyleSheet("QScrollArea { background-color: #f8f9fa; }")
+        
+        # Make the scroll area accept drops
+        gates_scroll.dragEnterEvent = self.dragEnterEvent
+        gates_scroll.dropEvent = self.dropEvent
+        
+        right_layout.addWidget(gates_scroll)
+        
+        # Legend
+        legend = QLabel("🟢 Include (WITH) | 🔴 Exclude (WITHOUT)")
+        legend.setStyleSheet("font-size: 9px; color: #666;")
+        right_layout.addWidget(legend)
+        
+        # Clear all button
+        clear_btn = QPushButton("Clear All Gates")
+        clear_btn.clicked.connect(self.clear_all_gates)
+        right_layout.addWidget(clear_btn)
+        
+        content_layout.addLayout(right_layout, stretch=2)
+        
+        main_layout.addLayout(content_layout)
+        
+        # Buttons
+        button_layout = QHBoxLayout()
+        self.select_button = QPushButton("Select")
+        self.select_button.setStyleSheet(
+            "QPushButton { background-color: #28a745; color: white; "
+            "padding: 10px 20px; font-weight: bold; border-radius: 4px; }"
+            "QPushButton:hover { background-color: #218838; }"
+        )
+        cancel_button = QPushButton("Cancel")
+        cancel_button.setStyleSheet("padding: 10px 20px;")
+        
+        button_layout.addStretch()
+        button_layout.addWidget(self.select_button)
+        button_layout.addWidget(cancel_button)
+        main_layout.addLayout(button_layout)
+        
+        self.setLayout(main_layout)
+        
+        # Connect buttons
+        self.select_button.clicked.connect(self.accept)
+        cancel_button.clicked.connect(self.reject)
+        
+        self.setAcceptDrops(True)
+    
+    def dragEnterEvent(self, event):
+        if event.mimeData().hasText():
+            event.acceptProposedAction()
+    
+    def dropEvent(self, event):
+        identity = event.mimeData().text()
+        if identity and identity not in self.gates:
+            self.add_gate(identity, self.current_mode_positive)
+        event.acceptProposedAction()
+    
+    def add_gate(self, identity, is_positive):
+        """Add a new identity gate"""
+        self.gates[identity] = is_positive
+        
+        gate_widget = IdentityGate(identity, is_positive)
+        gate_widget.remove_requested.connect(self.remove_gate)
+        self.gates_layout.addWidget(gate_widget)
+    
+    def remove_gate(self, gate_widget):
+        """Remove an identity gate"""
+        if gate_widget.identity in self.gates:
+            del self.gates[gate_widget.identity]
+        self.gates_layout.removeWidget(gate_widget)
+        gate_widget.deleteLater()
+    
+    def clear_all_gates(self):
+        """Clear all gates"""
+        # Remove all gate widgets
+        while self.gates_layout.count():
+            item = self.gates_layout.takeAt(0)
+            if item.widget():
+                item.widget().deleteLater()
+        self.gates = {}
+    
+    def get_classifier_data(self):
+        """Return dict with positive and negative gate lists"""
+        positive_gates = [iden for iden, is_pos in self.gates.items() if is_pos]
+        negative_gates = [iden for iden, is_pos in self.gates.items() if not is_pos]
+        
+        return {
+            'positive': positive_gates,
+            'negative': negative_gates
+        }
+
+class DraggableListWidget(QListWidget):
+    """List widget that supports dragging items"""
+    
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setDragEnabled(True)
+        self.setSelectionMode(QListWidget.SelectionMode.ExtendedSelection)
+    
+    def startDrag(self, supportedActions):
+        item = self.currentItem()
+        if item:
+            drag = QDrag(self)
+            mime_data = QMimeData()
+            mime_data.setText(item.text())
+            drag.setMimeData(mime_data)
+            drag.exec(Qt.DropAction.CopyAction)
 
 
 
@@ -15852,7 +17785,7 @@ class CentroidDialog(QDialog):
         # Add mode selection dropdown
         self.mode_selector = QComboBox()
         self.mode_selector.addItems(["Nodes and Edges", "Nodes", "Edges"])
-        self.mode_selector.setCurrentIndex(0)  # Default to Mode 1
+        self.mode_selector.setCurrentIndex(1)  # Default to Mode 1
         layout.addRow("Execution Mode:", self.mode_selector)
 
         self.ignore_empty = QPushButton("Skip ID-less?")
@@ -16229,17 +18162,38 @@ class CalcAllDialog(QDialog):
 
                 from . import network_analysis
 
-                new_lists = network_analysis.combine_lists_to_sublists(temp_network.network_lists)
-                old_lists = network_analysis.combine_lists_to_sublists(my_network.network_lists)
+                new_lists = network_analysis.combine_lists_to_sublists_no_edges([temp_network.network_lists[0], temp_network.network_lists[1]])
+                old_lists = network_analysis.combine_lists_to_sublists_no_edges([my_network.network_lists[0], my_network.network_lists[1]])
+                ref_lists = network_analysis.combine_lists_to_sublists(my_network.network_lists)
+                old_dict = {}
+                for i, pair in enumerate(old_lists):
+                    # Store both orientations of the pair
+                    old_dict[tuple(pair)] = i
+                    old_dict[tuple(reversed(pair))] = i
 
-                filtered_new_lists = [pair for pair in new_lists if pair not in old_lists]
+                output_lists = []
+                used_indices = set()
 
-                list1, list2, list3 = zip(*filtered_new_lists)
+                for pair in new_lists:
+                    pair_tuple = tuple(pair)
+                    if pair_tuple in old_dict:
+                        idx = old_dict[pair_tuple]
+                        if idx not in used_indices:
+                            output_lists.append(ref_lists[idx])
+                            used_indices.add(idx)
+
+                # Clean up old_lists and ref_lists by removing used items
+                # Delete in reverse order to maintain indices
+                for idx in sorted(used_indices, reverse=True):
+                    del ref_lists[idx]
+                    del old_lists[idx]
+
+                list1, list2, list3 = zip(*output_lists)
 
                 # Convert them back to lists (zip returns tuples by default)
-                filtered_new_lists = [list(list1), list(list2), list(list3)]
+                output_lists = [list(list1), list(list2), list(list3)]
 
-                my_network.network_lists = filtered_new_lists
+                my_network.network_lists = output_lists
                 del temp_network
 
             if edge_node and not labeled_branches:
@@ -16352,7 +18306,7 @@ class ProxDialog(QDialog):
         
         self.search = QLineEdit()
         self.search.setPlaceholderText("search")
-        important_layout.addRow("Search Region Distance? (enter true value corresponding to scaling, ie in microns):", self.search)
+        important_layout.addRow("Search Region Distance? (Enter true value corresponding to scaling, ie in microns. You can set nothing if using centroids; see Speed Up Options below):", self.search)
         
         self.xy_scale = QLineEdit(f"{my_network.xy_scale}")
         important_layout.addRow("xy_scale:", self.xy_scale)
@@ -16367,14 +18321,29 @@ class ProxDialog(QDialog):
         mode_layout = QFormLayout(mode_group)
         
         self.mode_selector = QComboBox()
-        self.mode_selector.addItems(["From Centroids (fast but ignores shape - use for small or spherical objects - search STARTS at centroid)", "From Morphological Shape (slower but preserves shape - use for oddly shaped objects - search STARTS at object border)"])
+        self.mode_selector.addItems(["From Centroids (fast but ignores shape - use for small or spherical objects - search STARTS at centroid)", "From Morphological Shape (slower but preserves shape - use for oddly shaped objects - search STARTS at object border)", "Morphological - Using Distance Transform (Does not let search regions extend beyond immediate neighbors. Use to simplify morphological search neighbor counts if desired.)"])
         self.mode_selector.setCurrentIndex(0)  # Default to Mode 1
         mode_layout.addRow("Execution Mode:", self.mode_selector)
         
         if my_network.node_identities is not None:
             self.id_selector = QComboBox()
-            # Add all options from id dictionary
-            self.id_selector.addItems(['None'] + list(set(my_network.node_identities.values())))
+            # Get unique identities <-- Commented this out because it is lag on a huge number of permutations. (The lag is adding to the QComboBox). Would need to reformat the architecture to use a lazy loading type of widget. Not sure how relevant these combos even are so i am just disabling this at the moment.
+            #unique_idens = set(tuple(iden) for iden in my_network.node_identities.values())
+
+            # Sort by length (number of elements)
+            #sorted_idens = sorted(unique_idens, key=len)
+
+            # Convert back to strings
+            #all_idens = [str(list(iden)) for iden in sorted_idens]
+
+            all_idens = list(my_network.node_identities.values())
+            seen = set()
+            for iden in all_idens:
+                seen.update(iden)
+            all_idens = list(seen)
+            all_idens = ["['" + iden + "']" for iden in all_idens] # In the future can update downstream components to expect a pure string but would only minorly increase performance
+
+            self.id_selector.addItems(['None'] + all_idens)
             self.id_selector.setCurrentIndex(0)  # Default to Mode 1
             mode_layout.addRow("Create Networks only from a specific node identity?:", self.id_selector)
         elif tutorial_example:
@@ -16393,7 +18362,7 @@ class ProxDialog(QDialog):
         
         self.overlays = QPushButton("Overlays")
         self.overlays.setCheckable(True)
-        self.overlays.setChecked(True)
+        self.overlays.setChecked(False)
         output_layout.addRow("Generate Overlays:", self.overlays)
 
         self.downsample = QLineEdit()
@@ -16411,12 +18380,12 @@ class ProxDialog(QDialog):
         speedup_layout = QFormLayout(speedup_group)
 
         self.max_neighbors = QLineEdit("")
-        speedup_layout.addRow("(If using centroids): Max number of closest neighbors each node can connect to? Further neighbors within the radius will be ignored if a value is passed here. (Can be good to simplify dense networks)", self.max_neighbors)
+        speedup_layout.addRow("(If using centroids): Max number of closest neighbors each node can connect to? (Will find only the n closest neighbors in search region, or just n closest neighbors if no search value set)", self.max_neighbors)
     
-        self.fastdil = QPushButton("Fast Dilate")
+        self.fastdil = QPushButton("Fast Search")
         self.fastdil.setCheckable(True)
-        self.fastdil.setChecked(False)
-        #speedup_layout.addRow("(If using morphological) Use Fast Dilation (Higher speed, less accurate with search regions much larger than nodes):", self.fastdil)
+        self.fastdil.setChecked(True)
+        speedup_layout.addRow("(If using distance transform morphological) Use Fast Search? (Requires edt package, adjacent search region borders may be a bit rougher, is not faster for huge searches)?:", self.fastdil)
         
         main_layout.addWidget(speedup_group)
         
@@ -16434,11 +18403,25 @@ class ProxDialog(QDialog):
             mode = self.mode_selector.currentIndex()
 
             if self.id_selector is not None and self.id_selector.currentText() != 'None':
-                target = self.id_selector.currentText()
-                targets = []
-                for node in my_network.node_identities:
-                    if target == my_network.node_identities[node]:
-                        targets.append(int(node))
+                import ast
+                target_str = self.id_selector.currentText()
+                target_list = ast.literal_eval(target_str)  # Parse "['a']" back to ['a']
+                
+                if len(target_list) == 1:
+                    # Single identity: find all nodes containing this identity
+                    identity = target_list[0]
+                    targets = [
+                        int(node) 
+                        for node, identity_list in my_network.node_identities.items() 
+                        if identity in identity_list
+                    ]
+                else:
+                    # Multiple identities: exact match only
+                    targets = [
+                        int(node) 
+                        for node, identity_list in my_network.node_identities.items() 
+                        if identity_list == target_list
+                    ]
             else:
                 targets = None
 
@@ -16447,7 +18430,7 @@ class ProxDialog(QDialog):
 
             # Get xy_scale and z_scale (1 if empty or invalid)
             try:
-                xy_scale = float(self.xy_scale.text()) if self.xy_scale.text() else my_network.xy_scale
+                xy_scale = float(self.xy_scale.text()) if self.xy_scale.text() else my_network.xy_scale 
             except ValueError:
                 xy_scale = my_network.xy_scale
                 
@@ -16481,7 +18464,7 @@ class ProxDialog(QDialog):
             self.parent().xy_scale_label.setText(f"xy_scale: {my_network.xy_scale:.2e}                   ")
             self.parent().z_scale_label.setText(f"z_scale: {my_network.z_scale:.2e}                   ")
 
-            if mode == 1:
+            if mode == 1: # Morphological search
                 if len(np.unique(my_network.nodes)) < 3:
                     my_network.nodes, _ = n3d.label_objects(my_network.nodes)
                 if my_network.node_centroids is None:
@@ -16489,7 +18472,7 @@ class ProxDialog(QDialog):
                 my_network.morph_proximity(search = search, targets = targets, fastdil = fastdil)
 
                 self.parent().load_channel(0, channel_data = my_network.nodes, data = True)
-            elif mode == 0:
+            elif mode == 0: # Centroid based search
 
                 if my_network.node_centroids is None and my_network.nodes is not None:
                     self.parent().show_centroid_dialog()
@@ -16516,6 +18499,14 @@ class ProxDialog(QDialog):
                     self.parent().load_channel(0, channel_data = my_network.nodes, data = True)
                 else:
                     my_network.kd_network(distance = search, targets = targets, max_neighbors = max_neighbors)
+            elif mode == 2: # DT based
+                if my_network.node_centroids is None:
+                    self.parent().show_centroid_dialog()
+
+                temp_network = n3d.Network_3D(nodes = sdl.smart_dilate(self.parent().channel_data[0], use_dt_dil_amount = round(search/2), fast_dil = fastdil, xy_scale = xy_scale, z_scale = z_scale), xy_scale = xy_scale, z_scale = z_scale)
+                temp_network.morph_proximity(search = [3,3], fastdil = True)
+                my_network.network_lists = temp_network.network_lists
+                del temp_network
 
             if directory is not None:
                 my_network.dump(directory = directory)

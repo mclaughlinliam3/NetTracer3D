@@ -6,14 +6,14 @@
   <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
 
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Changelog &mdash; NetTracer3D 1.3.5 documentation</title>
+  <title>Changelog &mdash; NetTracer3D 1.4.4 documentation</title>
       <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=b86133f3" />
       <link rel="stylesheet" type="text/css" href="_static/css/theme.css?v=e59714d7" />
 
   
       <script src="_static/jquery.js?v=5d32c60e"></script>
       <script src="_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
-      <script src="_static/documentation_options.js?v=4720776d"></script>
+      <script src="_static/documentation_options.js?v=6d0302ba"></script>
       <script src="_static/doctools.js?v=9bcbadda"></script>
       <script src="_static/sphinx_highlight.js?v=dc90522c"></script>
     <script src="_static/js/theme.js"></script>
@@ -300,6 +300,26 @@
 <li><p>Added option to do unsupervised endpoint joining of a specified distance for segmentation.</p></li>
 <li><p>Improved filament segmenter to better consider filament direction and to use state cacheing while in use to regenerate with alternate params. Updated the branch rejoining Class to consider the local direction of branches to join in a more logical manner.</p></li>
 <li><p>Fixed all the network histogram/stat/community calculations to consider weights properly, provided they are configured for multigraphs in networkx. (In short, edge weights in NetTracer3D are supposed to represent duplicate edges).</p></li>
+</ul>
+</dd>
+<dt>Version 1.3.6-1.4.4 updates</dt><dd><ul class="simple">
+<li><p>Added more options for styles of network graph renders.</p></li>
+<li><p>Batch calculating all nearest neighbor identity permutations now returns a nice looking graph rather than just a data table.</p></li>
+<li><p>Added a new way to get proximity networks through distance transforms that actually seems to community partition a bit more accurately.</p></li>
+<li><p>Added ability to train a neural network model for the histogram human-in-the-loop node identity assignment feature. This is somewhat in an untested phase although the idea is you can optionally train a model on your own thresholding that can be applied to similar datasets to avoid having to do more manual work.</p></li>
+<li><p>Didn’t mention last time, but added convex hull generation function.</p></li>
+<li><p>Fixed visual display bug that could sometimes happen when the realtimesegmenter finished the segmentation preview on an entire volume.</p></li>
+<li><p>Altered params on the random forest classifier to hopefully be faster and a bit more robust to noise.</p></li>
+<li><p>Added option to create node communities based on immediate neighbors of node groups, mainly for multiplexed cellular data purposes.</p></li>
+<li><p>What used to be referred to as ‘neighborhoods’ (essentially referring to aggregated communities) in the GUI is now referred to as ‘supercommunities’.This is to differentiate them from the new method mentioned above which neighborhoods is a more apt descriptor for. The source code will not reflect this.</p></li>
+<li><p>Proximity networks via centroids can now arbitrarily group the nearest ‘n’ neighbors of objects regardless of distance.</p></li>
+<li><p>From the bottom right spreadsheet table - you can save your network in pickle format. If you save these to an active session, they will load faster than loading the network from csv. Only really relevant for very large networks, although you can open the pickled network directly in Python (via pickle module) as a NetworkX graph object as well.</p></li>
+<li><p>From the modify network menu - you can now arbitrarily remove identities you don’t want in your current session.</p></li>
+<li><p>Updated the violin plot analyzer dialog to better handle big data</p></li>
+<li><p>Added method to generate hexagons (for 2D) or rhombic dodecahedrons (for 3D) (optionally within a masked area) of arbitrary size to act as pseudo-cells. This is designed mainly for multiplexed like data where you’re interested in assigning cells an identity based on fluorescent intensity but lack cellular segmentation - can be used to sort of bypass true cellular seg (will not be as accurate) for downstream clustering purposes.</p></li>
+<li><p>Revamped ability to select/rename different combos of node identities with new menus for doing such.</p></li>
+<li><p>Fixed some bugs regarding handling of node identities for some of the graphs.</p></li>
+<li><p>Other bug fixes, minor adjustments</p></li>
 </ul>
 </dd>
 </dl>

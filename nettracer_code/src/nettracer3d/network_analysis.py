@@ -14,6 +14,8 @@ from . import modularity
 import multiprocessing as mp
 import random
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from collections import Counter
+
 try:
     import cupy as cp
     import cupyx.scipy.ndimage as cpx
@@ -264,31 +266,27 @@ def master_list_to_excel(master_list, excel_name):
 
 def weighted_network(excel_file_path):
     """creates a network where the edges have weights proportional to the number of connections they make between the same structure"""
-
     if type(excel_file_path) == list:
         master_list = excel_file_path
     else:
-        # Read the Excel file into a pandas DataFrame
         master_list = read_excel_to_lists(excel_file_path)
-
-    # Create a graph
+    
     G = nx.Graph()
-
-    # Create a dictionary to store edge weights based on node pairs
-    edge_weights = {}
-
-    nodes_a = master_list[0]
-    nodes_b = master_list[1]
-
-    # Iterate over the DataFrame rows and update edge weights
-    for i in range(len(nodes_a)):
-        node1, node2 = nodes_a[i], nodes_b[i]
-        edge = (node1, node2) if node1 < node2 else (node2, node1)  # Ensure consistent order
-        edge_weights[edge] = edge_weights.get(edge, 0) + 1
-
-    # Add edges to the graph with weights
-    for edge, weight in edge_weights.items():
-        G.add_edge(edge[0], edge[1], weight=weight)
+    
+    # Convert to numpy arrays
+    nodes_a = np.asarray(master_list[0])
+    nodes_b = np.asarray(master_list[1])
+    
+    # Vectorized edge ordering (much faster than loop with if/else)
+    min_nodes = np.minimum(nodes_a, nodes_b)
+    max_nodes = np.maximum(nodes_a, nodes_b)
+    
+    # Create edge tuples and count occurrences using Counter (implemented in C)
+    edges = list(zip(min_nodes, max_nodes))
+    edge_weights = Counter(edges)
+    
+    # Add all weighted edges at once (much faster than one-by-one)
+    G.add_weighted_edges_from((e[0], e[1], w) for e, w in edge_weights.items())
 
     return G, edge_weights
 
@@ -338,38 +336,32 @@ def read_centroids_to_dict(file_path):
         with open(filename, 'r') as f:
             data = json.load(f)
         
-        # Convert only numeric strings to integers, leave other strings as is
         converted_data = {}
         for k, v in data.items():
             try:
-                converted_data[int(k)] = v
+                converted_data[int(k)] = np.array(v) if isinstance(v, list) else v
             except ValueError:
-                converted_data[k] = v
+                converted_data[k] = np.array(v) if isinstance(v, list) else v
         
         return converted_data
+    
     # Check file extension
     if file_path.lower().endswith('.xlsx'):
         df = pd.read_excel(file_path)
     elif file_path.lower().endswith('.csv'):
         df = pd.read_csv(file_path)
     elif file_path.lower().endswith('.json'):
-        df = load_json_to_dict(file_path)
+        return load_json_to_dict(file_path)
     else:
         raise ValueError("Unsupported file format. Please provide either .xlsx, .csv, or .json file")
     
-    # Initialize an empty dictionary
-    data_dict = {}
+    # Fast approach: use dict(zip(...)) with list of arrays
+    keys = df.iloc[:, 0].values
+    values = df.iloc[:, 1:4].values
     
-    # Iterate over each row in the DataFrame
-    for _, row in df.iterrows():
-        # First column is the key
-        key = row.iloc[0]
-        # Next three columns are the values
-        value = np.array(row.iloc[1:4])
-        # Add the key-value pair to the dictionary
-        data_dict[key] = value
-        
-    return data_dict
+    # Convert 2D array rows to list of 1D arrays in one operation
+    return dict(zip(keys, list(values)))
+
 
 def read_excel_to_singval_dict(file_path):
     """
@@ -382,38 +374,34 @@ def read_excel_to_singval_dict(file_path):
     dict: Dictionary with first column as keys and second column as values
     """
     def load_json_to_dict(filename):
-        with open(filename, 'r') as f:
-            data = json.load(f)
-        
-        # Convert only numeric strings to integers, leave other strings as is
-        converted_data = {}
-        for k, v in data.items():
-            try:
-                converted_data[int(k)] = v
-            except ValueError:
-                converted_data[k] = v
-        
-        return converted_data
+        try:
+            with open(filename, 'r') as f:
+                data = json.load(f)
 
+            converted_data = {}
+            for k, v in data.items():
+                try:
+                    converted_data[int(k)] = v
+                except ValueError:
+                    converted_data[k] = v
+            return converted_data
+        except:
+            return {}
+    
     # Check file extension and read accordingly
     if file_path.lower().endswith('.xlsx'):
         df = pd.read_excel(file_path)
     elif file_path.lower().endswith('.csv'):
         df = pd.read_csv(file_path)
     elif file_path.lower().endswith('.json'):
-        df = load_json_to_dict(file_path)
-        return df
+        return load_json_to_dict(file_path)
     else:
         raise ValueError("Unsupported file format. Please provide either .xlsx, .csv, or .json file")
     
     # Convert the DataFrame to a dictionary
-    data_dict = {}
-    for idx, row in df.iterrows():
-        key = row.iloc[0]  # First column as key
-        value = row.iloc[1]  # Second column as value
-        data_dict[key] = value
-        
-    return data_dict
+    return dict(zip(df.iloc[:, 0], df.iloc[:, 1]))
+
+
 
 def combine_lists_to_sublists(master_list):
 
@@ -439,6 +427,17 @@ def combine_lists_to_sublists(master_list):
 
     # Combine the lists into one list of sublists
     combined_list = [list(sublist) for sublist in zip(list1, list2, list3)]
+    
+    return combined_list
+
+def combine_lists_to_sublists_no_edges(master_list):
+
+
+    list1 = master_list[0]
+    list2 = master_list[1]
+
+    # Combine the lists into one list of sublists
+    combined_list = [list(sublist) for sublist in zip(list1, list2)]
     
     return combined_list
 
@@ -600,41 +599,12 @@ def _find_centroids_old(nodes, node_list = None, down_factor = None):
     return centroid_dict
 
 
+from numba import jit, prange
+from scipy import ndimage
+
+
 def _find_centroids(nodes, node_list=None, down_factor=None):
-    """Parallel version using sum accumulation instead of storing coordinates"""
-    
-    def compute_sums_in_chunk(chunk, y_offset):
-        """Accumulate sums and counts - much less memory than storing coords"""
-        sums_dict = {}
-        counts_dict = {}
-        
-        z_coords, y_coords, x_coords = np.where(chunk != 0)
-        
-        if len(z_coords) == 0:
-            return sums_dict, counts_dict
-        
-        y_coords_adjusted = y_coords + y_offset
-        labels = chunk[z_coords, y_coords, x_coords]
-        unique_labels = np.unique(labels)
-        
-        for label in unique_labels:
-            if label == 0:
-                continue
-            mask = (labels == label)
-            # Just store sums and counts - O(1) memory per label
-            sums_dict[label] = np.array([
-                z_coords[mask].sum(dtype=np.float64),
-                y_coords_adjusted[mask].sum(dtype=np.float64),
-                x_coords[mask].sum(dtype=np.float64)
-            ])
-            counts_dict[label] = mask.sum()
-        
-        return sums_dict, counts_dict
-    
-    def chunk_3d_array(array, num_chunks):
-        """Split the 3D array into smaller chunks along the y-axis."""
-        y_slices = np.array_split(array, num_chunks, axis=1)
-        return y_slices
+    """Using scipy's optimized C implementation"""
     
     # Handle input processing
     if isinstance(nodes, str):
@@ -646,35 +616,184 @@ def _find_centroids(nodes, node_list=None, down_factor=None):
     if down_factor is not None:
         nodes = downsample(nodes, down_factor)
     
-    sums_total = {}
-    counts_total = {}
-    num_cpus = mp.cpu_count()
+    # Get unique labels (excluding 0)
+    labels = np.unique(nodes)
+    labels = labels[labels != 0]
     
-    node_chunks = chunk_3d_array(nodes, num_cpus)
-    chunk_sizes = [chunk.shape[1] for chunk in node_chunks]
-    y_offsets = np.cumsum([0] + chunk_sizes[:-1])
+    # Use scipy's optimized center_of_mass
+    centroids = ndimage.center_of_mass(nodes > 0, nodes, labels)
     
-    with ThreadPoolExecutor(max_workers=num_cpus) as executor:
-        futures = [executor.submit(compute_sums_in_chunk, chunk, y_offset)
-                  for chunk, y_offset in zip(node_chunks, y_offsets)]
-        
-        for future in as_completed(futures):
-            sums_chunk, counts_chunk = future.result()
-            
-            # Merge is now just addition - O(1) instead of vstack
-            for label in sums_chunk:
-                if label in sums_total:
-                    sums_total[label] += sums_chunk[label]
-                    counts_total[label] += counts_chunk[label]
-                else:
-                    sums_total[label] = sums_chunk[label]
-                    counts_total[label] = counts_chunk[label]
-    
-    # Compute centroids from accumulated sums
+    # Convert to dictionary
     centroid_dict = {
-        label: np.round(sums_total[label] / counts_total[label]).astype(int)
-        for label in sums_total if label != 0
+        label: np.round(centroid).astype(int)
+        for label, centroid in zip(labels, centroids)
     }
+    
+    return centroid_dict
+
+def _find_centroids_numba(nodes, node_list=None, down_factor=None):
+    """Numba version using bounding boxes. Faster than the scipy but I don't use it because it's theoretically less reliable with weird oblong objects that yield huge bounding boxes"""
+    
+    # Handle input processing
+    if isinstance(nodes, str):
+        nodes = tifffile.imread(nodes)
+        if len(np.unique(nodes)) == 2:
+            structure_3d = np.ones((3, 3, 3), dtype=int)
+            nodes, num_nodes = ndimage.label(nodes)
+    
+    if down_factor is not None:
+        nodes = downsample(nodes, down_factor)
+    
+    # Handle byte order for TIFF compatibility
+    if nodes.dtype.byteorder == '>' or nodes.dtype.byteorder == '<':
+        nodes = np.ascontiguousarray(nodes, dtype=nodes.dtype.newbyteorder('='))
+    
+    # Find bounding boxes for all objects
+    bounding_boxes = ndimage.find_objects(nodes)
+    num_labels = len(bounding_boxes)
+    
+    # Convert bounding boxes to array format
+    bboxes_array = convert_bboxes_to_array(bounding_boxes, nodes.shape)
+    
+    # Compute centroids using Numba
+    centroids = compute_centroids_numba(nodes, num_labels, bboxes_array)
+    
+    # Convert to dictionary
+    centroid_dict = {
+        i + 1: centroids[i].astype(int) 
+        for i in range(num_labels) 
+        if not np.all(centroids[i] < 0)
+    }
+    
+    return centroid_dict
+
+
+def convert_bboxes_to_array(bounding_boxes, array_shape):
+    """Convert scipy bounding boxes to Numba-compatible array"""
+    num_labels = len(bounding_boxes)
+    bboxes_array = np.full((num_labels, 6), -1, dtype=np.int32)
+    
+    for i, bbox in enumerate(bounding_boxes):
+        if bbox is None:
+            continue
+        
+        z_slice, y_slice, x_slice = bbox
+        
+        z_min, z_max = z_slice.start, z_slice.stop - 1
+        y_min, y_max = y_slice.start, y_slice.stop - 1
+        x_min, x_max = x_slice.start, x_slice.stop - 1
+        
+        # Boundary checks
+        z_max = min(z_max, array_shape[0] - 1)
+        y_max = min(y_max, array_shape[1] - 1)
+        x_max = min(x_max, array_shape[2] - 1)
+        z_min = max(z_min, 0)
+        y_min = max(y_min, 0)
+        x_min = max(x_min, 0)
+        
+        bboxes_array[i] = [z_min, z_max, y_min, y_max, x_min, x_max]
+    
+    return bboxes_array
+
+
+@jit(nopython=True, parallel=True)
+def compute_centroids_numba(nodes, num_labels, bboxes_array):
+    """
+    Compute centroids for all labels using bounding boxes.
+    Parallelized across labels using prange.
+    """
+    centroids = np.full((num_labels, 3), -1.0, dtype=np.float64)
+    
+    for i in prange(num_labels):
+        label = i + 1  # Labels start at 1
+        
+        # Get bounding box
+        z_min, z_max, y_min, y_max, x_min, x_max = bboxes_array[i]
+        
+        # Skip if invalid bounding box
+        if z_min < 0:
+            continue
+        
+        # Extract subcell
+        sub_nodes = nodes[z_min:z_max+1, y_min:y_max+1, x_min:x_max+1]
+        
+        # Compute centroid for this label
+        sum_z = 0.0
+        sum_y = 0.0
+        sum_x = 0.0
+        count = 0
+        
+        # Iterate through the bounding box
+        for z in range(sub_nodes.shape[0]):
+            for y in range(sub_nodes.shape[1]):
+                for x in range(sub_nodes.shape[2]):
+                    if sub_nodes[z, y, x] == label:
+                        sum_z += z
+                        sum_y += y
+                        sum_x += x
+                        count += 1
+        
+        if count > 0:
+            # Compute local centroid
+            local_z = sum_z / count
+            local_y = sum_y / count
+            local_x = sum_x / count
+            
+            # Convert back to global coordinates
+            centroids[i, 0] = local_z + z_min
+            centroids[i, 1] = local_y + y_min
+            centroids[i, 2] = local_x + x_min
+    
+    return centroids
+
+
+
+def _find_centroids_gpu_bincount(nodes, node_list=None, down_factor=None):
+    """Alternative GPU version using bincount (potentially faster for many small objects)"""
+    
+    # Handle input processing
+    if isinstance(nodes, str):
+        nodes = tifffile.imread(nodes)
+        if len(np.unique(nodes)) == 2:
+            structure_3d = np.ones((3, 3, 3), dtype=int)
+            nodes, num_nodes = ndimage.label(nodes)
+    
+    if down_factor is not None:
+        nodes = downsample(nodes, down_factor)
+    
+    # Transfer to GPU
+    nodes_gpu = cp.asarray(nodes)
+    
+    # Get all non-zero coordinates at once (on GPU)
+    coords = cp.argwhere(nodes_gpu != 0)
+    labels = nodes_gpu[coords[:, 0], coords[:, 1], coords[:, 2]]
+    
+    max_label = int(labels.max())
+    
+    # Vectorized accumulation using bincount on GPU
+    counts = cp.bincount(labels, minlength=max_label + 1)[1:]
+    sum_z = cp.bincount(labels, weights=coords[:, 0], minlength=max_label + 1)[1:]
+    sum_y = cp.bincount(labels, weights=coords[:, 1], minlength=max_label + 1)[1:]
+    sum_x = cp.bincount(labels, weights=coords[:, 2], minlength=max_label + 1)[1:]
+    
+    # Find which labels actually exist
+    valid_mask = counts > 0
+    valid_labels = cp.asnumpy(cp.where(valid_mask)[0] + 1)
+    
+    # Transfer results to CPU
+    counts_cpu = cp.asnumpy(counts[valid_mask])
+    sum_z_cpu = cp.asnumpy(sum_z[valid_mask])
+    sum_y_cpu = cp.asnumpy(sum_y[valid_mask])
+    sum_x_cpu = cp.asnumpy(sum_x[valid_mask])
+    
+    # Compute centroids on CPU
+    centroid_dict = {}
+    for i, label in enumerate(valid_labels):
+        centroid_dict[label] = np.round(np.array([
+            sum_z_cpu[i] / counts_cpu[i],
+            sum_y_cpu[i] / counts_cpu[i],
+            sum_x_cpu[i] / counts_cpu[i]
+        ])).astype(int)
     
     return centroid_dict
 
@@ -1103,11 +1222,11 @@ def edge_to_node(network, node_identities=None, maxnode=None):
     # Add missing nodes
     for node in allnodes:
         if node not in identity_dict:
-            identity_dict[node] = 'Node'
+            identity_dict[node] = ['Node']
     
     # Add all edges at once
     for edge in transposed_edges.tolist():
-        identity_dict[edge] = 'Edge'
+        identity_dict[edge] = ['Edge']
     
     # Handle output
     if type(network) == str:
@@ -1146,6 +1265,32 @@ def save_singval_dict(dict, index_name, valname, filename):
         except Exception as e:
             print(f"Could not save as XLSX: {str(e)}")
 
+def save_singval_iden_dict(dict, index_name, valname, filename):
+    # Convert dictionary to DataFrame - store arrays as single values in one column
+    df = pd.DataFrame({valname: list(dict.values())}, index=dict.keys())
+    
+    # Rename the index
+    df.index.name = index_name
+    
+    # Remove file extension if present to use as base path
+    base_path = filename.rsplit('.', 1)[0]
+    
+    # First try to save as CSV
+    try:
+        csv_path = f"{base_path}.csv"
+        df.to_csv(csv_path)
+        print(f"Successfully saved {valname} data to {csv_path}")
+        return
+    except Exception as e:
+        print(f"Could not save as CSV: {str(e)}")
+        
+        # If CSV fails, try to save as Excel
+        try:
+            xlsx_path = f"{base_path}.xlsx"
+            df.to_excel(xlsx_path, engine='openpyxl')
+            print(f"Successfully saved {valname} data to {xlsx_path}")
+        except Exception as e:
+            print(f"Could not save as XLSX: {str(e)}")
 
 def rand_net_weighted(num_rows, num_nodes, nodes):
     """Optimized weighted random network generation - allows duplicate edges"""

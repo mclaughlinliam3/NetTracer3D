@@ -355,13 +355,14 @@ def search_neighbor_ids(nodes, targets, id_dict, neighborhood_dict, totals, sear
     total_dict = dict(zip(unique, counts))
 
     del total_dict[0]
-    
-    
+
     for label in total_dict:
         if label in id_dict:
             if label in count_dict:
-                neighborhood_dict[id_dict[label]] += count_dict[label]
-            totals[id_dict[label]] += total_dict[label]
+                for iden in id_dict[label]:
+                    neighborhood_dict[iden] += count_dict[label]
+            for iden in id_dict[label]:
+                totals[iden] += total_dict[label]
 
 
     try:

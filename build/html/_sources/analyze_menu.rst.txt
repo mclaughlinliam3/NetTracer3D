@@ -43,6 +43,7 @@ Parameter Explanations
         * Colors nodes by their community, assuming they have already been community partitioned. Will prompt the user to partition if not.
     3. Node-ID Coded
         * Display nodes color-coded by their node ID (if it exists).
+#. Node/Edge Rendering - Can optionally alter the edge color to be gray or black, and also set the sizes of the nodes and the edges in the render.
 #. Select 'Show Node Numerical IDs' to have each node be labelled on the graph by their internal label value from their image. This is useful for finding specific nodes but may clutter visualization.
 #. Select 'Draw weighted edges' to make any edges that have a weight appear thicker. Nodes that find repeat, distinct connections in 'connectivity networks' will have weights, or if you manually add repeat node connections.
 #. Select 'For Centroid Layout...' to make it so that if you use the centroid layout in param 1, nodes that have lower z values appear larger (allowing you to visually appraise 3D location on the 2D graph). Deselect it to have all the nodes be the same size.
@@ -56,9 +57,9 @@ Parameter Explanations
 * This includes the number of nodes, the number of edges, the number of nodes per 'node identity' property category, and the number of nodes per 'community' (if assigned).
 * The report will go in the upperright table.
 
-'Analyze -> Network -> Community Partition + Generic Network Stats'
+'Analyze -> Network -> Create Communities based on Network'
 -------------------------------
-* Use this function to partition the nodes into communities.
+* Use this function to partition the nodes into communities based on your network structure. This type of community clustering is good for finding functional units in the network, or spatial aggregates in proximity networks. For cells, you'd might consider the neighborhood based clustering instead.
 * Node communities will be saved and loaded with any 'Save/Load Network3D object' options.
 * Selecting this displays the following menu:
 
@@ -103,6 +104,51 @@ Parameter Explanations
 4. Seed (int): Sets the random seed for the community partition to use (since the starting point effects the outcome). You should use the same seed each time for reproducibility, or vary the seed to see how it effects partitioning. Leaving the seed empty will just use the seed of the rand (and numpy random) modules, which is initialized at program start.
 * Press partition to seperate the nodes into communities based on the selected parameters. In addition to setting the node_communities property, tables showing the community for each node and the stats will be generated in the tabulated data widget.
 
+'Analyze -> Network -> Create Communities based on Nodes Immediate Neighbors'
+-------------------------------
+* This option for community assignment evaluates the distribution of node identities around each node, and clusters the ones that appear similar. When you have a lot of identities assigned from multichannel data, this option can detect meaningful regions in the image, and so is typically the goto for multiplexed cellular data.
+* This method uses a proximity network to evaluate the node neighbors, usually.
+
+Parameter Explanations
+~~~~~~~~~~~~~~~
+#. Num communities - The number of communities you'd like to create.
+#. Clustering Seed - Enter an integer to change the initial seed to get a slightly different output.
+#. Min Neighbor Count - The minimum number of neighbors a node must have to be considered for grouping. Setting a value here can avoid including isolated nodes in your output.
+#. N Nearest Neighbors - This is an optional parameter; normally you might generate a proximity network for your nodes first that tied together neighbors, then skip this. But if you did not, you can enter a number of nearest neighbors you'd like each node to find, creating a new proximity network for this function.
+#. Max Distance - Also optional, similar to the above. Entering a value here will make the new proximity network only connect nodes within a specified distance. You can use this to prevent different regions from connecting over gaps that they shouldn't be. The specified distance is scaled by the xy_scale and z_scale properties.
+#. Community UMAP - Returns a UMAP of how similar your node neighborhoods are.
+#. Neighborhood Heatmaps - Returns a heatmap showing the compositions of the neighborhoods used to cluster the nodes. Note that this does not specify the composition of the resultant communities (use 'Analyze -> Network -> Calculate Composition of Network Communities (And UMAP)' for that), although the data will be similar. As such, it may not be that relevant although it's included for now.
+#. Treat Multi-Identity Nodes as Unique Identities - Across many channels, your nodes will probably aquire multiple identities. By default, this function just clusters based on the distribution of each unique identity. But if you enable this, any unique combination of identities will be treated as its own group. Note if you have a lot of combinations, this will massively increase the computational load, so I usually recommend skipping it.
+
+* Press get communities to assign your nodes communities based on their neighborhoods. 
+
+Algorithm Explanations
+~~~~~~~~~~~~~~~
+* This method just evaluates the neighbors of each node in the network, arranges those as proportions out of 1 in a one-dimensional array, and then clusters said arrays with sklearn's K-means clusterer.
+
+'Analyze -> Network -> Create Communities Based on Cuboidal Proximity Cells?'
+-------------------------------
+
+* This method splits the image into cells (of user-defined size) and assigns nodes to be in communities based on whether they share a cell.
+* It doesn't have anything to do with the network but is an alternate way to group the nodes into communities, without a network focus.
+* You can further group these resultant cells into supercommunities to find neighborhood motifs, although it won't be as strong as the node neighborhood community assigment if you have enough channels.
+
+
+Parameter Explanations
+~~~~~~~~~~~~~~~
+
+#. Cell Size
+    * The volume of a cell (Can be 2D or 3D). The cells will always be cubes (or squares).
+#. xy scale
+    * The 2D plane scaling of the image.
+#. z scale
+    * The 3D voxel depth scaling of the image.
+
+* The latter two params will scale the cell to be cuboidal based on provided scaling (ie its side lengths will be the same in true units).
+* Press 'Get Communities' to assign the communities based on cells.
+
+* The second submenu is 'Stats', and is primarily used to create tables and graphs about the network or image morphology.
+
 'Analyze -> Network -> Calculate Composition of Network Communities (And UMAP)'
 -------------------------------
 * This method is designed to be run on groups of nodes that have been community partitioned and have associated 'node_identities' property, to evaluate their general compositions.
@@ -125,7 +171,7 @@ Parameter Explanations
 #. Label UMAP Points How?
     * 'No Label' - UMAP points are not labeled
     * By Community - Assigns each point their numerical label.
-    * By Neighborhood - Colors communities in the UMAP by what neighborhood they belong to, presuming they have been assigned a neighborhood via 'Analyze -> Network -> Convert Network Communities...'
+    * By Supercommunity - Colors communities in the UMAP by what supercommunity they belong to, presuming they have been assigned a Supercommunity via 'Analyze -> Network -> Convert Network Communities...'
 #. Min Community Size to be grouped...
     * If empty, this param does nothing.
     * If an int is entered, any communities with nodes fewer than this val will not be included in the UMAP — since we might not care about small, insignificant communities.
@@ -157,43 +203,43 @@ Algorithm Explanation
 5. Normalizes the results twice: first by the total number of nodes, then to ensure all proportions sum to 1
 6. Returns a dictionary mapping each identity type to its weighted proportion in the network
 
-'Analyze -> Network -> Convert Network Communities Into Neighborhoods (Also Returns Compositional Heatmaps)'
+'Analyze -> Network -> Convert Network Communities Into Supercommunities (Also Returns Compositional Heatmaps)'
 -------------------------------
 
-* This method finds the average of compositions of all communities (assuming 'node_identities' exist - then uses the above function), then groups similar communities into 'neighborhoods'.
-* The purpose of this is to let the user crunch communities into a smaller set of neighborhoods for analysis of similar domains across the image.
-* The number of neighborhoods assigned is up to the user.
-* Running this method will also show a heatmap graph of what 'node_identity' is prominant in what neighborhood.
-* Neighborhoods by default get assigned by size as well, with 1 being the largest group, and n (the highest neighborhood ID) being the smallest, allowing their relative sizes to be easily compared.
-* Running this method will reassign the 'communities' property to these neighborhoods instead, so be sure to save the former first.
-    * This is so the user can use all community-associated functions on the new neighborhoods instead.
-    * However during an active session, this method will always run on the original communities and not the neighborhoods (it stores it in another temp property only for that purpose). This lets the user run this method with different params to evaluate different neighborhoods, but note that these temp communities are not used for anything else.
+* This method finds the average of compositions of all communities (assuming 'node_identities' exist - then uses the above function), then groups similar communities into 'Supercommunities'.
+* The purpose of this is to let the user crunch communities into a smaller set of Supercommunities for analysis of similar domains across the image.
+* The number of Supercommunities assigned is up to the user.
+* Running this method will also show a heatmap graph of what 'node_identity' is prominant in what Supercommunity.
+* Supercommunities by default get assigned by size as well, with 1 being the largest group, and n (the highest Supercommunity ID) being the smallest, allowing their relative sizes to be easily compared.
+* Running this method will reassign the 'communities' property to these Supercommunities instead, so be sure to save the former first.
+    * This is so the user can use all community-associated functions on the new Supercommunities instead.
+    * However during an active session, this method will always run on the original communities and not the Supercommunities (it stores it in another temp property only for that purpose). This lets the user run this method with different params to evaluate different Supercommunities, but note that these temp communities are not used for anything else.
 
 Parameter Explanations
 ~~~~~~~~~~~~~~~
 
-#. Num Neighborhoods
-    * The number of neighborhoods the user wants to group communities into. Presumably, you would want the number of communities to be larger by a logical amount than the number of new neighborhoods.
-    * Arbitrary neighborhood numbers can only be used for K-means clustering. DBSCAN clustering will always decide on its own how many to use. K-means will also try to guess a good neighborhood count if nothing is entered.
+#. Num Supercommunities
+    * The number of Supercommunities the user wants to group communities into. Presumably, you would want the number of communities to be larger by a logical amount than the number of new Supercommunities.
+    * Arbitrary Supercommunity numbers can only be used for K-means clustering. DBSCAN clustering will always decide on its own how many to use. K-means will also try to guess a good Supercommunity count if nothing is entered.
 #. Clustering Seed
-    * The random seed (int) used for neighborhood assignment. By default this is 42.
+    * The random seed (int) used for Supercommunity assignment. By default this is 42.
 #. Min Community Size to be grouped...
     * If empty, this param does nothing.
-    * If an int is entered, any communities with nodes fewer than this val will be assigned to 'Neighborhood 0' — since we might not care about small, insignificant communities.
+    * If an int is entered, any communities with nodes fewer than this val will be assigned to 'Supercommunity 0' — since we might not care about small, insignificant communities.
 #. Return Node Type Distribution Robust Heatmaps
-    * This method always returns a heatmap showing the proportional composition of each neighborhood for each ID type.
+    * This method always returns a heatmap showing the proportional composition of each Supercommunity for each ID type.
     * However, by pressing this option, two more heatmaps will be returned as well:
-    * The second heatmap shows in each cell the proportion of that node type in that neighborhood as compared to the total available nodes of that type.
-    * The third heatmap (which I like to use) takes the results from the second and divides them by the proportion of total nodes (of any type) that comprise that neighborhood. This gives us a result showing what node types are 'overrepresented' in this neighborhood (since we would expect each node type within a neighborhood to have the same proportional representation vs all nodes of that type as the total representation of all nodes of that neighborhood itself)
+    * The second heatmap shows in each cell the proportion of that node type in that Supercommunity as compared to the total available nodes of that type.
+    * The third heatmap (which I like to use) takes the results from the second and divides them by the proportion of total nodes (of any type) that comprise that Supercommunity. This gives us a result showing what node types are 'overrepresented' in this Supercommunity (since we would expect each node type within a Supercommunity to have the same proportional representation vs all nodes of that type as the total representation of all nodes of that Supercommunity itself)
         * In short though, cells with values above 1 overrepresent that node type, while values below 1 underrepresent it. This is a pretty great way to eyeball compositional anomolies.
 #. Mode - A dropdown menu to select the clustering algorithm.
     * KMeans - Uses K-means clustering. (Generally recommended)
-    * DBSCAN - Uses DBSCAN clustering. (Somewhat experimental). Note that DBSCAN likes to assign low-appearing groups as 'outliers', which in the current implementation get assigned to 'Neighborhood 0' (Along with any communities the user decided to threshold out by size).
+    * DBSCAN - Uses DBSCAN clustering. (Somewhat experimental). Note that DBSCAN likes to assign low-appearing groups as 'outliers', which in the current implementation get assigned to 'Supercommunity 0' (Along with any communities the user decided to threshold out by size).
 
-* Press 'Get Neighborhoods' to group the nodes into neighborhoods and to get the heatmaps. This also returns a number of tables to the tabulated data widget (top right), including:
+* Press 'Get Supercommunities' to group the nodes into Supercommunities and to get the heatmaps. This also returns a number of tables to the tabulated data widget (top right), including:
     * Tabulated versions of all heatmaps.
-    * Proportion of total nodes in network for each neighborhood.
-    * Nodes to neighborhood ID table.
+    * Proportion of total nodes in network for each Supercommunity.
+    * Nodes to Supercommunity ID table.
 
 Algorithm Explanation
 ~~~~~~~~~~~~~~~~~~~~
@@ -201,39 +247,18 @@ Algorithm Explanation
 * This method primarily uses the sklearn.cluster KMeans algorithm: https://scikit-learn.org/stable/modules/generated/sklearn.cluster.KMeans.html
 1. Finds the composition of all communities using 'Analyze -> Network -> Identity Makeup of Communities' logic.
 2. Converts compositions to numpy array to prepare data for scikit-learn clustering algorithm
-3. Applies K-means clustering with specified number of neighborhoods and random seed
+3. Applies K-means clustering with specified number of Supercommunities and random seed
 
 * Alternatively, the sklearn DBSCAN algorithm can be used: https://scikit-learn.org/stable/modules/generated/sklearn.cluster.DBSCAN.html
 1. Calculate min_samples - minimum neighbors a point needs to be a 'core point': max(3, sqrt(n_samples) * 0.2)
-2. Estimate eps (neighborhood radius): Use 80th percentile of 4th nearest neighbor distances. Non-core points within eps of core points become border points of that cluster.
+2. Estimate eps (Supercommunity radius): Use 80th percentile of 4th nearest neighbor distances. Non-core points within eps of core points become border points of that cluster.
 3. Run DBSCAN with calculated parameters
 4. Points that are neither core points nor within eps of core points become outliers
 
-* If using KMeans, and no neighborhood count is provided:
-1. Neighborhood counts from sizes 1 to 20 will be temporarily generated.
+* If using KMeans, and no Supercommunity count is provided:
+1. Supercommunity counts from sizes 1 to 20 will be temporarily generated.
 2. They will be graded on quality based on their calinksi harabasz score: https://scikit-learn.org/stable/modules/generated/sklearn.metrics.calinski_harabasz_score.html
-3. The neighborhood count with the highest score will be used.
-
-'Analyze -> Network -> Create Communities Based on Cuboidal Proximity Cells?'
--------------------------------
-
-* This method splits the image into cells (of user-defined size) and assigns nodes to be in communities based on whether they share a cell.
-* It doesn't have anything to do with the network but is an alternate way to group the nodes into communities, with a greater spatial focus.
-
-Parameter Explanations
-~~~~~~~~~~~~~~~
-
-#. Cell Size
-    * The volume of a cell (Can be 2D or 3D). The cells will always be cubes (or squares).
-#. xy scale
-    * The 2D plane scaling of the image.
-#. z scale
-    * The 3D voxel depth scaling of the image.
-
-* The latter two params will scale the cell to be cuboidal based on provided scaling (ie its side lengths will be the same in true units).
-* Press 'Get Communities' to assign the communities based on cells.
-
-* The second submenu is 'Stats', and is primarily used to create tables and graphs about the network or image morphology.
+3. The Supercommunity count with the highest score will be used.
 
 'Analyze -> Stats -> Network Related -> Calculate Generic Network Stats'
 -----------------------------------------
@@ -526,7 +551,7 @@ Parameter Explanations
 
 
 * Pressing 'Get Average Nearest Neighbor...' will yield a table of every 'root' node paired to its average distance to the desired number of nearest neighbors. It will also create a heatmap or 'quantifiable overlay' if selected.
-* (If node identities property exists) - Pressing 'Get All Averages' will yield a table of the average nearest neighbor distance (for the desired number of nearest neighbor) across all nodes for every identity vs identity combination available. This can be a fast way to query the dataset, but it does not yield distributions and heatmaps, which need to be individually obtained. However, note that this should not be used if the number of identities would make this cumbersome.
+* (If node identities property exists) - Pressing 'Get All Averages' will yield a table of the average nearest neighbor distance (for the desired number of nearest neighbor) across all nodes for every identity vs identity combination available. This can be a fast way to query the dataset, but it does not yield distributions and heatmaps, which need to be individually obtained. However, note that this should not be used if the number of identities would make this cumbersome. This option will also return a 2 dimensional matrix graph showing the distance for every combination created, useful for fast evaluation or visualization.
 * Note that this method automatically applies the xy_scale and z_scale set in the current properties. To ensure property distances, please make sure those are correct in Image -> Properties. By default, they are 1. 
 
 Algorithm Explanations:
@@ -648,22 +673,23 @@ Algorithm Explanation
 * This method can be used to visualize normalized violin plots and UMAPs for nodes that were assigned identities via multiple channel markers (via 'File -> Images -> Node Identities -> Assign Node Identities from Overlap with Other Images')
 * The aforementioned identity assignment funtion produces a table that shows the average intensity of each node for each marker. Please save this table from the upper-right data tables for use in this function. This data is the only one natively compatible with this function.
 * Upon running, the user will be prompted to retrieve this data table as a .csv or .xlsx file. Note that this table would ideally be the one created during the aforementioned node assignment, with the node identities themselves also derived from that function.
-* This method can also be used to group nodes into neighborhoods based on their shared intensity expression profiles across their channels. This is a good way to evaluate what unique phenotypes or flavors of nodes exist in the image.
+* This method can also be used to group nodes into communities based on their shared intensity expression profiles across their channels. This is a good way to evaluate what unique phenotypes or flavors of nodes exist in the image.
 
 Parameter Explanation
 ~~~~~~~~~~~~~~~~~~~~
 
 1. 'Return Identity Violin Plots?' - 'None' by default, but the dropdown menu can be used to select one of the current node_identities in the session, which informs the program to yield a violin plot displaying the normalized intensity expression for each channel of all nodes belonging to the aforementioned identity. This is useful for seeing what other channels a particular identity is generally positive in.
-2. 'Return Neighborhood/Community Violin Plots?' - 'None' by default, but the dropdown menu can be used to select one of the current communities (or rather neighborhoods, if communities have been grouped into neighborhoods) in the session, which informs the program to yield a violin plot displaying the normalized intensity expression for each channel of all nodes belonging to the aforementioned community/neighborhood. This is useful for seeing what channels constitute a particular community/neighborhood.
+2. 'Return Neighborhood/Community Violin Plots?' - 'None' by default, but the dropdown menu can be used to select one of the current communities (or rather Supercommunities, if communities have been grouped into Supercommunities) in the session, which informs the program to yield a violin plot displaying the normalized intensity expression for each channel of all nodes belonging to the aforementioned community/neighborhood. This is useful for seeing what channels constitute a particular community/neighborhood.
 3. 'Execution Mode...' - Dictates how the UMAP comparing intensities of nodes will label said nodes.
     * 'Label UMAP By Identity' - Each node will be labeled by their identity value, or randomly by one of them if they have multiple.
-    * 'Label UMAP by Neighborhood/Community' - Each node will bear the label of their assigned community/neighborhood. Useful if they were assigned neighborhoods based on overlapped intensity values.
-4. 'Assign Neighborhoods Via Kmeans Clustering' - Adjacent to this button, you can enter how many neighborhoods you want the nodes to be partitioned into, based on their similarity in intensity across the channels. If you leave it empty, the program will try to predict an ideal number of neighborhoods, but only up to 20.
-5. 'Reassign Identities Based on Clustering Results?' - Check this box, and while assigning neighborhoods with the above parameter, you will get the opportunity to also rename each neighborhood, in case you think they represent something more significant than their default names of 1, 2, 3, etc. For each neighborhood, the program will show you the violin plot for the intensity profile of each neighborhood to assist you in deciding what to rename it.
+    * 'Label UMAP by Community' - Each node will bear the label of their assigned community/neighborhood. Useful if they were assigned Supercommunities based on overlapped intensity values.
+4. 'Assign Neighborhoods Via Kmeans Clustering' - Adjacent to this button, you can enter how many communities you want the nodes to be partitioned into, based on their similarity in intensity across the channels. If you leave it empty, the program will try to predict an ideal number of communities, but only up to 20. Note this is biased for lower values and you should probably just apply an arbitrary number.
+5. 'Generate Intensity Heatmap' - After the KMeans clustering, selecting this will return an informative heatmap showing you the differing relative expression in marker intensity between your channels for each community.
+6. 'Reassign Identities Based on Clustering Results?' - Check this box, and while assigning communities with the above parameter, you will get the opportunity to also rename each community, in case you think they represent something more significant than their default names of 1, 2, 3, etc. For each communitiy, the program will show you the violin plot for the intensity profile of each communities to assist you in deciding what to rename it.
 
 * To view any designated violin plots, press 'Show-Z-score-like Violin'. The plot will be shown, and the corresponding data will populate the upper right data tables.
 * "Show Z-score UMAP" may be pressed to show a UMAP of the intensity Z-score for each node relative to the identity of each channel. (This is the same UMAP that can be displayed at the end of 'File -> Images -> Node Identities -> Assign Node Identities from Overlap with Other Images')
-* 'Assign Neighborhoods Via Kmeans Clustering' may be pressed to enact the neighborhood assignment.
+* 'Assign Neighborhoods Via Kmeans Clustering' may be pressed to enact the community assignment.
 
 Algorithm Explanation
 ~~~~~~~~~~~~~~~~~~~~

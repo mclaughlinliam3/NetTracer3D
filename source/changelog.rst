@@ -163,4 +163,23 @@ Version 1.2.9-1.3.5 updates
 	* Improved filament segmenter to better consider filament direction and to use state cacheing while in use to regenerate with alternate params. Updated the branch rejoining Class to consider the local direction of branches to join in a more logical manner.
 	* Fixed all the network histogram/stat/community calculations to consider weights properly, provided they are configured for multigraphs in networkx. (In short, edge weights in NetTracer3D are supposed to represent duplicate edges).
 
+Version 1.3.6-1.4.4 updates
+	* Added more options for styles of network graph renders.
+	* Batch calculating all nearest neighbor identity permutations now returns a nice looking graph rather than just a data table.
+	* Added a new way to get proximity networks through distance transforms that actually seems to community partition a bit more accurately.
+	* Added ability to train a neural network model for the histogram human-in-the-loop node identity assignment feature. This is somewhat in an untested phase although the idea is you can optionally train a model on your own thresholding that can be applied to similar datasets to avoid having to do more manual work.
+	* Didn't mention last time, but added convex hull generation function.
+	* Fixed visual display bug that could sometimes happen when the realtimesegmenter finished the segmentation preview on an entire volume.
+	* Altered params on the random forest classifier to hopefully be faster and a bit more robust to noise.
+	* Added option to create node communities based on immediate neighbors of node groups, mainly for multiplexed cellular data purposes.
+	* What used to be referred to as 'neighborhoods' (essentially referring to aggregated communities) in the GUI is now referred to as 'supercommunities'.This is to differentiate them from the new method mentioned above which neighborhoods is a more apt descriptor for. The source code will not reflect this.
+	* Proximity networks via centroids can now arbitrarily group the nearest 'n' neighbors of objects regardless of distance.
+	* From the bottom right spreadsheet table - you can save your network in pickle format. If you save these to an active session, they will load faster than loading the network from csv. Only really relevant for very large networks, although you can open the pickled network directly in Python (via pickle module) as a NetworkX graph object as well.
+	* From the modify network menu - you can now arbitrarily remove identities you don't want in your current session.
+	* Updated the violin plot analyzer dialog to better handle big data
+	* Added method to generate hexagons (for 2D) or rhombic dodecahedrons (for 3D) (optionally within a masked area) of arbitrary size to act as pseudo-cells. This is designed mainly for multiplexed like data where you're interested in assigning cells an identity based on fluorescent intensity but lack cellular segmentation - can be used to sort of bypass true cellular seg (will not be as accurate) for downstream clustering purposes.
+	* Revamped ability to select/rename different combos of node identities with new menus for doing such.
+	* Fixed some bugs regarding handling of node identities for some of the graphs.
+	* Other bug fixes, minor adjustments
+
 

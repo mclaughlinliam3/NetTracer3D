@@ -6,14 +6,14 @@
   <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
 
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>All Process Menu Options &mdash; NetTracer3D 1.3.5 documentation</title>
+  <title>All Process Menu Options &mdash; NetTracer3D 1.4.4 documentation</title>
       <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=b86133f3" />
       <link rel="stylesheet" type="text/css" href="_static/css/theme.css?v=e59714d7" />
 
   
       <script src="_static/jquery.js?v=5d32c60e"></script>
       <script src="_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
-      <script src="_static/documentation_options.js?v=4720776d"></script>
+      <script src="_static/documentation_options.js?v=6d0302ba"></script>
       <script src="_static/doctools.js?v=9bcbadda"></script>
       <script src="_static/sphinx_highlight.js?v=dc90522c"></script>
     <script src="_static/js/theme.js"></script>
@@ -164,6 +164,8 @@
 <li class="toctree-l3"><a class="reference internal" href="#id34">Algorithm Explanations</a></li>
 </ul>
 </li>
+<li class="toctree-l2"><a class="reference internal" href="#process-generate-generate-convex-hull">‘Process -&gt; Generate -&gt; Generate Convex Hull’</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#process-generate-generate-artificial-hexagonal-nodes">‘Process -&gt; Generate -&gt; Generate Artificial Hexagonal Nodes’</a></li>
 <li class="toctree-l2"><a class="reference internal" href="#process-modify-network-properties">‘Process -&gt; Modify Network/Properties’</a><ul>
 <li class="toctree-l3"><a class="reference internal" href="#id35">Parameter Explanations</a></li>
 </ul>
@@ -378,6 +380,7 @@
 <span id="proximity-network"></span><h2>‘Process -&gt; Calculate Network -&gt; Calculate Proximity Network…’<a class="headerlink" href="#process-calculate-network-calculate-proximity-network" title="Link to this heading"></a></h2>
 <ul class="simple">
 <li><p>This method is used to connect objects in the nodes channel based on whether they are within some user-defined distance of each other.</p></li>
+<li><p>These networks are useful for neighborhood based analysis for cells.</p></li>
 <li><p>Please see <a class="reference internal" href="proximity.html"><span class="doc">Proximity Networks - Ideal for Cellular Data</span></a> for a brief walkthrough about using this function.</p></li>
 <li><p>Selecting this function will show the following menu:</p></li>
 </ul>
@@ -388,7 +391,7 @@
 <ol class="arabic simple">
 <li><dl class="simple">
 <dt>Search Region Distance…</dt><dd><ul class="simple">
-<li><p>This value is the distance nodes will search for other nodes to connect to. Note that this value is scaled corresponding to the xy_scale/z_scale parameters. (As in, if you set xy_scale/z_scale correctly, then treat this as a real-value, such as microns, for your image).</p></li>
+<li><p>This value is the distance nodes will search for other nodes to connect to. Note that this value is scaled corresponding to the xy_scale/z_scale parameters. (As in, if you set xy_scale/z_scale correctly, then treat this as a real-value, such as microns, for your image). You can skip this parameter and enter a desired number of nearest neighbors instead if you are using centroids, or you can combine these two to find the ‘n’ nearest neighbors in some distance.</p></li>
 </ul>
 </dd>
 </dl>
@@ -410,9 +413,10 @@
 <li><dl class="simple">
 <dt>Execution Mode:</dt><dd><ul class="simple">
 <li><dl class="simple">
-<dt>The dropdown menu will display two options.</dt><dd><ol class="arabic simple">
+<dt>The dropdown menu will display three options.</dt><dd><ol class="arabic simple">
 <li><p>‘From Centroids…’ - The search is done starting from centroids, looking for other centroids. The algorithm that this uses should be faster for larger datasets. It is ideal to use when your nodes can be represented well by centroids, such as if they are small or relatively homogenous spheroids. Note that because centroids are used, this option allows this function to run without any nodes image whatsoever, assuming the node_centroids property was loaded in. This might be useful when importing data that has already been extracted out of an image elsewhere, as a set of centroids, for example.</p></li>
 <li><p>‘From Morphological Shape…’ - The search is done starting from each nodes’ border in 3D space. This algorithm is slower but is better suited handling non-homogenous or oddly-shaped nodes.</p></li>
+<li><p>‘Morphological - Using Distance Transform…’ - Similar to above, but will not allow nodes to connect over the search regions of other nodes. Results in nodes finding their immediate neighbors in the specified distance, but overall a simpler network than option 2.</p></li>
 </ol>
 </dd>
 </dl>
@@ -459,6 +463,14 @@
 <li><p>Restricts nodes from only making a number of connections to the integer value passed to this param.</p></li>
 <li><p>They will connect to their n nearest neighbors within the search region.</p></li>
 <li><p>This is a useful way to simplify dense networks.</p></li>
+<li><p>You can only do this from the centroid search. Note that you can skip passing a search parameter and just use this nearest neighbor search in that case, if desired.</p></li>
+</ul>
+</dd>
+</dl>
+</li>
+<li><dl class="simple">
+<dt>(If using distance transform morphological) Use Fast Search…?</dt><dd><ul class="simple">
+<li><p>If you are using the distance transform search method, this will have it calculate the distance transform in parallel, followed by flood filling to expand labelled regions. Requires the edt package. Search regions along connecting boundaries may be slightly rougher.</p></li>
 </ul>
 </dd>
 </dl>
@@ -1663,6 +1675,24 @@
 </ul>
 </section>
 </section>
+<section id="process-generate-generate-convex-hull">
+<h2>‘Process -&gt; Generate -&gt; Generate Convex Hull’<a class="headerlink" href="#process-generate-generate-convex-hull" title="Link to this heading"></a></h2>
+<ul class="simple">
+<li><p>This method can be run to create a Convex Hull around the non-background data for the active image.</p></li>
+<li><p>The convex hull is the smallest convex 3D shape that can encapsulate your data. It will be generated as a binary mask in Overlay2.</p></li>
+<li><p>You can essentially use this to define the volume that your data exists in. It can also be used to create a mask to inform the foreground vs background region of your data, for functions that care about that such as the Ripley’s function and the 3D nearest neighbor heatmaps.</p></li>
+</ul>
+</section>
+<section id="process-generate-generate-artificial-hexagonal-nodes">
+<h2>‘Process -&gt; Generate -&gt; Generate Artificial Hexagonal Nodes’<a class="headerlink" href="#process-generate-generate-artificial-hexagonal-nodes" title="Link to this heading"></a></h2>
+<ul class="simple">
+<li><p>This method can be used to create a set of labeled hexagons of arbitrary size. They will be created in Overlay2, either filling the entire image or only within a masked region.</p></li>
+<li><p>You essentially can use this to create ‘artificial cells’ for neighborhood detection via proximity networks. If you have multichannel data, you can assign the hexagons identities via ‘File -&gt; Images -&gt; Node Identities -&gt; Assign Node Identities…’. Then, generate a proximity network followed by ‘Analyze -&gt; Network -&gt; Create Communities based on Nodes’ Immediate Neighbors’.</p></li>
+<li><p>When generating the hexagons, you will specify side length, and optionally apply an xy and z_scale if your data is anisotropic in z. You can apply a downsample factor to generate these faster.</p></li>
+<li><p>For 3D data specifically, it will actually try to generate ‘Rhombic Dodecahedrons’ by default, which is a 3D shape that tesselates well. You can change it to create hexagonal prisms, which is faster but not a true 3D tesselator.</p></li>
+<li><p>You can select whether you’d like the output to be masked by some binary data in the Nodes’ channel, such as if your image has background you want to exclude from getting hexagons.</p></li>
+</ul>
+</section>
 <section id="process-modify-network-properties">
 <h2>‘Process -&gt; Modify Network/Properties’<a class="headerlink" href="#process-modify-network-properties" title="Link to this heading"></a></h2>
 <ul class="simple">
@@ -1692,8 +1722,15 @@
 </dl>
 </li>
 <li><dl class="simple">
+<dt>Remove Negative IDs</dt><dd><ul class="simple">
+<li><p>If you created negative IDs for nodes showing what identities they lack (ie, from the threshold identity assigner), you can remove those negative identities by choosing this.</p></li>
+</ul>
+</dd>
+</dl>
+</li>
+<li><dl class="simple">
 <dt>Remove Any Nodes Not in Nodes Channel From Properties?</dt><dd><ul class="simple">
-<li><p>This method will remove any nodes from the node_centroids and node_identities properties if their label is not present in the image in the nodes channel.</p></li>
+<li><p>This method will remove any nodes from the network, node_centroids, communities, and node_identities properties if their label is not present in the image in the nodes channel.</p></li>
 <li><p>This method is essentially here to support cropping datasets. If you crop an image and would like to eliminate any additional labels from the other properties that are no longer in the image, this is the way to do it.</p></li>
 </ul>
 </dd>
@@ -1765,6 +1802,13 @@
 <dt>Convert communities to nodes?</dt><dd><ul class="simple">
 <li><p>If the nodes have been partitioned into communities, this method will replace the network between the nodes with a network between its communities instead.</p></li>
 <li><p>Additionally, any labeled nodes in the nodes channel will take on a label belonging to their community, rather than their original ID.</p></li>
+</ul>
+</dd>
+</dl>
+</li>
+<li><dl class="simple">
+<dt>Change/Remove Identities:</dt><dd><ul class="simple">
+<li><p>Opens a menu with two functions: 1. You can remove any number of node identities from your session. 2. You can create groups of identities with positive gates (ie find nodes that have this identity) and negative gates (ie disclude nodes that have this identity) and rename them to some new identity. Use this if you have multi-identity nodes that you’d like to reduce to a singular identity, or if you just want to rename some identity.</p></li>
 </ul>
 </dd>
 </dl>

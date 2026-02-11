@@ -54,8 +54,9 @@ These functions will only work correctly if the image data in the Nodes and Edge
 
 'Show Identity'
 ~~~~~~~~~~~~~~~
-NetTracer3D supports the grouping of nodes into seperate 'identities', allowing them to represent different things. Assuming you have assigned identities, clicking 'Show Identity' reveals options for each identity. Clicking any of those options will select all nodes of that identity-type and add them to the highlight display.
-These functions will only work correctly if the image data in the Nodes channel corresponds to the correct IDs in the 'node_identities' property.
+* NetTracer3D supports the grouping of nodes into seperate 'identities', allowing them to represent different things. Assuming you have assigned identities, clicking 'Show Identity' reveals options for each identity. Clicking any of those options will select all nodes of that identity-type and add them to the highlight display.
+* These functions will only work correctly if the image data in the Nodes channel corresponds to the correct IDs in the 'node_identities' property.
+* You can select 'Custom' from this menu also to open a new window that will allow you to combine groups of identities as either positive (selects only nodes that have all those identities) or negative (does not select nodes that have said identity). This can be used to find specific combinations for multi-identity nodes.
 
 'Select All'
 ~~~~~~~~~~~~~~~
@@ -170,6 +171,8 @@ Selecting 'Save As provides the following options':
     * Saves the network as a .graphml file for analysis in a variety of different network analysis programs.
 5. Pajek
     * Saves the network as a .net file for analysis in the network analysis program 'Pajek'.
+6. Pickle
+    * Saves the network into two .pkl files. The first one contains a NetworkX Graph object corresponding to your current network, the second, some lists describing the same network. If your network is particularly big and taking a while to load in from previous sessions, you can put these pickle files in your active session folder, and it will prioritize loading them over the .CSV that it normally uses. Loading this way is slightly faster.
 
 Right Clicking in the Selection Window
 ~~~~~~~~~~~~~~~~~~~~~~~

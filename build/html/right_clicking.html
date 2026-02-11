@@ -6,14 +6,14 @@
   <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
 
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Right Clicking - All Options Available by Right Clicking in the GUI &mdash; NetTracer3D 1.3.5 documentation</title>
+  <title>Right Clicking - All Options Available by Right Clicking in the GUI &mdash; NetTracer3D 1.4.4 documentation</title>
       <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=b86133f3" />
       <link rel="stylesheet" type="text/css" href="_static/css/theme.css?v=e59714d7" />
 
   
       <script src="_static/jquery.js?v=5d32c60e"></script>
       <script src="_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
-      <script src="_static/documentation_options.js?v=4720776d"></script>
+      <script src="_static/documentation_options.js?v=6d0302ba"></script>
       <script src="_static/doctools.js?v=9bcbadda"></script>
       <script src="_static/sphinx_highlight.js?v=dc90522c"></script>
     <script src="_static/js/theme.js"></script>
@@ -217,8 +217,11 @@
 </section>
 <section id="show-identity">
 <h3>‘Show Identity’<a class="headerlink" href="#show-identity" title="Link to this heading"></a></h3>
-<p>NetTracer3D supports the grouping of nodes into seperate ‘identities’, allowing them to represent different things. Assuming you have assigned identities, clicking ‘Show Identity’ reveals options for each identity. Clicking any of those options will select all nodes of that identity-type and add them to the highlight display.
-These functions will only work correctly if the image data in the Nodes channel corresponds to the correct IDs in the ‘node_identities’ property.</p>
+<ul class="simple">
+<li><p>NetTracer3D supports the grouping of nodes into seperate ‘identities’, allowing them to represent different things. Assuming you have assigned identities, clicking ‘Show Identity’ reveals options for each identity. Clicking any of those options will select all nodes of that identity-type and add them to the highlight display.</p></li>
+<li><p>These functions will only work correctly if the image data in the Nodes channel corresponds to the correct IDs in the ‘node_identities’ property.</p></li>
+<li><p>You can select ‘Custom’ from this menu also to open a new window that will allow you to combine groups of identities as either positive (selects only nodes that have all those identities) or negative (does not select nodes that have said identity). This can be used to find specific combinations for multi-identity nodes.</p></li>
+</ul>
 </section>
 <section id="select-all">
 <h3>‘Select All’<a class="headerlink" href="#select-all" title="Link to this heading"></a></h3>
@@ -445,6 +448,13 @@ It has a main network table showing the full network and shown when the ‘Netwo
 <li><dl class="simple">
 <dt>Pajek</dt><dd><ul class="simple">
 <li><p>Saves the network as a .net file for analysis in the network analysis program ‘Pajek’.</p></li>
+</ul>
+</dd>
+</dl>
+</li>
+<li><dl class="simple">
+<dt>Pickle</dt><dd><ul class="simple">
+<li><p>Saves the network into two .pkl files. The first one contains a NetworkX Graph object corresponding to your current network, the second, some lists describing the same network. If your network is particularly big and taking a while to load in from previous sessions, you can put these pickle files in your active session folder, and it will prioritize loading them over the .CSV that it normally uses. Loading this way is slightly faster.</p></li>
 </ul>
 </dd>
 </dl>

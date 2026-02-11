@@ -111,12 +111,15 @@ def get_border_nodes(partition, G):
     intercom_connections = 0
     connected_coms = []
     for edge in G.edges():
-        if partition[edge[0]] != partition[edge[1]]:
-            border_nodes.add(edge[0])
-            border_nodes.add(edge[1])
-            connected_coms.append(partition[edge[0]])
-            connected_coms.append(partition[edge[1]])
-            intercom_connections += 1
+        try:
+            if partition[edge[0]] != partition[edge[1]]:
+                border_nodes.add(edge[0])
+                border_nodes.add(edge[1])
+                connected_coms.append(partition[edge[0]])
+                connected_coms.append(partition[edge[1]])
+                intercom_connections += 1
+        except:
+            pass
 
     return border_nodes, intercom_connections, set(connected_coms)
 
@@ -741,8 +744,15 @@ def assign_community_colors(community_dict: Dict[int, int], labeled_array: np.nd
     non_outlier_dict = {node: comm for node, comm in community_dict.items() if comm != 0}
     
     # Get communities excluding outliers
-    communities = sorted(set(non_outlier_dict.values())) if non_outlier_dict else list()
-    
+    try:
+        communities = sorted(set(non_outlier_dict.values())) if non_outlier_dict else []
+    except TypeError:
+        # Convert the dictionary values to strings
+        if non_outlier_dict:
+            non_outlier_dict = {node: str(comm) for node, comm in non_outlier_dict.items()}
+        community_dict = {node: str(comm) for node, comm in community_dict.items()}
+        communities = sorted(set(non_outlier_dict.values())) if non_outlier_dict else []
+
     # Generate colors for non-outlier communities only
     colors = generate_distinct_colors(len(communities)) if communities else []
     colors_rgba = np.array([(r, g, b, 255) for r, g, b in colors], dtype=np.uint8)
@@ -801,7 +811,12 @@ def assign_community_grays(community_dict: Dict[int, Union[int, str, Any]], labe
         max_val = max(community_dict.values())
     else:
         # For string/other communities, assign sequential values
-        unique_communities = sorted(set(community_dict.values()))
+        try:
+            unique_communities = sorted(set(community_dict.values()))
+        except:
+            community_dict = {node: str(comm) for node, comm in community_dict.items()}
+            unique_communities = sorted(set(community_dict.values()))
+
         community_to_value = {comm: i+1 for i, comm in enumerate(unique_communities)}
         node_to_gray = {node: community_to_value[comm] for node, comm in community_dict.items()}
         max_val = len(unique_communities)
@@ -823,13 +838,17 @@ def assign_community_grays(community_dict: Dict[int, Union[int, str, Any]], labe
     else:
         community_to_gray = {comm: i+1 for i, comm in enumerate(sorted(set(community_dict.values())))}
     
-    # Use numpy's vectorized operations for faster assignment
-    unique_labels = np.unique(labeled_array)
-    for label in unique_labels:
-        if label in node_to_gray:
-            gray_array[labeled_array == label] = node_to_gray[label]
+    # Create lookup table
+    max_label = max(max(labeled_array.flat), max(node_to_gray.keys()) if node_to_gray else 0)
+    gray_lut = np.zeros(int(max_label) + 1, dtype=dtype)
+    
+    for node_id, gray_val in node_to_gray.items():
+        gray_lut[node_id] = gray_val
+    
+    gray_array = gray_lut[labeled_array]
     
     return gray_array, community_to_gray
+    
 
 
 if __name__ == "__main__":

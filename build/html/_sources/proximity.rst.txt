@@ -16,7 +16,7 @@ Next, select 'Process -> Calculate -> Calculate Proximity Network'.
 .. image:: _static/proximity_menu.png
    :width: 800px
    :alt: Proximity Network Menu
-*Here we can see the menu to generate proximity networks. The search distance here is set to 300, which means nodes will look 300 pixels out for connections (although this will correspond to your scalings). Note there are two options available for searching, shown in the carrot dropdown next to 'Execution Mode'. The first option searches from centroids and works quite well with big data as the data structure is far simpler. The second option searches from object borders and may be slower on large images by comparison. In this case, I use the second option since these objects are heterogenously sized. For more information on using this algorithm, see* :ref:`proximity_network` 
+*Here we can see the menu to generate proximity networks. The search distance here is set to 300, which means nodes will look 300 pixels out for connections (although this will correspond to your scalings). Note there are two options available for searching, shown in the carrot dropdown next to 'Execution Mode'. The first option searches from centroids and works quite well with big data as the data structure is far simpler. The second option searches from object borders and may be slower on large images by comparison. In this case, I use the second option since these objects are heterogenously sized. You can optionally enter a number of nearest neighbors at the bottom instead of a search distance, or just combine these parameters to find a set number of neighbors within a specified distance. For more information on using this algorithm, see* :ref:`proximity_network` 
 
 And after algorithm execution:
 
@@ -32,7 +32,32 @@ And after algorithm execution:
 Proximity networks are a generic way to group together objects in 3D space and are ideal, for example, for grouping together cellular neighborhoods.
 One use for such cellular neighborhoods is grouping them into communities and analyzing their composition!
 
-Using Proximity Networks for Advanced Cellular Neighborhood Analysis - Example Analysis of CODEX sample
+
+Cellular Data - Modality of Analysis
+-----------------------------------------------------------------------
+* Generally speaking, there are two primary ways to analyze your cellular data in NetTracer3D.
+* Both of these modalities will start with these steps 
+   1. Segment your cells beforehand (ie in Cellpose) from a DAPI and/or membrane channel, or generate hexagonal nodes from the Generate menu.
+   2. Load the segmented cells into the nodes channel. Assemble the channels of interest from your image into a folder and then use 'File -> Images -> Node Identities -> Assign Node Identities from Overlap with Other Images'. This will calculate the average expression of each node across your channels - save this spreadsheet. You will also use thresholding to assign your nodes each channel identity.
+1. The first analysis option is to 1. Create a proximity network from your cells bearing node identities. I recommend using some number (ie 20) of nearest neighbors within a reasonable distance. Then use 'Analyze -> Network -> Create communities based on Node's Immediate neighbors' to group your cells into communities based on the recurrant neighbor patterns. Note this is different than the default community clustering from the network. The network clustering will more reveal spatial aggregates of cells based on their literally clumpiness in the tissue, which may be inappropraite for dense cellular arrangements.
+* Then, 'Analyze -> Network -> Calculate Community Composition...' will show you what your communities are comprised of.
+* You want many channels for this to work well. The more channels, the more distinct regions of your tissue will appear.
+* Here is the result of this community detection applied on a lymph node using NetTracer3D:
+
+.. image:: _static/node1.png
+   :width: 800px
+   :alt: Node 1
+*This approach is good for classifying your tissue
+
+2. The second analysis option requires using the intensities spreadsheet you created earlier. Use 'Analyze -> Stats -> Show Identity Violins...' and find the spreadsheet you created.
+* From the menu that appears, find clustering option and enter a number of communities to create based on the fluorescent expression profile for each cell. I recommend keeping the intensity heatmap checked, as it will inform you what the resultant communities are composed of.
+
+.. image:: _static/node2.png
+   :width: 800px
+   :alt: Node 2
+*This approach is good for finding types of cells
+
+Using Proximity Networks for Advanced Cellular Neighborhood Analysis - Walthrough Analysis of CODEX sample
 -----------------------------------------------------------------------
 
 Proximity networks generally make the best use of the 'node identities' property, which lets us eventually lasso together groups of nodes into neighborhoods that share local expression of similar cell types.
@@ -58,6 +83,8 @@ This is an image of a renal papilla. Here it is stained with DAPI (Nuclei).
    :alt: cellpose
 *Please see https://cellpose.readthedocs.io/en/latest/ for specific instructions on how to install/use cellpose*
 
+* If you can't segment cells or just don't want to, you can generate artificial hexagonal nodes from the Generate menu that similarly can partition your tissue.
+
 .. image:: _static/start.png
    :width: 800px
    :alt: start
@@ -73,7 +100,7 @@ This is an image of a renal papilla. Here it is stained with DAPI (Nuclei).
 .. image:: _static/chooseone.png
    :width: 800px
    :alt: chooseone
-*The step-out distance parameter can be used to optionally make each cell consider a wider area, such as to account for staining beyond the nuclei*
+*The step-out distance parameter can be used to optionally make each cell consider a wider area, such as to account for staining beyond the nuclei. If you segmented membranes or just don't want this you can skip it.*
 
 * NetTracer3D will then do some calculation - it will evaluate each cell for the average intensity it expresses in each channel.
 * Once its done, you will get prompted to do manual thresholding on each image, telling NetTracer3D which subset of cells you would like to assign that identity based on their relative intensities in that channel. For example, here I am doing CD68 (stains macrophages):
@@ -125,23 +152,54 @@ Grouping Cells By Shared Expression Profile
 
 * This neighborhood shows strong expression of CD31 but weaker expression of the other markers. It likely just represents blood vessels. This can be an effective way to query different unique cell phenotypes in our image.
 
-* Moving on from marker-based analysis, we may be interested in NetTracer3D's spatial capabilities. We will evaluate this over a broader set of markers. While this system is primarily designed to start with our user-in-the-loop per-channel thresholder, more nuanced segmentations can be created and also brought in via the auto-assignment capability. I will just demo that for these additional markers since I happened to already have segmented several channels of interest.
-* To use the auto-assignment, choose the following option:
+Grouping Cells By Neighborhood
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-.. image:: _static/choosetwo.png
+* Moving on from marker-based analysis, we may be interested in NetTracer3D's spatial capabilities. We will evaluate this over a broader set of markers. While this system is primarily designed to start with our user-in-the-loop per-channel thresholder, more nuanced segmentations can be created and also brought in via auto-assignment capabilities. This includes use of pre-binarized channels (ie you already segmented out the foreground), use of a neural network (which you can train while doing the manual thresholding and reuse) or just reapplication of previous threshold settings.
+
+* Now once more, we calculate a proximity network. I assign a search region limit of 100 microns and opt to have it find it's nearest 20 neighbors in that area. I don't use this here, but a cool feature to note is "Create Networks only from a specific node identity" can be used to make connections only start from a certain identity, for highly specified analysis.
+
+.. image:: _static/prox.png
    :width: 800px
-   :alt: choosetwo
-*Select the folder containing your binary segmented or to-be-auto-segmented channels*
+   :alt: prox
+*I am going to use centroids to make this proximity network, which is acceptable when my objects are circuloid/cuboid. Centroids can be obtained with 'Process -> Calculate Network -> Calculate Centroids', although if they don't exist and you run this, NetTracer3D will prompt you to calculate them. In this instance, I tell the Calculate Centroids Window to 'Skip ID-less centroids', which is a parameter that makes it exclude any centroids for Nodes that were not assigned an identity, and likewise those nodes will be excluded from the network. If I am interested, though, in having these ID-less nodes in the network, ie to represent the tissue architecture, this option does not need to be used. Finally, 'Process -> Modify Network/Properties' can be used to kick out centroids that don't have identities if I change my mind.*
 
-* The auto-assignment compares the nodes to a foreground-binarized version of each channel, and simply assigns them to that identity based on rote overlap.
-* Each channel can be already binarized (ie I segmented it myself first), but if it's not binary, NetTracer3D will detect this and auto-binarize it with Otsu's algorithm, which basically tries to find the larger intensity peak in the intensity histogram. Note that this auto-binarization only really works if the SNR is pretty good. If you think there's a chance it won't work, I highly recommend either manually segmenting all channels, or at least checking what Otsu's binarization does to that channel (Can be done in NetTracer3D with 'Process -> Image -> Binarize').
+* Here is an example of what the network itself looks like.
 
-.. image:: _static/segment_cd31.png
+.. image:: _static/network.png
    :width: 800px
-   :alt: segment_cd31
-*Here, I am using NetTracer3D's ML segmenter to segment CD31, a stain for blood vessels*
+   :alt: network
 
-* We may be interested in reassigning nodes with multiple identities to their own class (this is called 'phenotyping'). Since its common for some cell types to co-express markers, it can be a good way to group them into more specific categories (ie T-cell, instead of lymphocyte).
+* To cluster the nodes based on their network participation, I use 'Analyze -> Network -> Create Communities Based on Node's Immediate Neighbors...' to place the nodes into communities.
+
+.. image:: _static/communities.png
+   :width: 800px
+   :alt: communities
+*My nodes, having been assigned a community position, based on their network involvement, via the 'Louvain algorithm'. For the proximity network, this offers a way to group nodes based on their spatial relationship. This colored overlay can then be obtained with 'Analyze -> Data/Overlays -> Code Communities'.
+
+* Next I can use 'Analyze -> Network -> Calculate Community Composition' to see the relative compositions of each community and/or neighborhood. There are a few informative graphs I can generate, such as the below heatmap:
+
+.. image:: _static/hood_guide.png
+   :width: 800px
+   :alt: hood_guide
+*This graph tells us the log-normalized overexpression/underexpression of each label in a community. In short, any value greater than one (red) is over-represented in that community, while any value elss than one (blue) is under-represented in that community.*
+
+
+* You can also assign communities based on your network although it's less specific in cellular datasets, better for finding spatial aggregates of objects for proximity networks. Although one option if you do opt for network communities and want similarity clustering is to convert the network communities into Supercommunities via 'Analyze -> Network -> Convert Network into Supercommunities'. Just be aware that this is telling you something totally different than my recommended cellular analysis pipeline.
+
+Optional - Reassigning Node Identities for Tailored Analysis
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+* After assigning identities, we may be interested in reassigning nodes with multiple identities to their own class. For example, perhaps a group of markers represents a distinct cell type. Since its common for some cell types to co-express markers, it can be a good way to group them into more specific categories (ie T-cell, instead of lymphocyte).
+* This can be used to do more specific downstream analysis on one cell class, such as making proximity networks just from that cell class and evaluating what tends to appear around that sort of cell.
+* This is most easily done in NetTracer3D by using 'Process -> Modify Network/Properties', then choosing 'Change/Remove Identities'.
+
+.. image:: _static/gates.png
+   :width: 800px
+   :alt: gates
+*In this menu, just drag identities you want your renamed nodes to have to the middle from the left while 'Include' is enabled. You can also enable 'Exclude' to find only nodes lacking that identity. Assign a new name on the right and choose 'Run'.
+
+
 * Or, we might also have already assigned nodes some group of identities in a program like QuPath. Whatever the case, we will want to get the information with the node identities in a spreadsheet (ie save the node identities spreadsheet we just got by right clicking the upper right table). We can then use 'File -> Load -> Load From Excel Helper' to reassign the identities and pull them back into NetTracer3D:
 
 .. image:: _static/excel_helper.png
@@ -165,63 +223,6 @@ Grouping Cells By Shared Expression Profile
    :width: 800px
    :alt: cells_mapped
 *You can make this overlay with 'Analyze -> Data/Overlays -> Code Identities'
-
-* Now once more, we calculate a proximity network. I don't use this, but a cool feature to note is "Create Networks only from a specific node identity" can be used to make connections only start from a certain identity, for highly specified analysis.
-
-.. image:: _static/prox.png
-   :width: 800px
-   :alt: prox
-*I am going to use centroids to make this proximity network, which is acceptable when my objects are circuloid/cuboid. Centroids can be obtained with 'Process -> Calculate Network -> Calculate Centroids', although if they don't exist and you run this, NetTracer3D will prompt you to calculate them. In this instance, I tell the Calculate Centroids Window to 'Skip ID-less centroids', which is a parameter that makes it exclude any centroids for Nodes that were not assigned an identity, and likewise those nodes will be excluded from the network. If I am interested, though, in having these ID-less nodes in the network, ie to represent the tissue architecture, this option does not need to be used. Finally, 'Process -> Modify Network/Properties' can be used to kick out centroids that don't have identities if I change my mind.*
-
-* Here is an example of what the network itself looks like. Note that since I opted to not use centroids that don't have an identity, any nodes that did not overlap with a channel marker are not participating in this network at the moment.
-
-.. image:: _static/network.png
-   :width: 800px
-   :alt: network
-
-* To cluster the nodes based on their network participation, I use 'Analyze -> Network -> Community Partition...' to place the nodes into communities.
-
-.. image:: _static/communities.png
-   :width: 800px
-   :alt: communities
-*My nodes, having been assigned a community position, based on their network involvement, via the 'Louvain algorithm'. For the proximity network, this offers a way to group nodes based on their spatial relationship. This colored overlay can then be obtained with 'Analyze -> Data/Overlays -> Code Communities'.
-
-* I usually assign communities based on network. However, an alternative option to assign communities just based on splitting the image into cuboidal proximity cells of arbitrary size is available through 'Analyze -> Network -> Create Communities based on Cuboidal Proximity Cells'. These communities would have nothing to do with network structure, but may be more useful in partitioning the image if, for example, the cell layout is very dense and chaotic.
-* However, I just use the standard network partition. Now I can do analysis to see what the community compositions tend to look like. But I may have hundreds of communities in a big network. So in that case, an additional option is to use the communities to further group the nodes into neighborhoods. Neighborhoods are formed by evaluating the proportion of each node identity in a community, then grouping together communities that show similar compositions, which may represent areas of similar tissue or disease process, for example.
-* If you make neighborhoods, be sure to backup your communities first by saving them, if you want (although they are usually quick to regenerate). This is because neighborhoods actually take the place of the community property in the active session. The only exception is the method that creates neighborhoods in the first place (Analyze -> Network -> Convert Network Communities into Neighborhoods), as well as 'Analyze -> Network -> Identity Makeup of Communities', which both always reference the old communities even if neighborhoods have been created (unless, of course, the neighborhoods themselves are saved and reloaded directly into the communities property).
-
-.. image:: _static/hoods.png
-   :width: 800px
-   :alt: hoods
-*Here I am making neighborhoods. I can tell the window directly how many neighborhoods I want to be formed, although if this is empty, it will just try to calclulate a good number. I also assign a min-community size, so that any community with fewer than 5 cells will not be included*
-
-* Once we run the above method, it will generate our neighborhoods. One important thing to note is that any communities I deemed to small will get assigned to Neighborhood 0 (the outlier neighborhood). All other Neighborhoods are organized by their size, so Neighborhood 1 is the largest, Neighborhood 5 is mid-sized, while Neighborhood 10 is the smallest and may represent some anomaly.
-* Running this method also provide us some heatmaps telling us how much each neighborhood is expressing each label. The one I find the most useful is this one:
-
-.. image:: _static/hood_guide.png
-   :width: 800px
-   :alt: hood_guide
-*This graph tells us the log-normalized overexpression/underexpression of each label in a neighborhood. In short, any value greater than one (red) is over-represented in that community, while any value elss than one (blue) is under-represented in that community. Also rcall that Neighborhood 0 always contains discarded nodes only, while Neighborhoods are largest at 1 and get smaller from there. If I wanted, for whatever reason, to see this for the communities themselves, just tell the previous window to assign a neighborhood number equal to the number of available communities.*
-
-* I can run the 'Code Communities' method again to visualize the neighborhoods directly on the image:
-
-.. image:: _static/hood_colors.png
-   :width: 800px
-   :alt: hood_colors
-
-* Something else I can do is 'Analyze -> Network -> Identity Makeup of Communities' to see the relative compositions of each community and/or neighborhood. Note that this runs on communities in the current session regardless of whether neighborhoods have been assigned. But it can also generate us a UMAP showing how similar the communities are. If I have already made neighborhoods via above, I can also see exactly how the communities got grouped if I tell the UMAP to label itself by neighborhoods, like below:
-
-.. image:: _static/umap_params.png
-   :width: 400px
-   :alt: umap_params
-
-.. image:: _static/UMAP2.png
-   :width: 800px
-   :alt: UMAP2
-
-* This has been a fairly long analysis explanation but don't forget we can also analyze network composition with 'Analyze -> Stats -> Network Statistics Histograms', and that these histograms can be used to threshold the nodes. 
-* An important mention is that these histograms may be slow to generate for very complex networks. If over-connectivity is an issue for proximity networks, there is a parameter during their generation that can be used to actually limit the number of connections each node is allowed to make to their nearest 'n' neighbors! This can be important to use for very knotted networks (but it only works for the proximity networks made from centroids)! (Also worth mentioning that this means we can generate networks based on nearest neighbors as opposed to distance if we just tell NetTracer3D to limit itself to n nearest neighbors, but with a very large search distance).
-* Finally, the histogram algorithms may refuse to run on disconnected networks, which many of these cell graphs can frequently yield. One option then is to first get the subgraph. You can click on any node in the image, then right click and choose 'Show Connected Component'. The corresponding subgraph will populate the 'Selection' table in the lower left. Right click the selection table to save it, then load it back into NetTracer3D with load network (or right click it and choose swap with network table, but beware that this risks losing the wider network information if it's not backed up). Once we've put the subgraph in the main network, the network analysis algorithms will run on the subgraph instead!
 
 Next Steps
 ---------

@@ -33,7 +33,10 @@ from . import network_analysis
 from . import morphology
 from . import proximity
 from skimage.segmentation import watershed as water
-
+import json
+from collections import defaultdict
+import pickle
+from typing import Optional, Tuple
 
 
 #These next several methods relate to searching with 3D objects by dilating each one in a subarray around their neighborhood although I don't explicitly use this anywhere... can call them deprecated although I may want to use them later again so I have them still written out here.
@@ -382,8 +385,15 @@ def create_and_save_dataframe_old(pairwise_connections, excel_filename = None):
 
 def invert_dict(d):
     inverted = {}
-    for key, value in d.items():
-        inverted.setdefault(value, []).append(key)
+    if type(list(d.values())[0]) == list:
+        for key, value in d.items():
+            if len(value) < 2:
+                inverted.setdefault(value[0], []).append(key)
+            else:
+                inverted.setdefault(str(value), []).append(key)
+    else:
+        for key, value in d.items():
+            inverted.setdefault(value, []).append(key)
     return inverted
 
 def revert_dict(d):
@@ -394,25 +404,11 @@ def revert_dict(d):
     return inverted
 
 def invert_dict_special(d):
-
-    d = invert_dict(d)
-
-    new_dict = copy.deepcopy(d)
-
-    for key, vals in d.items():
-
-        try:
-            idens = ast.literal_eval(key)
-            for iden in idens:
-                try:
-                    new_dict[iden].extend(vals)
-                except:
-                    new_dict[iden] = vals
-            del new_dict[key]
-        except:
-            pass
-    return new_dict
-
+    inverted = defaultdict(list)
+    for node, idens in d.items():
+        for iden in idens:
+            inverted[iden].append(node)
+    return dict(inverted)  # convert back to regular dict
 
 def invert_array(array):
     """Internal method used to flip node array indices. 0 becomes 255 and vice versa."""
@@ -634,10 +630,6 @@ def remove_branches_new(skeleton, length):
     # Remove padding and return
     image_copy = (image_copy[1:-1, 1:-1, 1:-1]).astype(np.uint8)
     return image_copy
-
-import numpy as np
-from collections import deque, defaultdict
-
     
 def remove_branches(skeleton, length):
     """Used to compensate for overly-branched skeletons resulting from the scipy 3d skeletonization algorithm"""
@@ -784,6 +776,10 @@ def get_surface_areas(labeled, xy_scale=1, z_scale=1):
     
     result = {int(label): float(surface_areas[label]) for label in labels}
     return result
+
+def save_json(filename, my_dict):
+    with open(f'{filename}.json', 'w') as f:
+        json.dump(my_dict, f)
 
 def get_background_surface_areas(labeled, xy_scale=1, z_scale=1):
     """Calculate surface area exposed to background (value 0) for each object."""
@@ -1591,7 +1587,7 @@ def get_all_label_coords(labeled_array, background=0):
     
     return coords_dict
 
-def approx_boundaries(array, iden_set = None, node_identities = None, keep_labels = False):
+def approx_boundaries(array, iden_set = None, node_identities = None, keep_labels = False, root_list = False):
 
     """Hollows out an array, can do it for only a set number of identities. Returns coords as dict if labeled or as 1d numpy array if binary is desired"""
 
@@ -1599,10 +1595,20 @@ def approx_boundaries(array, iden_set = None, node_identities = None, keep_label
 
         nodes = []
 
-        for node in node_identities:
+        if not root_list:
 
-            if node_identities[node] in iden_set: #Filter out only idens we need
-                nodes.append(node)
+            iden_set = iden_set[0]
+
+            for node in node_identities:
+
+                if iden_set in node_identities[node]:
+
+                    nodes.append(node)
+        else:
+            for node in node_identities:
+                if str(iden_set) == str(node_identities[node]):
+                    nodes.append(node)
+
 
         mask = np.isin(array, nodes)
 
@@ -2258,6 +2264,8 @@ def downsample(data, factor, directory=None, order=0):
     return data
 
 
+
+
 def otsu_binarize(image_array, non_bool = False):
 
     """Automated binarize method for seperating the foreground"""
@@ -2297,6 +2305,16 @@ def binarize(arrayimage, directory = None):
 
 
     return arrayimage.astype(np.uint8)
+
+
+
+def save_pickle(G, filepath):
+    with open(filepath, 'wb') as f:
+        pickle.dump(G, f, protocol=pickle.HIGHEST_PROTOCOL)
+
+def load_pickle(filepath):
+    with open(filepath, 'rb') as f:
+        return pickle.load(f)
 
 def convert_to_multigraph(G, weight_attr='weight'):
     """
@@ -2402,20 +2420,17 @@ def erode(arrayimage, amount, xy_scale = 1, z_scale = 1, mode = 0, preserve_labe
 
     return arrayimage
 
-def iden_set(idens):
+def iden_set(idens, unique = False):
 
-    idens = set(idens)
-    real_iden_set = []
+    iden_set = set()
     for iden in idens:
-        try:
-            options = ast.literal_eval(iden)
-            for opt in options:
-                real_iden_set.append(opt)
-        except:
-            real_iden_set.append(iden)
+        iden_set.update(iden)
+    if unique:
+        unique_set = list(set(str(iden) for iden in idens if len(iden) > 1))
+        iden_set = sorted(iden_set.union(unique_set))
+        del unique_set
 
-    return set(real_iden_set)
-
+    return iden_set
 
 
 def skeletonize(arrayimage, directory = None):
@@ -3073,6 +3088,68 @@ def inverted_mask(image, mask, directory = None):
 
     return image
 
+def create_convex_hull_mask(binary_array):
+    """
+    Fast vectorized convex hull mask generation.
+    Handles both 3D arrays and pseudo-3D arrays (2D with z-length of 1).
+    Higher memory usage but much faster.
+    """
+    from scipy.spatial import ConvexHull, Delaunay
+    
+    binary_array = binary_array > 0
+    
+    # Check if this is a pseudo-3D array (2D array with z-length of 1)
+    if binary_array.ndim == 3 and binary_array.shape[0] == 1:
+        # Squeeze to 2D
+        binary_2d = binary_array[0]
+        points = np.argwhere(binary_2d)
+        
+        if len(points) < 3:  # Need at least 3 points for 2D convex hull
+            result_2d = binary_2d.copy().astype(np.uint8)
+            return np.expand_dims(result_2d, axis=0)
+        
+        # Compute 2D convex hull
+        hull = ConvexHull(points)
+        
+        # Delaunay triangulation using only hull vertices
+        deln = Delaunay(points[hull.vertices])
+        
+        # Create index grid for 2D image
+        idx = np.stack(np.indices(binary_2d.shape), axis=-1)
+        
+        # Vectorized check
+        out_idx = np.nonzero(deln.find_simplex(idx) + 1)
+        
+        # Create output mask
+        hull_mask_2d = np.zeros_like(binary_2d, dtype=np.uint8)
+        hull_mask_2d[out_idx] = 1
+        
+        # Expand back to pseudo-3D
+        return np.expand_dims(hull_mask_2d, axis=0)
+    
+    # Original 3D case
+    points = np.argwhere(binary_array)
+    
+    if len(points) < 4:  # Need at least 4 points for 3D convex hull
+        return binary_array.copy().astype(np.uint8)
+    
+    # Compute convex hull
+    hull = ConvexHull(points)
+    
+    # Delaunay triangulation using only hull vertices
+    deln = Delaunay(points[hull.vertices])
+    
+    # Create index grid for entire image (memory intensive but fast)
+    idx = np.stack(np.indices(binary_array.shape), axis=-1)
+    
+    # Vectorized check: find_simplex returns -1 for outside, >= 0 for inside
+    out_idx = np.nonzero(deln.find_simplex(idx) + 1)
+    
+    # Create output mask
+    hull_mask = np.zeros_like(binary_array, dtype=np.uint8)
+    hull_mask[out_idx] = 1
+    
+    return hull_mask
 
 def label(image, directory = None):
     """
@@ -3424,7 +3501,7 @@ class Network_3D:
 
     #Saving components of the 3D_network to hard mem:
 
-    def save_nodes(self, directory = None, filename = None):
+    def save_nodes(self, directory = None, filename = None, compression = None):
         """
         Can be called on a Network_3D object to save the nodes property to hard mem as a tif. It will save to the active directory if none is specified.
         :param directory: (Optional - Val = None; String). The path to an indended directory to save the nodes to.
@@ -3448,15 +3525,15 @@ class Network_3D:
                 try:
                     if len(self._nodes.shape) == 3:
                         try:
-                            tifffile.imwrite(f"{filename}", self._nodes, imagej=True, metadata=imagej_metadata, resolution=(resolution_value, resolution_value))
+                            tifffile.imwrite(f"{filename}", self._nodes, imagej=True, metadata=imagej_metadata, resolution=(resolution_value, resolution_value), compression = compression)
                         except:
                             try:
-                                tifffile.imwrite(f"{filename}", self._nodes)
+                                tifffile.imwrite(f"{filename}", self._nodes, compression = compression)
                             except:
                                 self._nodes = binarize(self._nodes)
-                                tifffile.imwrite(f"{filename}", self._nodes, imagej=True, metadata=imagej_metadata, resolution=(resolution_value, resolution_value))
+                                tifffile.imwrite(f"{filename}", self._nodes, imagej=True, metadata=imagej_metadata, resolution=(resolution_value, resolution_value), compression = compression)
                     else:
-                        tifffile.imwrite(f"{filename}", self._nodes)
+                        tifffile.imwrite(f"{filename}", self._nodes, compression = compression)
                     print(f"Nodes saved to {filename}")
                 except Exception as e:
                     print("Could not save nodes")
@@ -3464,22 +3541,22 @@ class Network_3D:
                 try:
                     if len(self._nodes.shape) == 3:
                         try:
-                            tifffile.imwrite(f"{directory}/{filename}", self._nodes, imagej=True, metadata=imagej_metadata, resolution=(resolution_value, resolution_value))
+                            tifffile.imwrite(f"{directory}/{filename}", self._nodes, imagej=True, metadata=imagej_metadata, resolution=(resolution_value, resolution_value), compression = compression)
                         except:
                             try:
-                                tifffile.imwrite(f"{directory}/{filename}", self._nodes)
+                                tifffile.imwrite(f"{directory}/{filename}", self._nodes, compression = compression)
                             except:
                                 self._nodes = binarize(self._nodes)
-                                tifffile.imwrite(f"{directory}/{filename}", self._nodes, imagej=True, metadata=imagej_metadata, resolution=(resolution_value, resolution_value))
+                                tifffile.imwrite(f"{directory}/{filename}", self._nodes, imagej=True, metadata=imagej_metadata, resolution=(resolution_value, resolution_value), compression = compression)
                     else:
-                        tifffile.imwrite(f"{directory}/{filename}", self._nodes)
+                        tifffile.imwrite(f"{directory}/{filename}", self._nodes, compression = compression)
                     print(f"Nodes saved to {directory}/{filename}")
                 except Exception as e:
                     print(f"Could not save nodes to {directory}")
         if self._nodes is None:
             print("Node attribute is empty, did not save...")
 
-    def save_edges(self, directory = None, filename = None):
+    def save_edges(self, directory = None, filename = None, compression = None):
         """
         Can be called on a Network_3D object to save the edges property to hard mem as a tif. It will save to the active directory if none is specified.
         :param directory: (Optional - Val = None; String). The path to an indended directory to save the edges to.
@@ -3503,24 +3580,24 @@ class Network_3D:
         if self._edges is not None:
             if directory is None:
                 try:
-                    tifffile.imwrite(f"{filename}", self._edges, imagej=True, metadata=imagej_metadata, resolution=(resolution_value, resolution_value))
+                    tifffile.imwrite(f"{filename}", self._edges, imagej=True, metadata=imagej_metadata, resolution=(resolution_value, resolution_value), compression = compression)
                 except:
                     try:
-                        tifffile.imwrite(f"{filename}", self._edges)
+                        tifffile.imwrite(f"{filename}", self._edges, compression = compression)
                     except:
                         self._edges = binarize(self._edges)
-                        tifffile.imwrite(f"{filename}", self._edges, imagej=True, metadata=imagej_metadata, resolution=(resolution_value, resolution_value))
+                        tifffile.imwrite(f"{filename}", self._edges, imagej=True, metadata=imagej_metadata, resolution=(resolution_value, resolution_value), compression = compression)
                 print(f"Edges saved to {filename}")
 
             if directory is not None:
                 try:
-                    tifffile.imwrite(f"{directory}/{filename}", self._edges, imagej=True, metadata=imagej_metadata, resolution=(resolution_value, resolution_value))
+                    tifffile.imwrite(f"{directory}/{filename}", self._edges, imagej=True, metadata=imagej_metadata, resolution=(resolution_value, resolution_value), compression = compression)
                 except:
                     try:
-                        tifffile.imwrite(f"{directory}/{filename}", self._edges)
+                        tifffile.imwrite(f"{directory}/{filename}", self._edges, compression = compression)
                     except:
                         self._edges = binarize(self._edges)
-                        tifffile.imwrite(f"{directory}/{filename}", self._edges, imagej=True, metadata=imagej_metadata, resolution=(resolution_value, resolution_value))
+                        tifffile.imwrite(f"{directory}/{filename}", self._edges, imagej=True, metadata=imagej_metadata, resolution=(resolution_value, resolution_value), compression = compression)
                 print(f"Edges saved to {directory}/{filename}")
 
         if self._edges is None:
@@ -3592,18 +3669,18 @@ class Network_3D:
                 network_analysis._save_centroid_dictionary({}, f'{directory}/edge_centroids.xlsx', index = 'Edge ID')
                 print(f"Centroids saved to {directory}/edge_centroids.xlsx")
 
-    def save_search_region(self, directory = None):
+    def save_search_region(self, directory = None, compression = None):
         """
         Can be called on a Network_3D object to save the search_region property to hard mem as a tif. It will save to the active directory if none is specified.
         :param directory: (Optional - Val = None; String). The path to an indended directory to save the search_region to.
         """
         if self._search_region is not None:
             if directory is None:
-                tifffile.imwrite("search_region.tif", self._search_region)
+                tifffile.imwrite("search_region.tif", self._search_region, compression = compression)
                 print("Search region saved to search_region.tif")
 
             if directory is not None:
-                tifffile.imwrite(f"{directory}/search_region.tif", self._search_region)
+                tifffile.imwrite(f"{directory}/search_region.tif", self._search_region, compression = compression)
                 print(f"Search region saved to {directory}/search_region.tif")
 
         if self._search_region is None:
@@ -3614,42 +3691,48 @@ class Network_3D:
         Can be called on a Network_3D object to save the network_lists property to hard mem as a .xlsx. It will save to the active directory if none is specified.
         :param directory: (Optional - Val = None; String). The path to an intended directory to save the network lists to.
         """
+
+
         if self._network_lists is not None:
             if directory is None:
 
                 temp_list = network_analysis.combine_lists_to_sublists(self._network_lists)
-                create_and_save_dataframe(temp_list, 'output_network.xlsx')
+                create_and_save_dataframe(temp_list, 'output_network.csv')
 
             if directory is not None:
                 temp_list = network_analysis.combine_lists_to_sublists(self._network_lists)
 
-                create_and_save_dataframe(temp_list, f'{directory}/output_network.xlsx')
+                create_and_save_dataframe(temp_list, f'{directory}/output_network.csv')
 
         if self._network_lists is None:
             print("Network associated attributes are empty (must set network_lists property to save network)...")
 
     def save_node_identities(self, directory = None):
         """
-        Can be called on a Network_3D object to save the node_identities property to hard mem as a .xlsx. It will save to the active directory if none is specified.
+        Can be called on a Network_3D object to save the node_identities property to hard mem as a .csv. It will save to the active directory if none is specified.
         :param directory: (Optional - Val = None; String). The path to an intended directory to save the node_identities to.
         """
         if self._node_identities is not None:
             if directory is None:
-                network_analysis.save_singval_dict(self._node_identities, 'NodeID', 'Identity', 'node_identities.xlsx')
-                print("Node identities saved to node_identities.xlsx")
+                save_json('node_identities', self._node_identities)
+                network_analysis.save_singval_iden_dict(self._node_identities, 'NodeID', 'Identity', 'node_identities.csv')
+                print("Node identities saved")
 
             if directory is not None:
-                network_analysis.save_singval_dict(self._node_identities, 'NodeID', 'Identity', f'{directory}/node_identities.xlsx')
-                print(f"Node identities saved to {directory}/node_identities.xlsx")
+                save_json(f'{directory}/node_identities', self._node_identities)
+                network_analysis.save_singval_iden_dict(self._node_identities, 'NodeID', 'Identity', f'{directory}/node_identities.csv')
+                print(f"Node identities saved to {directory}")
 
         if self._node_identities is None:
             if directory is None:
-                network_analysis.save_singval_dict({}, 'NodeID', 'Identity', 'node_identities.xlsx')
-                print("Node identities saved to node_identities.xlsx")
+                save_json('node_identities', self._node_identities)
+                network_analysis.save_singval_iden_dict({}, 'NodeID', 'Identity', 'node_identities.csv')
+                print("Node identities saved")
 
             if directory is not None:
-                network_analysis.save_singval_dict({}, 'NodeID', 'Identity', f'{directory}/node_identities.xlsx')
-                print(f"Node identities saved to {directory}/node_identities.xlsx")
+                save_json(f'{directory}/node_identities', self._node_identities)
+                network_analysis.save_singval_iden_dict({}, 'NodeID', 'Identity', f'{directory}/node_identities.csv')
+                print(f"Node identities saved to {directory}")
 
     def save_communities(self, directory = None):
         """
@@ -3674,7 +3757,7 @@ class Network_3D:
                 network_analysis.save_singval_dict({}, 'NodeID', 'Community', f'{directory}/node_communities.xlsx')
                 print(f"Communities saved to {directory}/node_communities.xlsx")
 
-    def save_network_overlay(self, directory = None, filename = None):
+    def save_network_overlay(self, directory = None, filename = None, compression = None):
 
         if self._network_overlay is not None:
             imagej_metadata = {
@@ -3694,32 +3777,32 @@ class Network_3D:
             if directory is None:
                 if len(self._network_overlay.shape) == 3:
                     try:
-                        tifffile.imwrite(f"{filename}", self._network_overlay, imagej=True, metadata=imagej_metadata, resolution=(resolution_value, resolution_value))
+                        tifffile.imwrite(f"{filename}", self._network_overlay, imagej=True, metadata=imagej_metadata, resolution=(resolution_value, resolution_value), compression = compression)
                     except:
                         try:
-                            tifffile.imwrite(f"{filename}", self._network_overlay)
+                            tifffile.imwrite(f"{filename}", self._network_overlay, compression = compression)
                         except:
                             self._network_overlay = binarize(self._network_overlay)
-                            tifffile.imwrite(f"{filename}", self._network_overlay, imagej=True, metadata=imagej_metadata, resolution=(resolution_value, resolution_value))
+                            tifffile.imwrite(f"{filename}", self._network_overlay, imagej=True, metadata=imagej_metadata, resolution=(resolution_value, resolution_value), compression = compression)
                 else:
-                    tifffile.imwrite(f"{filename}", self._network_overlay)
+                    tifffile.imwrite(f"{filename}", self._network_overlay, compression = compression)
                 print(f"Network overlay saved to {filename}")
 
             if directory is not None:
                 if len(self._network_overlay.shape) == 3:
                     try:
-                        tifffile.imwrite(f"{directory}/{filename}", self._network_overlay, imagej=True, metadata=imagej_metadata, resolution=(resolution_value, resolution_value))
+                        tifffile.imwrite(f"{directory}/{filename}", self._network_overlay, imagej=True, metadata=imagej_metadata, resolution=(resolution_value, resolution_value), compression = compression)
                     except:
                         try:
-                            tifffile.imwrite(f"{directory}/{filename}", self._network_overlay)
+                            tifffile.imwrite(f"{directory}/{filename}", self._network_overlay, compression = compression)
                         except:
                             self._network_overlay = binarize(self._network_overlay)
-                            tifffile.imwrite(f"{directory}/{filename}", self._network_overlay, imagej=True, metadata=imagej_metadata, resolution=(resolution_value, resolution_value))
+                            tifffile.imwrite(f"{directory}/{filename}", self._network_overlay, imagej=True, metadata=imagej_metadata, resolution=(resolution_value, resolution_value), compression = compression)
                 else:
-                    tifffile.imwrite(f"{directory}/{filename}", self._network_overlay)
+                    tifffile.imwrite(f"{directory}/{filename}", self._network_overlay, compression = compression)
                 print(f"Network overlay saved to {directory}/{filename}")
 
-    def save_id_overlay(self, directory = None, filename = None):
+    def save_id_overlay(self, directory = None, filename = None, compression = None):
 
         if self._id_overlay is not None:
             imagej_metadata = {
@@ -3739,13 +3822,13 @@ class Network_3D:
             if directory is None:
                 if len(self._id_overlay.shape) == 3:
                     try:
-                        tifffile.imwrite(f"{filename}", self._id_overlay, imagej=True, metadata=imagej_metadata, resolution=(resolution_value, resolution_value))
+                        tifffile.imwrite(f"{filename}", self._id_overlay, imagej=True, metadata=imagej_metadata, resolution=(resolution_value, resolution_value), compression = compression)
                     except:
                         try:
-                            tifffile.imwrite(f"{filename}", self._id_overlay)
+                            tifffile.imwrite(f"{filename}", self._id_overlay, compression = compression)
                         except:                            
                             self._id_overlay = binarize(self._id_overlay)
-                            tifffile.imwrite(f"{filename}", self._id_overlay, imagej=True, metadata=imagej_metadata, resolution=(resolution_value, resolution_value))
+                            tifffile.imwrite(f"{filename}", self._id_overlay, imagej=True, metadata=imagej_metadata, resolution=(resolution_value, resolution_value), compression = compression)
                 else:
                     tifffile.imwrite(f"{filename}", self._id_overlay, imagej=True)
                 print(f"Network overlay saved to {filename}")
@@ -3753,15 +3836,15 @@ class Network_3D:
             if directory is not None:
                 if len(self._id_overlay.shape) == 3:
                     try:
-                        tifffile.imwrite(f"{directory}/{filename}", self._id_overlay, imagej=True, metadata=imagej_metadata, resolution=(resolution_value, resolution_value))
+                        tifffile.imwrite(f"{directory}/{filename}", self._id_overlay, imagej=True, metadata=imagej_metadata, resolution=(resolution_value, resolution_value), compression = compression)
                     except:
                         try:
-                            tifffile.imwrite(f"{directory}/{filename}", self._id_overlay)
+                            tifffile.imwrite(f"{directory}/{filename}", self._id_overlay, compression = compression)
                         except:
                             self._id_overlay = binarize(self._id_overlay)
-                            tifffile.imwrite(f"{directory}/{filename}", self._id_overlay, imagej=True, metadata=imagej_metadata, resolution=(resolution_value, resolution_value))
+                            tifffile.imwrite(f"{directory}/{filename}", self._id_overlay, imagej=True, metadata=imagej_metadata, resolution=(resolution_value, resolution_value), compression = compression)
                 else:
-                    tifffile.imwrite(f"{directory}/{filename}", self._id_overlay)
+                    tifffile.imwrite(f"{directory}/{filename}", self._id_overlay, compression = compression)
                 print(f"ID overlay saved to {directory}/{filename}")
 
 
@@ -3772,33 +3855,36 @@ class Network_3D:
         :param directory: (Optional - Val = None; String). The path to an intended directory to save the properties to.
         """
 
+        print("Note that batch saved tiffs will be compressed. This should be fine for most tiff readers but use Save As for individual channels if you want full-sized tiffs.")
         directory = encapsulate(parent_dir = parent_dir, name = name)
 
         try:
-            self.save_nodes(directory)
-            self.save_edges(directory)
+            self.save_nodes(directory, compression = 'zlib')
+            self.save_edges(directory, compression = 'zlib')
             self.save_node_centroids(directory)
-            self.save_search_region(directory)
+            self.save_search_region(directory, compression = 'zlib')
             self.save_network(directory)
             self.save_node_identities(directory)
             self.save_edge_centroids(directory)
             self.save_scaling(directory)
             self.save_communities(directory)
-            self.save_network_overlay(directory)
-            self.save_id_overlay(directory)
+            self.save_network_overlay(directory, compression = 'zlib')
+            self.save_id_overlay(directory, compression = 'zlib')
 
         except:
-            self.save_nodes()
-            self.save_edges()
+            #import traceback
+            #print(traceback.format_exc())
+            self.save_nodes(compression = 'zlib')
+            self.save_edges(compression = 'zlib')
             self.save_node_centroids()
-            self.save_search_region()
+            self.save_search_region(compression = 'zlib')
             self.save_network()
             self.save_node_identities()
             self.save_edge_centroids()
             self.save_scaling()
             self.save_communities()
-            self.save_network_overlay()
-            self.save_id_overlay()
+            self.save_network_overlay(compression = 'zlib')
+            self.save_id_overlay(compression = 'zlib')
 
 
     def load_nodes(self, directory = None, file_path = None):
@@ -3917,18 +4003,38 @@ class Network_3D:
 
         items = directory_info(directory)
 
-        for item in items:
-            if item == 'output_network.xlsx' or item == 'output_network.csv':
-                if directory is not None:
-                    self._network, net_weights = network_analysis.weighted_network(f'{directory}/{item}')
-                    self._network_lists = network_analysis.read_excel_to_lists(f'{directory}/{item}')
-                    print("Succesfully loaded network")
-                    return
-                else:
-                    self._network, net_weights = network_analysis.weighted_network(item)
-                    self._network_lists = network_analysis.read_excel_to_lists(item)
-                    print("Succesfully loaded network")
-                    return
+        try:
+            for item in items:
+                if item == 'quickload_network.pkl':
+                    if directory is not None:
+                        self._network = load_pickle(f'{directory}/{item}')
+                    else:
+                        self._network = load_pickle(f'{item}')
+                if item == 'quickload_network_lists.pkl':
+                    if directory is not None:
+                        self._network_lists = load_pickle(f'{directory}/{item}')
+                    else:
+                        self._network_lists = load_pickle(f'{item}')
+            if self._network is not None and self._network_lists is not None:
+                print("Succesfully loaded network")
+                return
+            else:
+                gotoexcept = 1/0
+
+        except:
+            for item in items:
+
+                if item == 'output_network.xlsx' or item == 'output_network.csv':
+                    if directory is not None:
+                        self._network, net_weights = network_analysis.weighted_network(f'{directory}/{item}')
+                        self._network_lists = network_analysis.read_excel_to_lists(f'{directory}/{item}')
+                        print("Succesfully loaded network")
+                        return
+                    else:
+                        self._network, net_weights = network_analysis.weighted_network(item)
+                        self._network_lists = network_analysis.read_excel_to_lists(item)
+                        print("Succesfully loaded network")
+                        return
 
         print("Could not find network. It must be stored in specified directory and named 'output_network.xlsx' or 'output_network.csv'")
 
@@ -3992,6 +4098,7 @@ class Network_3D:
 
         print("Could not find node centroids. They must be in the specified directory and named 'node_centroids.xlsx'")
 
+
     def load_node_identities(self, directory = None, file_path = None):
         """
         Can be called on a Network_3D object to load a .xlsx into the node_identities property as a dictionary. It will look for a file called 'node_identities.xlsx' in the specified directory,
@@ -3999,29 +4106,75 @@ class Network_3D:
         :param directory: (Optional - Val = None; String). The path to an intended directory to search for the 'node_identities.xlsx' file.
         :param file_path: (Optional - Val = None; String). A path to any .xlsx to load into the node_identities property.
         """
+        import json
+        import ast
+
+        def normalize_to_lists(d):
+            """Convert dict values: strings -> [string], string-lists -> parsed lists."""
+            result = {}
+            for k, v in d.items():
+                if isinstance(v, str):
+                    if v.startswith('['):
+                        try:
+                            # Try JSON first (faster)
+                            result[k] = json.loads(v)
+                        except json.JSONDecodeError:
+                            # Fall back to ast.literal_eval for Python-style strings
+                            result[k] = ast.literal_eval(v)
+                    else:
+                        result[k] = [v]  # "hello" -> ["hello"]
+                else:
+                    result[k] = v  # Already a list
+            return result
 
         if file_path is not None:
             self._node_identities = network_analysis.read_excel_to_singval_dict(file_path)
             self._node_identities = self.clear_null(self._node_identities)
+            try:
+                if type(list(self._node_identities.values())[0]) == str:
+                    self._node_identities = normalize_to_lists(self._node_identities)
+            except:
+                pass
             print("Succesfully loaded node identities")
             return
 
         items = directory_info(directory)
 
         for item in items:
-            if item == 'node_identities.xlsx' or item == 'node_identities.csv':
+            if item == 'node_identities.xlsx' or item == 'node_identities.csv' or item == 'node_identities.json':
                 if directory is not None:
-                    self._node_identities = network_analysis.read_excel_to_singval_dict(f'{directory}/{item}')
+                    self._node_identities = network_analysis.read_excel_to_singval_dict(f'{directory}/node_identities.json')
+                    if self._node_identities == {}:
+                        try:
+                            self._node_identities = network_analysis.read_excel_to_singval_dict(f'{directory}/{item}')
+                        except:
+                            pass
                     self._node_identities = self.clear_null(self._node_identities)
+                    try:
+                        if type(list(self._node_identities.values())[0]) == str:
+                            self._node_identities = normalize_to_lists(self._node_identities)
+                    except:
+                        pass
+
                     print("Succesfully loaded node identities")
                     return
                 else:
-                    self._node_identities = network_analysis.read_excel_to_singval_dict(item)
+                    self._node_identities = network_analysis.read_excel_to_singval_dict('node_identities.json')
+                    if self._node_identities == {}:
+                        try:
+                            self._node_identities = network_analysis.read_excel_to_singval_dict(item)
+                        except:
+                            pass
+
                     self._node_identities = self.clear_null(self._node_identities)
+                    try:
+                        if type(list(self._node_identities.values())[0]) == str:
+                            self._node_identities = normalize_to_lists(self._node_identities)
+                    except:
+                        pass
                     print("Succesfully loaded node identities")
                     return
-
-        print("Could not find node identities. They must be in the specified directory and named 'node_identities.xlsx'")
+        print("Could not find node identities. They must be in the specified directory and named 'node_identities.json' or 'node_identities.csv' or 'node_identities.xlsx")
 
     def load_communities(self, directory = None, file_path = None):
         """
@@ -4380,7 +4533,7 @@ class Network_3D:
                 other_ID = other_ID[:-4]
 
             for item in rootIDs:
-                identity_dict[item] = root_ID
+                identity_dict[item] = [root_ID]
 
         for item in otherIDs: #Always adds the other vals to the dictionary
             try:
@@ -4392,7 +4545,7 @@ class Network_3D:
             elif other_ID.endswith('.tif'):
                 other_ID = other_ID[:-4]
 
-            identity_dict[item] = other_ID
+            identity_dict[item] = [other_ID]
 
         nodes = root_nodes + other_nodes #Combine the outer edges with the inner edges modified via the above steps
 
@@ -4513,6 +4666,8 @@ class Network_3D:
             self._network, net_weights = network_analysis.weighted_network(df)
 
     def create_id_network(self, n=5):
+        """This method is deprecated and does not work for the current program architecture"""
+
         import ast
         import random
         
@@ -4930,6 +5085,8 @@ class Network_3D:
             for node, comm in clean_communities.items()
         }
 
+        return old_to_new
+
 
 
 
@@ -5266,6 +5423,17 @@ class Network_3D:
             np.delete(nodes, 0)
 
         try:
+            for i in range(len(self.network_lists[0]) - 1, -1, -1):
+                if self.network_lists[0][i] not in nodes or self.network_lists[1][i] not in nodes:
+                    del self.network_lists[0][i]
+                    del self.network_lists[1][i]
+                    del self.network_lists[2][i]
+            self.network_lists = self.network_lists
+            print("Updated Network")
+        except:
+            pass
+
+        try:
             self.node_centroids = filter_dict_by_list(self.node_centroids, nodes)
             print("Updated centroids")
         except:
@@ -5354,17 +5522,19 @@ class Network_3D:
         :returns: A dictionary of degree values for each node.
         """
 
+        from . import histos
+        G = histos.convert_to_multigraph(self.network)
         if heatmap:
             import statistics
-            degrees_dict = {node: val for (node, val) in self.network.degree()}
+            degrees_dict = {node: val for (node, val) in G.degree()}
             pred = statistics.mean(list(degrees_dict.values()))
 
             node_intensity = {}
             import math
             node_centroids = {}
 
-            for node in list(self.network.nodes()):
-                node_intensity[node] = math.log(self.network.degree(node)/pred)
+            for node in list(G.nodes()):
+                node_intensity[node] = math.log(G.degree(node)/pred)
                 node_centroids[node] = self.node_centroids[node]
 
             from . import neighborhoods
@@ -5380,10 +5550,10 @@ class Network_3D:
             for item in self._node_centroids:
                 centroids[item] = np.round((self._node_centroids[item]) / down_factor)
             nodes = downsample(self._nodes, down_factor)
-            degrees, nodes = network_analysis.get_degrees(nodes, self._network, directory = directory, centroids = centroids, called = called, no_img = no_img)
+            degrees, nodes = network_analysis.get_degrees(nodes, G, directory = directory, centroids = centroids, called = called, no_img = no_img)
 
         else:
-            degrees, nodes = network_analysis.get_degrees(self._nodes, self._network, directory = directory, centroids = self._node_centroids, called = called, no_img = no_img)
+            degrees, nodes = network_analysis.get_degrees(self._nodes, G, directory = directory, centroids = self._node_centroids, called = called, no_img = no_img)
 
         return degrees, nodes
 
@@ -5642,27 +5812,43 @@ class Network_3D:
 
     def neighborhood_identities(self, root, directory = None, mode = 0, search = 0, fastdil = False):
 
-
-
         targets = []
         total_dict = {}
         neighborhood_dict = {}
         proportion_dict = {}
         G = self._network
         node_identities = self._node_identities
-        for val in set(node_identities.values()):
+
+        all_idens = list(self.node_identities.values())
+        seen = set()
+        for iden in all_idens:
+            seen.update(iden)
+        all_idens = list(seen)
+        all_idens.sort()
+
+        for val in all_idens:
             total_dict[val] = 0
             neighborhood_dict[val] = 0
-
-        for node in node_identities:
-            nodeid = node_identities[node]
-            total_dict[nodeid] += 1
-            if nodeid == root:
-                targets.append(node)
-
-
+        root = ast.literal_eval(root)
+        if len(root) < 2:
+            root = root[0]
+            for node in node_identities:
+                nodeid = node_identities[node]
+                for node_iden in nodeid:
+                    total_dict[node_iden] += 1
+                if root in nodeid:
+                    targets.append(node)
+            list_root = False
+        else:
+            root = str(root)
+            for node in node_identities:
+                nodeid = node_identities[node]
+                for node_iden in nodeid:
+                    total_dict[node_iden] += 1
+                if str(nodeid) == root:
+                    targets.append(node)
+            list_root = True
         if mode == 0: #search neighbor ids within the network
-
 
             for node in G.nodes():
                 try:
@@ -5670,9 +5856,17 @@ class Network_3D:
                     neighbors = list(G.neighbors(node))
                     for subnode in neighbors:
                         subnodeid = node_identities[subnode]
-                        if subnodeid == root:
-                            neighborhood_dict[nodeid] += 1
-                            break
+
+                        if not list_root:
+                            if root in subnodeid:
+                                for iden in nodeid:
+                                    neighborhood_dict[iden] += 1
+                                break
+                        else: # The string looks like a list in this case
+                            if str(subnodeid) == root:
+                                for iden in nodeid:
+                                    neighborhood_dict[iden] += 1
+                                break
                 except:
                     pass
 
@@ -5721,24 +5915,52 @@ class Network_3D:
         sides = max_bounds - min_bounds
         # Set max_r to None since we've handled edge effects through mirroring
 
-
         if root is None or targ is None: #Self clustering in this case
             roots = self._node_centroids.values()
             root_ids = self.node_centroids.keys()
             targs = self._node_centroids.values()
             is_subset = True
         else:
-            roots = []
-            targs = []
-            root_ids = []
-
-            for node, nodeid in self.node_identities.items(): #Otherwise we need to pull out this info
-                if nodeid == root:
-                    roots.append(self._node_centroids[node])
-                    root_ids.append(node)
-                if nodeid == targ:
-                    targs.append(self._node_centroids[node])
-
+            if root:
+                root_list = ast.literal_eval(root)
+                    
+                if len(root_list) == 1:
+                    # Single identity: find all nodes containing this identity
+                    root = root_list[0]
+                    roots = [
+                        self.node_centroids[node] 
+                        for node, identity_list in self.node_identities.items() 
+                        if root in identity_list
+                    ]
+                else:
+                    # Multiple identities: exact match only
+                    roots = [
+                        self.node_centroids[node] 
+                        for node, identity_list in self.node_identities.items() 
+                        if identity_list == root_list
+                    ]
+            else:
+                roots = None
+            if targ:
+                targ_list = ast.literal_eval(targ)
+                    
+                if len(targ_list) == 1:
+                    # Single identity: find all nodes containing this identity
+                    targ = targ_list[0]
+                    targs = [
+                        self.node_centroids[node] 
+                        for node, identity_list in self.node_identities.items() 
+                        if targ in identity_list
+                    ]
+                else:
+                    # Multiple identities: exact match only
+                    targs = [
+                        self.node_centroids[node] 
+                        for node, identity_list in self.node_identities.items() 
+                        if identity_list == targ_list
+                    ]
+            else:
+                targs = None
         if not is_subset:
             if np.array_equal(roots, targs):
                 is_subset = True
@@ -6048,12 +6270,12 @@ class Network_3D:
             # Count identities in this community
             for node in nodes:
                 try:
-                    idens = ast.literal_eval(self.node_identities[node])
-                    for iden in idens:
-                        counter[iden] += 1
+                    idens = self.node_identities[node]
                 except:
-                    counter[self.node_identities[node]] += 1
-            
+                    continue
+                for iden in idens:
+                    counter[iden] += 1
+
             # Convert to proportions within this community and weight by size
             for sort in counter:
                 if size > 0:  # Avoid division by zero
@@ -6078,7 +6300,9 @@ class Network_3D:
 
         from . import neighborhoods
 
-        neighborhoods.visualize_cluster_composition_umap(self.node_centroids, None, id_dictionary = self.node_identities, graph_label = "Node ID", title = 'UMAP Visualization of Node Centroids') 
+        id_dictionary = {node:str(val) for node, val in self.node_identities.items()}
+
+        neighborhoods.visualize_cluster_composition_umap(self.node_centroids, None, id_dictionary = id_dictionary, graph_label = "Node ID", title = 'UMAP Visualization of Node Centroids') 
 
 
     def identity_umap(self, data, mode = 0):
@@ -6092,11 +6316,8 @@ class Network_3D:
 
             for item in data.keys():
                 if item in self.node_identities:
-                    try:
-                        parse = ast.literal_eval(self.node_identities[item])
-                        neighbor_classes[item] = random.choice(parse)
-                    except:
-                        neighbor_classes[item] = self.node_identities[item]
+                    idens = self.node_identities[item]
+                    neighbor_classes[item] = random.choice(idens)
 
                 else:
                     del umap_dict[item]
@@ -6112,18 +6333,18 @@ class Network_3D:
             if mode == 0:
                 neighborhoods.visualize_cluster_composition_umap(umap_dict, None, id_dictionary = neighbor_classes, graph_label = "Node ID", title = 'UMAP Visualization of Node Identities by Z-Score') 
             else:
-                neighborhoods.visualize_cluster_composition_umap(umap_dict, None, id_dictionary = neighbor_classes, graph_label = "Node ID", title = 'UMAP Visualization of Node Identities by Z-Score', neighborhoods = self.communities, original_communities = self.communities) 
+                neighborhoods.visualize_cluster_composition_umap(umap_dict, None, id_dictionary = neighbor_classes, graph_label = "Node ID", title = 'UMAP Visualization of Node Identities by Z-Score', neighborhoods = self.communities, original_communities = self.communities, subname = "Communities") 
 
         except Exception as e:
             import traceback
             print(traceback.format_exc())
             print(f"Error: {e}")
 
-    def community_id_info_per_com(self, umap = False, label = 0, limit = 0, proportional = False, neighbors = None):
+    def community_id_info_per_com(self, umap = False, label = 0, limit = 0, proportional = False, neighbors = None, unique = False):
 
         community_dict = invert_dict(self.communities)
         summation = 0
-        id_set = iden_set(self.node_identities.values())
+        id_set = iden_set(self.node_identities.values(), unique = unique)
         id_dict = {}
         for i, iden in enumerate(id_set):
             id_dict[iden] = i
@@ -6143,14 +6364,17 @@ class Network_3D:
                 # Count identities in this community
                 for node in nodes:
                     try:
-                        idens = ast.literal_eval(self.node_identities[node])
-                        for iden in idens:
-                            counter[id_dict[iden]] += 1
+                        iden = self.node_identities[node]
                     except:
-                        try:
-                            counter[id_dict[self.node_identities[node]]] += 1 # Keep them as arrays
-                        except:
-                            pass
+                        continue
+                    if unique:
+                        if len(iden) < 2:
+                            counter[id_dict[iden[0]]] += 1 
+                        else:
+                            counter[id_dict[str(iden)]] += 1
+                    else:
+                        for sub_iden in iden:
+                            counter[id_dict[sub_iden]] += 1 # Check list for multi identities
 
                 for i in range(len(counter)): # Translate them into proportions out of 1
 
@@ -6162,10 +6386,22 @@ class Network_3D:
                     umap_dict[community] = counter
 
         else:
-            idens = invert_dict_special(self.node_identities)
+            if unique:
+                idens = invert_dict(self.node_identities)
+            else:
+                idens = invert_dict_special(self.node_identities)
             iden_count = {}
             template = {}
-            node_count = len(list(self.communities.keys()))
+            try: # Image itself represents more accurate node counts
+                node_count = np.unique(self.nodes)
+                if 0 in node_count:
+                    np.delete(node_count, 0)
+                node_count = len(node_count)
+            except: # But if user is working with a pure network we can try referencing that instead. They should have centroids in this situation.
+                try:
+                    node_count = len(list(self.node_centroids.keys()))
+                except: # No centroids, we can try the network itself
+                    node_count = len(list(self.network.nodes()))
 
             for iden in id_set:
                 template[iden] = 0
@@ -6181,16 +6417,20 @@ class Network_3D:
                 size = len(nodes)
                 counter = np.zeros(len(id_set))
 
+
                 for node in nodes:
                     try:
-                        idents = ast.literal_eval(self.node_identities[node])
-                        for iden in idents:
-                            iden_tracker[iden] += 1
+                        iden = self.node_identities[node]
                     except:
-                        try:
-                            iden_tracker[self.node_identities[node]] += 1
-                        except:
-                            pass
+                        continue
+                    if unique:
+                        if len(iden) < 2:  # Add up totality of available neighbor identity counts and store in array
+                            iden_tracker[iden[0]] += 1 
+                        else:
+                            iden_tracker[str(iden)] += 1
+                    else:
+                        for sub_iden in iden:
+                            iden_tracker[sub_iden] += 1 # Check list for multi identities
 
                 i = 0
 
@@ -6256,14 +6496,14 @@ class Network_3D:
 
         self.communities = revert_dict(coms)
 
-    def assign_neighborhoods(self, seed, count, limit = None, prev_coms = None, proportional = False, mode = 0):
+    def assign_neighborhoods(self, seed, count, limit = None, prev_coms = None, proportional = False, mode = 0, unique = False, heatmaps = True):
 
         from . import neighborhoods
 
         if prev_coms is not None:
             self.communities = copy.deepcopy(prev_coms)
 
-        identities, _ = self.community_id_info_per_com()
+        identities, _ = self.community_id_info_per_com(unique = unique)
 
         zero_group = {}
 
@@ -6280,7 +6520,7 @@ class Network_3D:
 
         try:
             if count > len(identities):
-                print(f"Requested neighborhoods too large for available communities. Using {len(identities)} neighborhoods (max for these coms)")
+                print(f"Requested supercommunities too large for available communities. Using {len(identities)} supercommunities (max for these coms)")
                 count = len(identities)
         except:
             pass
@@ -6328,38 +6568,84 @@ class Network_3D:
             self.communities.update(zero_group)
             len_dict[0] = [len(comus) - inc_count]
 
+        coms = invert_dict(self.communities)
+        try: # Image itself represents more accurate node counts
+            node_count = np.unique(self.nodes)
+            if 0 in node_count:
+                np.delete(node_count, 0)
+            node_count = len(node_count)
+        except: # But if user is working with a pure network we can try referencing that instead. They should have centroids in this situation.
+            try:
+                node_count = len(list(self.node_centroids.keys()))
+            except: # No centroids, we can try the network itself
+                node_count = len(list(self.network.nodes()))
 
-        identities, id_set = self.community_id_info_per_com()
+        for com, nodes in coms.items():
+
+            len_dict[com].append(len(nodes)/node_count)
+
+        identities, id_set = self.community_id_info_per_com(unique = unique)
+
+        if heatmaps:
+
+            matrixes = []
+
+            output, sorted_id_set = neighborhoods.plot_dict_heatmap(identities, id_set, title = "Supercommunity Heatmap by Proportional Composition Per Supercommunity", sublabel = "Supercommunity")
+
+            matrixes.append(output)
+
+            if proportional:
+
+                identities2, id_set2 = self.community_id_info_per_com(proportional = True, unique = unique)
+                output, sorted_id_set = neighborhoods.plot_dict_heatmap(identities2, id_set2, title = "Supercommunity Heatmap by Proportional Composition of Nodes in Supercommunity vs All Nodes in Image", sublabel = "Supercommunity")
+                matrixes.append(output)
+
+                identities3 = {}
+                for iden in identities2:
+                    identities3[iden] = identities2[iden]/len_dict[iden][1]
+
+                output, sorted_id_set = neighborhoods.plot_dict_heatmap(identities3, id_set2, title = "Over/Underrepresentation of Node Identities per Supercommunity (val < 1 = underrepresented, val > 1 = overrepresented)", center_at_one = True, sublabel = "Supercommunity")
+                matrixes.append(output)
+        else:
+            matrixes = None
+
+        return len_dict, matrixes, sorted_id_set
+
+    def community_heatmaps(self, proportional = True, unique = False):
+
+        from . import neighborhoods
+
+        len_dict = {}
+
+        identities, id_set = self.community_id_info_per_com(unique = unique)
 
         coms = invert_dict(self.communities)
         node_count = len(list(self.communities.keys()))
 
         for com, nodes in coms.items():
 
-            len_dict[com].append(len(nodes)/node_count)
+            len_dict[com] = (len(nodes)/node_count)
 
         matrixes = []
 
-        output = neighborhoods.plot_dict_heatmap(identities, id_set, title = "Neighborhood Heatmap by Proportional Composition Per Neighborhood")
+        output, sorted_id_set = neighborhoods.plot_dict_heatmap(identities, id_set, title = "Community Heatmap by Proportional Composition Per Community")
 
         matrixes.append(output)
 
         if proportional:
 
-            identities2, id_set2 = self.community_id_info_per_com(proportional = True)
-            output = neighborhoods.plot_dict_heatmap(identities2, id_set2, title = "Neighborhood Heatmap by Proportional Composition of Nodes in Neighborhood vs All Nodes in Image")
+            identities2, id_set2 = self.community_id_info_per_com(proportional = True, unique = unique)
+            output, sorted_id_set = neighborhoods.plot_dict_heatmap(identities2, id_set2, title = "Community Heatmap by Proportional Composition of Nodes in Community vs All Nodes in Image")
             matrixes.append(output)
 
             identities3 = {}
             for iden in identities2:
-                identities3[iden] = identities2[iden]/len_dict[iden][1]
+                identities3[iden] = identities2[iden]/len_dict[iden]
 
-            output = neighborhoods.plot_dict_heatmap(identities3, id_set2, title = "Over/Underrepresentation of Node Identities per Neighborhood (val < 1 = underrepresented, val > 1 = overrepresented)", center_at_one = True)
+            output, sorted_id_set = neighborhoods.plot_dict_heatmap(identities3, id_set2, title = "Over/Underrepresentation of Node Identities per Community (val < 1 = underrepresented, val > 1 = overrepresented)", center_at_one = True)
             matrixes.append(output)
 
-        return len_dict, matrixes, id_set
-
-
+        return matrixes, sorted_id_set     
 
     def kd_network(self, distance = 100, targets = None, make_array = False, max_neighbors = None):
 
@@ -6367,20 +6653,22 @@ class Network_3D:
 
         if self._xy_scale == self._z_scale:
             upsample = None
-            distance = distance/self._xy_scale # Account for scaling
+            if distance is not None:
+                distance = distance/self._xy_scale # Account for scaling
         else:
             upsample = [self._xy_scale, self._z_scale] # This means resolutions have to be normalized
             if self._xy_scale < self._z_scale:
-                distance = distance/self._xy_scale # We always upsample to normalize
+                if distance is not None:
+                    distance = distance/self._xy_scale # We always upsample to normalize
                 refactor = self._z_scale/self._xy_scale
                 for node, centroid in centroids.items():
                     centroids[node] = [centroid[0] * refactor, centroid[1], centroid[2]]
             elif self._z_scale < self._xy_scale:
-                distance = distance/self._z_scale
+                if distance is not None:
+                    distance = distance/self._z_scale
                 refactor = self._xy_scale/self._z_scale
                 for node, centroid in centroids.items():
                     centroids[node] = [centroid[0], centroid[1] * refactor, centroid[2] * refactor]
-
 
         neighbors = proximity.find_neighbors_kdtree(distance, targets = targets, centroids = centroids, max_neighbors = max_neighbors)
 
@@ -6466,11 +6754,16 @@ class Network_3D:
             overlay = neighborhoods.create_community_heatmap(heat_dict, self.communities, self.node_centroids, shape = shape, is_3d=is3d, labeled_array = self.nodes)
             return heat_dict, overlay
 
-    def get_merge_node_dictionaries(self, path, data):
+    def get_merge_node_dictionaries(self, path, data, img_list):
 
-        img_list = directory_info(path)
         id_dicts = []
         num_nodes = np.max(data)
+        bounding_boxes = ndimage.find_objects(data)
+        try:
+            from numba import jit
+            bounding_boxes = proximity.convert_bboxes_to_array(bounding_boxes, data.shape)
+        except:
+            pass
 
         for i, img in enumerate(img_list):
             if img.endswith('.tiff') or img.endswith('.tif'):
@@ -6479,10 +6772,20 @@ class Network_3D:
                 if len(mask.shape) == 2:
                     mask = np.expand_dims(mask, axis = 0)
 
-                id_dict = proximity.create_node_dictionary_id(data, mask, num_nodes)
+                id_dict = proximity.create_node_dictionary_id(data, mask, num_nodes, bounding_boxes)
                 id_dicts.append(id_dict)
 
-        return id_dicts
+        final_dicts = {}
+        for i, img in enumerate(img_list):
+            if img.endswith('.tiff'):
+                base_name = img[:-5]
+            elif img.endswith('.tif'):
+                base_name = img[:-4]
+            else:
+                base_name = img
+            final_dicts[base_name] = id_dicts[i]
+
+        return final_dicts
 
     def merge_node_ids(self, path, data, include = True):
 
@@ -6495,15 +6798,7 @@ class Network_3D:
                 del nodes[0]
             for node in nodes:
 
-                self.node_identities[node] = [] # Assign to lists at first
-        else:
-            for node, iden in self.node_identities.items():
-                try:
-                    self.node_identities[node] = ast.literal_eval(iden)
-                except:
-                    self.node_identities[node] = [iden]
-
-
+                self.node_identities[node] = [] # Assign to lists
 
         img_list = directory_info(path)
 
@@ -6550,24 +6845,8 @@ class Network_3D:
                     except:
                         pass
 
-        modify_dict = copy.deepcopy(self.node_identities)
+        self.node_identities = {node: iden for node, iden in self.node_identities.items() if iden != []}
 
-        for node, iden in self.node_identities.items():
-
-            try:
-
-                if len(iden) == 1:
-
-                    modify_dict[node] = str(iden[0]) # Singleton lists become bare strings
-                elif len(iden) == 0:
-                    del modify_dict[node]
-                else:
-                    modify_dict[node] = str(iden) # We hold multi element lists as strings for compatibility
-
-            except:
-                pass
-
-        self.node_identities = modify_dict
 
 
     def nearest_neighbors_avg(self, root, targ, xy_scale = 1, z_scale = 1, num = 1, heatmap = False, threed = True, numpy = False, quant = False, centroids = True, mask = None):
@@ -6661,6 +6940,26 @@ class Network_3D:
             return avg_distance
 
         do_borders = not centroids
+        try:
+            root = ast.literal_eval(root)
+        except:
+            root = [root]
+        if len(root) < 2:
+            root = root[0]
+            root_list = False
+        else:
+            root = str(root)
+            root_list = True #Signifying it looks like a list
+        try:
+            targ = ast.literal_eval(targ)
+        except:
+            targ = [targ]
+        if len(targ) < 2:
+            targ = targ[0]
+            targ_list = False
+        else:
+            targ = str(targ)
+            targ_list = True #Signifying it looks like a list
 
         if centroids:
             root_set = []
@@ -6672,33 +6971,17 @@ class Network_3D:
                 root_set = list(self.node_centroids.keys())
                 compare_set = root_set
                 title = "Nearest Neighbors Between Nodes Heatmap"
-
-            else:
-
-                title = f"Nearest Neighbors of ID {targ} from ID {root} Heatmap"
+            elif root == targ:
 
                 for node, iden in self.node_identities.items():
 
-                    if iden == root: # Standard behavior
-
-                        root_set.append(node)
-
-                    elif '[' in iden and root != "All (Excluding Targets)": # For multiple nodes
-                        if root in iden:
+                    if root_list:
+                        if str(iden) == str(root):
                             root_set.append(node)
-
-                    elif (iden == targ) or (targ == 'All Others (Excluding Self)'): # The other group
-
-                        compare_set.append(node)
-
-                    elif '[' in iden: # The other group, for multiple nodes
-                        if targ in iden:
-                            compare_set.append(node)
-
+                    elif root in iden:
+                        root_set.append(node)
                     elif root == "All (Excluding Targets)": # If not assigned to the other group but the comprehensive root option is used
                         root_set.append(node)
-
-            if root == targ:
 
                 compare_set = root_set
                 if len(compare_set) - 1 < num:
@@ -6706,13 +6989,38 @@ class Network_3D:
                     num = len(compare_set) - 1
 
                     print(f"Error: Not enough neighbor nodes for requested number of neighbors. Using max available neighbors: {num}")
-                    
+
+            else:
+
+                title = f"Nearest Neighbors of ID {targ} from ID {root} Heatmap"
+                for node, iden in self.node_identities.items():
+
+                    if root_list:
+                        if str(iden) == str(root): # Standard behavior
+                            root_set.append(node)
+                    elif root in iden:
+                        root_set.append(node)
+                    elif root == "All (Excluding Targets)": # If not assigned to the other group but the comprehensive root option is used
+                        root_set.append(node)
+
+                    if targ_list:
+                        if str(iden) == str(targ):
+                            compare_set.append(node)
+                    elif targ in iden:
+                        compare_set.append(node)
+                    elif targ == 'All Others (Excluding Self)': # The other group
+                        compare_set.append(node)
+
 
             if len(compare_set) < num:
 
                 num = len(compare_set)
 
                 print(f"Error: Not enough neighbor nodes for requested number of neighbors. Using max available neighbors: {num}")
+
+            if num == 0:
+                print(f"No neighbors available between {root} and {targ}")
+                return None, None, None, None
 
             avg, output = proximity.average_nearest_neighbor_distances(self.node_centroids, root_set, compare_set, xy_scale=self.xy_scale, z_scale=self.z_scale, num = num, do_borders = do_borders)
 
@@ -6727,22 +7035,31 @@ class Network_3D:
                 elif self.node_identities is not None:
                     for node, iden in self.node_identities.items():
 
-                        if iden == root:
-
+                        if root_list:
+                            if str(iden) == str(root): # Standard behavior
+                                root_set.append(node)
+                        elif root in iden:
+                            root_set.append(node)
+                        elif root == "All (Excluding Targets)": # If not assigned to the other group but the comprehensive root option is used
                             root_set.append(node)
 
-                        elif (iden == targ) or (targ == 'All Others (Excluding Self)'):
-
+                        if targ_list:
+                            if str(iden) == str(targ):
+                                compare_set.append(node)
+                        elif targ in iden:
                             compare_set.append(node)
+                        elif targ == 'All Others (Excluding Self)': # The other group
+                            compare_set.append(node)
+
 
             if root is None:
                 title = "Nearest Neighbors Between Nodes Heatmap"
-                root_set_neigh = approx_boundaries(self.nodes, keep_labels = True)
-                compare_set_neigh = approx_boundaries(self.nodes, keep_labels = False)
+                root_set_neigh = approx_boundaries(self.nodes, keep_labels = True, root_list = root_list)
+                compare_set_neigh = approx_boundaries(self.nodes, keep_labels = False, root_list = targ_list)
             else:
                 title = f"Nearest Neighbors of ID {targ} from ID {root} Heatmap"
 
-                root_set_neigh = approx_boundaries(self.nodes, [root], self.node_identities, keep_labels = True)
+                root_set_neigh = approx_boundaries(self.nodes, root, self.node_identities, keep_labels = True, root_list = root_list)
 
                 if targ == 'All Others (Excluding Self)':
                     compare_set_neigh = set(self.node_identities.values())
@@ -6751,7 +7068,7 @@ class Network_3D:
                 else:
                     targ = [targ]
 
-                compare_set_neigh = approx_boundaries(self.nodes, targ, self.node_identities, keep_labels = False)
+                compare_set_neigh = approx_boundaries(self.nodes, targ, self.node_identities, keep_labels = False, root_list = targ_list)
 
             avg, output = proximity.average_nearest_neighbor_distances(self.node_centroids, root_set_neigh, compare_set_neigh, xy_scale=self.xy_scale, z_scale=self.z_scale, num = num, do_borders = do_borders)
 

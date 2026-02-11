@@ -104,8 +104,10 @@ NetTracer3D is freely available for academic and nonprofit use and can obtained 
 
 NetTracer3D was developed by Liam McLaughlin while working under Dr. Sanjay Jain at Washington University School of Medicine.
 
--- Version 1.3.5 Updates --
+-- Version 1.4.4 Updates --
 
-	* Mainly bug fixes and adjustments.
-	* Most relevantly, fixed all the network histogram/stat/community calculations to consider weights properly, provided they are configured for multigraphs in networkx. (In short, edge weights in NetTracer3D are supposed to represent duplicate edges).
-	
+	* Revamped ability to select/rename different combos of node identities with new menus for doing such.
+	* Fixed some bugs regarding handling of node identities for some of the graphs.
+	* Other minor adjustments
+
+

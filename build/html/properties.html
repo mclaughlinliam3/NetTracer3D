@@ -6,14 +6,14 @@
   <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
 
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Properties of a Network3D Object &mdash; NetTracer3D 1.3.5 documentation</title>
+  <title>Properties of a Network3D Object &mdash; NetTracer3D 1.4.4 documentation</title>
       <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=b86133f3" />
       <link rel="stylesheet" type="text/css" href="_static/css/theme.css?v=e59714d7" />
 
   
       <script src="_static/jquery.js?v=5d32c60e"></script>
       <script src="_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
-      <script src="_static/documentation_options.js?v=4720776d"></script>
+      <script src="_static/documentation_options.js?v=6d0302ba"></script>
       <script src="_static/doctools.js?v=9bcbadda"></script>
       <script src="_static/sphinx_highlight.js?v=dc90522c"></script>
     <script src="_static/js/theme.js"></script>
@@ -139,6 +139,7 @@ Many of NetTracer3D’s methods may need to reference one or more of these prope
 <ul class="simple">
 <li><p>When NetTracer3D saves its properties, it organizes several into csv spreadsheets, containing specific data organization that it expects to find when loading the same properties back in.</p></li>
 <li><p>Some users may wish to load these properties in from elsewhere (.csv or .xlsx can be used to load). For example, if they want to manually assign nodes to certain centroids or identities by editing microsoft excel, or batch organizing datasets for import this way using something like the pandas module in python.</p></li>
+<li><p>Note that node identities specifically will also save into a .json that will be take priority over the .csv when loading. If you want to load the .csv instead, please delete the .json.</p></li>
 <li><p>Note that .xlsx files have a row limit, so I generally recommend saving as .CSV if possible, especially for large property lists.</p></li>
 <li><p>These structures are as follows (make sure to use correct headers):</p></li>
 </ul>

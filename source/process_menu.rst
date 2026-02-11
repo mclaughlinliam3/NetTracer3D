@@ -103,6 +103,7 @@ Algorithm Explanations
 'Process -> Calculate Network -> Calculate Proximity Network...'
 -------------------------------------------------------
 * This method is used to connect objects in the nodes channel based on whether they are within some user-defined distance of each other.
+* These networks are useful for neighborhood based analysis for cells.
 * Please see :doc:`proximity` for a brief walkthrough about using this function.
 * Selecting this function will show the following menu:
 
@@ -113,15 +114,16 @@ Algorithm Explanations
 Parameter Explanations
 ~~~~~~~~~~~~~~~
 #. Search Region Distance...
-    * This value is the distance nodes will search for other nodes to connect to. Note that this value is scaled corresponding to the xy_scale/z_scale parameters. (As in, if you set xy_scale/z_scale correctly, then treat this as a real-value, such as microns, for your image).
+    * This value is the distance nodes will search for other nodes to connect to. Note that this value is scaled corresponding to the xy_scale/z_scale parameters. (As in, if you set xy_scale/z_scale correctly, then treat this as a real-value, such as microns, for your image). You can skip this parameter and enter a desired number of nearest neighbors instead if you are using centroids, or you can combine these two to find the 'n' nearest neighbors in some distance.
 #. xy_scale
     * Enter a float value here if you want your X/Y 2D plane pixel-scaling to correspond to some real world value. (ie, 5 microns per pixel). It is presumed to be 1 by default.
 #. z_scale
     * Enter a float value here if you want your Z 3D voxel depth to correspond to some real world value. (ie, 5 microns per voxel). It is presumed to be 1 by default.
 #. Execution Mode:
-    * The dropdown menu will display two options.
+    * The dropdown menu will display three options.
         1. 'From Centroids...' - The search is done starting from centroids, looking for other centroids. The algorithm that this uses should be faster for larger datasets. It is ideal to use when your nodes can be represented well by centroids, such as if they are small or relatively homogenous spheroids. Note that because centroids are used, this option allows this function to run without any nodes image whatsoever, assuming the node_centroids property was loaded in. This might be useful when importing data that has already been extracted out of an image elsewhere, as a set of centroids, for example.
         2. 'From Morphological Shape...' - The search is done starting from each nodes' border in 3D space. This algorithm is slower but is better suited handling non-homogenous or oddly-shaped nodes.
+        3. 'Morphological - Using Distance Transform...' - Similar to above, but will not allow nodes to connect over the search regions of other nodes. Results in nodes finding their immediate neighbors in the specified distance, but overall a simpler network than option 2. 
 #. Create Networks only from a specific Node Identity?
     * This option will only appear if something is assigned to the node_identities property.
     * If so, there will be a dropdown menu to select one of your defined node-identities subtypes.
@@ -139,6 +141,10 @@ Parameter Explanations
     * Restricts nodes from only making a number of connections to the integer value passed to this param.
     * They will connect to their n nearest neighbors within the search region.
     * This is a useful way to simplify dense networks.
+    * You can only do this from the centroid search. Note that you can skip passing a search parameter and just use this nearest neighbor search in that case, if desired.
+#. (If using distance transform morphological) Use Fast Search...?
+    * If you are using the distance transform search method, this will have it calculate the distance transform in parallel, followed by flood filling to expand labelled regions. Requires the edt package. Search regions along connecting boundaries may be slightly rougher.
+
 
 Algorithm Explanations
 ~~~~~~~~~~~~~~~
@@ -855,6 +861,20 @@ Algorithm Explanations
 ~~~~~~~~~~~~~~~~~~~~~~~
 * This method now just runs smart dilate with a maximal dimension length of the image as the dilation parameter.
 
+'Process -> Generate -> Generate Convex Hull'
+-----------------------------------------------------
+* This method can be run to create a Convex Hull around the non-background data for the active image.
+* The convex hull is the smallest convex 3D shape that can encapsulate your data. It will be generated as a binary mask in Overlay2.
+* You can essentially use this to define the volume that your data exists in. It can also be used to create a mask to inform the foreground vs background region of your data, for functions that care about that such as the Ripley's function and the 3D nearest neighbor heatmaps.
+
+'Process -> Generate -> Generate Artificial Hexagonal Nodes'
+--------------------------------------------------------
+* This method can be used to create a set of labeled hexagons of arbitrary size. They will be created in Overlay2, either filling the entire image or only within a masked region.
+* You essentially can use this to create 'artificial cells' for neighborhood detection via proximity networks. If you have multichannel data, you can assign the hexagons identities via 'File -> Images -> Node Identities -> Assign Node Identities...'. Then, generate a proximity network followed by 'Analyze -> Network -> Create Communities based on Nodes' Immediate Neighbors'. 
+* When generating the hexagons, you will specify side length, and optionally apply an xy and z_scale if your data is anisotropic in z. You can apply a downsample factor to generate these faster.
+* For 3D data specifically, it will actually try to generate 'Rhombic Dodecahedrons' by default, which is a 3D shape that tesselates well. You can change it to create hexagonal prisms, which is faster but not a true 3D tesselator.
+* You can select whether you'd like the output to be masked by some binary data in the Nodes' channel, such as if your image has background you want to exclude from getting hexagons.
+
 'Process -> Modify Network/Properties'
 -------------------------------------
 * The final option in 'Process' is 'Modify Network/Properties', which provides several options for transforming network structure post calculation.
@@ -874,8 +894,10 @@ Parameter Explanations
 #. Force Any Multiple IDs to Pick a Random Single ID?
     * If a node has multiple identities associated with it, it will randomly pick a single one to be.
     * This is useful with identity visualization (ie, code identities), when we have a lot of identity permutations but don't want them cluttering things.
+#. Remove Negative IDs
+    * If you created negative IDs for nodes showing what identities they lack (ie, from the threshold identity assigner), you can remove those negative identities by choosing this.
 #. Remove Any Nodes Not in Nodes Channel From Properties?
-    * This method will remove any nodes from the node_centroids and node_identities properties if their label is not present in the image in the nodes channel.
+    * This method will remove any nodes from the network, node_centroids, communities, and node_identities properties if their label is not present in the image in the nodes channel.
     * This method is essentially here to support cropping datasets. If you crop an image and would like to eliminate any additional labels from the other properties that are no longer in the image, this is the way to do it.
 #. Remove Trunk...?
     * Sometimes networks will have regions that are widely connected by a central trunk structure.
@@ -907,6 +929,8 @@ Parameter Explanations
 #. Convert communities to nodes?
     * If the nodes have been partitioned into communities, this method will replace the network between the nodes with a network between its communities instead.
     * Additionally, any labeled nodes in the nodes channel will take on a label belonging to their community, rather than their original ID.
+#. Change/Remove Identities:
+    * Opens a menu with two functions: 1. You can remove any number of node identities from your session. 2. You can create groups of identities with positive gates (ie find nodes that have this identity) and negative gates (ie disclude nodes that have this identity) and rename them to some new identity. Use this if you have multi-identity nodes that you'd like to reduce to a singular identity, or if you just want to rename some identity.
 #. Add/Remove Network Pairs
     * Opens a new window where the user can enter new pairs of nodes to add to (or remove from) the network (along with an optional edge ID associated with them if applicable).
     * Removing a pair of nodes without entering an edge ID will remove all examples of that node-pair (regardless of which edge), while specifying an edge ID will only remove the node pair that was joined by that edge.

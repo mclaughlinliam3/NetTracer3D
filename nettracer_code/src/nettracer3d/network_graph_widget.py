@@ -17,7 +17,8 @@ class GraphLoadThread(QThread):
     finished = pyqtSignal(object)  # Emits the computed layout data
     
     def __init__(self, graph, geometric, component, centroids, communities, 
-                 community_dict, identities, identity_dict, weight, z_size, shell):
+                 community_dict, identities, identity_dict, weight, z_size,
+                 shell, node_size, edge_size):
         super().__init__()
         self.graph = graph
         self.geometric = geometric
@@ -30,6 +31,8 @@ class GraphLoadThread(QThread):
         self.weight = weight
         self.z_size = z_size
         self.shell = shell
+        self.node_size = node_size
+        self.edge_size = edge_size
     
     def run(self):
         """Compute layout and colors in background thread"""
@@ -525,7 +528,7 @@ class GraphLoadThread(QThread):
             return [{
                 'x': np.array(x_coords),
                 'y': np.array(y_coords),
-                'thickness': 1.0
+                'thickness': self.edge_size
             }]
         
         # Weight-based rendering - batch by thickness
@@ -539,8 +542,8 @@ class GraphLoadThread(QThread):
         
         # Define thickness bins (e.g., 10 discrete thickness levels)
         num_bins = 10
-        thickness_min = 0.5
-        thickness_max = 3.0  # Maximum thickness cap
+        thickness_min = self.edge_size/2
+        thickness_max = 3.0 * self.edge_size  # Maximum thickness cap
         
         # Batch edges by thickness bin
         edge_batches = {}  # {thickness: [(x_coords, y_coords), ...]}
@@ -550,7 +553,7 @@ class GraphLoadThread(QThread):
             if weight_range > 0:
                 normalized = (weight - min_weight) / weight_range
             else:
-                normalized = 0.5
+                normalized = self.edge_size/2
             
             # Calculate thickness with cap
             thickness = thickness_min + normalized * (thickness_max - thickness_min)
@@ -600,6 +603,7 @@ class GraphLoadThread(QThread):
             color_map = self._generate_community_colors(self.identity_dict)
             for node in self.graph.nodes():
                 identity = self.identity_dict.get(node, 'Unknown')
+                identity = str(identity)
                 colors.append(color_map.get(identity, '#808080'))
         elif self.communities and self.community_dict:
             color_map = self._generate_community_colors(self.community_dict)
@@ -615,7 +619,7 @@ class GraphLoadThread(QThread):
     
     def _compute_all_node_sizes_vectorized(self, nodes):
         if not self.geometric or not self.centroids or not self.z_size:
-            return [10] * len(nodes)
+            return [self.node_size] * len(nodes)
 
         # GLOBAL z range (matches original behavior)
         all_z = np.array([
@@ -687,8 +691,14 @@ class GraphLoadThread(QThread):
         """Generate colors for communities using the specified strategy"""
         from collections import Counter
         
-        unique_communities = sorted(set(my_dict.values()))
-        community_sizes = Counter(my_dict.values())
+        try:
+            unique_communities = sorted(set(my_dict.values()))
+            some_dict = my_dict
+        except:
+            some_dict = {node: str(comm) for node, comm in my_dict.items()}
+            unique_communities = sorted(set(some_dict.values()))
+
+        community_sizes = Counter(some_dict.values())
         sorted_communities = random.Random(42).sample(unique_communities, len(unique_communities))
         colors_rgb = self._generate_distinct_colors_rgb(len(unique_communities))
         color_map = {comm: colors_rgb[i] for i, comm in enumerate(sorted_communities)}
@@ -731,7 +741,8 @@ class NetworkGraphWidget(QWidget):
     
     def __init__(self, parent=None, weight=False, geometric=False, component = False, 
                  centroids=None, communities=False, community_dict=None,
-                 identities=False, identity_dict=None, labels=False, z_size = False, shell = False):
+                 identities=False, identity_dict=None, labels=False, z_size = False, 
+                 shell = False, node_size = 10, black_edges = False, edge_size = 1, popout = False):
         super().__init__(parent)
         
         self.parent_window = parent
@@ -746,6 +757,10 @@ class NetworkGraphWidget(QWidget):
         self.labels = labels
         self.z_size = z_size
         self.shell = shell
+        self.node_size = node_size
+        self.black_edges = black_edges
+        self.edge_size = edge_size
+        self.popout = popout
         
         # Graph data
         self.graph = None
@@ -757,6 +772,7 @@ class NetworkGraphWidget(QWidget):
         self.label_items = {}
         self.label_data = []  # Store label data for on-demand rendering
         self.selected_nodes = set()
+        self.node_click = False
         self.rendered = False
         
         # CACHING for fast updates
@@ -822,7 +838,6 @@ class NetworkGraphWidget(QWidget):
         self.plot.addItem(self.loading_text)
         
         # Enable mouse tracking for area selection
-        self.plot.scene().sigMouseClicked.connect(self._on_plot_clicked)
         self.plot.scene().sigMouseMoved.connect(self._on_mouse_moved)
         
         # Disable default mouse interaction - will enable only in pan mode
@@ -837,6 +852,7 @@ class NetworkGraphWidget(QWidget):
         
         # Connect click events
         self.scatter.sigClicked.connect(self._on_node_clicked)
+        self.plot.scene().sigMouseClicked.connect(self._on_plot_clicked)
         
         # Connect view change for level-of-detail updates
         self.plot.sigRangeChanged.connect(self._on_view_changed)
@@ -892,9 +908,14 @@ class NetworkGraphWidget(QWidget):
 
         if self.identities:
             from collections import Counter
-            
-            unique_identities = sorted(set(self.identity_dict.values()))
-            community_sizes = Counter(self.identity_dict.values())
+            try:
+                unique_identities = sorted(set(self.identity_dict.values()))
+                community_sizes = Counter(self.identity_dict.values())
+            except:
+                some_dict = {node: str(comm) for node, comm in self.identity_dict.items()}
+                unique_identities = sorted(set(some_dict.values()))
+                community_sizes = Counter(some_dict.values())
+
             sorted_communities = random.Random(42).sample(unique_identities, len(unique_identities))
             colors_rgb = _generate_distinct_colors_rgb(len(unique_identities))
             color_map = {comm: colors_rgb[i] for i, comm in enumerate(sorted_communities)}
@@ -1039,6 +1060,7 @@ class NetworkGraphWidget(QWidget):
         self.clear_btn.setToolTip("Clear Graph")
         self.clear_btn.setMaximumSize(32, 32)
         self.clear_btn.clicked.connect(self._clear_graph)
+
         
         # Add buttons to layout
         panel_layout.addWidget(self.select_btn)
@@ -1048,6 +1070,14 @@ class NetworkGraphWidget(QWidget):
         panel_layout.addWidget(self.refresh_btn)
         panel_layout.addWidget(self.settings_btn)
         panel_layout.addWidget(self.clear_btn)
+
+        if self.popout:
+            self.popout_btn = QPushButton("⤴")
+            self.popout_btn.setToolTip("Full Screen")
+            self.popout_btn.setMaximumSize(32, 32)
+            self.popout_btn.clicked.connect(self._popout_graph)
+            panel_layout.addWidget(self.popout_btn)
+
         panel_layout.addStretch()
         
         panel.setLayout(panel_layout)
@@ -1128,7 +1158,7 @@ class NetworkGraphWidget(QWidget):
             self.graph, self.geometric, self.component, self.centroids,
             self.communities, self.community_dict,
             self.identities, self.identity_dict, self.weight, self.z_size,
-            self.shell
+            self.shell, self.node_size, self.edge_size
         )
         self.load_thread.finished.connect(self._on_graph_loaded)
         self.load_thread.start()
@@ -1192,6 +1222,11 @@ class NetworkGraphWidget(QWidget):
         for label_item in self.label_items.values():
             self.plot.removeItem(label_item)
         self.label_items.clear()
+
+        if self.black_edges:
+            edge_color = (0, 0, 0)
+        else:
+            edge_color = (150, 150, 150, 100)
         
         # Render edges - batched by weight for efficiency
         edge_batches = result['edge_pens']
@@ -1200,7 +1235,7 @@ class NetworkGraphWidget(QWidget):
                 edge_line = PlotCurveItem(
                     x=batch['x'],
                     y=batch['y'],
-                    pen=pg.mkPen(color=(150, 150, 150, 100), width=batch['thickness']),
+                    pen=pg.mkPen(color=edge_color, width=batch['thickness']),
                     connect='finite'  # Break lines at NaN
                 )
                 self.plot.addItem(edge_line)
@@ -1366,62 +1401,6 @@ class NetworkGraphWidget(QWidget):
         if self.label_data:
             self._update_labels_for_zoom()
     
-    def _render_edges(self, edges):
-        """Render edges with optional weight-based thickness (OPTIMIZED: single combined line)"""
-        # Remove old edges
-        for item in self.edge_items:
-            self.plot.removeItem(item)
-        self.edge_items.clear()
-        
-        if not edges:
-            return
-        
-        # Get weight range for normalization if using weights
-        if self.weight:
-            weights = [w for _, _, w in edges]
-            if len(weights) > 0:
-                min_weight = min(weights)
-                max_weight = max(weights)
-                weight_range = max_weight - min_weight if max_weight > min_weight else 1
-            else:
-                weight_range = 1
-                min_weight = 0
-        
-        # Combine all edges into single line with NaN separators
-        x_combined = []
-        y_combined = []
-        thicknesses = []
-        
-        for x, y, weight in edges:
-            if self.weight and 'weight_range' in locals() and weight_range > 0:
-                # Normalize weight to thickness range (0.5 - 3.0)
-                normalized = (weight - min_weight) / weight_range
-                thickness = 0.5 + normalized * 2.5
-            else:
-                thickness = 1.0
-            
-            thicknesses.append(thickness)
-            
-            # Add edge coordinates with NaN separator
-            x_combined.extend([x[0], x[1], np.nan])
-            y_combined.extend([y[0], y[1], np.nan])
-        
-        # Use average thickness
-        avg_thickness = np.mean(thicknesses) if thicknesses else 1.0
-        
-        # Create single line with all edges
-        edge_line = PlotCurveItem(
-            x=np.array(x_combined),
-            y=np.array(y_combined),
-            pen=pg.mkPen(color=(150, 150, 150, 100), width=avg_thickness),
-            connect='finite'
-        )
-        self.plot.addItem(edge_line)
-        self.edge_items.append(edge_line)
-        
-        # Ensure nodes are on top
-        self.scatter.setZValue(10)
-    
     def _hex_to_rgb(self, hex_color):
         """Convert hex color to RGB tuple"""
         hex_color = hex_color.lstrip('#')
@@ -1429,7 +1408,8 @@ class NetworkGraphWidget(QWidget):
     
     def _on_plot_clicked(self, ev):
         """Handle clicks on the plot background"""
-        if not self.selection_mode:
+        if not self.selection_mode or self.node_click or not self.popout:
+            self.node_click = False
             return
         
         # Only handle left button clicks
@@ -1439,12 +1419,6 @@ class NetworkGraphWidget(QWidget):
         # Get the position in scene coordinates
         scene_pos = ev.scenePos()
         
-        # Check if click was on a node (scatter will handle it)
-        items = self.plot.scene().items(scene_pos)
-        for item in items:
-            if item == self.scatter:
-                # Click was on scatter plot, let node handler deal with it
-                return
         
         # Click was on background
         modifiers = ev.modifiers()
@@ -1454,8 +1428,8 @@ class NetworkGraphWidget(QWidget):
             # Deselect all nodes
             self.selected_nodes.clear()
             self._render_nodes()
+            self.push_selection()
             self.node_selected.emit([])
-        
         # Ctrl+Click on background does nothing (as requested)
     
     def _on_mouse_moved(self, pos):
@@ -1474,6 +1448,7 @@ class NetworkGraphWidget(QWidget):
     def _start_area_selection(self, scene_pos):
         """Start area selection with rectangle"""
         self.is_area_selecting = True
+        self.node_click = False
         
         # Convert to view coordinates
         view_pos = self.plot.vb.mapSceneToView(scene_pos)
@@ -1873,6 +1848,32 @@ class NetworkGraphWidget(QWidget):
 
         self.loading_text.setPos(0, 0)  # Center of view
         self.plot.addItem(self.loading_text)
+
+    def _popout_graph(self):
+
+        temp_graph_widget = NetworkGraphWidget(
+            parent=self.parent_window,
+            weight=self.weight,
+            geometric=self.geometric,
+            component = self.component,
+            centroids=self.centroids,
+            communities=self.communities,
+            community_dict=self.community_dict,
+            labels=self.labels,
+            identities = self.identities,
+            identity_dict = self.identity_dict,
+            z_size = self.z_size,
+            shell = self.shell,
+            node_size = self.node_size,
+            black_edges = self.black_edges,
+            edge_size = self.edge_size
+        )
+
+        temp_graph_widget.set_graph(self.graph)
+        temp_graph_widget.show_in_window(title="Network Graph", width=1000, height=800)
+        temp_graph_widget.load_graph()
+        self.parent_window.temp_graph_widgets.append(temp_graph_widget)
+
     
     def select_nodes(self, nodes, add_to_selection=False):
         """
@@ -1887,11 +1888,16 @@ class NetworkGraphWidget(QWidget):
         """
         if not add_to_selection:
             self.selected_nodes.clear()
-        
-        # Add valid nodes to selection
-        for node in nodes:
-            if node in self.node_items:
-                self.selected_nodes.add(node)
+
+        if nodes is None:
+            self.selected_nodes = set()
+        elif nodes == []:
+            self.selected_nodes = set()
+        else:     
+            # Add valid nodes to selection
+            for node in nodes:
+                if node in self.node_items:
+                    self.selected_nodes.add(node)
         
         # Update visual representation
         self._render_nodes()
@@ -1928,10 +1934,12 @@ class NetworkGraphWidget(QWidget):
             # Clear previous selection and select only this node
             self.selected_nodes.clear()
             self.selected_nodes.add(clicked_node)
+
         self.push_selection()
         
         # Update visual representation
         self._render_nodes()
+        self.node_click = True
         
         # Emit signal with all selected nodes
         self.node_selected.emit(list(self.selected_nodes))
@@ -2062,6 +2070,10 @@ class NetworkGraphWidget(QWidget):
         com_action.triggered.connect(self.parent_window.handle_show_communities)
         comp_action = context_menu.addAction("Show Connected Component")
         comp_action.triggered.connect(self.parent_window.handle_show_component)
+
+        comp_action2 = context_menu.addAction("Isolate Connected Component")
+        comp_action2.triggered.connect(lambda: self.parent_window.handle_show_component(isolate = True))
+
         # Add separator
         context_menu.addSeparator()
         
@@ -2099,7 +2111,7 @@ class NetworkGraphWidget(QWidget):
     
     def update_params(self, weight=None, geometric=None, component = None, centroids=None,
                      communities=None, community_dict=None,
-                     identities=None, identity_dict=None, labels=None, z_size = None, shell = None):
+                     identities=None, identity_dict=None, labels=None, z_size = None, shell = None, node_size = 10):
         """Update visualization parameters"""
         if weight is not None:
             self.weight = weight
@@ -2123,6 +2135,8 @@ class NetworkGraphWidget(QWidget):
             self.z_size = z_size
         if shell is not None:
             self.shell = shell
+        if node_size is not None:
+            self.node_size = node_size
     
     def _on_view_changed(self):
         """Handle view range changes for level-of-detail adjustments"""
@@ -2181,6 +2195,11 @@ class NetworkGraphWidget(QWidget):
             edge_alpha = min(150, int(100 + self.current_zoom_factor * 10))
         else:
             edge_alpha = 100
+
+        if self.black_edges:
+            edge_color = (0, 0, 0)
+        else:
+            edge_color = (150, 150, 150, edge_alpha)
         
         # Update edge rendering (batched edge items)
         if self.edge_items:
@@ -2188,7 +2207,7 @@ class NetworkGraphWidget(QWidget):
                 current_pen = edge_item.opts['pen']
                 if current_pen is not None:
                     width = current_pen.widthF()
-                    new_pen = pg.mkPen(color=(150, 150, 150, edge_alpha), width=width)
+                    new_pen = pg.mkPen(color=edge_color, width=width)
                     edge_item.setPen(new_pen)
         
         # Update labels based on zoom level

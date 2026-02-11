@@ -31,6 +31,7 @@ Necessary Structures to Properties stored in CSVs
 ---------------------------------------
 * When NetTracer3D saves its properties, it organizes several into csv spreadsheets, containing specific data organization that it expects to find when loading the same properties back in.
 * Some users may wish to load these properties in from elsewhere (.csv or .xlsx can be used to load). For example, if they want to manually assign nodes to certain centroids or identities by editing microsoft excel, or batch organizing datasets for import this way using something like the pandas module in python.
+* Note that node identities specifically will also save into a .json that will be take priority over the .csv when loading. If you want to load the .csv instead, please delete the .json.
 * Note that .xlsx files have a row limit, so I generally recommend saving as .CSV if possible, especially for large property lists.
 * These structures are as follows (make sure to use correct headers):
 

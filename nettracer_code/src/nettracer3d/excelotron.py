@@ -184,7 +184,8 @@ class ClassifierWidget(QFrame):
         super().__init__(parent)
         self.classifier_id = classifier_id
         self.classifier_group_widget = classifier_group_widget  # Store reference to parent group
-        self.substrings = []
+        self.positive_substrings = []
+        self.negative_substrings = []
         
         self.setStyleSheet("""
             QFrame {
@@ -293,8 +294,9 @@ class ClassifierWidget(QFrame):
         self.substring_input.setPlaceholderText("Enter substring to match...")
         substring_layout.addWidget(self.substring_input)
         
-        add_substring_btn = QPushButton("Add")
-        add_substring_btn.setStyleSheet("""
+        # Positive substring button (green)
+        add_positive_btn = QPushButton("+ Positive")
+        add_positive_btn.setStyleSheet("""
             QPushButton {
                 background-color: #28a745;
                 color: white;
@@ -306,13 +308,30 @@ class ClassifierWidget(QFrame):
                 background-color: #218838;
             }
         """)
-        add_substring_btn.clicked.connect(self.add_substring)
-        substring_layout.addWidget(add_substring_btn)
+        add_positive_btn.clicked.connect(lambda: self.add_substring(positive=True))
+        substring_layout.addWidget(add_positive_btn)
+        
+        # Negative substring button (red)
+        add_negative_btn = QPushButton("- Negative")
+        add_negative_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #dc3545;
+                color: white;
+                border: none;
+                padding: 5px 10px;
+                border-radius: 3px;
+            }
+            QPushButton:hover {
+                background-color: #c82333;
+            }
+        """)
+        add_negative_btn.clicked.connect(lambda: self.add_substring(positive=False))
+        substring_layout.addWidget(add_negative_btn)
         
         layout.addLayout(substring_layout)
         
-        # Connect Enter key to add substring
-        self.substring_input.returnPressed.connect(self.add_substring)
+        # Connect Enter key to add positive substring (default)
+        self.substring_input.returnPressed.connect(lambda: self.add_substring(positive=True))
         
         # Substrings display
         self.substrings_display = QLabel("Substrings: (none)")
@@ -334,15 +353,22 @@ class ClassifierWidget(QFrame):
         
         self.setLayout(layout)
     
-    def add_substring(self):
+    def add_substring(self, positive=True):
         substring = self.substring_input.text().strip()
-        if substring and substring not in self.substrings:
-            self.substrings.append(substring)
-            self.update_substrings_display()
-            self.substring_input.clear()
+        if substring:
+            if positive:
+                if substring not in self.positive_substrings:
+                    self.positive_substrings.append(substring)
+                    self.update_substrings_display()
+                    self.substring_input.clear()
+            else:
+                if substring not in self.negative_substrings:
+                    self.negative_substrings.append(substring)
+                    self.update_substrings_display()
+                    self.substring_input.clear()
     
     def update_substrings_display(self):
-        if self.substrings:
+        if self.positive_substrings or self.negative_substrings:
             # Create clickable labels for each substring
             if hasattr(self, 'substrings_container') and self.substrings_container is not None:
                 try:
@@ -355,12 +381,13 @@ class ClassifierWidget(QFrame):
             container_layout = QHBoxLayout()
             container_layout.setContentsMargins(0, 0, 0, 0)
             
-            for i, substring in enumerate(self.substrings):
+            # Add positive substrings (green)
+            for i, substring in enumerate(self.positive_substrings):
                 substring_widget = QFrame()
                 substring_widget.setStyleSheet("""
                     QFrame {
-                        background-color: #e9ecef;
-                        border: 1px solid #adb5bd;
+                        background-color: #d4edda;
+                        border: 1px solid #28a745;
                         border-radius: 3px;
                         padding: 2px 5px;
                         margin: 1px;
@@ -371,7 +398,7 @@ class ClassifierWidget(QFrame):
                 substring_layout.setContentsMargins(2, 2, 2, 2)
                 
                 label = QLabel(f'"{substring}"')
-                label.setStyleSheet("background: transparent; border: none;")
+                label.setStyleSheet("background: transparent; border: none; color: #155724;")
                 substring_layout.addWidget(label)
                 
                 remove_btn = QPushButton("×")
@@ -389,7 +416,48 @@ class ClassifierWidget(QFrame):
                         background-color: #c82333;
                     }
                 """)
-                remove_btn.clicked.connect(lambda checked, idx=i: self.remove_substring(idx))
+                remove_btn.clicked.connect(lambda checked, idx=i: self.remove_substring(idx, positive=True))
+                substring_layout.addWidget(remove_btn)
+                
+                substring_widget.setLayout(substring_layout)
+                container_layout.addWidget(substring_widget)
+            
+            # Add negative substrings (red)
+            for i, substring in enumerate(self.negative_substrings):
+                substring_widget = QFrame()
+                substring_widget.setStyleSheet("""
+                    QFrame {
+                        background-color: #f8d7da;
+                        border: 1px solid #dc3545;
+                        border-radius: 3px;
+                        padding: 2px 5px;
+                        margin: 1px;
+                    }
+                """)
+                
+                substring_layout = QHBoxLayout()
+                substring_layout.setContentsMargins(2, 2, 2, 2)
+                
+                label = QLabel(f'"{substring}"')
+                label.setStyleSheet("background: transparent; border: none; color: #721c24;")
+                substring_layout.addWidget(label)
+                
+                remove_btn = QPushButton("×")
+                remove_btn.setFixedSize(16, 16)
+                remove_btn.setStyleSheet("""
+                    QPushButton {
+                        background-color: #dc3545;
+                        color: white;
+                        border: none;
+                        border-radius: 8px;
+                        font-size: 8px;
+                        font-weight: bold;
+                    }
+                    QPushButton:hover {
+                        background-color: #c82333;
+                    }
+                """)
+                remove_btn.clicked.connect(lambda checked, idx=i: self.remove_substring(idx, positive=False))
                 substring_layout.addWidget(remove_btn)
                 
                 substring_widget.setLayout(substring_layout)
@@ -434,10 +502,15 @@ class ClassifierWidget(QFrame):
             insert_index = 2  # After header and substring input
             layout.insertWidget(insert_index, self.substrings_display)
 
-    def remove_substring(self, index):
-        if 0 <= index < len(self.substrings):
-            self.substrings.pop(index)
-            self.update_substrings_display()
+    def remove_substring(self, index, positive=True):
+        if positive:
+            if 0 <= index < len(self.positive_substrings):
+                self.positive_substrings.pop(index)
+                self.update_substrings_display()
+        else:
+            if 0 <= index < len(self.negative_substrings):
+                self.negative_substrings.pop(index)
+                self.update_substrings_display()
     
     def delete_requested(self):
         # Use the stored reference instead of parent()
@@ -445,11 +518,23 @@ class ClassifierWidget(QFrame):
     
     def matches_identity(self, identity_str):
         """Check if this classifier matches the given identity string"""
-        if not self.substrings:  # Empty classifier matches everything
+        # Empty classifier matches everything
+        if not self.positive_substrings and not self.negative_substrings:
             return True
         
         identity_str = str(identity_str)
-        return all(substring in identity_str for substring in self.substrings)
+        
+        # Check all positive substrings must be present (AND logic)
+        if self.positive_substrings:
+            if not all(substring in identity_str for substring in self.positive_substrings):
+                return False
+        
+        # Check no negative substrings should be present (NOT logic)
+        if self.negative_substrings:
+            if any(substring in identity_str for substring in self.negative_substrings):
+                return False
+        
+        return True
     
     def get_new_id(self):
         """Get the new ID for this classifier"""
@@ -609,8 +694,10 @@ class ClassifierGroupWidget(QFrame):
             self.renumber_classifiers()
     
     def preview_classification(self):
-        """Apply classification rules to the identity remapping widget"""
-        if not hasattr(self.identity_remap_widget, 'identity_mappings'):
+        """Apply classification rules to the identity remapping widget - OPTIMIZED"""
+        table = self.identity_remap_widget.table
+        
+        if table.rowCount() == 0:
             QMessageBox.warning(self, "Warning", "No identity data loaded yet.")
             return
         
@@ -618,67 +705,72 @@ class ClassifierGroupWidget(QFrame):
             QMessageBox.warning(self, "Warning", "No classifiers defined.")
             return
         
-        # Apply classifiers in order (hierarchical)
-        classifier_ids = sorted(self.classifiers.keys())  # MOVE THIS LINE UP HERE
+        # Cache frequently accessed values
+        classifier_ids = sorted(self.classifiers.keys())
+        removed_rows = self.identity_remap_widget.removed_rows
+        is_hierarchical = self.hierarchical_checkbox.isChecked()
         
-        # Get all original identities
-        original_identities = list(self.identity_remap_widget.identity_mappings.keys())
+        # Single-pass processing
         matched_identities = set()
-        classifier_usage = {classifier_id: 0 for classifier_id in classifier_ids}  # Now classifier_ids is defined
+        classifier_usage = {cid: 0 for cid in classifier_ids}
+        rows_to_remove = []  # Batch removal for efficiency
         
-
-        for identity in original_identities:
-                    identity_str = str(identity)
+        # Process all rows in one pass
+        for row in range(table.rowCount()):
+            if row in removed_rows:
+                continue
+                
+            orig_item = table.item(row, 0)
+            if not orig_item:
+                continue
+                
+            identity_str = orig_item.text()
+            matched = False
+            
+            # Check classifiers in order
+            for classifier_id in classifier_ids:
+                classifier = self.classifiers[classifier_id]
+                
+                if classifier.matches_identity(identity_str):
+                    # This classifier matches
+                    matched = True
+                    matched_identities.add(identity_str)
+                    classifier_usage[classifier_id] += 1
                     
-                    # Check classifiers in order
-                    for classifier_id in classifier_ids:
-                        classifier = self.classifiers[classifier_id]
-                        
-                        if classifier.matches_identity(identity_str):
-                            # This classifier matches
-                            matched_identities.add(identity)
-                            classifier_usage[classifier_id] += 1  # Track usage
-                            
-                            # Set the new ID if provided
-                            new_id = classifier.get_new_id()
-                            if new_id and identity in self.identity_remap_widget.identity_mappings:
-                                if self.hierarchical_checkbox.isChecked():
-                                    # Hierarchical mode - just set the new ID
-                                    self.identity_remap_widget.identity_mappings[identity]['new_edit'].setText(new_id)
+                    # Set the new ID if provided
+                    new_id = classifier.get_new_id()
+                    if new_id:
+                        new_item = table.item(row, 1)
+                        if new_item:
+                            if is_hierarchical:
+                                new_item.setText(new_id)
+                            else:
+                                # Non-hierarchical mode - append to existing
+                                current_text = new_item.text().strip()
+                                if current_text:
+                                    try:
+                                        existing_list = literal_eval(current_text)
+                                        if isinstance(existing_list, list):
+                                            existing_list.append(new_id)
+                                            new_item.setText(str(existing_list))
+                                        else:
+                                            new_item.setText(str([current_text, new_id]))
+                                    except:
+                                        new_item.setText(str([current_text, new_id]))
                                 else:
-                                    # Non-hierarchical mode - append to existing or create new
-                                    current_text = self.identity_remap_widget.identity_mappings[identity]['new_edit'].text().strip()
-                                    if current_text:
-                                        # Parse existing text to see if it's already a list
-                                        try:
-                                            existing_list = literal_eval(current_text)
-                                            if isinstance(existing_list, list):
-                                                existing_list.append(new_id)
-                                                new_text = str(existing_list)
-                                            else:
-                                                # Current text is a single value, make it a list
-                                                new_text = str([current_text, new_id])
-                                        except:
-                                            # If parsing fails, treat as single value
-                                            new_text = str([current_text, new_id])
-                                    else:
-                                        # No existing text, just set the new ID
-                                        new_text = new_id
-                                    
-                                    self.identity_remap_widget.identity_mappings[identity]['new_edit'].setText(new_text)
-                            
-                            # Only break if hierarchical mode (first match wins)
-                            if self.hierarchical_checkbox.isChecked():
-                                break
+                                    new_item.setText(new_id)
+                    
+                    # Only break if hierarchical mode (first match wins)
+                    if is_hierarchical:
+                        break
+            
+            # Collect unmatched rows for batch removal
+            if not matched:
+                rows_to_remove.append(row)
         
-        # Remove identities that didn't match any classifier
-        unmatched_identities = set(original_identities) - matched_identities
-        for identity in unmatched_identities:
-            self.identity_remap_widget.remove_identity(identity)
-        
-        # Show results
-        matched_count = len(matched_identities)
-        removed_count = len(unmatched_identities)
+        # Batch remove unmatched rows (much faster than one-by-one)
+        for row in rows_to_remove:
+            self.identity_remap_widget.remove_identity_row(row)
         
         # Create usage report
         usage_report = ""
@@ -686,16 +778,19 @@ class ClassifierGroupWidget(QFrame):
             classifier = self.classifiers[classifier_id]
             count = classifier_usage[classifier_id]
             new_id = classifier.get_new_id() or "(no new ID set)"
-            substrings = classifier.substrings or ["(empty - matches all)"]
+            pos_substrings = classifier.positive_substrings or ["(none)"]
+            neg_substrings = classifier.negative_substrings or ["(none)"]
+            
             usage_report += f"  Classifier {classifier_id}: {count} matches → '{new_id}'\n"
-            usage_report += f"    Substrings: {substrings}\n"
+            usage_report += f"    Include (positive): {pos_substrings}\n"
+            usage_report += f"    Exclude (negative): {neg_substrings}\n"
 
         QMessageBox.information(
             self, 
             "Classification Preview Applied", 
             f"Classification complete!\n\n"
-            f"• Matched identities: {matched_count}\n"
-            f"• Removed identities: {removed_count}\n"
+            f"• Matched identities: {len(matched_identities)}\n"
+            f"• Removed identities: {len(rows_to_remove)}\n"
             f"• Total classifiers used: {len(self.classifiers)}\n\n"
             f"Classifier Usage:\n{usage_report}\n"
             f"Check the Identity Remapping widget to see the results."
@@ -712,7 +807,8 @@ class ClassifierGroupWidget(QFrame):
             new_classifier = ClassifierWidget(new_classifier_id, self, self)
             
             # Copy data
-            new_classifier.substrings = original.substrings.copy()
+            new_classifier.positive_substrings = original.positive_substrings.copy()
+            new_classifier.negative_substrings = original.negative_substrings.copy()
             new_classifier.new_id_input.setText(original.new_id_input.text())
             new_classifier.update_substrings_display()
             
@@ -797,7 +893,7 @@ class ClassifierGroupWidget(QFrame):
         self.classifier_counter = len(self.classifiers)
 
 class IdentityRemapWidget(QFrame):
-    """Widget for remapping node identities"""
+    """Widget for remapping node identities using QTableWidget for performance"""
     
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -819,175 +915,207 @@ class IdentityRemapWidget(QFrame):
         header.setAlignment(Qt.AlignmentFlag.AlignCenter)
         layout.addWidget(header)
         
-        # Create scroll area for the mapping table
-        scroll = QScrollArea()
-        scroll.setWidgetResizable(True)
-        scroll.setMinimumHeight(250)
-        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
-        scroll.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
+        # Action buttons
+        action_layout = QHBoxLayout()
         
-        # Container for mapping rows
-        self.container = QWidget()
-        self.container_layout = QVBoxLayout()
-        self.container_layout.setSpacing(2)
-        self.container.setLayout(self.container_layout)
-        scroll.setWidget(self.container)
+        # Delete checked button
+        self.delete_checked_btn = QPushButton("🗑 Delete Checked Rows")
+        self.delete_checked_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #dc3545;
+                color: white;
+                border: none;
+                padding: 5px 10px;
+                border-radius: 3px;
+                font-weight: bold;
+            }
+            QPushButton:hover {
+                background-color: #c82333;
+            }
+        """)
+        self.delete_checked_btn.clicked.connect(self.delete_checked_rows)
+        action_layout.addWidget(self.delete_checked_btn)
         
-        layout.addWidget(scroll)
+        # Select/Deselect all button
+        self.toggle_all_btn = QPushButton("☑ Toggle All")
+        self.toggle_all_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #6c757d;
+                color: white;
+                border: none;
+                padding: 5px 10px;
+                border-radius: 3px;
+                font-weight: bold;
+            }
+            QPushButton:hover {
+                background-color: #5a6268;
+            }
+        """)
+        self.toggle_all_btn.clicked.connect(self.toggle_all_checkboxes)
+        action_layout.addWidget(self.toggle_all_btn)
+        
+        action_layout.addStretch()
+        layout.addLayout(action_layout)
+        
+        # Create table widget
+        self.table = QTableWidget()
+        self.table.setColumnCount(3)
+        self.table.setHorizontalHeaderLabels(["Original ID", "New ID (leave blank to keep)", "Mark for Deletion"])
+        self.table.horizontalHeader().setStretchLastSection(False)
+        self.table.horizontalHeader().setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
+        self.table.horizontalHeader().setSectionResizeMode(1, QHeaderView.ResizeMode.Stretch)
+        self.table.horizontalHeader().setSectionResizeMode(2, QHeaderView.ResizeMode.Fixed)
+        self.table.setColumnWidth(2, 120)
+        self.table.setAlternatingRowColors(True)
+        self.table.setMinimumHeight(250)
+        
+        layout.addWidget(self.table)
         self.setLayout(layout)
         
-        # Store mapping data
-        self.identity_mappings = {}  # original_id -> {'new_edit': QLineEdit, 'row_widget': QWidget}
-        self.removed_identities = set()  # Track removed identities
+        # Store mapping data - now just track original identities and removed ones
+        self.original_identities = []  # List of original identities in order
+        self.removed_rows = set()  # Set of row indices that are marked for removal
         
     def populate_identities(self, identities):
-        """Populate the left column with unique identities from the data"""
-        # Clear existing mappings
-        for i in reversed(range(self.container_layout.count())):
-            item = self.container_layout.itemAt(i)
-            if item and item.widget():
-                item.widget().deleteLater()
-        
-        self.identity_mappings.clear()
-        self.removed_identities.clear()
+        """Populate the table with unique identities from the data - optimized for large datasets"""
+        # Clear existing data
+        self.table.setRowCount(0)
+        self.removed_rows.clear()
         
         # Get unique identities
         unique_identities = sorted(list(set(identities)))
+        self.original_identities = unique_identities
         
-        # Create header row
-        header_layout = QHBoxLayout()
-        orig_label = QLabel("Original ID")
-        orig_label.setStyleSheet("font-weight: bold; padding: 5px;")
-        new_label = QLabel("New ID (leave blank to keep original)")
-        new_label.setStyleSheet("font-weight: bold; padding: 5px;")
-        delete_label = QLabel("Remove")
-        delete_label.setStyleSheet("font-weight: bold; padding: 5px; text-align: center;")
-        delete_label.setFixedWidth(60)
+        # Set row count once (much faster than adding rows one by one)
+        self.table.setRowCount(len(unique_identities))
         
-        header_layout.addWidget(orig_label, 2)
-        header_layout.addWidget(new_label, 3)
-        header_layout.addWidget(delete_label, 1)
+        # Disable sorting during population for better performance
+        self.table.setSortingEnabled(False)
         
-        header_widget = QWidget()
-        header_widget.setLayout(header_layout)
-        self.container_layout.addWidget(header_widget)
+        # Populate table - now much faster without widget creation
+        for row, identity in enumerate(unique_identities):
+            # Original ID (read-only)
+            orig_item = QTableWidgetItem(str(identity))
+            orig_item.setFlags(orig_item.flags() & ~Qt.ItemFlag.ItemIsEditable)
+            orig_item.setBackground(Qt.GlobalColor.lightGray)
+            self.table.setItem(row, 0, orig_item)
+            
+            # New ID (editable)
+            new_item = QTableWidgetItem("")
+            self.table.setItem(row, 1, new_item)
+            
+            # Checkbox for deletion (much faster than button widgets!)
+            checkbox_item = QTableWidgetItem()
+            checkbox_item.setFlags(Qt.ItemFlag.ItemIsUserCheckable | Qt.ItemFlag.ItemIsEnabled)
+            checkbox_item.setCheckState(Qt.CheckState.Unchecked)
+            checkbox_item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
+            self.table.setItem(row, 2, checkbox_item)
         
-        # Create mapping rows
-        for identity in unique_identities:
-            row_layout = QHBoxLayout()
-            
-            # Original identity (read-only)
-            orig_edit = QLineEdit(str(identity))
-            orig_edit.setReadOnly(True)
-            orig_edit.setStyleSheet("background-color: #e9ecef; border: 1px solid #ced4da;")
-            orig_edit.setMinimumWidth(120)  # Set initial minimum width
-
-            # New identity (editable)
-            new_edit = QLineEdit()
-            new_edit.setPlaceholderText(f"Enter new ID for {identity}")
-            new_edit.setStyleSheet("border: 1px solid #ced4da;")
-            new_edit.setMinimumWidth(180)  # Set initial minimum width
-            
-            # Delete button
-            delete_btn = QPushButton("×")
-            delete_btn.setFixedSize(25, 25)
-            delete_btn.setStyleSheet("""
-                QPushButton {
-                    background-color: #dc3545;
-                    color: white;
-                    border: none;
-                    border-radius: 12px;
-                    font-weight: bold;
-                    font-size: 12px;
-                }
-                QPushButton:hover {
-                    background-color: #c82333;
-                }
-            """)
-            
-            row_layout.addWidget(orig_edit, 2)
-            row_layout.addWidget(new_edit, 3)
-            row_layout.addWidget(delete_btn, 1)
-            
-            row_widget = QWidget()
-            row_widget.setLayout(row_layout)
-            self.container_layout.addWidget(row_widget)
-            
-            # Store the mapping
-            self.identity_mappings[identity] = {
-                'new_edit': new_edit,
-                'row_widget': row_widget
-            }
-            
-            # Connect delete button
-            delete_btn.clicked.connect(lambda checked, id=identity: self.remove_identity(id))
+        # Re-enable sorting after population
+        self.table.setSortingEnabled(True)
+    
+    def delete_checked_rows(self):
+        """Delete all rows that are checked"""
+        for row in range(self.table.rowCount()):
+            checkbox_item = self.table.item(row, 2)
+            if checkbox_item and checkbox_item.checkState() == Qt.CheckState.Checked:
+                self.remove_identity_row(row)
+    
+    def toggle_all_checkboxes(self):
+        """Toggle all checkboxes on/off"""
+        # Check if any are unchecked
+        any_unchecked = False
+        for row in range(self.table.rowCount()):
+            if row not in self.removed_rows:
+                checkbox_item = self.table.item(row, 2)
+                if checkbox_item and checkbox_item.checkState() == Qt.CheckState.Unchecked:
+                    any_unchecked = True
+                    break
+        
+        # If any unchecked, check all. Otherwise uncheck all.
+        new_state = Qt.CheckState.Checked if any_unchecked else Qt.CheckState.Unchecked
+        
+        for row in range(self.table.rowCount()):
+            if row not in self.removed_rows:
+                checkbox_item = self.table.item(row, 2)
+                if checkbox_item:
+                    checkbox_item.setCheckState(new_state)
+    
+    def remove_identity_row(self, row):
+        """Mark a row as removed (visually hide it)"""
+        self.removed_rows.add(row)
+        # Hide the row
+        self.table.setRowHidden(row, True)
     
     def remove_identity(self, identity):
-        """Remove an identity from the mapping widget"""
-        if identity in self.identity_mappings:
-            # Add to removed set
-            self.removed_identities.add(identity)
-            
-            # Remove the widget
-            row_widget = self.identity_mappings[identity]['row_widget']
-            self.container_layout.removeWidget(row_widget)
-            row_widget.deleteLater()
-            
-            # Remove from mappings
-            del self.identity_mappings[identity]
+        """Remove an identity by value (for compatibility with classifier)"""
+        # Find the row with this identity
+        for row in range(self.table.rowCount()):
+            if row not in self.removed_rows:
+                orig_item = self.table.item(row, 0)
+                if orig_item and orig_item.text() == str(identity):
+                    self.remove_identity_row(row)
+                    break
     
     def get_remapped_identities(self, original_identities):
         """Return the remapped identities based on user input, filtering out removed ones"""
+        # Create a mapping from original identity to new identity
+        remap_dict = {}
+        for row in range(self.table.rowCount()):
+            if row not in self.removed_rows:
+                orig_item = self.table.item(row, 0)
+                new_item = self.table.item(row, 1)
+                if orig_item and new_item:
+                    orig_id = orig_item.text()
+                    new_id = new_item.text().strip()
+                    if new_id:
+                        remap_dict[orig_id] = new_id
+        
+        # Create set of removed identities for quick lookup
+        removed_identities = set()
+        for row in self.removed_rows:
+            orig_item = self.table.item(row, 0)
+            if orig_item:
+                removed_identities.add(orig_item.text())
+        
+        # Apply remapping and filtering
         remapped = []
         for orig_id in original_identities:
-            # Skip if identity was removed
-            if orig_id in self.removed_identities:
+            orig_id_str = str(orig_id)
+            
+            # Skip if removed
+            if orig_id_str in removed_identities:
                 continue
-                
-            if orig_id in self.identity_mappings:
-                new_id = self.identity_mappings[orig_id]['new_edit'].text().strip()
-                if new_id:  # If user entered a new ID
-                    remapped.append(new_id)
-                else:  # If blank, keep original
-                    remapped.append(orig_id)
+            
+            # Use remapped ID if available, otherwise keep original
+            if orig_id_str in remap_dict:
+                remapped.append(remap_dict[orig_id_str])
             else:
-                # If not in mappings but not removed, keep original
-                if orig_id not in self.removed_identities:
-                    remapped.append(orig_id)
+                remapped.append(orig_id)
+        
         return remapped
     
     def get_filtered_indices(self, original_identities):
         """Return indices of identities that should be kept (not removed)"""
+        # Create set of removed identities for quick lookup
+        removed_identities = set()
+        for row in self.removed_rows:
+            orig_item = self.table.item(row, 0)
+            if orig_item:
+                removed_identities.add(orig_item.text())
+        
+        # Find indices to keep
         kept_indices = []
         for i, orig_id in enumerate(original_identities):
-            if orig_id not in self.removed_identities:
+            if str(orig_id) not in removed_identities:
                 kept_indices.append(i)
+        
         return kept_indices
     
     def update_font_sizes(self, scale_factor):
         """Update widget sizes based on scale but keep font sizes constant"""
-        # Don't change font sizes - just let the widgets resize naturally
-        # The horizontal layout will automatically make the text fields wider
-        # when the parent widget gets larger
-        
-        # Set minimum widths based on scale factor to ensure readability
-        min_orig_width = max(80, int(120 * scale_factor))
-        min_new_width = max(120, int(180 * scale_factor))
-        
-        # Update all line edits in the mapping
-        for identity_data in self.identity_mappings.values():
-            new_edit = identity_data['new_edit']
-            
-            # Set minimum widths but don't change font
-            new_edit.setMinimumWidth(min_new_width)
-            
-            # Also update the original ID field
-            row_widget = identity_data['row_widget']
-            layout = row_widget.layout()
-            if layout and layout.itemAt(0):
-                orig_edit = layout.itemAt(0).widget()
-                if isinstance(orig_edit, QLineEdit):
-                    orig_edit.setMinimumWidth(min_orig_width)
+        # Table handles sizing automatically, no manual adjustment needed
+        pass
 
 
 class TabbedIdentityWidget(QFrame):
@@ -1215,15 +1343,19 @@ class TabbedIdentityWidget(QFrame):
         if file_path:
             config = {
                 'identity_mappings': {},
-                'removed_identities': list(self.identity_remap_widget.removed_identities),
+                'removed_rows': list(self.identity_remap_widget.removed_rows),
                 'classifiers': []
             }
             
-            # Save identity mappings
-            for orig_id, data in self.identity_remap_widget.identity_mappings.items():
-                config['identity_mappings'][str(orig_id)] = {
-                    'new_id': data['new_edit'].text()
-                }
+            # Save identity mappings from table
+            table = self.identity_remap_widget.table
+            for row in range(table.rowCount()):
+                orig_item = table.item(row, 0)
+                new_item = table.item(row, 1)
+                if orig_item and new_item:
+                    config['identity_mappings'][orig_item.text()] = {
+                        'new_id': new_item.text()
+                    }
             
             # Save classifiers in order
             for i in range(self.classifier_group_widget.container_layout.count() - 1):
@@ -1231,7 +1363,8 @@ class TabbedIdentityWidget(QFrame):
                 if hasattr(widget, 'classifier_id'):
                     classifier_config = {
                         'id': widget.classifier_id,
-                        'substrings': widget.substrings,
+                        'positive_substrings': widget.positive_substrings,
+                        'negative_substrings': widget.negative_substrings,
                         'new_id': widget.get_new_id()
                     }
                     config['classifiers'].append(classifier_config)
@@ -1263,24 +1396,40 @@ class TabbedIdentityWidget(QFrame):
                 for classifier_id in list(self.classifier_group_widget.classifiers.keys()):
                     self.classifier_group_widget.remove_classifier(classifier_id)
                 
-                # Load identity mappings
-                for orig_id_str, data in config.get('identity_mappings', {}).items():
-                    # Convert string back to original type if needed
-                    orig_id = orig_id_str
-                    if orig_id in self.identity_remap_widget.identity_mappings:
-                        self.identity_remap_widget.identity_mappings[orig_id]['new_edit'].setText(data['new_id'])
+                # Load identity mappings into table
+                table = self.identity_remap_widget.table
+                for row in range(table.rowCount()):
+                    orig_item = table.item(row, 0)
+                    new_item = table.item(row, 1)
+                    if orig_item and new_item:
+                        orig_id = orig_item.text()
+                        if orig_id in config.get('identity_mappings', {}):
+                            new_item.setText(config['identity_mappings'][orig_id]['new_id'])
                 
-                # Load removed identities
-                for removed_id in config.get('removed_identities', []):
-                    if removed_id in self.identity_remap_widget.identity_mappings:
-                        self.identity_remap_widget.remove_identity(removed_id)
+                # Load removed rows
+                removed_rows = config.get('removed_rows', [])
+                # Also support old format with 'removed_identities'
+                if 'removed_identities' in config:
+                    # Find rows matching removed identities
+                    for identity in config['removed_identities']:
+                        for row in range(table.rowCount()):
+                            orig_item = table.item(row, 0)
+                            if orig_item and orig_item.text() == str(identity):
+                                self.identity_remap_widget.remove_identity_row(row)
+                                break
+                else:
+                    # Use removed_rows directly
+                    for row in removed_rows:
+                        if row < table.rowCount():
+                            self.identity_remap_widget.remove_identity_row(row)
                 
                 # Load classifiers
                 for classifier_config in config.get('classifiers', []):
                     self.classifier_group_widget.add_classifier()
                     # Get the last added classifier
                     last_classifier = list(self.classifier_group_widget.classifiers.values())[-1]
-                    last_classifier.substrings = classifier_config['substrings']
+                    last_classifier.positive_substrings = classifier_config.get('positive_substrings', [])
+                    last_classifier.negative_substrings = classifier_config.get('negative_substrings', [])
                     last_classifier.new_id_input.setText(classifier_config['new_id'])
                     last_classifier.update_substrings_display()
                 
@@ -1639,6 +1788,16 @@ class ExcelToDictGUI(QMainWindow):
                             break
 
     def export_dictionary(self):
+
+        def to_list(item):
+            if isinstance(item, list):
+                return item
+            else:
+                try:
+                    return literal_eval(item)
+                except:
+                    return [item]
+
         if not self.dict_columns:
             QMessageBox.warning(self, "Warning", "No dictionary columns defined")
             return
@@ -1669,6 +1828,7 @@ class ExcelToDictGUI(QMainWindow):
                                         filtered_indices = self.identity_remap_widget.get_filtered_indices(column_data.tolist())
                                         filtered_data = [column_data[i] for i in filtered_indices]
                                         remapped_data = self.identity_remap_widget.get_remapped_identities(filtered_data)
+                                        remapped_data = [to_list(item) for item in remapped_data]
                                         result_dict[key_name] = remapped_data
                                     elif key_name == 'Numerical IDs':
                                         

@@ -8,6 +8,7 @@ src/nettracer3d/community_extractor.py
 src/nettracer3d/endpoint_joiner.py
 src/nettracer3d/excelotron.py
 src/nettracer3d/filaments.py
+src/nettracer3d/hexagons.py
 src/nettracer3d/histos.py
 src/nettracer3d/modularity.py
 src/nettracer3d/morphology.py
@@ -26,6 +27,7 @@ src/nettracer3d/segmenter_GPU.py
 src/nettracer3d/simple_network.py
 src/nettracer3d/smart_dilate.py
 src/nettracer3d/stats.py
+src/nettracer3d/threshold_predictor.py
 src/nettracer3d/tutorial.py
 src/nettracer3d.egg-info/PKG-INFO
 src/nettracer3d.egg-info/SOURCES.txt

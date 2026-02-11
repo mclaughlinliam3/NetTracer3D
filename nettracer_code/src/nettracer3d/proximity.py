@@ -219,8 +219,9 @@ def find_neighbors_kdtree(radius, centroids=None, array=None, targets=None, max_
     
     Parameters:
     -----------
-    radius : float
-        Search radius for finding neighbors
+    radius : float or None
+        Search radius for finding neighbors. If None and max_neighbors is set,
+        returns k nearest neighbors at any distance.
     centroids : dict or list, optional
         Dictionary mapping node IDs to coordinates or list of points
     array : numpy.ndarray, optional
@@ -228,8 +229,9 @@ def find_neighbors_kdtree(radius, centroids=None, array=None, targets=None, max_
     targets : list, optional
         Specific targets to query for neighbors
     max_neighbors : int, optional
-        Maximum number of nearest neighbors to return per query point within the radius.
-        If None, returns all neighbors within radius (original behavior).
+        Maximum number of nearest neighbors to return per query point.
+        If radius is also set, returns up to max_neighbors within radius.
+        If radius is None, returns exactly max_neighbors at any distance.
     """
     
     # Get coordinates of nonzero points
@@ -294,39 +296,69 @@ def find_neighbors_kdtree(radius, centroids=None, array=None, targets=None, max_
             return []
     
     print("Querying KDTree...")
-
-    # Query for all points within radius of each query point
-    neighbor_indices = tree.query_ball_point(query_points, radius)
+    
+    # Determine query strategy based on parameters
+    if radius is None and max_neighbors is not None:
+        # Case 1: k-nearest neighbors at any distance
+        # Query for k+1 to include self, which we'll filter out
+        k = max_neighbors + 1
+        distances, neighbor_indices = tree.query(query_points, k=k)
+        
+    elif max_neighbors is not None:
+        # Case 2: k-nearest neighbors within radius
+        # Query for enough neighbors to ensure we get max_neighbors within radius
+        # Use a larger k to be safe, then filter by radius
+        k = min(len(points), max_neighbors * 3 + 1)  # Heuristic: query more than needed
+        distances, neighbor_indices = tree.query(query_points, k=k)
+        
+    else:
+        # Case 3: all neighbors within radius (original behavior)
+        neighbor_indices = tree.query_ball_point(query_points, radius)
+        distances = None  # Not needed for this case
     
     print("Sorting Through Output...")
-
-    # Sequential processing
+    
+    # Process results efficiently
     output = []
-    for i, neighbors in enumerate(neighbor_indices):
-        query_idx = query_indices[i]
+    
+    for i, query_idx in enumerate(query_indices):
         query_point = points[query_idx]
         
-        # Filter out self-reference
-        filtered_neighbors = [n for n in neighbors if n != query_idx]
-        
-        # If max_neighbors is specified and we have more neighbors than allowed
-        if max_neighbors is not None and len(filtered_neighbors) > max_neighbors:
-            # Use KDTree to get distances efficiently - query for more than we need
-            # to ensure we get the exact closest ones
-            k = min(len(filtered_neighbors), max_neighbors + 1)  # +1 in case query point is included
-            distances, indices = tree.query(query_point, k=k)
+        if distances is not None:
+            # Handle k-nearest neighbor results (distances and indices are arrays)
+            # Results are already sorted by distance
+            if neighbor_indices.ndim == 1:
+                # Single query result
+                neighbor_list = neighbor_indices.tolist()
+                distance_list = distances.tolist()
+            else:
+                # Multiple query results
+                neighbor_list = neighbor_indices[i].tolist()
+                distance_list = distances[i].tolist()
             
-            # Filter out self and limit to max_neighbors
-            selected_neighbors = []
-            for dist, idx in zip(distances, indices):
-                if idx != query_idx and idx in filtered_neighbors:
-                    selected_neighbors.append(idx)
-                    if len(selected_neighbors) >= max_neighbors:
-                        break
-            
-            filtered_neighbors = selected_neighbors
+            # Filter and limit in one pass
+            filtered_neighbors = []
+            for dist, neighbor_idx in zip(distance_list, neighbor_list):
+                # Skip self-reference
+                if neighbor_idx == query_idx:
+                    continue
+                    
+                # If radius is set, check distance constraint
+                if radius is not None and dist > radius:
+                    continue
+                
+                filtered_neighbors.append(neighbor_idx)
+                
+                # Stop if we've reached max_neighbors
+                if max_neighbors is not None and len(filtered_neighbors) >= max_neighbors:
+                    break
+        else:
+            # Handle radius-based results (list of indices)
+            neighbor_list = neighbor_indices[i]
+            # Filter out self - simple list comprehension
+            filtered_neighbors = [n for n in neighbor_list if n != query_idx]
         
-        # Process the selected neighbors
+        # Build output in required format
         if centroids:
             query_value = idx_to_node[query_idx]
             for neighbor_idx in filtered_neighbors:
@@ -337,7 +369,7 @@ def find_neighbors_kdtree(radius, centroids=None, array=None, targets=None, max_
             for neighbor_idx in filtered_neighbors:
                 neighbor_value = array[point_tuples[neighbor_idx]]
                 output.append([query_value, neighbor_value, 0])
-
+    
     print("Organizing Network...")
     
     return output
@@ -458,11 +490,28 @@ def average_nearest_neighbor_distances(point_centroids, root_set, compare_set, x
             else:
                 distances_array = np.mean(distances_to_all[:, 1:], axis=1)
         else:
-            distances_to_all, _ = tree.query(root_coords_scaled, k=num)
-            if num == 1:
-                distances_array = distances_to_all.flatten()
+            # Query one extra neighbor in case of self-matches
+            k_query = min(num + 1, len(tree.data))  # Don't exceed available points
+            distances_to_all, _ = tree.query(root_coords_scaled, k=k_query)
+            
+            # Check if any points found themselves (distance ≈ 0)
+            epsilon = 1e-10
+            has_self_match = np.any(distances_to_all[:, 0] < epsilon)
+            
+            if has_self_match:
+                # Skip first column (self-matches) and use next 'num' neighbors
+                # Check if we have enough columns after skipping the first
+                max_col = min(num + 1, distances_to_all.shape[1])
+                if num == 1:
+                    distances_array = distances_to_all[:, 1]
+                else:
+                    distances_array = np.mean(distances_to_all[:, 1:max_col], axis=1)
             else:
-                distances_array = np.mean(distances_to_all, axis=1)
+                # No self-matches, use first 'num' neighbors as normal
+                if num == 1:
+                    distances_array = distances_to_all[:, 0]
+                else:
+                    distances_array = np.mean(distances_to_all[:, :num], axis=1)
         
         # Map back to root_ids
         for i, root_id in enumerate(root_set):
@@ -858,6 +907,111 @@ def partition_objects_into_cells(object_centroids, cell_size):
 
 # To use with the merge node identities manual calculation: 
 
+#Numba implementation:
+
+from numba import jit
+
+
+def convert_bboxes_to_array(bounding_boxes, array_shape):
+    """Convert scipy bounding boxes to Numba-compatible array"""
+    num_labels = len(bounding_boxes)
+    bboxes_array = np.full((num_labels, 6), -1, dtype=np.int32)
+    
+    for i, bbox in enumerate(bounding_boxes):
+        if bbox is None:
+            continue
+        
+        z_slice, y_slice, x_slice = bbox
+        
+        z_min, z_max = z_slice.start, z_slice.stop - 1
+        y_min, y_max = y_slice.start, y_slice.stop - 1
+        x_min, x_max = x_slice.start, x_slice.stop - 1
+        
+        # Boundary checks
+        z_max = min(z_max, array_shape[0] - 1)
+        y_max = min(y_max, array_shape[1] - 1)
+        x_max = min(x_max, array_shape[2] - 1)
+        z_min = max(z_min, 0)
+        y_min = max(y_min, 0)
+        x_min = max(x_min, 0)
+        
+        bboxes_array[i] = [z_min, z_max, y_min, y_max, x_min, x_max]
+    
+    return bboxes_array
+
+@jit(nopython=True, parallel=True)
+def compute_all_means_numba(nodes, edges, num_nodes, bboxes_array):
+    """
+    Single Numba function with automatic parallelization.
+    Uses Numba's prange for parallel loops.
+    """
+    results = np.zeros(num_nodes, dtype=np.float64)
+    
+    for i in range(num_nodes):
+        label = i + 1  # Labels start at 1
+        
+        # Get bounding box
+        z_min, z_max, y_min, y_max, x_min, x_max = bboxes_array[i]
+        
+        # Skip if invalid bounding box
+        if z_min < 0:
+            results[i] = 0.0
+            continue
+        
+        # Extract subcell
+        sub_nodes = nodes[z_min:z_max+1, y_min:y_max+1, x_min:x_max+1]
+        sub_edges = edges[z_min:z_max+1, y_min:y_max+1, x_min:x_max+1]
+        
+        # Compute mean for this label
+        sum_val = 0.0
+        count = 0
+        
+        nodes_flat = sub_nodes.ravel()
+        edges_flat = sub_edges.ravel()
+        
+        for j in range(len(nodes_flat)):
+            if nodes_flat[j] == label and edges_flat[j] > 0:
+                sum_val += edges_flat[j]
+                count += 1
+        
+        results[i] = sum_val / count if count > 0 else 0.0
+    
+    return results
+
+def create_node_dictionary_id_numba(nodes, edges, num_nodes, bounding_boxes):
+    """
+    Pure Numba version with byte order handling for TIFF compatibility.
+    """
+    array_shape = nodes.shape
+    
+    # Convert to native byte order if needed
+    if nodes.dtype.byteorder == '>' or nodes.dtype.byteorder == '<':
+        nodes = np.ascontiguousarray(nodes, dtype=nodes.dtype.newbyteorder('='))
+    if edges.dtype.byteorder == '>' or edges.dtype.byteorder == '<':
+        edges = np.ascontiguousarray(edges, dtype=edges.dtype.newbyteorder('='))
+    
+    # Single Numba call
+    results = compute_all_means_numba(nodes, edges, num_nodes, bounding_boxes)
+    
+    # Convert to dictionary
+    node_dict = {i+1: results[i] for i in range(num_nodes)}
+    
+    return node_dict
+
+def create_node_dictionary_id(nodes, edges, num_nodes, bounding_boxes):
+
+    try:
+        from numba import jit
+        return create_node_dictionary_id_numba(nodes, edges, num_nodes, bounding_boxes)
+    except:
+        import traceback
+        print(traceback.format_exc())
+        print("Attempting without numba. If you haven't, please install numba package to speed up this section, otherwise this is some other error.")
+        return create_node_dictionary_id_python(nodes, edges, num_nodes, bounding_boxes)
+
+
+#Non numba:
+
 def get_reslice_indices_for_id(slice_obj, array_shape):
     """Convert slice object to padded indices accounting for dilation and boundaries"""
     if slice_obj is None:
@@ -913,13 +1067,10 @@ def process_label_id(args):
     return label, sub_nodes, sub_edges
 
 
-def create_node_dictionary_id(nodes, edges, num_nodes):
+def create_node_dictionary_id_python(nodes, edges, num_nodes, bounding_boxes):
     """Modified to pre-compute all bounding boxes using find_objects"""
     node_dict = {}
     array_shape = nodes.shape
-    
-    # Get all bounding boxes at once
-    bounding_boxes = ndimage.find_objects(nodes)
     
     # Use ThreadPoolExecutor for parallel execution
     with ThreadPoolExecutor(max_workers=mp.cpu_count()) as executor:

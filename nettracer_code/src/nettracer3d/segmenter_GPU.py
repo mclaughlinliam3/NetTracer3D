@@ -24,10 +24,18 @@ class InteractiveSegmenter:
         self.patterns = []
 
         self.model = RandomForestClassifier(
-            n_estimators=100,
-            n_jobs=-1,
-            max_depth=None
-        )
+                        n_estimators=150,           
+                        max_depth=20,          
+                        min_samples_split=10,       
+                        min_samples_leaf=5,
+                        max_features='sqrt',        
+                        max_samples=0.7,           
+                        class_weight='balanced',    
+                        n_jobs=-1,
+                        random_state=42,
+                        bootstrap=True,
+                        oob_score=True
+                    )
 
         self.lock = threading.Lock()
         self._currently_segmenting = None
@@ -1288,10 +1296,18 @@ class InteractiveSegmenter:
         if not saving:
             print("Training model...")
             self.model = RandomForestClassifier(
-                n_estimators=100,
-                n_jobs=-1,
-                max_depth=None
-            )
+                            n_estimators=150,           
+                            max_depth=20,          
+                            min_samples_split=10,       
+                            min_samples_leaf=5,
+                            max_features='sqrt',        
+                            max_samples=0.7,           
+                            class_weight='balanced',    
+                            n_jobs=-1,
+                            random_state=42,
+                            bootstrap=True,
+                            oob_score=True
+                        )
 
         self.speed = speed
         self.cur_gpu = use_gpu

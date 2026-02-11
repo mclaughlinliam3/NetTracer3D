@@ -11,6 +11,10 @@ import matplotlib.colors as mcolors
 from collections import Counter
 from . import community_extractor
 import random
+import re
+import matplotlib.patches as mpatches
+
+
 
 
 import os
@@ -154,6 +158,7 @@ def _find_optimal_clusters(data, seed, max_k):
     
     for k in k_range:
         try:
+            print(f"Testing {k} clusters")
             kmeans = KMeans(n_clusters=k, random_state=seed, n_init=10)
             labels = kmeans.fit_predict(data)
             
@@ -174,7 +179,7 @@ def _find_optimal_clusters(data, seed, max_k):
         return optimal_k
     
 def plot_dict_heatmap(unsorted_data_dict, id_set, figsize=(12, 8), title="Neighborhood Heatmap", 
-                     center_at_one=False):
+                     center_at_one=False, center_at_zero=False, sublabel = "Community"):
     """
     Create a heatmap from a dictionary of numpy arrays.
     
@@ -182,8 +187,8 @@ def plot_dict_heatmap(unsorted_data_dict, id_set, figsize=(12, 8), title="Neighb
     -----------
     data_dict : dict
         Dictionary where keys are identifiers and values are 1D numpy arrays of floats (0-1)
-    id_set : list
-        List of strings describing what each index in the numpy arrays represents
+    id_set : list or set
+        List or set of strings describing what each index in the numpy arrays represents
     figsize : tuple, optional
         Figure size (width, height)
     title : str, optional
@@ -193,6 +198,12 @@ def plot_dict_heatmap(unsorted_data_dict, id_set, figsize=(12, 8), title="Neighb
         - 0 to 1: blue to white (underrepresentation to normal)
         - 1+: white to red (overrepresentation)
         If False (default), uses standard white-to-red scaling from 0 to 1
+    center_at_zero : bool, optional
+        If True, uses a diverging colormap centered at 0 with symmetric scaling:
+        - Negative values: blue (below zero)
+        - 0: white (center)
+        - Positive values: red (above zero)
+        Takes priority over center_at_one if both are True
     
     Returns:
     --------
@@ -204,6 +215,19 @@ def plot_dict_heatmap(unsorted_data_dict, id_set, figsize=(12, 8), title="Neighb
     keys = list(data_dict.keys())
     data_matrix = np.array([data_dict[key] for key in keys])
 
+    # Convert id_set to sorted list if it's a set or unsorted list
+    if isinstance(id_set, set):
+        sorted_id_set = sorted(list(id_set))
+    else:
+        sorted_id_set = sorted(id_set)
+    
+    # Create mapping from original to sorted order
+    original_id_list = list(id_set) if isinstance(id_set, set) else id_set
+    sorted_indices = [original_id_list.index(id_val) for id_val in sorted_id_set]
+    
+    # Reorder data columns to match sorted id_set
+    data_matrix = data_matrix[:, sorted_indices]
+
     # Move key 0 to the bottom if it exists as the first key
     if keys and keys[0] == 0:
         keys.append(keys.pop(0))
@@ -212,7 +236,84 @@ def plot_dict_heatmap(unsorted_data_dict, id_set, figsize=(12, 8), title="Neighb
     # Create the plot
     fig, ax = plt.subplots(figsize=figsize)
     
-    if center_at_one:
+    if center_at_zero:
+        # Custom colormap and scaling for center_at_zero mode
+        # Find the actual data range
+        data_min = np.min(data_matrix)
+        data_max = np.max(data_matrix)
+        
+        # Create a custom colormap: blue -> white -> red
+        colors = ['#2166ac', '#4393c3', '#92c5de', '#d1e5f0', '#f7f7f7', 
+                 '#fddbc7', '#f4a582', '#d6604d', '#b2182b']
+        n_bins = 256
+        cmap = LinearSegmentedColormap.from_list('custom_diverging', colors, N=n_bins)
+        
+        # Create symmetric nonlinear transformation
+        def transform_data(data):
+            transformed = np.zeros_like(data)
+            
+            # Get max absolute value for symmetric scaling
+            max_abs = max(abs(data_min), abs(data_max))
+            
+            if max_abs == 0:
+                return transformed + 0.5
+            
+            # For negative values: map to [0, 0.5)
+            mask_neg = data < 0
+            if np.any(mask_neg):
+                # Use sqrt of absolute value for more resolution near zero
+                transformed[mask_neg] = 0.5 * (1 - np.sqrt(np.abs(data[mask_neg])) / np.sqrt(max_abs))
+            
+            # For positive values: map to (0.5, 1.0]
+            mask_pos = data > 0
+            if np.any(mask_pos):
+                transformed[mask_pos] = 0.5 + 0.5 * np.sqrt(data[mask_pos]) / np.sqrt(max_abs)
+            
+            # Zero maps to 0.5 (center)
+            mask_zero = data == 0
+            transformed[mask_zero] = 0.5
+            
+            return transformed
+        
+        # Transform the data for visualization
+        transformed_matrix = transform_data(data_matrix)
+        
+        # Create heatmap with custom colormap
+        im = ax.imshow(transformed_matrix, cmap=cmap, aspect='auto', vmin=0, vmax=1)
+        
+        # Create custom colorbar with original values
+        cbar = ax.figure.colorbar(im, ax=ax)
+        
+        # Set colorbar ticks to show meaningful values
+        # Create symmetric ticks around zero
+        max_abs = max(abs(data_min), abs(data_max))
+        tick_values = []
+        
+        if max_abs <= 1:
+            step_values = [0, 0.25, 0.5, 0.75, 1.0]
+        elif max_abs <= 2:
+            step_values = [0, 0.5, 1.0, 1.5, 2.0]
+        else:
+            step_values = [0, 1.0, 2.0, 3.0, 4.0, 5.0]
+        
+        # Add negative and positive versions of each step
+        for val in step_values:
+            if -val >= data_min and val != 0:
+                tick_values.append(-val)
+        tick_values.append(0)
+        for val in step_values:
+            if val <= data_max and val != 0:
+                tick_values.append(val)
+        
+        tick_values = sorted(set(tick_values))
+        
+        # Transform tick values for colorbar positioning
+        transformed_ticks = transform_data(np.array(tick_values))
+        cbar.set_ticks(transformed_ticks)
+        cbar.set_ticklabels([f'{v:.2f}' for v in tick_values])
+        cbar.ax.set_ylabel('Value (centered at 0)', rotation=-90, va="bottom")
+        
+    elif center_at_one:
         # Custom colormap and scaling for center_at_one mode
         # Find the actual data range
         data_min = np.min(data_matrix)
@@ -277,27 +378,25 @@ def plot_dict_heatmap(unsorted_data_dict, id_set, figsize=(12, 8), title="Neighb
         cbar = ax.figure.colorbar(im, ax=ax)
         cbar.ax.set_ylabel('Intensity', rotation=-90, va="bottom")
     
-    # Set ticks and labels
-    ax.set_xticks(np.arange(len(id_set)))
+    # Set ticks and labels (use sorted_id_set)
+    ax.set_xticks(np.arange(len(sorted_id_set)))
     ax.set_yticks(np.arange(len(keys)))
-    ax.set_xticklabels(id_set)
+    ax.set_xticklabels(sorted_id_set)
     labels = list(keys)
     if labels and labels[-1] == 0:
         labels[-1] = 'Excluded (0)'
     ax.set_yticklabels(labels)
 
-
-
     # Rotate x-axis labels for better readability
     plt.setp(ax.get_xticklabels(), rotation=45, ha="right", rotation_mode="anchor")
     
-    # Add text annotations showing the actual values
-    for i in range(len(keys)):
-        for j in range(len(id_set)):
-            # Use original data values for annotations
-            text = ax.text(j, i, f'{data_matrix[i, j]:.3f}',
-                          ha="center", va="center", color="black", fontsize=8)
-
+    # Add text annotations only if id_set is not too large
+    if len(sorted_id_set) <= 20:
+        for i in range(len(keys)):
+            for j in range(len(sorted_id_set)):
+                # Use original data values for annotations
+                text = ax.text(j, i, f'{data_matrix[i, j]:.3f}',
+                              ha="center", va="center", color="black", fontsize=8)
 
     ret_dict = {}
 
@@ -305,19 +404,21 @@ def plot_dict_heatmap(unsorted_data_dict, id_set, figsize=(12, 8), title="Neighb
         ret_dict[keys[i]] = row
     
     # Set labels and title
-    if center_at_one:
+    if center_at_zero:
+        ax.set_xlabel('Value Relative to Zero')
+    elif center_at_one:
         ax.set_xlabel('Representation Factor of Node Type')
     else:
         ax.set_xlabel('Proportion of Node Type')
 
-    ax.set_ylabel('Neighborhood')
+    ax.set_ylabel(f'{sublabel}')
     ax.set_title(title)
     
     # Adjust layout to prevent label cutoff
     plt.tight_layout()
     plt.show()
 
-    return ret_dict
+    return ret_dict, sorted_id_set
     
 
 
@@ -359,7 +460,8 @@ def visualize_cluster_composition_umap(cluster_data: Dict[int, np.ndarray],
                                      graph_label = "Community ID",
                                      title = 'UMAP Visualization of Community Compositions',
                                      neighborhoods: Optional[Dict[int, int]] = None,
-                                     original_communities = None):
+                                     original_communities = None,
+                                     subname = 'Supercommunity'):
     """
     Convert cluster composition data to UMAP visualization.
     
@@ -518,9 +620,9 @@ def visualize_cluster_composition_umap(cluster_data: Dict[int, np.ndarray],
                 legend_elements.append(
                     plt.Line2D([0], [0], marker='o', color='w', 
                               markerfacecolor=norm_color, 
-                              markersize=10, label=f'Neighborhood {neighborhood_id}')
+                              markersize=10, label=f'{subname} {neighborhood_id}')
                 )
-            plt.legend(handles=legend_elements, title='Neighborhoods', 
+            plt.legend(handles=legend_elements, title=f'{subname}', 
                       bbox_to_anchor=(1.05, 1), loc='upper left')
         elif use_identity_coloring:
             # Create custom legend for identities
@@ -536,7 +638,7 @@ def visualize_cluster_composition_umap(cluster_data: Dict[int, np.ndarray],
         plt.xlabel('UMAP Component 1')
         plt.ylabel('UMAP Component 2')
         if use_neighborhood_coloring:
-            title += ' (Colored by Neighborhood)'
+            title += f' (Colored by {subname})'
         elif use_identity_coloring:
             title += ' (Colored by Identity)'
         plt.title(title)
@@ -1280,3 +1382,117 @@ def create_violin_plots(data_dict, graph_title="Violin Plots"):
         print(f"\nTotal outliers across all datasets: {total_outliers}")
     print("="*60 + "\n")
 
+
+def create_neighbor_heatmap(distance_dict, dpi=300):
+    """
+    Create a professional heatmap from nearest neighbor distance data.
+    
+    Parameters:
+    -----------
+    distance_dict : dict
+        Dictionary with keys like 'Root Type vs Neighbors: Neighbor Type'
+        and values as distances
+    dpi : int
+        Resolution of the output image
+    """
+    
+    # Parse the dictionary to extract cell types and create matrix
+    cell_types = set()
+    data_tuples = []
+    
+    for key, value in distance_dict.items():
+        # Extract root and neighbor from keys like:
+        # 'Includes: Tumor+ vs Neighbors: Includes Fibroblast+'
+        match = re.search(r':\s*(.+?)\s+vs\s+Neighbors:\s*(.+?)$', key)
+        if match:
+            root = match.group(1).strip()
+            neighbor = match.group(2).strip()
+            
+            # Remove 'Includes' or 'Includes:' prefix if present
+            root = re.sub(r'^Includes:?\s*', '', root).strip()
+            neighbor = re.sub(r'^Includes:?\s*', '', neighbor).strip()
+            
+            cell_types.add(root)
+            cell_types.add(neighbor)
+            data_tuples.append((root, neighbor, float(value)))
+    
+    # Sort cell types for consistent ordering
+    cell_types = sorted(list(cell_types))
+    n = len(cell_types)
+    
+    # Create matrix
+    matrix = np.full((n, n), np.nan)
+    for root, neighbor, value in data_tuples:
+        i = cell_types.index(root)
+        j = cell_types.index(neighbor)
+        matrix[i, j] = value
+    
+    # Create figure with specific styling
+    fig, ax = plt.subplots(figsize=(10, 8))
+    fig.patch.set_facecolor('#0f0f0f')
+    ax.set_facecolor('#1a1a1a')
+    
+    # Create custom colormap: red (close/clustered) -> yellow -> blue (distant)
+    colors = ['#d32f2f', '#e57373', '#ff9800', '#ffc107', '#64b5f6', '#2196f3', '#1565c0']
+    n_bins = 100
+    cmap = LinearSegmentedColormap.from_list('custom', colors, N=n_bins)
+    cmap.set_bad(color='#1a1a1a')  # Set color for NaN values to match background
+    
+    # Plot heatmap
+    im = ax.imshow(matrix, cmap=cmap, aspect='auto', interpolation='nearest')
+    
+    # Set ticks and labels
+    ax.set_xticks(np.arange(n))
+    ax.set_yticks(np.arange(n))
+    ax.set_xticklabels(cell_types, color='#cccccc', fontsize=11, fontweight='500')
+    ax.set_yticklabels(cell_types, color='#cccccc', fontsize=11, fontweight='500')
+    
+    # Rotate x labels for better readability
+    plt.setp(ax.get_xticklabels(), rotation=45, ha='right', rotation_mode='anchor')
+    
+    # Add axis labels to clarify root vs neighbor
+    ax.set_xlabel('Neighbor Node Type (searching to)', 
+                   fontsize=13, fontweight='600', color='#64c8ff', labelpad=15)
+    ax.set_ylabel('Root Node Type (searching from)', 
+                   fontsize=13, fontweight='600', color='#64c8ff', labelpad=15)
+    
+    # Add title
+    title = ax.text(0.5, 1.08, 'Nearest Neighbor Distance Matrix',
+                    transform=ax.transAxes, fontsize=18, fontweight='700',
+                    color='#f5f5f5', ha='center')
+    
+    subtitle = ax.text(0.5, 1.03, 'Average spatial distances between node populations',
+                       transform=ax.transAxes, fontsize=11,
+                       color='#888888', ha='center')
+    
+    # Add values as text in each cell only if n is not too large
+    if n <= 20:
+        for i in range(n):
+            for j in range(n):
+                if not np.isnan(matrix[i, j]):
+                    # Always use black text
+                    text = ax.text(j, i, f'{matrix[i, j]:.1f}',
+                                 ha='center', va='center', color='#1a1a1a',
+                                 fontsize=12, fontweight='700', fontfamily='monospace')
+    
+    # Add colorbar with custom styling
+    cbar = plt.colorbar(im, ax=ax, fraction=0.046, pad=0.04)
+    cbar.set_label('Distance', rotation=270, labelpad=20, 
+                   fontsize=11, color='#aaaaaa', fontweight='500')
+    cbar.ax.yaxis.set_tick_params(color='#666666', labelcolor='#aaaaaa')
+    cbar.outline.set_edgecolor('#333333')
+    cbar.ax.set_facecolor('#1a1a1a')
+    
+    # Style the grid
+    ax.set_xticks(np.arange(n) - 0.5, minor=True)
+    ax.set_yticks(np.arange(n) - 0.5, minor=True)
+    ax.grid(which='minor', color='#333333', linestyle='-', linewidth=1.5)
+    ax.tick_params(which='minor', size=0)
+    ax.tick_params(which='major', size=0)
+    
+    # Remove spines
+    for spine in ax.spines.values():
+        spine.set_visible(False)
+    
+    plt.tight_layout()
+    plt.show()

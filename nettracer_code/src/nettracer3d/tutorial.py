@@ -1490,7 +1490,7 @@ def setup_file_tutorial(window):
 
     tutorial.add_step(
         None,
-        "This can be used to rapidly assign differential identities to your cells. Note that all the channels should have the same shape.",
+        "This can be used to rapidly assign differential identities to your cells. Note that all the channels should have the same shape. Your work doing these thresholds can optionally be used to train a neural network to attempt to automate this between similar datasets.",
         highlight_type=None,
         message_position="top_right"
         )
@@ -1998,7 +1998,7 @@ def setup_prox_tutorial(window):
 
     tutorial.add_step(
         MenuHelper.create_widget_getter(tutorial, 'prox_dialog', 'search'),
-        "The search region value will tell the program how close you want a pair of nodes to be before they are connected. You must provide a value here to use this function.",
+        "The search region value will tell the program how close you want a pair of nodes to be before they are connected. Provide a value here to let the network know how far nodes can connect. This can be skipped in favor of using n nearest neighbors for centroid search, but it is required for morphological search.",
         highlight_type=None,
         message_position="beside",
         pre_action=MenuHelper.create_widget_interaction(tutorial, 'prox_dialog', 'search', 'setText("FLOAT!")'),
@@ -2026,7 +2026,7 @@ def setup_prox_tutorial(window):
 
     tutorial.add_step(
         MenuHelper.create_widget_getter(tutorial, 'prox_dialog', 'mode_selector'),
-        "--Execution Mode tells the program if you want to link nodes by comparing the distances between their centroids or their borders.\n\n--The first option will utilize centroids, which is usually faster and good for objects that are rougly circular or spheroid, such as cells. Note the search distance will start at the centroid and only create a pair if the search encounter's another centroid, so you may need to increase that value to compensate if the borders are larger than the centroids.\n\n--The second option will search from the actual object's boundary and may be slower to process, but is ideal for more oddly shaped nodes whose location cannot be described well by a centroid. Nodes will be linked based on their boundary-to-boundary distance.",
+        "--Execution Mode tells the program if you want to link nodes by comparing the distances between their centroids or their borders.\n\n--The first option will utilize centroids, which is usually faster and good for objects that are rougly circular or spheroid, such as cells. Note the search distance will start at the centroid and only create a pair if the search encounter's another centroid, so you may need to increase that value to compensate if the borders are larger than the centroids.\n\n--The second option will search from the actual object's boundary and may be slower to process, but is ideal for more oddly shaped nodes whose location cannot be described well by a centroid. Nodes will be linked based on their boundary-to-boundary distance.\n\n--The third option will also use the morphological shape, but will assess neighbors by first dilating all the labels in 3D space with a distance transform. The prior morphological searcher instead dilates nodes within subarrays and lets them find all their neighbors within the specified distance. This version instead will cause search regions to bump up against each other and cease growing. A hidden advantage of this is it's actually good for simplifying network complexity and can actually better describe regional clusters at times, so do keep it in mind!",
         highlight_type=None,
         message_position="beside",
         pre_action=MenuHelper.create_widget_interaction(tutorial, 'prox_dialog', 'mode_selector', 'showPopup()'),
@@ -2069,11 +2069,20 @@ def setup_prox_tutorial(window):
 
     tutorial.add_step(
         MenuHelper.create_widget_getter(tutorial, 'prox_dialog', 'max_neighbors'),
-        "The integer entered here will cause any node to only be able to have a maximum of that many connections. It will preferentially take connections to its closest neighbors. You can enter a cap here to simplify network structure in dense images. Alternatively, if you are using the centroid search you can enter a very large distance for your search region (note this sort of distance might slow down the border search substantially) and then pass a value here as a way to appraise the 'n' closest neighbors for each node.",
+        "The integer entered here will cause any node to only be able to have a maximum of that many connections. It will preferentially take connections to its closest neighbors. You can enter a cap here to simplify network structure in dense images. Alternatively, if you are using the centroid search you can enter nothing for search and then pass a value here as a way to appraise the 'n' closest neighbors for each node.",
         highlight_type=None,
         message_position="beside",
         pre_action=MenuHelper.create_widget_interaction(tutorial, 'prox_dialog', 'max_neighbors', 'setText("INT!")'),
         action=MenuHelper.create_widget_interaction(tutorial, 'prox_dialog', 'max_neighbors', 'setText("")')
+    )
+
+    tutorial.add_step(
+        MenuHelper.create_widget_getter(tutorial, 'prox_dialog', 'fastdil'),
+        "If you are searching with the distance transform, the fast search option may be enabled to attempt a faster search using parallelization. This requires installation of the edt package. It will cause rougher borders between your search region though (whereas the slow version yields a perfect output), and will not be much faster if you set the search regions to some huge value. I generally use it for big datasets but just consider your use case when checking it.",
+        highlight_type=None,
+        message_position="beside",
+        pre_action=MenuHelper.create_widget_interaction(tutorial, 'prox_dialog', 'fastdil', 'click()'),
+        action=MenuHelper.create_widget_interaction(tutorial, 'prox_dialog', 'fastdil', 'toggle()')
     )
 
     def close_dialog():
@@ -2415,7 +2424,10 @@ def setup_analysis_tutorial(window):
 
         \n\n--Use 'Generic Network Report' to get basic statistics about your Network 3D Object. This includes node count, edge count, nodes per identity category, and nodes per community (if assigned).
 
-        \n\n--Use 'Community Partition + Generic Network Stats' to group nodes into communities using either Label Propagation or Louvain algorithms. This function also calculates comprehensive community statistics including modularity, clustering coefficients, and per-community metrics like density and conductance.""",
+        \n\n--Use 'Create Communities Based on Networks' to group nodes into communities based on network structure using either Label Propagation or Louvain algorithms. This may be a way to find spatial or functional clusters in your image. This function also calculates comprehensive community statistics including modularity, clustering coefficients, and per-community metrics like density and conductance.
+        
+        \n\n--Use 'Create Communities Based on Node's Immediate Neighbors' to group nodes into communities based on the identity distribution of the nodes that immediately neighbor them in their network. This would typically be done with a proximity network of n nearest neighbors in a group of nodes that have some diverse set of identities, ie multiplexed cellular data. It will group nodes based on recurring neighborhood motifs in the tissue, which may partition cellular datasets more logically than just relying on spatial clustering.""",
+
         highlight_type=None,
         message_position="top_right",
         pre_action=open_to_save,
@@ -2424,10 +2436,10 @@ def setup_analysis_tutorial(window):
     tutorial.add_step(
         MenuHelper.create_submenu_action_rect_getter(window, "Analyze", "Network", "Show Network"),
 
-        f"""--Use 'Calculate Composition of Network Communities (And Show UMAP)' to analyze the compositional makeup of your communities based on node identities. This function can provide per-community identity proportions or a weighted average across all communities, and can generate a UMAP to visualize compositional similarity between communities.
-        \n\n--Use 'Convert Network Communities Into Neighborhoods' to group similar communities into a smaller set of neighborhoods using K-means or DBSCAN clustering. This function returns compositional heatmap graphs showing identity distributions across neighborhoods, including optional robust heatmaps that highlight overrepresented node types. Note this will reassign the 'communities' property to neighborhoods.
+        f"""--Use 'Create Communities Based on Cuboidal Proximity Cells' as an alternative spatial method for grouping nodes into communities. This splits the image into user-defined cuboidal cells and assigns nodes to communities based on whether they share a cell, independent of the network structure. You would mostly use it for images where the nodes were chaotically arranged (and so not in meaningful network communities), and you were just interested in creating supercommunities to describe what is clustered with what.
+        \n\n--Use 'Calculate Composition of Communities (And Show UMAP/Heatmaps)' to analyze the compositional makeup of your communities based on node identities. This function can provide per-community identity proportions or a weighted average across all communities, and can generate a UMAP to visualize compositional similarity between communities.
+        \n\n--Use 'Convert Network Communities Into Supercommunities' to group similar communities into a smaller set of supercommunities using K-means or DBSCAN clustering. This function returns compositional heatmap graphs showing identity distributions across supercommunities, including optional robust heatmaps that highlight overrepresented node types. Note this will reassign the 'communities' property to neighborhoods.""",
 
-        \n\n--Use 'Create Communities Based on Cuboidal Proximity Cells' as an alternative spatial method for grouping nodes into communities. This splits the image into user-defined cuboidal cells and assigns nodes to communities based on whether they share a cell, independent of the network structure. You would mostly use it for images where the nodes were chaotically arranged (and so not in meaningful network communities), and you were just interested in creating neighborhoods to describe what is clustered with what.""",
         highlight_type=None,
         message_position="top_right",
         pre_action=open_to_save,
@@ -2741,7 +2753,12 @@ def setup_process_tutorial(window):
 
         \n\n--Use 'Trace Filaments' to open a window for automatically cleaning segmentations of filament-like structures (such as vessels, nerves) by tracing a new, cleaner mask over pathways the program can detect.
 
-        \n\n--Use 'Generate Voronoi Diagram' to create a Voronoi diagram from node_centroids, where labeled cells represent the region closest to each centroid. This provides an alternative way to define node neighborhoods for connectivity networks, particularly useful for small or homogeneous spheroid nodes. The diagram is loaded into Overlay2.""",                
+        \n\n--Use 'Generate Voronoi Diagram' to create a Voronoi diagram from node_centroids, where labeled cells represent the region closest to each centroid. This provides an alternative way to define node neighborhoods for connectivity networks, particularly useful for small or homogeneous spheroid nodes. The diagram is loaded into Overlay2.                
+        
+        \n\n--Use 'Generate Convex Hull' to create a 3D binary overlay that surrounds your foreground for a segmented image. This mask can be used to define foreground from background regions, which can be useful for some other methods such as the Ripley's clustering or heatmap prediction.
+        
+        \n\n--Use 'Generate Artificial Hexagonal Nodes'. to fill your image, or a desired mask region, with hexagons (or prisms) or 3D decahedrons of an arbitrary size. These can serve as artificial cells, for example, for labeling and neighborhood clustering multiplexed data""",
+
         highlight_type=None,
         message_position="top_right",
         pre_action=open_to_save,
@@ -2772,7 +2789,9 @@ def setup_process_tutorial(window):
 
         \n\n--Use 'Force Any Multiple IDs to Pick a Random Single ID' to randomly assign a single identity to nodes with multiple identities. This simplifies identity visualization when there are many identity permutations.
 
-        \n\n--Use 'Remove Any Nodes Not in Nodes Channel From Properties' to clean up node_centroids and node_identities properties by removing any nodes whose labels aren't present in the nodes channel image. Useful after cropping datasets.
+        \n\n--Use 'Remove All Negative IDs' to eliminate any identities with the '-' tag at the end. Can be applied after node identity assignment if negative gates were included.
+
+        \n\n--Use 'Remove Any Nodes Not in Nodes Channel From Properties' to clean up node_centroids, node_identities, network, and communities properties by removing any nodes whose labels aren't present in the nodes channel image. Useful after cropping parent datasets.
 
         \n\n--Use 'Remove Trunk' to eliminate the most interconnected edge from the network, which can dominate analysis when evaluating downstream connections in trunk-heavy networks.""",
         highlight_type="rect",
@@ -2805,6 +2824,8 @@ def setup_process_tutorial(window):
         \n\n--Use 'Rearrange Community IDs by Size' to renumber communities by node count, with 1 being the largest community. Makes community IDs more meaningful for visualization and analysis.
 
         \n\n--Use 'Convert Communities to Nodes' to replace the node-to-node network with a community-to-community network, and relabel nodes in the image by their community ID rather than original ID.
+
+        \n\n--Use 'Remove Identities' to manually remove identities you no longer want in your current session.
 
         \n\n--Use 'Add/Remove Network Pairs' to manually add or remove specific node pairs from the network with optional edge IDs. Allows arbitrary network modification beyond what table widgets support.""",
         highlight_type="rect",
@@ -2858,7 +2879,7 @@ def setup_image_tutorial(window):
         MenuHelper.create_submenu_action_rect_getter(window, "Image", "Overlays", "Shuffle"),
         f"""-Use 'Overlays -> Create Network Overlay' to draw 1-voxel thick white lines between all node centroids in the network, placed in Overlay1. Provides convenient network structure visualization, especially in 3D. Optional downsampling enlarges the rendered output.
 
-        \n\n--Use 'Overlays -> Create ID Overlay' to write the numerical ID of each node over its centroid, placed in Overlay2. Provides convenient node label visualization with optional downsampling to enlarge rendered output.
+        \n\n--Use 'Overlays -> Create Node Number Overlay' to write the numerical ID of each node over its centroid, placed in Overlay2. Provides convenient node label visualization with optional downsampling to enlarge rendered output.
 
         \n\n--Use 'Overlays -> Color Nodes (or edges)' to create an RGB overlay where each grayscale label receives a unique color, placed in Overlay2 with a color legend in the data tables. Excellent for visualizing labeled objects.
 
