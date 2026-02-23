@@ -39,6 +39,8 @@ edt
 [rec]
 napari
 edt
+igraph
+leidenalg
 
 [viz]
 napari

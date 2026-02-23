@@ -1043,16 +1043,22 @@ def prune_samenode_connections(networkfile, nodeIDs, target=None):
     
     Args:
         networkfile: Network file path or list of node pairs
-        nodeIDs: Node identity mapping (file path or dict)
+        nodeIDs: Node identity mapping (file path or dict), where each node maps
+                 to a LIST of identity strings.
         target: Optional string. If provided, only prunes pairs where BOTH nodes 
-                have this specific identity. If None, prunes all same-identity pairs.
+                have this specific identity in their identity lists. If None, 
+                prunes all pairs that share at least one common identity.
     """
     import numpy as np
     
     # Handle nodeIDs input
     if type(nodeIDs) == str:
         df = pd.read_excel(nodeIDs)
-        data_dict = pd.Series(df.iloc[:, 1].values, index=df.iloc[:, 0]).to_dict()
+        # Assumes identities are stored as comma-separated strings in column 1
+        data_dict = {
+            row[0]: [i.strip() for i in str(row[1]).split(',')]
+            for row in df.itertuples(index=False)
+        }
     else:
         data_dict = nodeIDs
     
@@ -1071,17 +1077,23 @@ def prune_samenode_connections(networkfile, nodeIDs, target=None):
     else:
         edgesC = np.array([None] * len(nodesA), dtype=object)
     
-    # Vectorized lookup of node IDs
-    idsA = np.array([data_dict.get(node) for node in nodesA])
-    idsB = np.array([data_dict.get(node) for node in nodesB])
+    # Lookup identity lists for each node (returns empty list if node not found)
+    idsA = [data_dict.get(node, []) for node in nodesA]
+    idsB = [data_dict.get(node, []) for node in nodesB]
     
     # Create boolean mask based on target parameter
     if target is None:
-        # Original behavior: keep where IDs are different
-        keep_mask = idsA != idsB
+        # Keep pair only if the two nodes share NO common identity
+        keep_mask = np.array([
+            len(set(a) & set(b)) == 0
+            for a, b in zip(idsA, idsB)
+        ])
     else:
-        # New behavior: only remove pairs where BOTH nodes have the target identity
-        keep_mask = ~((idsA == target) & (idsB == target))
+        # Keep pair unless BOTH nodes carry the target identity
+        keep_mask = np.array([
+            not (target in a and target in b)
+            for a, b in zip(idsA, idsB)
+        ])
     
     # Apply filter
     filtered_nodesA = nodesA[keep_mask].tolist()
@@ -1098,7 +1110,7 @@ def prune_samenode_connections(networkfile, nodeIDs, target=None):
         nettracer.create_and_save_dataframe(save_list, filename)
         print(f"Pruned network saved to {filename}")
     
-    # Create output_dict
+    # Create output_dict (values remain as lists)
     nodes_in_filtered = set(filtered_nodesA + filtered_nodesB)
     output_dict = {node: data_dict[node] for node in nodes_in_filtered 
                    if node in data_dict}
@@ -1120,7 +1132,10 @@ def isolate_internode_connections(networkfile, nodeIDs, ID1, ID2):
     # Handle nodeIDs input
     if type(nodeIDs) == str:
         df = pd.read_excel(nodeIDs)
-        data_dict = pd.Series(df.iloc[:, 1].values, index=df.iloc[:, 0]).to_dict()
+        data_dict = {
+            row[0]: [i.strip() for i in str(row[1]).split(',')]
+            for row in df.itertuples(index=False)
+        }
     else:
         data_dict = nodeIDs
     
@@ -1134,14 +1149,14 @@ def isolate_internode_connections(networkfile, nodeIDs, ID1, ID2):
     nodesB = np.array(master_list[1])
     edgesC = np.array(master_list[2])
     
-    # Vectorized lookup of node values
-    valuesA = np.array([str(data_dict.get(node, '')) for node in nodesA])
-    valuesB = np.array([str(data_dict.get(node, '')) for node in nodesB])
+    # Lookup identity lists for each node
+    valuesA = [data_dict.get(node, []) for node in nodesA]
+    valuesB = [data_dict.get(node, []) for node in nodesB]
     
-    # Create boolean mask for filtering
+    # Create boolean mask: keep pair only if BOTH nodes carry at least one of ID1/ID2
     legalIDs_set = {str(ID1), str(ID2)}
-    maskA = np.array([val in legalIDs_set for val in valuesA])
-    maskB = np.array([val in legalIDs_set for val in valuesB])
+    maskA = np.array([any(v in legalIDs_set for v in vals) for vals in valuesA])
+    maskB = np.array([any(v in legalIDs_set for v in vals) for vals in valuesB])
     keep_mask = maskA & maskB
     
     # Apply filter
@@ -1159,7 +1174,7 @@ def isolate_internode_connections(networkfile, nodeIDs, ID1, ID2):
         nettracer.create_and_save_dataframe(save_list, filename)
         print(f"Isolated internode network saved to {filename}")
     
-    # Create output_dict
+    # Create output_dict (values remain as lists)
     nodes_in_filtered = set(filtered_nodesA + filtered_nodesB)
     output_dict = {node: data_dict[node] for node in nodes_in_filtered 
                    if node in data_dict}

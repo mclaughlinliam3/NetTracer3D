@@ -12,6 +12,21 @@ import random
 import copy
 
 
+def remove_dupe_ids(idens):
+
+    try:
+        ret_dict = {}
+
+        for node, iden in idens.items():
+            try:
+                ret_dict[node] = [random.choice(iden)]
+            except:
+                pass
+
+        return ret_dict
+    except:
+        return None
+
 class GraphLoadThread(QThread):
     """Thread for loading graph layouts without blocking the UI"""
     finished = pyqtSignal(object)  # Emits the computed layout data
@@ -753,7 +768,7 @@ class NetworkGraphWidget(QWidget):
         self.communities = communities
         self.community_dict = community_dict or {}
         self.identities = identities
-        self.identity_dict = identity_dict or {}
+        self.identity_dict = remove_dupe_ids(identity_dict) or {}
         self.labels = labels
         self.z_size = z_size
         self.shell = shell
@@ -942,7 +957,7 @@ class NetworkGraphWidget(QWidget):
         if self.identities:
             title = QLabel("Node Identities")
         elif self.communities:
-            title = QLabel("Node Community/Neighborhood")
+            title = QLabel("Node Community")
         title.setStyleSheet("font-weight: bold; font-size: 11pt; padding: 3px;")
         legend_layout.addWidget(title)
         
@@ -2108,35 +2123,6 @@ class NetworkGraphWidget(QWidget):
         
         # Show the menu
         context_menu.exec(global_pos)
-    
-    def update_params(self, weight=None, geometric=None, component = None, centroids=None,
-                     communities=None, community_dict=None,
-                     identities=None, identity_dict=None, labels=None, z_size = None, shell = None, node_size = 10):
-        """Update visualization parameters"""
-        if weight is not None:
-            self.weight = weight
-        if geometric is not None:
-            self.geometric = geometric
-        if component is not None:
-            self.component = component
-        if centroids is not None:
-            self.centroids = centroids
-        if communities is not None:
-            self.communities = communities
-        if community_dict is not None:
-            self.community_dict = community_dict
-        if identities is not None:
-            self.identities = identities
-        if identity_dict is not None:
-            self.identity_dict = identity_dict
-        if labels is not None:
-            self.labels = labels
-        if z_size is not None:
-            self.z_size = z_size
-        if shell is not None:
-            self.shell = shell
-        if node_size is not None:
-            self.node_size = node_size
     
     def _on_view_changed(self):
         """Handle view range changes for level-of-detail adjustments"""

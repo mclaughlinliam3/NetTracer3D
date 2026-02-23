@@ -34,8 +34,9 @@ from . import morphology
 from . import proximity
 from skimage.segmentation import watershed as water
 import json
-from collections import defaultdict
+from collections import defaultdict, deque
 import pickle
+import random
 from typing import Optional, Tuple
 
 
@@ -4669,7 +4670,6 @@ class Network_3D:
         """This method is deprecated and does not work for the current program architecture"""
 
         import ast
-        import random
         
         if self.node_identities is None:
             return
@@ -5399,55 +5399,40 @@ class Network_3D:
 
 
     def purge_properties(self):
-
-        """Eliminate nodes from properties that are no longer present in the nodes channel"""
-
         print("Trimming properties. Note this does not update the network...")
 
-        def filter_dict_by_list(input_dict, filter_list):
-            """
-            Remove dictionary entries where the key is not in the filter list.
-            
-            Args:
-                input_dict (dict): Dictionary with integer values
-                filter_list (list): List of integers to keep
-                
-            Returns:
-                dict: New dictionary with only keys that exist in filter_list
-            """
-            return {key: value for key, value in input_dict.items() if key in filter_list}
+        nodes_set = set(np.unique(self.nodes))
+        nodes_set.discard(0)
 
-        nodes = np.unique(self.nodes)
-
-        if 0 in nodes:
-            np.delete(nodes, 0)
-
+        # --- network_lists: vectorized filtering ---
         try:
-            for i in range(len(self.network_lists[0]) - 1, -1, -1):
-                if self.network_lists[0][i] not in nodes or self.network_lists[1][i] not in nodes:
-                    del self.network_lists[0][i]
-                    del self.network_lists[1][i]
-                    del self.network_lists[2][i]
-            self.network_lists = self.network_lists
+            src = np.array(self.network_lists[0])
+            dst = np.array(self.network_lists[1])
+            weights = np.array(self.network_lists[2])
+
+            mask = np.isin(src, list(nodes_set)) & np.isin(dst, list(nodes_set))
+
+            self.network_lists[0] = src[mask].tolist()
+            self.network_lists[1] = dst[mask].tolist()
+            self.network_lists[2] = weights[mask].tolist()
             print("Updated Network")
-        except:
+        except Exception:
             pass
 
-        try:
-            self.node_centroids = filter_dict_by_list(self.node_centroids, nodes)
-            print("Updated centroids")
-        except:
-            pass
-        try:
-            self.communities = filter_dict_by_list(self.communities, nodes)
-            print("Updated communities")
-        except:
-            pass
-        try:
-            self.node_identities = filter_dict_by_list(self.node_identities, nodes)
-            print("Updated identities")
-        except:
-            pass
+        # --- dict filtering with set lookup (O(1) per key) ---
+        def filter_dict_by_set(input_dict, keep_set):
+            return {k: v for k, v in input_dict.items() if k in keep_set}
+
+        for attr, label in [
+            ("node_centroids", "centroids"),
+            ("communities", "communities"),
+            ("node_identities", "identities"),
+        ]:
+            try:
+                setattr(self, attr, filter_dict_by_set(getattr(self, attr), nodes_set))
+                print(f"Updated {label}")
+            except Exception:
+                pass
 
     def remove_trunk_post(self):
         """
@@ -5625,6 +5610,18 @@ class Network_3D:
 
     def extract_communities(self, color_code = True, down_factor = None, identities = False):
 
+        def remove_dupe_ids(idens):
+
+            ret_dict = {}
+
+            for node, iden in idens.items():
+                try:
+                    ret_dict[node] = [random.choice(iden)]
+                except:
+                    pass
+
+            return ret_dict
+
         if down_factor is not None:
             original_shape = self._nodes.shape
             temp = downsample(self._nodes, down_factor)
@@ -5632,7 +5629,7 @@ class Network_3D:
                 if not identities:
                     image, output = community_extractor.assign_community_colors(self.communities, temp)
                 else:
-                    image, output = community_extractor.assign_community_colors(self.node_identities, temp)
+                    image, output = community_extractor.assign_community_colors(remove_dupe_ids(self.node_identities), temp)
             else:
                 if not identities:
                     image, output = community_extractor.assign_community_grays(self.communities, temp)
@@ -5645,7 +5642,7 @@ class Network_3D:
                 if not identities:
                     image, output = community_extractor.assign_community_colors(self.communities, self._nodes)
                 else:
-                    image, output = community_extractor.assign_community_colors(self.node_identities, self._nodes)
+                    image, output = community_extractor.assign_community_colors(remove_dupe_ids(self.node_identities), self._nodes)
             else:
                 if not identities:
                     image, output = community_extractor.assign_community_grays(self.communities, self._nodes)
@@ -6310,7 +6307,6 @@ class Network_3D:
         try:
 
             neighbor_classes = {}
-            import random
 
             umap_dict = copy.deepcopy(data)
 
@@ -6318,9 +6314,6 @@ class Network_3D:
                 if item in self.node_identities:
                     idens = self.node_identities[item]
                     neighbor_classes[item] = random.choice(idens)
-
-                else:
-                    del umap_dict[item]
 
             #from scipy.stats import zscore
 
@@ -7145,8 +7138,70 @@ class Network_3D:
         return avg, output, quant_overlay, pred
 
 
+    def shortest_distances_to_targets(self, root_nodes, target_nodes, return_path_edges=False):
+        G = self.network
+        target_set = set(target_nodes)
+        root_set = set(root_nodes)
 
+        # Manual multi-source BFS from all target nodes
+        distances = {}
+        predecessors = {}
+        queue = deque()
+        for t in target_set:
+            if t in G:
+                distances[t] = 0
+                predecessors[t] = None
+                queue.append(t)
 
+        while queue:
+            node = queue.popleft()
+            for neighbor in G.neighbors(node):
+                if neighbor not in distances:
+                    distances[neighbor] = distances[node] + 1
+                    predecessors[neighbor] = node
+                    queue.append(neighbor)
+
+        result = {}
+        path_edges = set()
+
+        for node in root_nodes:
+            if node in distances:
+                dist = distances[node]
+                if dist == 0:
+                    best = None
+                    best_path = None
+                    for target in target_set:
+                        if target == node:
+                            continue
+                        try:
+                            if return_path_edges:
+                                p = nx.shortest_path(G, node, target)
+                                d = len(p) - 1
+                            else:
+                                d = nx.shortest_path_length(G, node, target)
+                            if best is None or d < best:
+                                best = d
+                                if return_path_edges:
+                                    best_path = p
+                        except nx.NetworkXNoPath:
+                            continue
+                    if best is not None:
+                        result[node] = best
+                        if return_path_edges and best_path:
+                            for i in range(len(best_path) - 1):
+                                path_edges.add((best_path[i], best_path[i + 1]))
+                else:
+                    result[node] = dist
+                    if return_path_edges:
+                        # Walk back through predecessors, collecting edge pairs
+                        current = node
+                        while predecessors[current] is not None:
+                            path_edges.add((current, predecessors[current]))
+                            current = predecessors[current]
+
+        if return_path_edges:
+            return result, list(path_edges)
+        return result
 
 
 

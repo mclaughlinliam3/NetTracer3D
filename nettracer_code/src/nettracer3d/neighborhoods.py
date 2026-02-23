@@ -492,6 +492,8 @@ def visualize_cluster_composition_umap(cluster_data: Dict[int, np.ndarray],
     """
     
     # Convert set to sorted list for consistent ordering
+
+
     try:
         class_labels = sorted(list(class_names))
     except:
@@ -499,6 +501,9 @@ def visualize_cluster_composition_umap(cluster_data: Dict[int, np.ndarray],
     
     # Extract cluster IDs and compositions
     cluster_ids = list(cluster_data.keys())
+    import math
+    n = len(cluster_ids)
+    point_size = max(10, min(100, 100 / math.log2(n + 1)))
     compositions = np.array([cluster_data[cluster_id] for cluster_id in cluster_ids])
     
     # Create UMAP reducer
@@ -586,13 +591,13 @@ def visualize_cluster_composition_umap(cluster_data: Dict[int, np.ndarray],
     if n_components == 2:
         if use_neighborhood_coloring:
             scatter = plt.scatter(embedding[:, 0], embedding[:, 1], 
-                                c=point_colors, s=100, alpha=0.7)
+                                c=point_colors, s=point_size, alpha=0.7)
         elif use_identity_coloring:
             scatter = plt.scatter(embedding[:, 0], embedding[:, 1], 
-                                c=point_colors, s=100, alpha=0.7)
+                                c=point_colors, s=point_size, alpha=0.7)
         else:
             scatter = plt.scatter(embedding[:, 0], embedding[:, 1], 
-                                c=point_colors, cmap='viridis', s=100, alpha=0.7)
+                                c=point_colors, cmap='viridis', s=point_size, alpha=0.7)
         
         if label:
             # Add cluster ID labels
@@ -649,13 +654,13 @@ def visualize_cluster_composition_umap(cluster_data: Dict[int, np.ndarray],
         
         if use_neighborhood_coloring:
             scatter = ax.scatter(embedding[:, 0], embedding[:, 1], embedding[:, 2],
-                               c=point_colors, s=100, alpha=0.7)
+                               c=point_colors, s=point_size, alpha=0.7)
         elif use_identity_coloring:
             scatter = ax.scatter(embedding[:, 0], embedding[:, 1], embedding[:, 2],
-                               c=point_colors, s=100, alpha=0.7)
+                               c=point_colors, s=point_size, alpha=0.7)
         else:
             scatter = ax.scatter(embedding[:, 0], embedding[:, 1], embedding[:, 2],
-                               c=point_colors, cmap='viridis', s=100, alpha=0.7)
+                               c=point_colors, cmap='viridis', s=point_size, alpha=0.7)
         
         if label:
             # Add cluster ID labels
@@ -708,27 +713,6 @@ def visualize_cluster_composition_umap(cluster_data: Dict[int, np.ndarray],
     
     plt.tight_layout()
     plt.show()
-    
-    if class_labels is not None:
-        # Print composition details
-        print("Cluster Compositions:")
-        print(f"Classes: {class_labels}")
-        for i, cluster_id in enumerate(cluster_ids):
-            composition = compositions[i]
-            additional_info = ""
-            if use_neighborhood_coloring and cluster_id in neighborhoods:
-                neighborhood_id = neighborhoods[cluster_id]
-                additional_info = f" (Neighborhood: {neighborhood_id})"
-            elif id_dictionary is not None:
-                identity = id_dictionary.get(cluster_id, "Unknown")
-                additional_info = f" (Identity: {identity})"
-            
-            print(f"Cluster {cluster_id}{additional_info}: {composition}")
-            # Show which classes dominate this cluster
-            dominant_indices = np.argsort(composition)[::-1][:2]  # Top 2
-            dominant_classes = [class_labels[idx] for idx in dominant_indices]
-            dominant_values = [composition[idx] for idx in dominant_indices]
-            print(f"  Dominant: {dominant_classes[0]} ({dominant_values[0]:.3f}), {dominant_classes[1]} ({dominant_values[1]:.3f})")
     
     return embedding
 
@@ -1238,7 +1222,7 @@ def create_node_heatmap(node_intensity, node_centroids, shape=None, is_3d=True,
         plt.tight_layout()
         plt.show()
 
-def create_violin_plots(data_dict, graph_title="Violin Plots"):
+def create_violin_plots(data_dict, graph_title="Violin Plots", idens=None):
     """
     Create violin plots from dictionary data with distinct colors and IQR lines.
     
@@ -1246,7 +1230,13 @@ def create_violin_plots(data_dict, graph_title="Violin Plots"):
     data_dict (dict): Dictionary where keys are column headers (strings) and 
                      values are lists of floats
     graph_title (str): Title for the overall plot
+    idens (list, optional): Full list of identity/community labels used across
+                           the application. If provided, colours are assigned
+                           from the same palette so they stay consistent with
+                           the network / UMAP graphs even when only a subset
+                           of labels appears in data_dict.
     """
+
     if not data_dict:
         print("No data to plot")
         return
@@ -1256,12 +1246,8 @@ def create_violin_plots(data_dict, graph_title="Violin Plots"):
     labels = list(data_dict.keys())
     data_lists = list(data_dict.values())
     
-    # Generate colors
-    try:
-        final_colors = generate_distinct_colors(len(labels))
-    except Exception as e:
-        print(f"Color generation failed, using default colors: {e}")
-        final_colors = plt.cm.Set3(np.linspace(0, 1, len(labels)))
+    # --- colour schema matching UMAPGraphWidget / NetworkGraphWidget ---
+    final_colors = _generate_graph_consistent_colors(labels, idens)
     
     fig, ax = plt.subplots(figsize=(max(8, len(labels) * 1.5), 6))
     
@@ -1306,7 +1292,7 @@ def create_violin_plots(data_dict, graph_title="Violin Plots"):
                 linestyles='dotted',
                 linewidth=1.5,
                 zorder=3,
-                label='IQR (25th–75th)' if i == 0 else None  # Add label once
+                label='IQR (25th–75th)' if i == 0 else None
             )
             
             # Text annotation below the violins
@@ -1383,7 +1369,72 @@ def create_violin_plots(data_dict, graph_title="Violin Plots"):
     print("="*60 + "\n")
 
 
-def create_neighbor_heatmap(distance_dict, dpi=300):
+def _generate_graph_consistent_colors(labels, idens=None):
+    """
+    Generate colours for `labels` using the same deterministic scheme as
+    UMAPGraphWidget._generate_community_colors / NetworkGraphWidget:
+      1. Gather all unique labels (from `idens` if given, else from `labels`).
+      2. Sort them.
+      3. Deterministically shuffle with Random(42).
+      4. Assign evenly-spaced HSV hues in that shuffled order.
+      5. Override label 0 → brown (#8B4513).
+      6. Return a list of hex colours parallel to `labels`.
+
+    Parameters
+    ----------
+    labels : list
+        The labels that actually appear in the violin plot (in plot order).
+    idens : list, optional
+        The FULL set of labels used across the app.  Passing this ensures
+        a label gets the same colour here as it does on the graph, even if
+        only a subset is plotted.
+
+    Returns
+    -------
+    list of str
+        Hex colour strings, one per entry in `labels`.
+    """
+    import colorsys
+    import random as _random
+
+    # Build the global label universe
+    if idens is not None:
+        all_labels = set(idens)
+    else:
+        all_labels = set()
+    all_labels.update(labels)
+
+    try:
+        unique_sorted = sorted(all_labels)
+    except TypeError:
+        unique_sorted = sorted(all_labels, key=str)
+
+    n = len(unique_sorted)
+    if n == 0:
+        return ['#808080'] * len(labels)
+
+    # Deterministic shuffle — same seed as the graph widgets
+    shuffled = _random.Random(42).sample(unique_sorted, n)
+
+    # HSV hues evenly spaced
+    hex_palette = []
+    for i in range(n):
+        hue = i / max(n, 1)
+        r, g, b = colorsys.hsv_to_rgb(hue, 1.0, 1.0)
+        hex_palette.append('#{:02x}{:02x}{:02x}'.format(
+            int(r * 255), int(g * 255), int(b * 255)))
+
+    color_map = {lbl: hex_palette[i] for i, lbl in enumerate(shuffled)}
+
+    # Label 0 → brown, consistent with graph widgets
+    if 0 in color_map:
+        color_map[0] = '#8B4513'
+
+    # Map back to the plot-order labels
+    return [color_map.get(lbl, '#808080') for lbl in labels]
+
+
+def create_neighbor_heatmap(distance_dict, dpi=300, title = "Nearest Neighbor Distance Matrix", subtitle = "Average spatial distances between node populations", y_label = "Distance"):
     """
     Create a professional heatmap from nearest neighbor distance data.
     
@@ -1457,11 +1508,11 @@ def create_neighbor_heatmap(distance_dict, dpi=300):
                    fontsize=13, fontweight='600', color='#64c8ff', labelpad=15)
     
     # Add title
-    title = ax.text(0.5, 1.08, 'Nearest Neighbor Distance Matrix',
+    title = ax.text(0.5, 1.08, f'{title}',
                     transform=ax.transAxes, fontsize=18, fontweight='700',
                     color='#f5f5f5', ha='center')
     
-    subtitle = ax.text(0.5, 1.03, 'Average spatial distances between node populations',
+    subtitle = ax.text(0.5, 1.03, f'{subtitle}',
                        transform=ax.transAxes, fontsize=11,
                        color='#888888', ha='center')
     
@@ -1477,7 +1528,7 @@ def create_neighbor_heatmap(distance_dict, dpi=300):
     
     # Add colorbar with custom styling
     cbar = plt.colorbar(im, ax=ax, fraction=0.046, pad=0.04)
-    cbar.set_label('Distance', rotation=270, labelpad=20, 
+    cbar.set_label(f'{y_label}', rotation=270, labelpad=20, 
                    fontsize=11, color='#aaaaaa', fontweight='500')
     cbar.ax.yaxis.set_tick_params(color='#666666', labelcolor='#aaaaaa')
     cbar.outline.set_edgecolor('#333333')

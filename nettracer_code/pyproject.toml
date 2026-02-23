@@ -1,6 +1,6 @@
 [project]
 name = "nettracer3d"
-version = "1.4.4"
+version = "1.4.9"
 authors = [
   { name="Liam McLaughlin", email="liamm@wustl.edu" },
 ]
@@ -42,7 +42,7 @@ cupy = ["cupy"]
 # Features
 cellpose = ["cellpose[GUI]"]
 viz = ["napari"]
-rec = ["napari", "edt"]
+rec = ["napari", "edt", "igraph", "leidenalg"]
 edt = ["edt"]
 
 # All non-GPU features

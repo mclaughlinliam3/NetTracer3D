@@ -2470,6 +2470,8 @@ def setup_analysis_tutorial(window):
 
         \n\n--Use 'Radial Distribution Analysis' to create a graph showing the average number of neighboring nodes versus distance from any given node. This helps evaluate how far apart connected nodes are in 3D space and assess network efficiency.,
         
+        \n\n--Use 'Nearest Network Neighbors' to compute the shortest paths between either groups of highlighted nodes, nodes of some identity, or a mix of the two. In addition to these quantifications, this function can also yield heatmap and shortest paths overlays.,
+
         \n\n--Use 'Community Cluster Heatmap' to visualize community density in 2D or 3D, with nodes colored by whether they're in higher (red) or lower (blue) density communities than expected. Can be output as a matplotlib graph or RGB overlay.""",
 
         highlight_type=None,

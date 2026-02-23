@@ -29,6 +29,7 @@ src/nettracer3d/smart_dilate.py
 src/nettracer3d/stats.py
 src/nettracer3d/threshold_predictor.py
 src/nettracer3d/tutorial.py
+src/nettracer3d/umap_widget.py
 src/nettracer3d.egg-info/PKG-INFO
 src/nettracer3d.egg-info/SOURCES.txt
 src/nettracer3d.egg-info/dependency_links.txt

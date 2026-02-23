@@ -182,4 +182,13 @@ Version 1.3.6-1.4.4 updates
 	* Fixed some bugs regarding handling of node identities for some of the graphs.
 	* Other bug fixes, minor adjustments
 
+Version 1.4.5-1.4.9 updates
+	* Most of the UMAP outputs are now interactable - select groups of nodes of interest (linked to the main image viewer) and flexibly configure identity vs community rendering. It's also possible to now save the UMAP embedding schema which is the big computational hurdle so you can calculate a big task and load it faster later.
+	* The identity render-ers that encode identities as colored overlays no longer make use of 'multi-identity' nodes as their own category. There were often so many in some cases that this was not visually useful so I pulled it.
+	* For the violin plots you can know flexibly input how many channels you want to show.
+	* Added a new nearest network neighbor function for computing different shortest paths between nodes and rendering the output.
+	* Improved the connectivity networks that use branches. Now retains current node identities in addition to adding new branches to the graph, and allows branch networks to extend through 'node-occupied-space' (because these structures may overlap - before the nodes came to the foreground and blocked out the branches they sit on top of).
+	* Some bug fixes, optimizations
+
+
 

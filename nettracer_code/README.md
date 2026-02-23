@@ -11,9 +11,16 @@ Please see: https://nettracer3d.readthedocs.io/en/latest/
 Please see: https://www.youtube.com/watch?v=_4uDy0mzG94&list=PLsrhxiimzKJMZ3_gTWkfrcAdJQQobUhj7
 
 
+--- Using the windows installer ---
+
+If you are on windows, an installer will be available at the GitHub repo, or here: https://doi.org/10.5281/zenodo.17873800
+
+Simply download and run the installer, then open the program in windows. You can also download the executable and its dependencies directly. Note that this version will be missing a few features compared to the Python package, namely GPU segmentation support. It will also not be updated as often.
+
+
 --- Installing as a Python package ---
 
-1. **Get Python and Pip on your path**: To install nettracer3d, first install Python version 3.12. Make sure the Python installation installs pip, and that both Python and pip are available on your PATH. I recommend installing Python using the installer which is available here. Make sure to check the option to 'add Python to PATH' when it appears: https://www.python.org/downloads/
+1. **Get Python and Pip on your path**: To install nettracer3d, first install Python version 3.12. (You can try other python versions also but I can't say which one's will cause dependency problems). Make sure the Python installation installs pip, and that both Python and pip are available on your PATH. I recommend installing Python using the installer which is available here. Make sure to check the option to 'add Python to PATH' when it appears: https://www.python.org/downloads/
 
 
 2. **Base Package**: Next, use this command in your command terminal
@@ -31,7 +38,7 @@ Please see: https://www.youtube.com/watch?v=_4uDy0mzG94&list=PLsrhxiimzKJMZ3_gTW
 	* pip install nettracer3d[edt]
 
 
-5. **Recommended full package**: Or if you want to just get both edt and napari at once:
+5. **Recommended full package**: Or if you want to just get both edt and napari at once. This will also give you the module to run leiden clustering:
 	
 	* pip install nettracer3d[rec]
 
@@ -49,12 +56,6 @@ I recommend installing the program as an Anaconda package to ensure its modules 
 
 https://www.anaconda.com/download?utm_source=anacondadocs&utm_medium=documentation&utm_campaign=download&utm_content=installwindows
 
-
---- Using the downloadable version ---
-
-Alternatively, you can download a compiled .exe of version 1.2.7 here: https://doi.org/10.5281/zenodo.17873800 
-
-Unzip the folder, then double click the NetTracer3D executable to run the program. Note that this version will be missing a few features compared to the Python package, namely GPU segmentation support and the ability to print updates to the command window. It will also not be updated as often.
 
 
 --- Optional Packages ---
@@ -104,10 +105,8 @@ NetTracer3D is freely available for academic and nonprofit use and can obtained 
 
 NetTracer3D was developed by Liam McLaughlin while working under Dr. Sanjay Jain at Washington University School of Medicine.
 
--- Version 1.4.4 Updates --
+-- Version 1.4.9 Updates --
 
-	* Revamped ability to select/rename different combos of node identities with new menus for doing such.
-	* Fixed some bugs regarding handling of node identities for some of the graphs.
-	* Other minor adjustments
+	* Some fixes.
 
 

@@ -79,6 +79,8 @@ Parameter Explanations
         * Partition the network using NetworkX's label propogation algorithm.
     2. Louvain
         * Partition the network using NetworkX's louvain algorithm.
+    3. Leiden
+        * Partition using the Leiden algorithm, which is an enhanced Louvain algorithm. This will require you install the 'leidenalg' package (pip install leidenalg) - it is an optional dependency at the moment so you won't have it by default.
     * Both of these options are quick, efficient ways to group networks. Label propogation is a bit faster but more variable.
     * Note that network community detection in general (and in these cases) has some degree of randomness in how it decides to group objects (based on what nodes it starts from).
 3. Community Stats
@@ -116,7 +118,7 @@ Parameter Explanations
 #. Min Neighbor Count - The minimum number of neighbors a node must have to be considered for grouping. Setting a value here can avoid including isolated nodes in your output.
 #. N Nearest Neighbors - This is an optional parameter; normally you might generate a proximity network for your nodes first that tied together neighbors, then skip this. But if you did not, you can enter a number of nearest neighbors you'd like each node to find, creating a new proximity network for this function.
 #. Max Distance - Also optional, similar to the above. Entering a value here will make the new proximity network only connect nodes within a specified distance. You can use this to prevent different regions from connecting over gaps that they shouldn't be. The specified distance is scaled by the xy_scale and z_scale properties.
-#. Community UMAP - Returns a UMAP of how similar your node neighborhoods are.
+#. Community UMAP - Returns a UMAP of how similar your node neighborhoods are. The UMAP is interactable - use a lasso to select groups of nodes. You can right click in the main window to assign them to their own communities. There are also some unique rendering options. These interactable UMAPs can be saved and later reloaded using the 'folder icon' that loads spreadsheets in the top right to skip embedding computation.
 #. Neighborhood Heatmaps - Returns a heatmap showing the compositions of the neighborhoods used to cluster the nodes. Note that this does not specify the composition of the resultant communities (use 'Analyze -> Network -> Calculate Composition of Network Communities (And UMAP)' for that), although the data will be similar. As such, it may not be that relevant although it's included for now.
 #. Treat Multi-Identity Nodes as Unique Identities - Across many channels, your nodes will probably aquire multiple identities. By default, this function just clusters based on the distribution of each unique identity. But if you enable this, any unique combination of identities will be treated as its own group. Note if you have a lot of combinations, this will massively increase the computational load, so I usually recommend skipping it.
 
@@ -370,6 +372,21 @@ Parameter Explanations
     * This is the distance that will be used as a step size while searching outward from nodes in the graph to evaluate how close in 3D space their neighbors are.
 
 * Press 'Get Radial Distribution' to open a new matplotlib window showing the graph, and also place the obtained data in as a new table in the tabulated data widget.
+
+'Analyze -> Stats -> Network Related -> Network Nearest Neighbors'
+-----------------------------------------
+* This method is designed for finding 1. statistics about the number of steps in the shortest paths between objects of interest in the network and 2. Rendering overlays of those shortest paths and/or heatmap overlays of which objects are closer in the network.
+* You can either run this to find nearest neighbors between selected elements in the network, between elements bearing some 'node_identity', or a combination of the two.
+
+Parameter Explanations
+~~~~~~~~~~~~~~~
+#. Root Identity to Search for Neighbor IDs - Here you will have the option to choose what node types are searching for shortest paths (to the target type). This will be set to the highlighted nodes by default but you can also have it start from nodes of one of your node identity types.
+#. Neighbor Identities to Search For? - These are the node types that are being searched for by your root type. This will be set to the highlighted nodes by default but you can also have it search for nodes of one of your node identity types.
+#. Generate Heatmap - Renders a heatmap overlay in Overlay2 where closer nodes are red and further nodes are blue. The color schema is based on the average number of steps any node has to go to reach the target nodes with root nodes requiring more steps being bluer and those requiring less being redder.
+#. Generate Shortest Path Overlay - Renders a shortest path overlay in Overlay1 which shows the nodes and edges that yield the shortest path between your root and target nodes. If you've calculated a 'Connectivity Network' using 'Prelabeled Edges', this can be an interesting way to find the shortest path through a structure such as blood vessels or nerves.
+
+* Click 'Get Nearest Network Neighbors' to yield the nearest neighbor distrubution for your root nodes (returns a table), and also the overlays you've selected.
+* Click 'Get Average Nearest All ID Combinations' to yield the average nearest distance for all unique combos of node identities. Note that this will not provide distributions or overlays. You will get a matrix graph showing all the combos in a nice visualization though.
 
 'Analyze -> Stats -> Network Related -> Community Cluster Heatmap'
 -----------------------------------------
@@ -683,9 +700,11 @@ Parameter Explanation
 3. 'Execution Mode...' - Dictates how the UMAP comparing intensities of nodes will label said nodes.
     * 'Label UMAP By Identity' - Each node will be labeled by their identity value, or randomly by one of them if they have multiple.
     * 'Label UMAP by Community' - Each node will bear the label of their assigned community/neighborhood. Useful if they were assigned Supercommunities based on overlapped intensity values.
-4. 'Assign Neighborhoods Via Kmeans Clustering' - Adjacent to this button, you can enter how many communities you want the nodes to be partitioned into, based on their similarity in intensity across the channels. If you leave it empty, the program will try to predict an ideal number of communities, but only up to 20. Note this is biased for lower values and you should probably just apply an arbitrary number.
-5. 'Generate Intensity Heatmap' - After the KMeans clustering, selecting this will return an informative heatmap showing you the differing relative expression in marker intensity between your channels for each community.
-6. 'Reassign Identities Based on Clustering Results?' - Check this box, and while assigning communities with the above parameter, you will get the opportunity to also rename each community, in case you think they represent something more significant than their default names of 1, 2, 3, etc. For each communitiy, the program will show you the violin plot for the intensity profile of each communities to assist you in deciding what to rename it.
+    * The UMAP is interactable - use a lasso to select groups of nodes. You can right click in the main window to assign them to their own communities. There are also some unique rendering options. These interactable UMAPs can be saved and later reloaded using the 'folder icon' that loads spreadsheets in the top right to skip embedding computation.
+4. 'Plan Identities...' - Use this to limit the number of node identities that are shown in the UMAPs and/or violin plots.
+5. 'Assign Neighborhoods Via Kmeans Clustering' - Adjacent to this button, you can enter how many communities you want the nodes to be partitioned into, based on their similarity in intensity across the channels. If you leave it empty, the program will try to predict an ideal number of communities, but only up to 20. Note this is biased for lower values and you should probably just apply an arbitrary number.
+6. 'Generate Intensity Heatmap' - After the KMeans clustering, selecting this will return an informative heatmap showing you the differing relative expression in marker intensity between your channels for each community.
+7. 'Reassign Identities Based on Clustering Results?' - Check this box, and while assigning communities with the above parameter, you will get the opportunity to also rename each community, in case you think they represent something more significant than their default names of 1, 2, 3, etc. For each communitiy, the program will show you the violin plot for the intensity profile of each communities to assist you in deciding what to rename it.
 
 * To view any designated violin plots, press 'Show-Z-score-like Violin'. The plot will be shown, and the corresponding data will populate the upper right data tables.
 * "Show Z-score UMAP" may be pressed to show a UMAP of the intensity Z-score for each node relative to the identity of each channel. (This is the same UMAP that can be displayed at the end of 'File -> Images -> Node Identities -> Assign Node Identities from Overlap with Other Images')

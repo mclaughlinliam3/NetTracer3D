@@ -384,7 +384,6 @@ def community_partition(G, weighted = False, style = 0, dostats = True, seed = N
             stats['Number of Communities'] = len(communities)
             community_sizes = [len(com) for com in communities]
             stats['Community Sizes'] = community_sizes
-            import numpy as np
             stats['Average Community Size'] = np.mean(community_sizes)
         except:
             pass
@@ -445,7 +444,6 @@ def community_partition(G, weighted = False, style = 0, dostats = True, seed = N
                 
                 # Degree centrality
                 degree_cent = nx.degree_centrality(subgraph)
-                import numpy as np
                 stats[f'Community {i+1} Avg Degree Centrality'] = np.mean(list(degree_cent.values()))
                 
                 # Average path length (only for connected subgraphs)
@@ -456,49 +454,172 @@ def community_partition(G, weighted = False, style = 0, dostats = True, seed = N
         
         return stats
 
+    def calculate_leiden_network_stats(G, unweighted_G, communities):
+        """
+        Calculate comprehensive network statistics for the graph using Leiden community detection.
+        """
+        stats = {}
+
+        try:
+            stats['Modularity Entire Network'] = community.modularity(G, communities)
+        except:
+            pass
+
+        try:
+            connected_components = list(nx.connected_components(G))
+            if len(connected_components) > 1:
+                for i, component in enumerate(connected_components):
+                    subgraph = G.subgraph(component)
+                    # Use Leiden for component-level modularity too
+                    import igraph as ig
+                    import leidenalg
+                    g_ig = ig.Graph.from_networkx(subgraph)
+                    if subgraph.is_multigraph():
+                        g_ig.simplify(combine_edges="sum")
+                    partition = leidenalg.find_partition(g_ig, leidenalg.ModularityVertexPartition)
+                    component_communities = [set() for _ in range(max(partition.membership) + 1)]
+                    nodes_list = list(subgraph.nodes())
+                    for idx, mem in enumerate(partition.membership):
+                        component_communities[mem].add(nodes_list[idx])
+                    component_communities = [c for c in component_communities if len(c) > 0]
+                    modularity = community.modularity(subgraph, component_communities)
+                    num_nodes = len(component)
+                    stats[f'Modularity of component with {num_nodes} nodes'] = modularity
+        except:
+            pass
+
+        try:
+            stats['Number of Communities'] = len(communities)
+            community_sizes = [len(com) for com in communities]
+            stats['Community Sizes'] = community_sizes
+            stats['Average Community Size'] = np.mean(community_sizes)
+        except:
+            pass
+
+        try:
+            stats['Global Clustering Coefficient'] = nx.average_clustering(unweighted_G)
+        except:
+            pass
+        try:
+            stats['Assortativity'] = nx.degree_assortativity_coefficient(G)
+        except:
+            pass
+
+        def count_inter_community_edges(G, communities):
+            inter_edges = 0
+            for com1, com2 in itertools.combinations(communities, 2):
+                inter_edges += len(list(nx.edge_boundary(G, com1, com2)))
+            return inter_edges
+
+        try:
+            stats['Inter-community Edges'] = count_inter_community_edges(G, communities)
+        except:
+            pass
+
+        def mixing_parameter(G, communities):
+            external_edges = 0
+            total_edges = 0
+            for com in communities:
+                subgraph = G.subgraph(com)
+                internal_edges = subgraph.number_of_edges()
+                total_com_edges = sum(G.degree(node) for node in com)
+                external_edges += total_com_edges - (2 * internal_edges)
+                total_edges += total_com_edges
+            return external_edges / total_edges
+
+        try:
+            stats['Mixing Parameter'] = mixing_parameter(G, communities)
+        except:
+            pass
+
+        try:
+            for i, com in enumerate(communities):
+                subgraph = unweighted_G.subgraph(com)
+                stats[f'Community {i+1} Density'] = nx.density(subgraph)
+                stats[f'Community {i+1} Conductance'] = nx.conductance(G, com)
+                stats[f'Community {i+1} Avg Clustering'] = nx.average_clustering(subgraph)
+                degree_cent = nx.degree_centrality(subgraph)
+                stats[f'Community {i+1} Avg Degree Centrality'] = np.mean(list(degree_cent.values()))
+                if nx.is_connected(subgraph):
+                    stats[f'Community {i+1} Avg Path Length'] = nx.average_shortest_path_length(subgraph)
+        except:
+            pass
+
+        return stats
+
     stats = {}
     unweighted_G = G
     if weighted:
         G = n3d.convert_to_multigraph(G)
 
     if style == 1:
-
-        # Louvain with NetworkX's implementation
+        # Louvain
         communities = list(nx.community.louvain_communities(G, seed = seed))
+        output = {}
+        for i, com in enumerate(communities):
+            for node in com:
+                output[node] = i + 1
+        if dostats:
+            stats = calculate_louvain_network_stats(G, unweighted_G, communities, seed)
+        return output, None, stats
 
-        # Convert to the same format as community_louvain.best_partition
+    elif style == 2:
+        # Leiden
+        import igraph as ig
+        import leidenalg
+
+        g_ig = ig.Graph.from_networkx(G)
+
+        # igraph doesn't support multigraphs natively — simplify by summing edge weights
+        if G.is_multigraph():
+            g_ig.simplify(combine_edges="sum")
+
+        # Set up partition kwargs
+        partition_kwargs = {}
+        if seed is not None:
+            partition_kwargs['seed'] = seed
+
+        # Use weights if available (convert_to_multigraph typically produces weighted edges)
+        if 'weight' in g_ig.es.attributes():
+            partition_kwargs['weights'] = 'weight'
+
+        partition = leidenalg.find_partition(
+            g_ig,
+            leidenalg.ModularityVertexPartition,
+            **partition_kwargs
+        )
+
+        # Map igraph node indices back to original NetworkX node labels
+        nodes_list = list(G.nodes())
+        communities = [set() for _ in range(max(partition.membership) + 1)]
+        for idx, mem in enumerate(partition.membership):
+            communities[mem].add(nodes_list[idx])
+        communities = [c for c in communities if len(c) > 0]
+
         output = {}
         for i, com in enumerate(communities):
             for node in com:
                 output[node] = i + 1
 
         if dostats:
-            stats = calculate_louvain_network_stats(G, unweighted_G, communities, seed)
+            stats = calculate_leiden_network_stats(G, unweighted_G, communities)
 
         return output, None, stats
 
     elif style == 0:
-
-
-        # Detect communities using label propagation
-
+        # Label propagation
         if seed is not None:
             import random
             import numpy as np
-            # Set seeds
             random.seed(seed)
             np.random.seed(seed)
-
         communities = list(community.label_propagation_communities(G))
         output = {}
         for i, com in enumerate(communities):
             for node in com:
                 output[node] = i + 1
-
         if dostats:
-
             stats = calculate_network_stats(G, unweighted_G, communities)
-
         return output, None, stats
 
 
