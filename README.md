@@ -13,7 +13,7 @@ Please see: https://www.youtube.com/watch?v=_4uDy0mzG94&list=PLsrhxiimzKJMZ3_gTW
 
 --- Using the windows installer ---
 
-If you are on windows, an installer will be available here: https://doi.org/10.5281/zenodo.17873800
+If you are on windows, an installer will be available in the 'releases' section on this github page (to the right of the file viewer). It will also be available here: https://doi.org/10.5281/zenodo.17873800
 
 Simply download and run the installer, then open the program in windows. You can also download the executable and its dependencies directly. Note that this version will be missing a few features compared to the Python package, namely GPU segmentation support. It will also not be updated as often.
 
