@@ -46,11 +46,13 @@
               <p class="caption" role="heading"><span class="caption-text">User Guide:</span></p>
 <ul class="current">
 <li class="toctree-l1 current"><a class="current reference internal" href="#">Installation</a><ul>
-<li class="toctree-l2"><a class="reference internal" href="#system-requirements">System Requirements</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#system-requirements">System Requirements</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#using-the-windows-installer"><strong>Using the Windows Installer</strong></a></li>
+</ul>
+</li>
 <li class="toctree-l2"><a class="reference internal" href="#installing-nettracer3d">Installing NetTracer3D</a><ul>
 <li class="toctree-l3"><a class="reference internal" href="#using-pip">Using pip</a></li>
 <li class="toctree-l3"><a class="reference internal" href="#using-anaconda">Using Anaconda</a></li>
-<li class="toctree-l3"><a class="reference internal" href="#alternate-option-just-downloading-the-compiled-version-instead-of-the-package"><strong>Alternate Option</strong> — Just downloading the compiled version instead of the package</a></li>
 <li class="toctree-l3"><a class="reference internal" href="#optional-packages">Optional Packages</a></li>
 <li class="toctree-l3"><a class="reference internal" href="#gpu">GPU</a></li>
 </ul>
@@ -125,6 +127,12 @@
 <li><p>Storage: ~7GB for installation (at least, that’s how big the compiled version’s dependencies get), additional space for captured data</p></li>
 <li><p>Python: 3.12</p></li>
 </ul>
+<section id="using-the-windows-installer">
+<h3><strong>Using the Windows Installer</strong><a class="headerlink" href="#using-the-windows-installer" title="Link to this heading"></a></h3>
+<p>If you are on Windows, the easiest option is to just download and run the windows installer available at the github repo: <a class="reference external" href="https://github.com/mclaughlinliam3/NetTracer3D/releases/tag/v1.4.8">https://github.com/mclaughlinliam3/NetTracer3D/releases/tag/v1.4.8</a></p>
+<p>You can also get it, along with the direct .exe here: <a class="reference external" href="https://doi.org/10.5281/zenodo.17873800">https://doi.org/10.5281/zenodo.17873800</a></p>
+<p>Note that the installation version will be missing a few features compared to the Python package, namely GPU support for segmentation. It will also not be updated as often.</p>
+</section>
 </section>
 <section id="installing-nettracer3d">
 <h2>Installing NetTracer3D<a class="headerlink" href="#installing-nettracer3d" title="Link to this heading"></a></h2>
@@ -191,11 +199,6 @@ pip<span class="w"> </span>install<span class="w"> </span>nettracer3d<span class
 nettracer3d
 </pre></div>
 </div>
-</section>
-<section id="alternate-option-just-downloading-the-compiled-version-instead-of-the-package">
-<h3><strong>Alternate Option</strong> — Just downloading the compiled version instead of the package<a class="headerlink" href="#alternate-option-just-downloading-the-compiled-version-instead-of-the-package" title="Link to this heading"></a></h3>
-<p>If you want to avoid going the Python/pip route, you can download a compiled .exe of version 1.2.7 here: <a class="reference external" href="https://doi.org/10.5281/zenodo.17873800">https://doi.org/10.5281/zenodo.17873800</a></p>
-<p>Unzip the folder, then double click the NetTracer3D executable to run the program. Note that this version will be missing a few features compared to the Python package, namely GPU support for segmentation, and the ability to print updates to the command window. It will also not be updated as often.</p>
 </section>
 <section id="optional-packages">
 <h3>Optional Packages<a class="headerlink" href="#optional-packages" title="Link to this heading"></a></h3>

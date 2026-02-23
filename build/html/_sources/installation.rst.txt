@@ -16,6 +16,17 @@ Before installing NetTracer3D, ensure your system meets the following requiremen
 * Storage: ~7GB for installation (at least, that's how big the compiled version's dependencies get), additional space for captured data
 * Python: 3.12
 
+
+**Using the Windows Installer** 
+~~~~~~~~~~~~~~~~~~~~~~~~
+
+If you are on Windows, the easiest option is to just download and run the windows installer available at the github repo: https://github.com/mclaughlinliam3/NetTracer3D/releases/tag/v1.4.8
+
+You can also get it, along with the direct .exe here: https://doi.org/10.5281/zenodo.17873800 
+
+Note that the installation version will be missing a few features compared to the Python package, namely GPU support for segmentation. It will also not be updated as often.
+
+
 Installing NetTracer3D
 ----------------------
 
@@ -91,14 +102,6 @@ This should install the program in the 'nettracer3d' environment in conda. Then,
     conda activate nettracer3d
 
     nettracer3d
-
-**Alternate Option** — Just downloading the compiled version instead of the package
-~~~~~~~~~~~~~~~~~~~~~~~~
-
-If you want to avoid going the Python/pip route, you can download a compiled .exe of version 1.2.7 here: https://doi.org/10.5281/zenodo.17873800 
-
-Unzip the folder, then double click the NetTracer3D executable to run the program. Note that this version will be missing a few features compared to the Python package, namely GPU support for segmentation, and the ability to print updates to the command window. It will also not be updated as often.
-
 
 Optional Packages
 ~~~~~~~~~~~~~~~~~~
