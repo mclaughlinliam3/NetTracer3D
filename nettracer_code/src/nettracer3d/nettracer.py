@@ -779,8 +779,18 @@ def get_surface_areas(labeled, xy_scale=1, z_scale=1):
     return result
 
 def save_json(filename, my_dict):
-    with open(f'{filename}.json', 'w') as f:
-        json.dump(my_dict, f)
+
+    try:
+        with open(f'{filename}.json', 'w') as f:
+            json.dump(my_dict, f)
+    except:
+        try:
+            my_dict = {int(k): v for k, v in my_dict.items()}
+            with open(f'{filename}.json', 'w') as f:
+                json.dump(my_dict, f)
+        except Exception as e:
+            print(f"Error saving {filename} json: {e}")
+
 
 def get_background_surface_areas(labeled, xy_scale=1, z_scale=1):
     """Calculate surface area exposed to background (value 0) for each object."""
@@ -6590,8 +6600,8 @@ class Network_3D:
             if proportional:
 
                 identities2, id_set2 = self.community_id_info_per_com(proportional = True, unique = unique)
-                output, sorted_id_set = neighborhoods.plot_dict_heatmap(identities2, id_set2, title = "Supercommunity Heatmap by Proportional Composition of Nodes in Supercommunity vs All Nodes in Image", sublabel = "Supercommunity")
-                matrixes.append(output)
+                #output, sorted_id_set = neighborhoods.plot_dict_heatmap(identities2, id_set2, title = "Supercommunity Heatmap by Proportional Composition of Nodes in Supercommunity vs All Nodes in Image", sublabel = "Supercommunity")
+                #matrixes.append(output) <---- this one is sort of hard to interpret so not showing it anymore. But we need to calculate it anyway to get the third one.
 
                 identities3 = {}
                 for iden in identities2:
@@ -6628,8 +6638,8 @@ class Network_3D:
         if proportional:
 
             identities2, id_set2 = self.community_id_info_per_com(proportional = True, unique = unique)
-            output, sorted_id_set = neighborhoods.plot_dict_heatmap(identities2, id_set2, title = "Community Heatmap by Proportional Composition of Nodes in Community vs All Nodes in Image")
-            matrixes.append(output)
+            #output, sorted_id_set = neighborhoods.plot_dict_heatmap(identities2, id_set2, title = "Community Heatmap by Proportional Composition of Nodes in Community vs All Nodes in Image")
+            #matrixes.append(output) <---- this one is sort of hard to interpret so not showing it anymore
 
             identities3 = {}
             for iden in identities2:

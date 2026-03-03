@@ -190,5 +190,9 @@ Version 1.4.5-1.4.9 updates
 	* Improved the connectivity networks that use branches. Now retains current node identities in addition to adding new branches to the graph, and allows branch networks to extend through 'node-occupied-space' (because these structures may overlap - before the nodes came to the foreground and blocked out the branches they sit on top of).
 	* Some bug fixes, optimizations
 
+Version 1.5.0-1.5.1 updates
+	* Added 3d brightness normalization function
+	* Bug fixes
+
 
 

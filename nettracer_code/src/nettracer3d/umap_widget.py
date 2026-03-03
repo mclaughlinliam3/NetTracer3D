@@ -69,6 +69,17 @@ class UMAPGraphWidget(QWidget):
         self.last_selected_set = set()
         self.cached_sizes_for_lod = []
 
+        # --- fast array-based rendering (avoids spot-dict rebuild) ---
+        self._pos_array = None          # Nx2 float64 positions
+        self._size_array = None         # N float64 current sizes
+        self._brush_list = None         # list of N QBrush (current, with selection)
+        self._data_list = None          # list of N node_id values
+        self._base_point_size = 10.0    # scalar base size (same for all nodes)
+
+        # --- LOD debounce timer ---
+        self._lod_timer = None
+        self._pending_lod_scale = None
+
         # --- interaction mode ---
         self.selection_mode = True
         self.zoom_mode = False
@@ -389,6 +400,8 @@ class UMAPGraphWidget(QWidget):
         else:
             point_size = max(2, self.node_size * 0.25)
 
+        self._base_point_size = float(point_size)
+
         # --- colours ---
         active_dict = self._active_color_dict()
         color_map = self._generate_community_colors(active_dict)
@@ -414,10 +427,16 @@ class UMAPGraphWidget(QWidget):
 
         self.node_colors = colors_hex
 
-        # --- spots & brush cache ---
-        spots = []
+        # --- parallel arrays & brush cache (fast path) ---
+        self._pos_array = self.embedding.copy()
+        self._size_array = np.full(n, point_size, dtype=np.float64)
+        self._brush_list = [None] * n
+        self._data_list = list(self.node_ids)
+
         brush_cache = {}
+        spots = []  # kept for legacy compat with _recolor_nodes / spot-dict consumers
         sizes = []
+
         for i, nid in enumerate(self.node_ids):
             hex_c = colors_hex[i].lstrip('#')
             r, g, b = (int(hex_c[j:j+2], 16) for j in (0, 2, 4))
@@ -427,6 +446,7 @@ class UMAPGraphWidget(QWidget):
             selected_brush = pg.mkBrush(255, 255, 0, 255)
 
             brush_cache[nid] = {'normal': normal_brush, 'selected': selected_brush}
+            self._brush_list[i] = normal_brush
 
             spot = {
                 'pos': self.embedding[i],
@@ -440,10 +460,16 @@ class UMAPGraphWidget(QWidget):
         self.cached_spots = spots
         self.cached_brushes = brush_cache
         self.cached_sizes_for_lod = sizes[:]
-        self.cached_node_to_index = {spot['data']: i for i, spot in enumerate(spots)}
+        self.cached_node_to_index = {nid: i for i, nid in enumerate(self.node_ids)}
 
-        # --- render scatter ---
-        self.scatter.setData(spots=self.cached_spots)
+        # --- render scatter (array path — much faster than spots dicts) ---
+        self.scatter.setData(
+            pos=self._pos_array,
+            size=self._size_array,
+            brush=self._brush_list,
+            data=self._data_list,
+            pen=None,
+        )
         self.scatter.setZValue(10)
 
         # --- labels ---
@@ -504,11 +530,26 @@ class UMAPGraphWidget(QWidget):
 
             if nid in self.selected_nodes:
                 self.cached_spots[i]['brush'] = selected_brush
+                if self._brush_list is not None:
+                    self._brush_list[i] = selected_brush
             else:
                 self.cached_spots[i]['brush'] = normal_brush
+                if self._brush_list is not None:
+                    self._brush_list[i] = normal_brush
 
         self.node_colors = colors_hex
-        self.scatter.setData(spots=self.cached_spots)
+
+        # Use fast array path if available, fall back to spot dicts
+        if self._pos_array is not None:
+            self.scatter.setData(
+                pos=self._pos_array,
+                size=self._size_array,
+                brush=self._brush_list,
+                data=self._data_list,
+                pen=None,
+            )
+        else:
+            self.scatter.setData(spots=self.cached_spots)
 
         # rebuild legend
         self._rebuild_legend(active_dict, color_map)
@@ -682,7 +723,7 @@ class UMAPGraphWidget(QWidget):
     # ------------------------------------------------------- render helpers -----
     def _render_nodes(self):
         """Only update brushes for nodes that changed selection state."""
-        if not self.cached_spots or not self.cached_brushes:
+        if not self.cached_brushes:
             return
 
         newly_selected = self.selected_nodes - self.last_selected_set
@@ -694,14 +735,32 @@ class UMAPGraphWidget(QWidget):
         for node in newly_selected:
             if node in self.cached_node_to_index:
                 idx = self.cached_node_to_index[node]
-                self.cached_spots[idx]['brush'] = self.cached_brushes[node]['selected']
+                brush = self.cached_brushes[node]['selected']
+                if self.cached_spots:
+                    self.cached_spots[idx]['brush'] = brush
+                if self._brush_list is not None:
+                    self._brush_list[idx] = brush
 
         for node in newly_deselected:
             if node in self.cached_node_to_index:
                 idx = self.cached_node_to_index[node]
-                self.cached_spots[idx]['brush'] = self.cached_brushes[node]['normal']
+                brush = self.cached_brushes[node]['normal']
+                if self.cached_spots:
+                    self.cached_spots[idx]['brush'] = brush
+                if self._brush_list is not None:
+                    self._brush_list[idx] = brush
 
-        self.scatter.setData(spots=self.cached_spots)
+        # Use fast array path if available
+        if self._pos_array is not None:
+            self.scatter.setData(
+                pos=self._pos_array,
+                size=self._size_array,
+                brush=self._brush_list,
+                data=self._data_list,
+                pen=None,
+            )
+        else:
+            self.scatter.setData(spots=self.cached_spots)
         self.last_selected_set = self.selected_nodes.copy()
 
     # ------------------------------------------------------- view / zoom --------
@@ -728,42 +787,85 @@ class UMAPGraphWidget(QWidget):
             zoom_changed = abs(zoom_factor - self.current_zoom_factor) / max(self.current_zoom_factor, 0.01) > 0.05
             if zoom_changed:
                 self.current_zoom_factor = zoom_factor
-                self._update_lod_rendering()
+                # Debounce LOD: schedule update, coalescing rapid zoom events
+                self._schedule_lod_update()
             else:
                 if self.labels:
                     self._update_labels_for_zoom()
 
+    def _schedule_lod_update(self):
+        """Debounce LOD updates — coalesce rapid zoom events into one render."""
+        if self._lod_timer is None:
+            self._lod_timer = QTimer()
+            self._lod_timer.setSingleShot(True)
+            self._lod_timer.timeout.connect(self._apply_lod_update)
+        # Restart the timer; only fires once zooming settles
+        self._lod_timer.start(30)  # 30 ms debounce
+
+    def _apply_lod_update(self):
+        """Deferred LOD render — called once after zoom events settle."""
+        self._update_lod_rendering()
+
     def _update_lod_rendering(self):
-        """Adjust node sizes based on zoom level — small when zoomed out, large when zoomed in."""
-        if not self.cached_spots or not self.cached_sizes_for_lod:
+        """Adjust node sizes based on zoom level — uses in‑place array update
+        to avoid the expensive scatter.setData() rebuild."""
+        if self._size_array is None or len(self._size_array) == 0:
             return
 
         # zoom_factor ~1.0 at full extent, grows as you zoom in
-        # We want nodes to be noticeably smaller at full zoom-out and grow
-        # significantly as the user zooms in.
         zf = self.current_zoom_factor
 
         if zf <= 0.5:
-            # Very zoomed out — shrink nodes
             scale_factor = 0.5
         elif zf <= 1.0:
-            # Around default view — interpolate from 0.5× to 1.0×
             scale_factor = 0.5 + 0.5 * (zf / 1.0)
         else:
-            # Zoomed in — grow nodes with a sqrt curve for smooth scaling
-            # At 2× zoom → ~1.4×, at 4× → ~2×, at 10× → ~3.2×, at 25× → ~5×
             scale_factor = 1.0 + (math.sqrt(zf) - 1.0) * 1.0
 
-        # Clamp to avoid absurdly large nodes
         scale_factor = min(scale_factor, 8.0)
 
-        for i, base_size in enumerate(self.cached_sizes_for_lod):
-            self.cached_spots[i]['size'] = base_size * scale_factor
+        new_size = self._base_point_size * scale_factor
+
+        # --- fast path: modify pyqtgraph's internal data in‑place ---
+        # This bypasses the full setData() → generateSpots() pipeline.
+        # ScatterPlotItem stores point data in self.data (numpy recarray).
+        try:
+            if (self.scatter.data is not None
+                    and len(self.scatter.data) == len(self._size_array)):
+                self._size_array[:] = new_size
+                self.scatter.data['size'] = new_size
+                # Regenerate the cached spot fragments for the new sizes
+                self.scatter.updateSpots()
+                self.scatter.prepareGeometryChange()
+                self.scatter.bounds = [None, None]
+                self.scatter.update()
+            else:
+                # Fallback: full array‑based setData (still faster than spot dicts)
+                self._size_array[:] = new_size
+                self.scatter.setData(
+                    pos=self._pos_array,
+                    size=self._size_array,
+                    brush=self._brush_list,
+                    data=self._data_list,
+                    pen=None,
+                )
+        except (AttributeError, TypeError):
+            # Ultimate fallback for unexpected pyqtgraph internals
+            self._size_array[:] = new_size
+            self.scatter.setData(
+                pos=self._pos_array,
+                size=self._size_array,
+                brush=self._brush_list,
+                data=self._data_list,
+                pen=None,
+            )
+
+        # Keep legacy cached_spots in sync (for _recolor_nodes etc.)
+        for i in range(len(self.cached_sizes_for_lod)):
+            self.cached_spots[i]['size'] = new_size
 
         if self.labels:
             self._update_labels_for_zoom()
-
-        self.scatter.setData(spots=self.cached_spots)
 
     # ------------------------------------------------------- labels -------------
     def _update_labels_for_zoom(self):
@@ -925,6 +1027,16 @@ class UMAPGraphWidget(QWidget):
         self.cached_sizes_for_lod.clear()
         self.label_data.clear()
         self.rendered = False
+
+        # Clear array state
+        self._pos_array = None
+        self._size_array = None
+        self._brush_list = None
+        self._data_list = None
+
+        # Stop LOD timer
+        if self._lod_timer is not None and self._lod_timer.isActive():
+            self._lod_timer.stop()
 
     def _remove_loading_text(self):
         if hasattr(self, 'loading_text') and self.loading_text is not None:

@@ -13,7 +13,7 @@ Please see: https://www.youtube.com/watch?v=_4uDy0mzG94&list=PLsrhxiimzKJMZ3_gTW
 
 --- Using the windows installer ---
 
-If you are on windows, an installer will be available at the GitHub repo, or here: https://doi.org/10.5281/zenodo.17873800
+If you are on windows, an installer will be available at the GitHub repo: https://github.com/mclaughlinliam3/NetTracer3D/releases/tag/v1.4.8
 
 Simply download and run the installer, then open the program in windows. You can also download the executable and its dependencies directly. Note that this version will be missing a few features compared to the Python package, namely GPU segmentation support. It will also not be updated as often.
 
@@ -105,8 +105,9 @@ NetTracer3D is freely available for academic and nonprofit use and can obtained 
 
 NetTracer3D was developed by Liam McLaughlin while working under Dr. Sanjay Jain at Washington University School of Medicine.
 
--- Version 1.4.9 Updates --
+-- Version 1.5.1 Updates --
 
-	* Some fixes.
+	* Added brightness norm function to normalize deep slices of 3d stacks to have similar brightness to surface ones.
+	* Bug fixes
 
 

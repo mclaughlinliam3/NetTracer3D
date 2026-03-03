@@ -1222,7 +1222,7 @@ def create_node_heatmap(node_intensity, node_centroids, shape=None, is_3d=True,
         plt.tight_layout()
         plt.show()
 
-def create_violin_plots(data_dict, graph_title="Violin Plots", idens=None):
+def create_violin_plots(data_dict, graph_title="Violin Plots", idens=None, valid_idens = None):
     """
     Create violin plots from dictionary data with distinct colors and IQR lines.
     
@@ -1235,6 +1235,7 @@ def create_violin_plots(data_dict, graph_title="Violin Plots", idens=None):
                            from the same palette so they stay consistent with
                            the network / UMAP graphs even when only a subset
                            of labels appears in data_dict.
+    valid_idens (list, optional): If provided, will not show the included identities
     """
 
     if not data_dict:
@@ -1243,6 +1244,14 @@ def create_violin_plots(data_dict, graph_title="Violin Plots", idens=None):
     
     # Prepare data
     data_dict = dict(sorted(data_dict.items()))
+
+    if valid_idens:
+        new_labels = {}
+        for label, vals in data_dict.items():
+            if label in valid_idens:
+                new_labels[label] = vals
+        data_dict = new_labels
+
     labels = list(data_dict.keys())
     data_lists = list(data_dict.values())
     

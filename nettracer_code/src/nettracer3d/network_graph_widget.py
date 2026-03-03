@@ -4,12 +4,13 @@ from PyQt6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QMe
                               QSizePolicy, QApplication, QScrollArea, QLabel, QFrame,
                               QFileDialog, QMessageBox)
 from PyQt6.QtCore import Qt, pyqtSignal, QThread, pyqtSlot, QTimer, QPointF, QRectF
-from PyQt6.QtGui import QColor, QPen, QBrush
+from PyQt6.QtGui import QColor, QPen, QBrush, QPainterPath, QPolygonF
 import pyqtgraph as pg
 from pyqtgraph import ScatterPlotItem, PlotCurveItem, GraphicsLayoutWidget, ROI
 import colorsys
 import random
 import copy
+import math
 
 
 def remove_dupe_ids(idens):
@@ -796,6 +797,20 @@ class NetworkGraphWidget(QWidget):
         self.cached_brushes = {}  # Node -> {'normal': brush, 'selected': brush}
         self.last_selected_set = set()  # Track last selection state
         self.cached_sizes_for_lod = []  # Base sizes for LOD scaling
+
+        # Fast array-based rendering (avoids spot-dict rebuild on setData)
+        self._pos_array = None          # Nx2 float64 positions
+        self._size_array = None         # N float64 current sizes
+        self._brush_list = None         # list of N QBrush (current, with selection)
+        self._data_list = None          # list of N node_id values
+        self._base_sizes = None         # N float64 original per-node sizes
+
+        # Cached full-graph bounds (avoids recomputing from dict every zoom)
+        self._full_x_range = 0.0
+        self._full_y_range = 0.0
+
+        # LOD debounce timer
+        self._lod_timer = None
         
         # Interaction mode
         self.selection_mode = True
@@ -806,6 +821,14 @@ class NetworkGraphWidget(QWidget):
         self.selection_start_pos = None
         self.is_area_selecting = False
         self.click_timer = None
+        
+        # Lasso selection
+        self.lasso_mode = False
+        self.lasso_points = []
+        self.lasso_path_item = None
+        self.is_lasso_selecting = False
+        self.lasso_start_pos = None
+        self.lasso_close_threshold = 15  # pixels to consider "closed"
         
         # Middle mouse panning in selection mode
         self.temp_pan_active = False
@@ -1055,6 +1078,13 @@ class NetworkGraphWidget(QWidget):
         self.zoom_btn.setCheckable(True)
         self.zoom_btn.setMaximumSize(32, 32)
         self.zoom_btn.clicked.connect(self._toggle_zoom_mode)
+
+        self.lasso_btn = QPushButton("🫳")
+        self.lasso_btn.setToolTip("Lasso Selection Tool")
+        self.lasso_btn.setCheckable(True)
+        self.lasso_btn.setChecked(False)
+        self.lasso_btn.setMaximumSize(32, 32)
+        self.lasso_btn.clicked.connect(self._toggle_lasso_mode)
         
         self.home_btn = QPushButton("🏠")
         self.home_btn.setToolTip("Reset View")
@@ -1075,12 +1105,12 @@ class NetworkGraphWidget(QWidget):
         self.clear_btn.setToolTip("Clear Graph")
         self.clear_btn.setMaximumSize(32, 32)
         self.clear_btn.clicked.connect(self._clear_graph)
-
         
         # Add buttons to layout
         panel_layout.addWidget(self.select_btn)
         panel_layout.addWidget(self.pan_btn)
         panel_layout.addWidget(self.zoom_btn)
+        panel_layout.addWidget(self.lasso_btn)
         panel_layout.addWidget(self.home_btn)
         panel_layout.addWidget(self.refresh_btn)
         panel_layout.addWidget(self.settings_btn)
@@ -1199,6 +1229,19 @@ class NetworkGraphWidget(QWidget):
         # Build node-to-index mapping
         self.cached_node_to_index = {spot['data']: i 
                                       for i, spot in enumerate(self.cached_spots)}
+
+        # Build parallel arrays for fast array-based setData
+        n = len(self.cached_spots)
+        if n > 0:
+            self._pos_array = np.array([s['pos'] for s in self.cached_spots], dtype=np.float64)
+            self._size_array = np.array([s['size'] for s in self.cached_spots], dtype=np.float64)
+            self._brush_list = [s['brush'] for s in self.cached_spots]
+            self._data_list = [s['data'] for s in self.cached_spots]
+            self._base_sizes = self._size_array.copy()
+
+            # Cache full-graph bounds (constant until graph reloads)
+            self._full_x_range = float(self._pos_array[:, 0].max() - self._pos_array[:, 0].min())
+            self._full_y_range = float(self._pos_array[:, 1].max() - self._pos_array[:, 1].min())
         
         # Fast render - data is already prepared
         self._render_prepared_data(result)
@@ -1256,8 +1299,17 @@ class NetworkGraphWidget(QWidget):
                 self.plot.addItem(edge_line)
                 self.edge_items.append(edge_line)
         
-        # Render nodes - use cached spots directly
-        self.scatter.setData(spots=self.cached_spots)
+        # Render nodes - use fast array path if available
+        if self._pos_array is not None:
+            self.scatter.setData(
+                pos=self._pos_array,
+                size=self._size_array,
+                brush=self._brush_list,
+                data=self._data_list,
+                pen=None,
+            )
+        else:
+            self.scatter.setData(spots=self.cached_spots)
         self.scatter.setZValue(10)
         
         # Build node items mapping
@@ -1274,7 +1326,7 @@ class NetworkGraphWidget(QWidget):
     def _render_nodes(self):
         """OPTIMIZED: Only update brushes for nodes that changed selection state"""
         
-        if not self.cached_spots or not self.cached_brushes:
+        if not self.cached_brushes:
             return
         
         # Find nodes whose selection state changed
@@ -1289,15 +1341,32 @@ class NetworkGraphWidget(QWidget):
         for node in newly_selected:
             if node in self.cached_node_to_index:
                 idx = self.cached_node_to_index[node]
-                self.cached_spots[idx]['brush'] = self.cached_brushes[node]['selected']
+                brush = self.cached_brushes[node]['selected']
+                if self.cached_spots:
+                    self.cached_spots[idx]['brush'] = brush
+                if self._brush_list is not None:
+                    self._brush_list[idx] = brush
         
         for node in newly_deselected:
             if node in self.cached_node_to_index:
                 idx = self.cached_node_to_index[node]
-                self.cached_spots[idx]['brush'] = self.cached_brushes[node]['normal']
+                brush = self.cached_brushes[node]['normal']
+                if self.cached_spots:
+                    self.cached_spots[idx]['brush'] = brush
+                if self._brush_list is not None:
+                    self._brush_list[idx] = brush
         
-        # Update the scatter plot with modified spots
-        self.scatter.setData(spots=self.cached_spots)
+        # Use fast array path if available
+        if self._pos_array is not None:
+            self.scatter.setData(
+                pos=self._pos_array,
+                size=self._size_array,
+                brush=self._brush_list,
+                data=self._data_list,
+                pen=None,
+            )
+        else:
+            self.scatter.setData(spots=self.cached_spots)
         
         # Update last selection state
         self.last_selected_set = self.selected_nodes.copy()
@@ -1448,7 +1517,18 @@ class NetworkGraphWidget(QWidget):
         # Ctrl+Click on background does nothing (as requested)
     
     def _on_mouse_moved(self, pos):
-        """Handle mouse movement for area selection"""
+        """Handle mouse movement for area selection and lasso"""
+        if self.is_lasso_selecting:
+            view_pos = self.plot.vb.mapSceneToView(pos)
+            self.lasso_points.append(view_pos)
+            self._draw_lasso()
+
+            # Check if the newest segment crosses any older segment
+            cross_idx = self._find_segment_crossing()
+            if cross_idx >= 0:
+                self._auto_close_lasso(cross_idx)
+            return
+
         if self.is_area_selecting and self.selection_rect:
             # Update selection rectangle
             view_pos = self.plot.vb.mapSceneToView(pos)
@@ -1555,14 +1635,16 @@ class NetworkGraphWidget(QWidget):
         if self.selection_mode:
             self.pan_btn.setChecked(False)
             self.zoom_btn.setChecked(False)
+            self.lasso_btn.setChecked(False)
             self.zoom_mode = False
+            self.lasso_mode = False
             # Disable panning, but allow wheel events to be handled manually
             self.plot.setCursor(Qt.CursorShape.ArrowCursor)
             self.plot.vb.setMenuEnabled(False)
             self.plot.setMouseEnabled(x=False, y=False)
         else:
             # If nothing else is checked, check pan by default
-            if not self.pan_btn.isChecked() and not self.zoom_btn.isChecked():
+            if not self.pan_btn.isChecked() and not self.zoom_btn.isChecked() and not self.lasso_btn.isChecked():
                 self.pan_btn.click()
     
     def _toggle_pan_mode(self):
@@ -1570,15 +1652,17 @@ class NetworkGraphWidget(QWidget):
         if self.pan_btn.isChecked():
             self.select_btn.setChecked(False)
             self.zoom_btn.setChecked(False)
+            self.lasso_btn.setChecked(False)
             self.selection_mode = False
             self.zoom_mode = False
+            self.lasso_mode = False
             # Enable panning
             self.plot.vb.setMenuEnabled(True)
             self.plot.setCursor(Qt.CursorShape.OpenHandCursor)
             self.plot.setMouseEnabled(x=True, y=True)
         else:
             # Disable panning
-            if not self.select_btn.isChecked() and not self.zoom_btn.isChecked():
+            if not self.select_btn.isChecked() and not self.zoom_btn.isChecked() and not self.lasso_btn.isChecked():
                 self.select_btn.click()
 
     def _toggle_zoom_mode(self):
@@ -1588,16 +1672,197 @@ class NetworkGraphWidget(QWidget):
         if self.zoom_mode:
             self.select_btn.setChecked(False)
             self.pan_btn.setChecked(False)
+            self.lasso_btn.setChecked(False)
             self.selection_mode = False
+            self.lasso_mode = False
             # Disable default panning for zoom mode
             self.plot.setCursor(Qt.CursorShape.CrossCursor)
             self.plot.vb.setMenuEnabled(False)
             self.plot.setMouseEnabled(x=False, y=False)
         else:
             # If nothing else is checked, check pan by default
-            if not self.pan_btn.isChecked() and not self.select_btn.isChecked():
+            if not self.pan_btn.isChecked() and not self.select_btn.isChecked() and not self.lasso_btn.isChecked():
                 self.select_btn.click()
         
+    def _toggle_lasso_mode(self):
+        """Toggle lasso selection mode"""
+        self.lasso_mode = self.lasso_btn.isChecked()
+        
+        if self.lasso_mode:
+            self.select_btn.setChecked(False)
+            self.pan_btn.setChecked(False)
+            self.zoom_btn.setChecked(False)
+            self.selection_mode = False
+            self.zoom_mode = False
+            self.plot.setCursor(Qt.CursorShape.CrossCursor)
+            self.plot.vb.setMenuEnabled(False)
+            self.plot.setMouseEnabled(x=False, y=False)
+        else:
+            if not self.pan_btn.isChecked() and not self.select_btn.isChecked() and not self.zoom_btn.isChecked():
+                self.select_btn.click()
+
+    # ------------------------------------------------------- lasso selection ----
+    def _start_lasso(self, scene_pos):
+        """Begin drawing a lasso from the given scene position."""
+        self.is_lasso_selecting = True
+        self.node_click = False
+        view_pos = self.plot.vb.mapSceneToView(scene_pos)
+        self.lasso_start_pos = view_pos
+        self.lasso_points = [view_pos]
+
+        # Create a dashed-line PlotCurveItem
+        if self.lasso_path_item is not None:
+            self.plot.removeItem(self.lasso_path_item)
+
+        pen = pg.mkPen(color=(0, 100, 255), width=2, style=Qt.PenStyle.DashLine)
+        self.lasso_path_item = PlotCurveItem(pen=pen)
+        self.lasso_path_item.setZValue(30)
+        self.plot.addItem(self.lasso_path_item)
+
+    def _draw_lasso(self):
+        """Redraw the dashed lasso line from accumulated points."""
+        if self.lasso_path_item is None or len(self.lasso_points) < 2:
+            return
+
+        xs = [p.x() for p in self.lasso_points]
+        ys = [p.y() for p in self.lasso_points]
+        self.lasso_path_item.setData(x=np.array(xs), y=np.array(ys))
+
+    @staticmethod
+    def _segments_intersect(p1, p2, p3, p4):
+        """
+        Test if line segment (p1->p2) intersects (p3->p4).
+        Returns (True, t) where t is the parameter along p3->p4 at the
+        intersection, or (False, 0) if no intersection.
+        """
+        dx1 = p2[0] - p1[0]
+        dy1 = p2[1] - p1[1]
+        dx2 = p4[0] - p3[0]
+        dy2 = p4[1] - p3[1]
+
+        denom = dx1 * dy2 - dy1 * dx2
+        if abs(denom) < 1e-12:
+            return False, 0
+
+        dx3 = p3[0] - p1[0]
+        dy3 = p3[1] - p1[1]
+
+        t = (dx3 * dy2 - dy3 * dx2) / denom
+        u = (dx3 * dy1 - dy3 * dx1) / denom
+
+        if 0.0 <= t <= 1.0 and 0.0 <= u <= 1.0:
+            return True, u
+        return False, 0
+
+    def _find_segment_crossing(self):
+        """
+        Check if the newest lasso segment crosses any earlier segment.
+        Returns the index of the earlier segment's START point, or -1 if none.
+        """
+        n = len(self.lasso_points)
+        if n < 6:
+            return -1
+
+        a = self.lasso_points[-2]
+        b = self.lasso_points[-1]
+        seg_new = (a.x(), a.y()), (b.x(), b.y())
+
+        check_up_to = n - 5
+
+        for i in range(0, check_up_to):
+            c = self.lasso_points[i]
+            d = self.lasso_points[i + 1]
+            seg_old = (c.x(), c.y()), (d.x(), d.y())
+
+            hit, _ = self._segments_intersect(
+                seg_new[0], seg_new[1], seg_old[0], seg_old[1]
+            )
+            if hit:
+                return i
+
+        return -1
+
+    def _auto_close_lasso(self, crossing_segment_idx):
+        """
+        The lasso path crossed itself. Form a closed polygon from the
+        crossing point to the end and select nodes inside it.
+        """
+        if not self.is_lasso_selecting:
+            return
+
+        loop_points = self.lasso_points[crossing_segment_idx:]
+
+        if len(loop_points) >= 3:
+            poly = QPolygonF([QPointF(p.x(), p.y()) for p in loop_points])
+            path = QPainterPath()
+            path.addPolygon(poly)
+            path.closeSubpath()
+
+            selected_in_lasso = []
+            for nid, pos in self.node_positions.items():
+                if path.contains(QPointF(float(pos[0]), float(pos[1]))):
+                    selected_in_lasso.append(nid)
+
+            modifiers = QApplication.keyboardModifiers()
+            ctrl = modifiers & Qt.KeyboardModifier.ControlModifier
+
+            if not ctrl:
+                self.selected_nodes = set()
+            self.selected_nodes.update(selected_in_lasso)
+            self.push_selection()
+            self._render_nodes()
+            self.node_selected.emit(list(self.selected_nodes))
+
+        self._cleanup_lasso()
+
+    def _cleanup_lasso(self):
+        """Remove lasso visuals and reset state."""
+        if self.lasso_path_item is not None:
+            self.plot.removeItem(self.lasso_path_item)
+            self.lasso_path_item = None
+        self.lasso_points.clear()
+        self.is_lasso_selecting = False
+        self.lasso_start_pos = None
+
+    def _finish_lasso(self, event):
+        """
+        Called on mouse release. If the lasso hasn't already auto-closed
+        via self-intersection, check if the end is near the start as a
+        fallback, otherwise just cancel.
+        """
+        if not self.is_lasso_selecting:
+            return
+
+        if len(self.lasso_points) >= 3 and self.lasso_start_pos is not None:
+            last_view = self.lasso_points[-1]
+            first_view = self.lasso_start_pos
+            scene_last = self.plot.vb.mapViewToScene(last_view)
+            scene_first = self.plot.vb.mapViewToScene(first_view)
+            dx = scene_last.x() - scene_first.x()
+            dy = scene_last.y() - scene_first.y()
+            pixel_dist = math.sqrt(dx * dx + dy * dy)
+
+            if pixel_dist < self.lasso_close_threshold:
+                poly = QPolygonF([QPointF(p.x(), p.y()) for p in self.lasso_points])
+                path = QPainterPath()
+                path.addPolygon(poly)
+                path.closeSubpath()
+
+                selected_in_lasso = []
+                for nid, pos in self.node_positions.items():
+                    if path.contains(QPointF(float(pos[0]), float(pos[1]))):
+                        selected_in_lasso.append(nid)
+
+                modifiers = event.modifiers()
+                ctrl = modifiers & Qt.KeyboardModifier.ControlModifier
+                if not ctrl:
+                    self.selected_nodes = set()
+                self.selected_nodes.update(selected_in_lasso)
+                self.push_selection()
+                self._render_nodes()
+                self.node_selected.emit(list(self.selected_nodes))
+
+        self._cleanup_lasso()
     def eventFilter(self, obj, event):
         """Filter events for custom mouse handling"""
         from PyQt6.QtCore import QEvent
@@ -1608,11 +1873,20 @@ class NetworkGraphWidget(QWidget):
             return super().eventFilter(obj, event)
         
         if event.type() == QEvent.Type.GraphicsSceneMousePress:            
-            # Handle middle mouse button for temporary panning in selection mode
+            # Handle middle mouse button for temporary panning in any non-pan mode
             if event.button() == Qt.MouseButton.MiddleButton:
-                if self.selection_mode or self.zoom_mode:
+                if self.selection_mode or self.zoom_mode or self.lasso_mode:
                     self._start_temp_pan()
                     return False  # Let the event propagate for panning
+            
+            # LASSO MODE: Handle left button for lasso selection
+            elif event.button() == Qt.MouseButton.LeftButton and self.lasso_mode:
+                self.last_mouse_pos = event.scenePos()
+                if not self.click_timer:
+                    self.click_timer = QTimer()
+                    self.click_timer.setSingleShot(True)
+                    self.click_timer.timeout.connect(self._on_long_press)
+                self.click_timer.start(200)
             
             # SELECTION MODE: Handle left button for area selection
             elif event.button() == Qt.MouseButton.LeftButton and (self.selection_mode or self.zoom_mode):
@@ -1625,8 +1899,20 @@ class NetworkGraphWidget(QWidget):
                 self.click_timer.start(200)  # 200ms threshold for area selection
         
         elif event.type() == QEvent.Type.GraphicsSceneMouseMove:
+            # Check if we should start lasso
+            if self.lasso_mode and self.click_timer and self.click_timer.isActive():
+                if self.last_mouse_pos:
+                    current_pos = event.scenePos()
+                    delta_x = abs(current_pos.x() - self.last_mouse_pos.x())
+                    delta_y = abs(current_pos.y() - self.last_mouse_pos.y())
+                    
+                    if delta_x > 10 or delta_y > 10:
+                        self.click_timer.stop()
+                        if not self.is_lasso_selecting:
+                            self._start_lasso(self.last_mouse_pos)
+
             # Check if we should start area selection
-            if (self.selection_mode or self.zoom_mode) and self.click_timer and self.click_timer.isActive():
+            elif (self.selection_mode or self.zoom_mode) and self.click_timer and self.click_timer.isActive():
                 if self.last_mouse_pos:
                     # Check if mouse moved significantly
                     current_pos = event.scenePos()
@@ -1636,7 +1922,6 @@ class NetworkGraphWidget(QWidget):
                     if delta_x > 10 or delta_y > 10:  # Moved significantly
                         self.click_timer.stop()
                         if not self.is_area_selecting:
-                            #if not self.was_in_selection_before_wheel or self.zoom_mode:
                             self._start_area_selection(self.last_mouse_pos)
 
         
@@ -1647,6 +1932,15 @@ class NetworkGraphWidget(QWidget):
                     self._end_temp_pan()
                     return False  # Let event propagate
             
+            # Handle lasso release
+            elif event.button() == Qt.MouseButton.LeftButton and self.lasso_mode:
+                if self.click_timer and self.click_timer.isActive():
+                    self.click_timer.stop()
+                
+                if self.is_lasso_selecting:
+                    self._finish_lasso(event)
+                    return True
+
             # Handle left button release in selection mode
             elif event.button() == Qt.MouseButton.LeftButton and (self.selection_mode or self.zoom_mode):
                 if self.click_timer and self.click_timer.isActive():
@@ -1672,16 +1966,18 @@ class NetworkGraphWidget(QWidget):
                     return True
         
         elif event.type() == QEvent.Type.GraphicsSceneWheel:
-            # Handle wheel events in selection mode
-            if self.selection_mode or self.zoom_mode:
+            # Handle wheel events in selection/zoom/lasso mode
+            if self.selection_mode or self.zoom_mode or self.lasso_mode:
                 self._handle_wheel_in_selection(event)
                 return False  # Let event propagate for actual zooming
         
         return super().eventFilter(obj, event)
     
     def _on_long_press(self):
-        """Handle long press for area selection"""
-        if (self.selection_mode or self.zoom_mode) and self.last_mouse_pos:
+        """Handle long press for area selection or lasso"""
+        if self.lasso_mode and self.last_mouse_pos:
+            self._start_lasso(self.last_mouse_pos)
+        elif (self.selection_mode or self.zoom_mode) and self.last_mouse_pos:
             # Start area selection at stored mouse position
             self._start_area_selection(self.last_mouse_pos)
     
@@ -1694,8 +1990,8 @@ class NetworkGraphWidget(QWidget):
     def _end_temp_pan(self):
         """End temporary panning mode"""
         self.temp_pan_active = False
-        # Disable mouse if we're in selection mode
-        if self.selection_mode or self.zoom_mode:
+        # Disable mouse if we're in selection/zoom/lasso mode
+        if self.selection_mode or self.zoom_mode or self.lasso_mode:
             self.plot.setMouseEnabled(x=False, y=False)
     
     def _handle_wheel_in_selection(self, event):
@@ -1716,7 +2012,7 @@ class NetworkGraphWidget(QWidget):
     
     def _end_wheel_zoom(self):
         """End wheel zoom and return to selection mode"""
-        if self.was_in_selection_before_wheel and (self.selection_mode or self.zoom_mode):
+        if self.was_in_selection_before_wheel and (self.selection_mode or self.zoom_mode or self.lasso_mode):
             self.plot.setMouseEnabled(x=False, y=False)
             self.was_in_selection_before_wheel = False
     
@@ -1831,6 +2127,14 @@ class NetworkGraphWidget(QWidget):
             self.plot.removeItem(self.selection_rect)
             self.selection_rect = None
         
+        # Clear lasso if active
+        if self.lasso_path_item is not None:
+            self.plot.removeItem(self.lasso_path_item)
+            self.lasso_path_item = None
+        self.lasso_points.clear()
+        self.is_lasso_selecting = False
+        self.lasso_start_pos = None
+        
         # Clear data
         self.node_positions.clear()
         self.node_items.clear()
@@ -1845,6 +2149,19 @@ class NetworkGraphWidget(QWidget):
         self.cached_brushes.clear()
         self.last_selected_set.clear()
         self.cached_sizes_for_lod.clear()
+
+        # Clear array state
+        self._pos_array = None
+        self._size_array = None
+        self._brush_list = None
+        self._data_list = None
+        self._base_sizes = None
+        self._full_x_range = 0.0
+        self._full_y_range = 0.0
+
+        # Stop LOD timer
+        if self._lod_timer is not None and self._lod_timer.isActive():
+            self._lod_timer.stop()
 
         if self.graph is None or len(self.graph.nodes()) == 0:
             # Show loading indicator
@@ -2134,34 +2451,38 @@ class NetworkGraphWidget(QWidget):
         x_range = view_range[0][1] - view_range[0][0]
         y_range = view_range[1][1] - view_range[1][0]
         
-        # Get initial full graph bounds
-        nodes = list(self.node_positions.keys())
-        pos_array = np.array([self.node_positions[n] for n in nodes])
-        
-        if len(pos_array) > 0:
-            full_x_range = pos_array[:, 0].max() - pos_array[:, 0].min()
-            full_y_range = pos_array[:, 1].max() - pos_array[:, 1].min()
+        # Use cached full-graph bounds (avoid rebuilding array from dict)
+        full_x_range = self._full_x_range
+        full_y_range = self._full_y_range
+
+        if full_x_range > 0 and full_y_range > 0:
+            # Calculate zoom factor (smaller view range = more zoomed in)
+            zoom_x = full_x_range / x_range if x_range > 0 else 1
+            zoom_y = full_y_range / y_range if y_range > 0 else 1
+            zoom_factor = max(zoom_x, zoom_y)
             
-            if full_x_range > 0 and full_y_range > 0:
-                # Calculate zoom factor (smaller view range = more zoomed in)
-                zoom_x = full_x_range / x_range if x_range > 0 else 1
-                zoom_y = full_y_range / y_range if y_range > 0 else 1
-                zoom_factor = max(zoom_x, zoom_y)
-                
-                # Update if zoom changed significantly (>10% change)
-                zoom_changed = abs(zoom_factor - self.current_zoom_factor) / max(self.current_zoom_factor, 0.01) > 0.1
-                if zoom_changed:
-                    self.current_zoom_factor = zoom_factor
-                    self._update_lod_rendering()
-                else:
-                    # Even if zoom didn't change, update labels for panning
-                    # (viewport changed but zoom level stayed the same)
-                    if self.labels:
-                        self._update_labels_for_zoom()
+            # Update if zoom changed significantly (>10% change)
+            zoom_changed = abs(zoom_factor - self.current_zoom_factor) / max(self.current_zoom_factor, 0.01) > 0.1
+            if zoom_changed:
+                self.current_zoom_factor = zoom_factor
+                self._schedule_lod_update()
+            else:
+                # Even if zoom didn't change, update labels for panning
+                if self.labels:
+                    self._update_labels_for_zoom()
+
+    def _schedule_lod_update(self):
+        """Debounce LOD updates — coalesce rapid zoom events into one render."""
+        if self._lod_timer is None:
+            self._lod_timer = QTimer()
+            self._lod_timer.setSingleShot(True)
+            self._lod_timer.timeout.connect(self._update_lod_rendering)
+        # Restart the timer; only fires once zooming settles
+        self._lod_timer.start(30)  # 30 ms debounce
     
     def _update_lod_rendering(self):
-        """OPTIMIZED: Update rendering based on current zoom level using cached data"""
-        if not self.cached_spots or not self.cached_sizes_for_lod:
+        """OPTIMIZED: Update rendering based on current zoom level using array path"""
+        if self._size_array is None or len(self._size_array) == 0:
             return
         
         # Adjust node sizes based on zoom
@@ -2170,9 +2491,9 @@ class NetworkGraphWidget(QWidget):
         else:
             scale_factor = 1.0
         
-        # Update node sizes in cached spots
-        for i, base_size in enumerate(self.cached_sizes_for_lod):
-            self.cached_spots[i]['size'] = base_size * scale_factor
+        # Update size array (vectorized — replaces Python loop over dicts)
+        if self._base_sizes is not None:
+            np.multiply(self._base_sizes, scale_factor, out=self._size_array)
         
         # Update edge visibility based on zoom
         if self.current_zoom_factor < 0.5:
@@ -2200,8 +2521,18 @@ class NetworkGraphWidget(QWidget):
         if self.labels:
             self._update_labels_for_zoom()
         
-        # Re-render nodes with new sizes
-        self.scatter.setData(spots=self.cached_spots)
+        # Keep legacy cached_spots in sync
+        for i in range(len(self.cached_spots)):
+            self.cached_spots[i]['size'] = float(self._size_array[i])
+
+        # Re-render nodes with array path
+        self.scatter.setData(
+            pos=self._pos_array,
+            size=self._size_array,
+            brush=self._brush_list,
+            data=self._data_list,
+            pen=None,
+        )
 
     def show_in_window(self, title="Network Graph", width=1000, height=800):
         """Show the graph widget in a separate non-modal window"""

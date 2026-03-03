@@ -19,6 +19,7 @@ src/nettracer3d/network_analysis.py
 src/nettracer3d/network_draw.py
 src/nettracer3d/network_graph_widget.py
 src/nettracer3d/node_draw.py
+src/nettracer3d/normalize_3d_brightness.py
 src/nettracer3d/painting.py
 src/nettracer3d/proximity.py
 src/nettracer3d/run.py

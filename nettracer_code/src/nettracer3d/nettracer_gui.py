@@ -976,7 +976,7 @@ class ImageViewerWindow(QMainWindow):
                     neighbor_classes = None
 
                 umap = umw.UMAPGraphWidget(
-                    parent=self.parent(),
+                    parent=self,
                     labels=False
                 )
 
@@ -4637,6 +4637,8 @@ class ImageViewerWindow(QMainWindow):
         invert_action.triggered.connect(self.show_invert_dialog)
         z_proj_action = image_menu.addAction("Z Project")
         z_proj_action.triggered.connect(self.show_z_dialog)
+        norm_bright_action = image_menu.addAction("Normalize Brightness")
+        norm_bright_action.triggered.connect(self.show_norm_dialog)
 
         generate_menu = process_menu.addMenu("Generate")
         centroid_node_action = generate_menu.addAction("Generate Nodes (From Node Centroids)")
@@ -5349,6 +5351,12 @@ class ImageViewerWindow(QMainWindow):
         """Show the z-proj dialog."""
         dialog = ZDialog(self)
         dialog.exec()
+
+    def show_norm_dialog(self):
+        """Show the z-proj dialog."""
+        dialog = NormDialog(self)
+        dialog.exec()
+
 
     def show_calc_all_dialog(self):
         """Show the calculate all parameter dialog."""
@@ -6424,6 +6432,7 @@ class ImageViewerWindow(QMainWindow):
                             arraydata = nii_img.get_fdata()
                             self.channel_data[channel_index] = np.transpose(arraydata, (2, 1, 0))
                         except:
+                            print("Done")
                             return
                         
                     elif file_extension in ['jpg', 'jpeg', 'png']:
@@ -6476,6 +6485,7 @@ class ImageViewerWindow(QMainWindow):
 
             if len(self.channel_data[channel_index].shape) == 4:
                 if not self.channel_data[channel_index].shape[-1] in (3, 4):
+                    print(self.channel_data[channel_index].shape)
                     if self.confirm_multichan_dialog(): # User is trying to load 4D channel stack:
                         my_data = copy.deepcopy(self.channel_data[channel_index])
                         self.channel_data[channel_index] = None 
@@ -6505,6 +6515,7 @@ class ImageViewerWindow(QMainWindow):
                             self.channel_data[channel_index] = n3d.upsample_with_padding(self.channel_data[channel_index], original_shape = old_shape)
                             break
                         else:
+                            self.channel_data[channel_index] = None
                             return
 
             if not begin_paint:
@@ -9275,54 +9286,57 @@ class MergeNodeIdDialog(QDialog):
                         base_name = img
                     self.parent().load_channel(2, mask, data = True)
 
-                    # Wait for user to threshold this data
-                    self.parent().special_dict = id_dicts[base_name]
-                    processing_completed = self.wait_for_threshold_processing(nohigh = True, title = img, histo_dict = histo_dict, img = img, automated = automated)
-                    
-                    if not processing_completed:
-                        self.parent().thresh_min = None
-                        self.parent().thresh_max = None
-                        # User cancelled, ask if they want to continue
-                        reply = QMessageBox.question(self, 'Continue?', 
-                                                   f'Threshold cancelled for item {i+1}. Continue with remaining items?',
-                                                   QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No)
-                        if reply == QMessageBox.StandardButton.No:
-                            self.parent().old_thresh = None
-                            break
-                        continue
-                    
-                    thresh_dict[img] = [self.parent().thresh_min, self.parent().thresh_max]
-                    # At this point, the thresholded image is in the main window's memory
-                    # Get the processed/thresholded data from wherever ThresholdWindow stored it
-                    thresholded_vals = self.parent().thresh_vals
-
-                    assigned = {}
-                    thresholded_set = set(thresholded_vals)
-
-                    pos_marker = f'{base_name}+'
-                    neg_marker = f'{base_name}-'
-
-                    for node in my_network.node_identities.keys():
-                        try:
-                            node_int = int(node)
-                        except (ValueError, TypeError):
+                    try:
+                        # Wait for user to threshold this data
+                        self.parent().special_dict = id_dicts[base_name]
+                        processing_completed = self.wait_for_threshold_processing(nohigh = True, title = img, histo_dict = histo_dict, img = img, automated = automated)
+                        
+                        if not processing_completed:
+                            self.parent().thresh_min = None
+                            self.parent().thresh_max = None
+                            # User cancelled, ask if they want to continue
+                            reply = QMessageBox.question(self, 'Continue?', 
+                                                       f'Threshold cancelled for item {i+1}. Continue with remaining items?',
+                                                       QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No)
+                            if reply == QMessageBox.StandardButton.No:
+                                self.parent().old_thresh = None
+                                break
                             continue
                         
-                        node_ids = my_network.node_identities[node]
+                        thresh_dict[img] = [self.parent().thresh_min, self.parent().thresh_max]
+                        # At this point, the thresholded image is in the main window's memory
+                        # Get the processed/thresholded data from wherever ThresholdWindow stored it
+                        thresholded_vals = self.parent().thresh_vals
+
+                        assigned = {}
+                        thresholded_set = set(thresholded_vals)
+
+                        pos_marker = f'{base_name}+'
+                        neg_marker = f'{base_name}-'
+
+                        for node in my_network.node_identities.keys():
+                            try:
+                                node_int = int(node)
+                            except (ValueError, TypeError):
+                                continue
+                            
+                            node_ids = my_network.node_identities[node]
+                            
+                            # Remove if present
+                            if pos_marker in node_ids:
+                                node_ids.remove(pos_marker)
+                            elif neg_marker in node_ids:
+                                node_ids.remove(neg_marker)
+                            
+                            if node_int in thresholded_set:
+                                node_ids.append(pos_marker)
+                            elif include:
+                                node_ids.append(neg_marker)
                         
-                        # Remove if present
-                        if pos_marker in node_ids:
-                            node_ids.remove(pos_marker)
-                        elif neg_marker in node_ids:
-                            node_ids.remove(neg_marker)
-                        
-                        if node_int in thresholded_set:
-                            node_ids.append(pos_marker)
-                        elif include:
-                            node_ids.append(neg_marker)
-                    
-                    # Process the thresholded data
-                    self.parent().highlight_overlay = None
+                        # Process the thresholded data
+                        self.parent().highlight_overlay = None
+                    except:
+                        continue
 
 
                 my_network.node_identities = {node: iden for node, iden in my_network.node_identities.items() if iden != []}
@@ -9451,7 +9465,7 @@ class MultiChanDialog(QDialog):
         self.overlay1 = QComboBox()
         self.overlay2 = QComboBox()
         options = ["None"]
-        for i in range(self.data.shape[0]):
+        for i in range(self.data.shape[1]):
             options.append(str(i))
         self.nodes.addItems(options)
         self.edges.addItems(options)
@@ -9479,22 +9493,22 @@ class MultiChanDialog(QDialog):
 
         try:
             node_chan = int(self.nodes.currentText())
-            self.parent().load_channel(0, self.data[node_chan, :, :, :], data = True)
+            self.parent().load_channel(0, self.data[:, node_chan, :, :], data = True)
         except:
             pass
         try:
             edge_chan = int(self.edges.currentText())
-            self.parent().load_channel(1, self.data[edge_chan, :, :, :], data = True)
+            self.parent().load_channel(1, self.data[:, edge_chan, :, :], data = True)
         except:
             pass
         try:
             overlay1_chan = int(self.overlay1.currentText())
-            self.parent().load_channel(2, self.data[overlay1_chan, :, :, :], data = True)
+            self.parent().load_channel(2, self.data[:, overlay1_chan, :, :], data = True)
         except:
             pass
         try:
             overlay2_chan = int(self.overlay2.currentText())
-            self.parent().load_channel(3, self.data[overlay2_chan, :, :, :], data = True)
+            self.parent().load_channel(3, self.data[:, overlay2_chan, :, :], data = True)
         except:
             pass
 
@@ -9509,9 +9523,9 @@ class MultiChanDialog(QDialog):
                 QFileDialog.Option.ShowDirsOnly
             )
 
-            for i in range(self.data.shape[0]):
+            for i in range(self.data.shape[1]):
                 try:
-                    tifffile.imwrite(f'{parent_dir}/C{i}.tif', self.data[i, :, :, :])
+                    tifffile.imwrite(f'{parent_dir}/C{i}.tif', self.data[:, i, :, :])
                 except:
                     continue
         except:
@@ -10420,7 +10434,7 @@ class NeighComDialog(QDialog):
         self.limit.setPlaceholderText("Empty = no minimum")
         cluster_layout.addRow("Min Neighbor Count:", self.limit)
 
-        self.local = QCheckBox("Create Communities based on Inidividual Nodes' Identities Instead of Neighbors? (Does not use network; Needs many identities)")
+        self.local = QCheckBox("Create Communities based on Individual Nodes' Identities Instead of Neighbors? (Does not use network; Needs many identities)")
         self.local.setChecked(False)
         cluster_layout.addRow(self.local)
         
@@ -12747,6 +12761,7 @@ class ViolinDialog(QDialog):
 
     def run(self, com = None):
 
+        valid_idens = None
         all_idens = list(my_network.node_identities.values())
         seen = set()
         for iden in all_idens:
@@ -12754,7 +12769,7 @@ class ViolinDialog(QDialog):
         idens = list(seen)
 
         for i, iden in enumerate(idens):
-            if iden.endswith('+'):
+            if iden.endswith('+') or iden.endswith('-'):
                 idens[i] = iden[:-1]
 
         def df_to_dict_by_rows(df, row_indices, title):
@@ -12804,7 +12819,7 @@ class ViolinDialog(QDialog):
                 com_list = com_dict[int(com)]
 
                 # --- Apply identity plan filtering to community node list ---
-                com_list = self._filter_iden_list_by_plan(com_list)
+                #com_list = self._filter_iden_list_by_plan(com_list)
 
                 violin_dict = df_to_dict_by_rows(self.df, com_list, f"Z-Score-like Channel Intensities of Community {com}, {len(com_list)} Nodes")
 
@@ -12816,7 +12831,7 @@ class ViolinDialog(QDialog):
                     pass
 
                 # --- Apply identity plan filtering to violin columns ---
-                violin_dict = self._filter_violin_dict_columns_by_plan(violin_dict)
+                #violin_dict = self._filter_violin_dict_columns_by_plan(violin_dict)
 
                 neighborhoods.create_violin_plots(violin_dict, graph_title=f"Z-Score-like Channel Intensities of Community {com}, {len(com_list)} Nodes", idens = idens)
 
@@ -12869,10 +12884,24 @@ class ViolinDialog(QDialog):
                 com_list = com_dict[int(com)]
 
                 # --- Apply identity plan filtering to community node list ---
-                com_list = self._filter_iden_list_by_plan(com_list)
+                #com_list = self._filter_iden_list_by_plan(com_list)
+
+                include, exclude = self._get_identity_filter()
 
                 violin_dict = df_to_dict_by_rows(self.df, com_list, f"Z-Score-like Channel Intensities of Community {com}, {len(com_list)} Nodes")
 
+                if include:
+                    valid_idens = list(include)
+                    for i, iden in enumerate(valid_idens):
+                        if iden.endswith('+') or iden.endswith('-'):
+                            valid_idens[i] = iden[:-1]                
+                elif exclude:
+                    valid_idens = []
+                    for iden in seen:
+                        if iden not in exclude:
+                            if iden.endswith('+') or iden.endswith('-'):
+                                iden = iden[:-1]
+                            valid_idens.append(iden)
                 try:
                     new_dict = {key:val for key, val in violin_dict.items() if key in idens}
                     if new_dict != {}:
@@ -12881,9 +12910,9 @@ class ViolinDialog(QDialog):
                     pass
 
                 # --- Apply identity plan filtering to violin columns ---
-                violin_dict = self._filter_violin_dict_columns_by_plan(violin_dict)
+                #violin_dict = self._filter_violin_dict_columns_by_plan(violin_dict)
 
-                neighborhoods.create_violin_plots(violin_dict, graph_title=f"Z-Score-like Channel Intensities of Community {com}, {len(com_list)} Nodes", idens = idens)
+                neighborhoods.create_violin_plots(violin_dict, graph_title=f"Z-Score-like Channel Intensities of Community {com}, {len(com_list)} Nodes", idens = idens, valid_idens = valid_idens)
         except:
             import traceback
             print(traceback.format_exc())
@@ -13469,7 +13498,7 @@ class ResizeDialog(QDialog):
         
         layout = QFormLayout(self)
         self.resize = QLineEdit()
-        self.resize.setPlaceholderText("Will Override Below")
+        self.resize.setPlaceholderText("Will Override Below. Greater than 1 = Upsample - this is different than other 'downsample factor' params in NetTracer3D.")
         layout.addRow("Resize Factor (All Dimensions):", self.resize)
         self.zsize = QLineEdit("1")
         layout.addRow("Resize Z Factor:", self.zsize)
@@ -13515,13 +13544,17 @@ class ResizeDialog(QDialog):
                 self.reset_fields()
                 return
             
+            if resize:
+                zsize = resize
+                ysize = resize
+                xsize = resize
             resize = resize if resize is not None else (zsize, ysize, xsize)
 
-            if (self.parent().shape[1] * resize) < 1 or (self.parent().shape[2] * resize) < 1:
+            if float(self.parent().shape[1] * ysize) < 1 or float(self.parent().shape[2] * xsize) < 1:
                 print("Incompatible x/y dimensions")
                 return
-            elif (self.parent().shape[0] * resize) < 1:
-                resize = (1, resize, resize)
+            elif float(self.parent().shape[0] * zsize) < 1:
+                resize = (1, ysize, xsize)
 
             if special:
                 if upsize:
@@ -16217,12 +16250,12 @@ class HexNodeDialog(QDialog):
             return
 
         try:
-            xy_scale = float(self.xy_scale)
+            xy_scale = float(self.xy_scale.text())
         except:
             xy_scale = 1
 
         try:
-            z_scale = float(self.z_scale)
+            z_scale = float(self.z_scale.text())
         except:
             z_scale = 1
 
@@ -16968,7 +17001,84 @@ class GrayWaterDialog(QDialog):
             print(f"Error: {e}")
 
 
+class NormDialog(QDialog):
 
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle(f"Normalize Brightness Across 3D Stack - Please segment out your background first (ie with intensity thresholding).")
+        self.setModal(True)
+        
+        layout = QFormLayout(self)
+
+        self.shells = QLineEdit("5")
+        layout.addRow("Num shells", self.shells)
+
+        # Add Run button
+        run_button = QPushButton("Run")
+        run_button.clicked.connect(self.run)
+        layout.addRow(run_button)
+
+    def wait_for_threshold_processing(self):
+        """
+        Opens ThresholdWindow and waits for user to process the image.
+        Returns True if completed, False if cancelled.
+        The thresholded image will be available in the main window after completion.
+        """
+        # Create event loop to wait for user
+        loop = QEventLoop()
+        result = {'completed': False}
+        
+        # Create the threshold window
+        thresh_window = ThresholdWindow(self.parent(), 0)
+
+        
+        # Connect signals
+        def on_processing_complete():
+            result['completed'] = True
+            loop.quit()
+            
+        def on_processing_cancelled():
+            result['completed'] = False
+            loop.quit()
+        
+        thresh_window.processing_complete.connect(on_processing_complete)
+        thresh_window.processing_cancelled.connect(on_processing_cancelled)
+        
+        # Show window and wait
+        thresh_window.show()
+        thresh_window.raise_()
+        thresh_window.activateWindow()
+        
+        # Block until user clicks "Apply Threshold & Continue" or "Cancel"
+        loop.exec()
+        
+        # Clean up
+        thresh_window.deleteLater()
+        
+        return result['completed']
+
+    def run(self):
+
+        try:
+
+            self.accept()
+            print("Please threshold foreground, or press cancel/skip if you already have or not desired:")
+            self.wait_for_threshold_processing()
+
+            try:
+                shells = int(self.shell.currentText())
+            except:
+                shells = 5
+
+            data = self.parent().channel_data[self.parent().active_channel]
+            dtype = data.dtype
+            from . import normalize_3d_brightness as n3b
+
+            data = n3b.normalize_brightness(data, (my_network.z_scale, my_network.xy_scale, my_network.xy_scale), n_shells = shells)
+
+            self.parent().load_channel(self.parent().active_channel, data.astype(dtype), True)
+        except Exception as e:
+            print(f"Error: {e}")
 
 class WatershedDialog(QDialog):
     def __init__(self, parent=None):
@@ -17200,6 +17310,8 @@ class ZDialog(QDialog):
                 pass
 
         self.accept()
+
+
 
 
 class CentroidNodeDialog(QDialog):

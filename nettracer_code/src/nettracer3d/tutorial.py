@@ -2725,7 +2725,10 @@ def setup_process_tutorial(window):
 
         \n\n--Use 'Invert' to invert an image, swapping high and low values.
 
-        \n\n--Use 'Z-Project' to superimpose all XY slices into a single 2D slice using max, mean, min, sum, or standard deviation projection modes.""",
+        \n\n--Use 'Z-Project' to superimpose all XY slices into a single 2D slice using max, mean, min, sum, or standard deviation projection modes.
+
+        \n\n--Use 'Normalize Brightness' to try to make the general brightness throughout the depth of the 3D stack (and also deep into the tissue in XY) be relatively similar without disurpting local brightness differences. Useful to normalize Z-stacks before trying to do brightness-based appraisal, such as assigning node identities.""",
+
         highlight_type=None,
         message_position="top_right",
         pre_action=open_to_save,

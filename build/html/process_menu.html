@@ -6,14 +6,14 @@
   <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
 
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>All Process Menu Options &mdash; NetTracer3D 1.4.4 documentation</title>
+  <title>All Process Menu Options &mdash; NetTracer3D 1.5.1 documentation</title>
       <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=b86133f3" />
       <link rel="stylesheet" type="text/css" href="_static/css/theme.css?v=e59714d7" />
 
   
       <script src="_static/jquery.js?v=5d32c60e"></script>
       <script src="_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
-      <script src="_static/documentation_options.js?v=6d0302ba"></script>
+      <script src="_static/documentation_options.js?v=44dfd65d"></script>
       <script src="_static/doctools.js?v=9bcbadda"></script>
       <script src="_static/sphinx_highlight.js?v=dc90522c"></script>
     <script src="_static/js/theme.js"></script>
@@ -144,6 +144,7 @@
 </li>
 <li class="toctree-l2"><a class="reference internal" href="#process-image-invert">‘Process -&gt; Image -&gt; Invert’</a></li>
 <li class="toctree-l2"><a class="reference internal" href="#process-image-z-project">‘Process -&gt; Image -&gt; Z-Project’</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#process-image-normalize-brigthness">‘Process -&gt; Image -&gt; Normalize Brigthness’</a></li>
 <li class="toctree-l2"><a class="reference internal" href="#process-generate-generate-nodes-from-node-centroids">‘Process -&gt; Generate -&gt; Generate Nodes (From Node Centroids)’</a></li>
 <li class="toctree-l2"><a class="reference internal" href="#process-generate-generate-nodes-from-edge-vertices">‘Process -&gt; Generate -&gt; Generate Nodes (From ‘Edge’ Vertices)’</a><ul>
 <li class="toctree-l3"><a class="reference internal" href="#id28">Parameter Explanations</a></li>
@@ -1392,6 +1393,17 @@
 </dl>
 </li>
 <li><p>Press ‘Run Z-Project’ to run the method. Note this method projects all four channels.</p></li>
+</ul>
+</section>
+<section id="process-image-normalize-brigthness">
+<h2>‘Process -&gt; Image -&gt; Normalize Brigthness’<a class="headerlink" href="#process-image-normalize-brigthness" title="Link to this heading"></a></h2>
+<ul class="simple">
+<li><p>This method will try to normalize the brightness of a 3D image. Sometimes 3D images are brighter closer to where the light hits them. This is typically at the top of the Z-stack, but can be biased in the X/Y plane as well.</p></li>
+<li><p>This method uses a stack of 2D Distance Transforms to pick out shells at varying depths in your image. It takes the median brightness of the shells and uses it to assemble a vector field of how the brightness tends to change as you get deeper into the tissue.</p></li>
+<li><p>Every voxel is then transformed to mitigate said changes in brightness.</p></li>
+<li><p>Note this will not necessarily perfectly transform your data so that it appears identical to how it would if light scattering did not exist. But I feel like it’s a reasonable approximation in datasets that you want to use intensity-appraising methods on (such as the identity assignment functions).</p></li>
+<li><p>When you run this method, it will normalize the ‘active channel’. The only parameter is the number of shells you want to use which is 5 by default.</p></li>
+<li><p>Each axis is normalized individually, serially.</p></li>
 <li><p>The third submenu is the generate menu, which has a few functions that use your data to create new datasets</p></li>
 </ul>
 </section>

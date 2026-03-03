@@ -693,6 +693,15 @@ Algorithm Explanations
     * These options control how the z-project is generated. 'max' assembles it from the maximum value at each location in the stack. 'mean' takes the means of the stack, 'min' uses the minimum value, 'sum' uses the sum of the values, and 'std' uses the standard deviation of the values.
 * Press 'Run Z-Project' to run the method. Note this method projects all four channels.
 
+'Process -> Image -> Normalize Brigthness'
+-----------------------------------------------------
+* This method will try to normalize the brightness of a 3D image. Sometimes 3D images are brighter closer to where the light hits them. This is typically at the top of the Z-stack, but can be biased in the X/Y plane as well.
+* This method uses a stack of 2D Distance Transforms to pick out shells at varying depths in your image. It takes the median brightness of the shells and uses it to assemble a vector field of how the brightness tends to change as you get deeper into the tissue.
+* Every voxel is then transformed to mitigate said changes in brightness.
+* Note this will not necessarily perfectly transform your data so that it appears identical to how it would if light scattering did not exist. But I feel like it's a reasonable approximation in datasets that you want to use intensity-appraising methods on (such as the identity assignment functions).
+* When you run this method, it will normalize the 'active channel'. The only parameter is the number of shells you want to use which is 5 by default.
+* Each axis is normalized individually, serially. 
+
 
 * The third submenu is the generate menu, which has a few functions that use your data to create new datasets
 
