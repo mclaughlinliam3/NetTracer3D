@@ -20,9 +20,7 @@ Before installing NetTracer3D, ensure your system meets the following requiremen
 **Using the Windows Installer** 
 ~~~~~~~~~~~~~~~~~~~~~~~~
 
-If you are on Windows, the easiest option is to just download and run the windows installer available at the github repo: https://github.com/mclaughlinliam3/NetTracer3D/releases/tag/v1.4.8
-
-You can also get it, along with the direct .exe here: https://doi.org/10.5281/zenodo.17873800 
+If you are on Windows, the easiest option is to just download and run the windows installer available at the github repo: https://github.com/mclaughlinliam3/NetTracer3D/releases
 
 Note that the installation version will be missing a few features compared to the Python package, namely GPU support for segmentation. It will also not be updated as often.
 
