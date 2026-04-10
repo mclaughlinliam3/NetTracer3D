@@ -1,6 +1,6 @@
 [project]
 name = "nettracer3d"
-version = "1.5.1"
+version = "1.5.7"
 authors = [
   { name="Liam McLaughlin", email="liamm@wustl.edu" },
 ]
@@ -23,7 +23,8 @@ dependencies = [
     "scikit-learn",
     "setuptools",
     "umap-learn",
-    "numba"]
+    "numba",
+    "lightgbm"]
 
 readme = "README.md"
 requires-python = ">=3.7"
@@ -54,4 +55,5 @@ nettracer3d = "nettracer3d.run:main"
 [project.urls]
 Documentation = "https://nettracer3d.readthedocs.io/en/latest/"
 Youtube_Tutorial = "https://www.youtube.com/watch?v=_4uDy0mzG94&list=PLsrhxiimzKJMZ3_gTWkfrcAdJQQobUhj7"
-Downloadable_Version = "https://doi.org/10.5281/zenodo.17873800"
+Installer = "https://github.com/mclaughlinliam3/NetTracer3D/releases"
+Paper = "https://doi.org/10.64898/2026.03.25.714104"

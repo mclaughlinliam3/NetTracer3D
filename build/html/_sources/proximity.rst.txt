@@ -123,7 +123,7 @@ Grouping Cells By Shared Expression Profile
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 * When we finish running the above steps, we will be prompted to save a spreadsheet containing the average intensity of each channel for each cell. We will want to save that, as well as our progress so far, as we especially do not want to lose our assigned node identities. Utilize 'File -> Save As -> Save Network3D Object As' to save the current session.
-* Next, from the menu bar, select 'Analyze -> Stats -> Show Identity Violins/UMAP/Assign Intensity Neighborhoods'. We are prompted to find the intensities spreadsheet we just saved. After finding it, we open this menu:
+* Next, from the menu bar, select 'Analyze -> Stats -> Cellular-Esque Analysis'. We are prompted to find the intensities spreadsheet we just saved. After finding it, we open this menu:
 
 .. image:: _static/violin_menu.png
    :width: 400px

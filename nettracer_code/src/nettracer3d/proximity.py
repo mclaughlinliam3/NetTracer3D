@@ -909,7 +909,7 @@ def partition_objects_into_cells(object_centroids, cell_size):
 
 #Numba implementation:
 
-from numba import jit
+from numba import jit, prange
 
 
 def convert_bboxes_to_array(bounding_boxes, array_shape):
@@ -940,74 +940,80 @@ def convert_bboxes_to_array(bounding_boxes, array_shape):
     return bboxes_array
 
 @jit(nopython=True, parallel=True)
-def compute_all_means_numba(nodes, edges, num_nodes, bboxes_array):
+def compute_all_means_numba(nodes, edges, select_nodes, bboxes_array):
     """
     Single Numba function with automatic parallelization.
-    Uses Numba's prange for parallel loops.
+    Only computes means for the node IDs in select_nodes.
     """
-    results = np.zeros(num_nodes, dtype=np.float64)
-    
-    for i in range(num_nodes):
-        label = i + 1  # Labels start at 1
-        
+    n = len(select_nodes)
+    results = np.zeros(n, dtype=np.float64)
+
+    for i in prange(n):
+        label = select_nodes[i]  # Already the 1-based node ID
+        idx = label - 1          # 0-based index into bboxes_array
+
         # Get bounding box
-        z_min, z_max, y_min, y_max, x_min, x_max = bboxes_array[i]
-        
+        z_min, z_max, y_min, y_max, x_min, x_max = bboxes_array[idx]
+
         # Skip if invalid bounding box
         if z_min < 0:
             results[i] = 0.0
             continue
-        
+
         # Extract subcell
         sub_nodes = nodes[z_min:z_max+1, y_min:y_max+1, x_min:x_max+1]
         sub_edges = edges[z_min:z_max+1, y_min:y_max+1, x_min:x_max+1]
-        
+
         # Compute mean for this label
         sum_val = 0.0
         count = 0
-        
+
         nodes_flat = sub_nodes.ravel()
         edges_flat = sub_edges.ravel()
-        
+
         for j in range(len(nodes_flat)):
             if nodes_flat[j] == label and edges_flat[j] > 0:
                 sum_val += edges_flat[j]
                 count += 1
-        
+
         results[i] = sum_val / count if count > 0 else 0.0
-    
+
     return results
 
-def create_node_dictionary_id_numba(nodes, edges, num_nodes, bounding_boxes):
+
+def create_node_dictionary_id_numba(nodes, edges, num_nodes, bounding_boxes, select_nodes):
     """
     Pure Numba version with byte order handling for TIFF compatibility.
     """
-    array_shape = nodes.shape
-    
     # Convert to native byte order if needed
     if nodes.dtype.byteorder == '>' or nodes.dtype.byteorder == '<':
         nodes = np.ascontiguousarray(nodes, dtype=nodes.dtype.newbyteorder('='))
     if edges.dtype.byteorder == '>' or edges.dtype.byteorder == '<':
         edges = np.ascontiguousarray(edges, dtype=edges.dtype.newbyteorder('='))
-    
-    # Single Numba call
-    results = compute_all_means_numba(nodes, edges, num_nodes, bounding_boxes)
-    
-    # Convert to dictionary
-    node_dict = {i+1: results[i] for i in range(num_nodes)}
-    
+
+    # Ensure select_nodes is a numpy array for Numba
+    select_nodes_arr = np.asarray(select_nodes, dtype=np.int64)
+
+    # Single Numba call — only processes select_nodes
+    results = compute_all_means_numba(nodes, edges, select_nodes_arr, bounding_boxes)
+
+    # Convert to dictionary keyed by the actual node IDs
+    node_dict = {select_nodes_arr[i]: results[i] for i in range(len(select_nodes_arr))}
+
     return node_dict
 
-def create_node_dictionary_id(nodes, edges, num_nodes, bounding_boxes):
 
+def create_node_dictionary_id(nodes, edges, num_nodes, bounding_boxes, select_nodes=None):
+    if select_nodes is None:
+        select_nodes = list(range(1, num_nodes + 1))
     try:
         from numba import jit
-        return create_node_dictionary_id_numba(nodes, edges, num_nodes, bounding_boxes)
+        return create_node_dictionary_id_numba(nodes, edges, num_nodes, bounding_boxes, select_nodes)
     except:
         import traceback
         print(traceback.format_exc())
-        print("Attempting without numba. If you haven't, please install numba package to speed up this section, otherwise this is some other error.")
-        return create_node_dictionary_id_python(nodes, edges, num_nodes, bounding_boxes)
+        print("Attempting without numba...")
+        return create_node_dictionary_id_python(nodes, edges, num_nodes, bounding_boxes, select_nodes)
 
 
 #Non numba:

@@ -15,6 +15,7 @@ scikit-learn
 setuptools
 umap-learn
 numba
+lightgbm
 
 [CUDA11]
 cupy-cuda11x

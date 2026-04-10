@@ -8,10 +8,12 @@ src/nettracer3d/community_extractor.py
 src/nettracer3d/endpoint_joiner.py
 src/nettracer3d/excelotron.py
 src/nettracer3d/filaments.py
+src/nettracer3d/flow_cytometry_widget.py
 src/nettracer3d/hexagons.py
 src/nettracer3d/histos.py
 src/nettracer3d/modularity.py
 src/nettracer3d/morphology.py
+src/nettracer3d/napari_viewer_widget.py
 src/nettracer3d/neighborhoods.py
 src/nettracer3d/nettracer.py
 src/nettracer3d/nettracer_gui.py

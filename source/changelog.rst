@@ -194,5 +194,18 @@ Version 1.5.0-1.5.1 updates
 	* Added 3d brightness normalization function
 	* Bug fixes
 
-
-
+Version 1.5.2-1.5.7 updates
+	* The napari 3d view is now interactive. Toggle to 'selection mode' in the napari instance to select nodes/edges, and use right click functions that select stuff based on properties.
+	* The function to assign communities just using arbitrarily sized cubes now uses the hexagon/rhomboid method instead. This is a tad slower but it's probably the more correct way for these tessellation solutions to be done.
+	* The 'identity distribution of neighbors' menu method has an updated window view to reflect the implementation of the batch calculation. The neighbor distance matrices generated from this batch calculation can give you somewhat complete descriptions of what's happening in a tissue so long as you set up the proximity network parameters correctly and have meaningful identities assigned.
+	* The find 'mother nodes' method has been changed to 'transcommunity nodes' because the latter more accurately describes what these are while the former is just more of a made up term.
+	* The 'violin plot' menu was renamed to 'Cellular-Esque Analysis'. Additionally, this menu now lets you compare expression of two 'node identity' items in a flow cytometry like graph.
+	* Segmenter was upgraded - now uses more feature maps for both the quick and detailed models providing more accurate segmentation. Segmentation chunks use padding too so there are fewer edge artifacts. Also swapped the random forest classifier to use the lightgbm model (https://en.wikipedia.org/wiki/LightGBM) which is sort of a faster version of the former; to help account for the speed loss due to computing more feature maps. As such, the quick model is actually now deeper than the previous detailed model and is a good segmenter for most tasks. The new detailed model uses a rather large number of features in its feature maps so it's great for smaller images but you might want to stick with the quick for large ones.
+	* Added new capabilities to the interactable UMAP - Namely, can now assign groups of node identities to assign a score to each node and create a heatmap over the UMAP characterizing what node fits that profile the best.
+	* This is from the 'violin plot' dialog that uses the identities intensities spreadsheet.
+	* There you can assign different identity groups and calculate the umap. The heatmap data will be saved with the UMAP so you don't have to calculate it again. If you've calculated the base heatmap for your set of nodes you can also use the
+	* Similarly, this new functionality also comes with a thresholder that you can use to easily rote threshold out these high scoring items, although the UMAP provides some additional visualization help.
+	* Also if you've calculated and saved the base umap, you can avoid recalculating it and instead assign different heatmap scores like this - run the threshold option for the heatmap scores, then with the base umap open - open the options and convert it to heatmap. It will try to use the most recent threshold dictionary as its data source.
+	* The UMAP itself now runs a bit better - mainly concerning highlighting objects. Before a bug was making this slower than it should be.
+	* The violin plots for node intensities can now be configured to show Z-scores directly (before it was just a modified Z-score that was easier to visually appraise but less applicable from a broad analytic standpoint. Now you can create either as desired).
+	* The data tables now show their full titles if you hover over their tab, and will include their table name as the default save value.

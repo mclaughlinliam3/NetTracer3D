@@ -519,33 +519,30 @@ Algorithm Explanations
 
 **If Using the Machine Learning Segmenter**
 
-* The goal of the machine learning segmenter is to take user designated training regions, compute feature maps around them, then use the training regions' corresponding feature map points to train a Random Forest Classifier (which can later segment the entire image).
+* The goal of the machine learning segmenter is to take user designated training regions, compute feature maps around them, then use the training regions' corresponding feature map points to train a LightGBM Classifier (which can later segment the entire image).
 * The chunks used to make the feature maps are (as of writing) 49^3 for 3D neighborhoods, while 2D neighborhoods will only be chunked (in 2D) if the 2D plane is greater than 64^3 pixels (if it is, the 2D plane will get divided until each chunk is less than 64^3 pixels). Any time chunks are mentioned below, presume these are the sizes.
 * A feature map is essentially some abstracted dataset (via some neighborhood-considering algorithm such as Gaussian Blur) that allows a coordinate in an image to somewhat inform about what its neighborhood looks like.
 
 1. First, the sk.learn RandomForestClassifier class is initiated with the parameters n_estimators set to 100 and the param max_depth set to None. https://scikit-learn.org/stable/modules/generated/sklearn.ensemble.RandomForestClassifier.html
-2. Whenever a model is trained, chunks around the training data are extracted and turned into mini feature maps. Positive training regions have their values from the feature maps fed to the random forest classifier as 'good' numbers while negative training regions have their values from the feature maps fed to the random forest classifier as 'bad' numbers.
-3. When the volume is segmented, chunks are handed off to be converted into feature maps, and each voxel in the chunk shows its corresponding index in the feature map to the random forest classifier to determine whether it ought to be considered foreground.
+2. Whenever a model is trained, chunks around the training data are extracted and turned into mini feature maps. Positive training regions have their values from the feature maps fed to the LightGBM classifier as 'good' numbers while negative training regions have their values from the feature maps fed to the LightGBM classifier as 'bad' numbers.
+3. When the volume is segmented, chunks are handed off to be converted into feature maps, and each voxel in the chunk shows its corresponding index in the feature map to the LightGBM classifier to determine whether it ought to be considered foreground.
 4. When this process finishes, it places its output in Overlay2. Note that the Preview Segment method works similar, except it does not interrupt the user, instead initiating a parallel thread that processes chunks at the user's Z-plane, near their mouse position.
 
-* The feature maps for the 'Quick Model' are as follows:
+* The feature maps for the 'Quick Model' (sigmas 1, 2, 4, 8) are as follows:
 
 #. The original image.
-#. Gaussian Blurs for sigma values 1, 2, 4, 8 (obtained via scipy.ndimage.gaussian_filter())
-#. Difference of Gaussians for sigma values 1-2, 2-4, and 4-8.
-#. The gradiant magnitude, obtained from scipy.ndimage.sobel() sobel kernels in each dimension.
+#. Gaussian Blurs for sigma values 1, 2, 4, 8.
+#. Difference of Gaussians for all sigma pairs: 1-2, 1-4, 1-8, 2-4, 2-8, 4-8.
+#. Gradient Magnitude for the original image and each Gaussian-smoothed image, computed via finite-difference kernels in each spatial dimension.
+#. Laplacian (sum of second derivatives) for the original image and each Gaussian-smoothed image.
 
-* The feature maps for 'Detailed Model' are computed using multiple scales and morphological operators:
+* The feature maps for the 'Detailed Model' (sigmas 1, 2, 4, 8, 16) include everything above (with the additional sigma=16 scale) plus:
 
-#. The original Image
-#. Gaussian Blurs for sigma values 1, 2, 4, 8 (obtained via scipy.ndimage.gaussian_filter())
-#. Difference of Gaussians (DoG) for sigma values 1-2, 2-4, and 4-8.
-#. Gaussian Gradient Magnitudes - Computed for each sigma value using scipy.ndimage.sobel() kernels in all three dimensions (x, y, z). Magnitude calculated as sqrt(gx² + gy² + gz²) for each Gaussian-smoothed image. Captures edge strength at multiple scales.
-#. Laplacian of Gaussian - Second-order derivative features computed using scipy.ndimage.laplace(). Applied to each Gaussian-smoothed image at different sigma values. Detects blob-like structures and zero-crossings.
-#. Largest Hessian Eigenvalue - Computes the largest eigenvalue of the 3x3 Hessian matrix at each voxel. Uses second-order derivatives (hxx, hyy, hzz, hxy, hxz, hyz) via scipy.ndimage.gaussian_filter() with order parameters. Fully vectorized computation using numpy.linalg.eigvals() for all spatial locations simultaneously. Captures local curvature information and tubular/sheet-like structures.
-#. Feature Normalization - Intensity features (original image, Gaussians, DoGs) are kept in raw form. Morphological features (gradients, Laplacians, Hessian eigenvalues) are normalized using z-score standardization. Normalization applied per-feature across all spatial dimensions to ensure balanced feature contributions.
+#. Hessian Eigenvalues — All eigenvalues of the Hessian matrix at each voxel/pixel, computed for the original and each Gaussian-smoothed image. In 2D this yields 2 eigenvalues (smallest and largest); in 3D this yields 3 eigenvalues (sorted ascending). Captures local curvature, tubular, and sheet-like structures.
+#. Structure Tensor Eigenvalues — The gradient outer-product tensor is smoothed at integration scales γ = 1 and γ = 3, and its eigenvalues are extracted. Computed for the original and each Gaussian-smoothed image at each integration scale. Captures local orientation and anisotropy (edges, ridges, corners).
+#. Local Statistics — For each sigma value, a sliding window of size (1 + 2·sigma) is applied to the original image to compute: local minimum, local maximum, local mean, and local variance.
 
-* In general, the quick model is preferable for images with good SNR, while the detailed model weights morphology harder and so is better for poor SNR but typically requires more training.
+* In general, the quick model is preferable for images with good SNR, while the detailed model can be used for tougher segmentations.
 * For RGB images, each channel is processed independently, meaning it requires 3x as many maps.
 * Training by 2D patterns simply uses 2D alternatives to the above described maps.
 * Training with GPU simply uses cupy methods to get the above described maps.

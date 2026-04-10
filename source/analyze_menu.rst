@@ -128,11 +128,12 @@ Algorithm Explanations
 ~~~~~~~~~~~~~~~
 * This method just evaluates the neighbors of each node in the network, arranges those as proportions out of 1 in a one-dimensional array, and then clusters said arrays with sklearn's K-means clusterer.
 
-'Analyze -> Network -> Create Communities Based on Cuboidal Proximity Cells?'
+'Analyze -> Network -> Create Communities Based on Hexagonal/Rhomboid Proximity Cells?'
 -------------------------------
 
 * This method splits the image into cells (of user-defined size) and assigns nodes to be in communities based on whether they share a cell.
-* It doesn't have anything to do with the network but is an alternate way to group the nodes into communities, without a network focus.
+* It will ask you for parameters about the hexagon side length, and whether you would prefer hexagonal prisms or dodecahedrons in 3D (2D uses hexagons always).
+* It doesn't have anything to do with the network but is an alternate way to group the nodes into communities, without a network or nearest neighbor focus.
 * You can further group these resultant cells into supercommunities to find neighborhood motifs, although it won't be as strong as the node neighborhood community assigment if you have enough channels.
 
 
@@ -443,8 +444,9 @@ Parameter Explanations
 4. Use Fast Dilation... (Only applies if using mode 2 and have entered a value for param 3)
     * If enabled, the program will attempt to use the edt module to solve the dilation in parallel. If edt is not present or this fails somehow, it will fall back to the scipy method.
     * If disabled, the program will use the scipy distance_transform_edt method to solve the dilation, which may be slower.
-
 * Press 'Get Neighborhood Identity Distribution' to display a few matplotlib barcharts, with associated data tables being added to the tabulated data widget.
+* Press 'Batch: All Network Combinations...' to compute the neighbor information for all identity combinations available. This will return a matrix (both a graph and tables) telling you the number of times each identity is able to find at least one neighbor of another identity. There are three of these - the first just gives the raw sums, the second gives the natural logs of the first, and the last gives percentile-based data (Where if I had A, B, and C as identities - it would tell me the percentage of A's neighbor interactions that are A-B and the percentage that are A-C; this output excludes self pairing). This batch calculation is best combined with proximity networks to describe the border compositions between objects at some arbitrary distance.
+
 * The following tables (and corresponding graphs) will appear:
 * If using mode 1:
     1. Neighborhood Distribution of Nodes in Network from Nodes: 'X'
@@ -685,7 +687,7 @@ Algorithm Explanation
 * All of these tests are simply obtained by running their respective scipy.stats function on the inputted data. See https://docs.scipy.org/doc/scipy/reference/stats.html for more info.
 
 
-'Analyze -> Stats -> Show Identities Violin/UMAP/Assign Intensity Neighborhoods'
+'Analyze -> Stats -> Cellular-Esque Analysis'
 -----------------------------------------
 * This method can be used to visualize normalized violin plots and UMAPs for nodes that were assigned identities via multiple channel markers (via 'File -> Images -> Node Identities -> Assign Node Identities from Overlap with Other Images')
 * The aforementioned identity assignment funtion produces a table that shows the average intensity of each node for each marker. Please save this table from the upper-right data tables for use in this function. This data is the only one natively compatible with this function.
@@ -695,20 +697,33 @@ Algorithm Explanation
 Parameter Explanation
 ~~~~~~~~~~~~~~~~~~~~
 
-1. 'Return Identity Violin Plots?' - 'None' by default, but the dropdown menu can be used to select one of the current node_identities in the session, which informs the program to yield a violin plot displaying the normalized intensity expression for each channel of all nodes belonging to the aforementioned identity. This is useful for seeing what other channels a particular identity is generally positive in.
-2. 'Return Neighborhood/Community Violin Plots?' - 'None' by default, but the dropdown menu can be used to select one of the current communities (or rather Supercommunities, if communities have been grouped into Supercommunities) in the session, which informs the program to yield a violin plot displaying the normalized intensity expression for each channel of all nodes belonging to the aforementioned community/neighborhood. This is useful for seeing what channels constitute a particular community/neighborhood.
-3. 'Execution Mode...' - Dictates how the UMAP comparing intensities of nodes will label said nodes.
-    * 'Label UMAP By Identity' - Each node will be labeled by their identity value, or randomly by one of them if they have multiple.
-    * 'Label UMAP by Community' - Each node will bear the label of their assigned community/neighborhood. Useful if they were assigned Supercommunities based on overlapped intensity values.
+* Violin plot menu:
+    1. 'Identity Violin Plots?' - 'None' by default, but the dropdown menu can be used to select one of the current node_identities in the session, which informs the program to yield a violin plot displaying the normalized intensity expression for each channel of all nodes belonging to the aforementioned identity. This is useful for seeing what other channels a particular identity is generally positive in.
+    2. 'Neighborhood/Community Violin Plots?' - 'None' by default, but the dropdown menu can be used to select one of the current communities (or rather Supercommunities, if communities have been grouped into Supercommunities) in the session, which informs the program to yield a violin plot displaying the normalized intensity expression for each channel of all nodes belonging to the aforementioned community/neighborhood. This is useful for seeing what channels constitute a particular community/neighborhood.
+    3. 'Format' - Default setting ('Z-score Like') sets the 0 value for the violin plots to the lowest minimum expression of each identity/channel, as defined by the user during the thresholding segment. Change this to 'Z-Score' to have it return true Z-scores. The former is easier to visually compare shared expression between channels in graph form while the latter may be more applicable to different analysis applications.
+
+* UMAP Menu
     * The UMAP is interactable - use a lasso to select groups of nodes. You can right click in the main window to assign them to their own communities. There are also some unique rendering options. These interactable UMAPs can be saved and later reloaded using the 'folder icon' that loads spreadsheets in the top right to skip embedding computation.
-4. 'Plan Identities...' - Use this to limit the number of node identities that are shown in the UMAPs and/or violin plots.
-5. 'Assign Neighborhoods Via Kmeans Clustering' - Adjacent to this button, you can enter how many communities you want the nodes to be partitioned into, based on their similarity in intensity across the channels. If you leave it empty, the program will try to predict an ideal number of communities, but only up to 20. Note this is biased for lower values and you should probably just apply an arbitrary number.
-6. 'Generate Intensity Heatmap' - After the KMeans clustering, selecting this will return an informative heatmap showing you the differing relative expression in marker intensity between your channels for each community.
-7. 'Reassign Identities Based on Clustering Results?' - Check this box, and while assigning communities with the above parameter, you will get the opportunity to also rename each community, in case you think they represent something more significant than their default names of 1, 2, 3, etc. For each communitiy, the program will show you the violin plot for the intensity profile of each communities to assist you in deciding what to rename it.
+    * 'Label Mode...' - Dictates how the UMAP comparing intensities of nodes will label said nodes.
+        1. 'Label UMAP By Identity' - Each node will be labeled by their identity value, or randomly by one of them if they have multiple.
+        2. 'Label UMAP by Community' - Each node will bear the label of their assigned community/neighborhood. Useful if they were assigned Supercommunities based on overlapped intensity values.
+        3. 'Label with Identity Plan Heatmap' - Uses the information from the selected identities (see params below) to make nodes more 'red' or more 'blue'. Redness denotes the presence of more characteristics fitting the combinations of pos/neg identity gates. The centerpoint for the redness will be based on your minimum assigned threshold for each identity, or just the median if that was not assigned.
+
+* Identity Planning Menu
+    1. 'Plan Identities...' - Use this to limit the number of node identities that are shown in the UMAPs and/or violin plots. Affects the below thresholding option.
+    2. Threshold type menu - By default, will threshold nodes with a simple histogram that scores nodes that resemble your identity combination as higher. You will also be able to assign the identities weights to make certain ones affect the score more. If you have two identities selected, you can change this box to 'Flow Cyto-Like Graph' to instead show both identities on an axis and use the lasso to select nodes in the desired score range yourself.
+
+* Kmeans Clustering Menu
+    * Performs KMean's Clustering using Z-Score values
+    1. Method - Use 'Cluster by Expression Profle' to cluster each node into groups based on the Z-scores of its intensity for each channel/identity. Use 'Cluster by Neighbor Expression Profile' to instead cluster the nodes based on the average expression profile of their neighbors in their network. You will have wanted to assign a proximity network first.
+    2. Num Communities - enter how many communities you want the nodes to be partitioned into, based on their similarity in intensity across the channels. If you leave it empty, the program will try to predict an ideal number of communities, but only up to 20. Note this is biased for lower values and you should probably just apply an arbitrary number at first.
+    3. 'Generate Intensity Heatmap' - After the KMeans clustering, selecting this will return an informative heatmap showing you the differing relative expression in marker intensity between your channels for each community.
+    4. 'Reassign Identities Based on Clustering Results?' - Check this box, and while assigning communities with the above parameter, you will get the opportunity to also rename each community, in case you think they represent something more significant than their default names of 1, 2, 3, etc. For each communitiy, the program will show you the violin plot for the intensity profile of each communities to assist you in deciding what to rename it.
 
 * To view any designated violin plots, press 'Show-Z-score-like Violin'. The plot will be shown, and the corresponding data will populate the upper right data tables.
 * "Show Z-score UMAP" may be pressed to show a UMAP of the intensity Z-score for each node relative to the identity of each channel. (This is the same UMAP that can be displayed at the end of 'File -> Images -> Node Identities -> Assign Node Identities from Overlap with Other Images')
-* 'Assign Neighborhoods Via Kmeans Clustering' may be pressed to enact the community assignment.
+* 'Run Identity Plan Phenotyping' may be pressed to create the identity combination thresholder/flow cyto-like graph.
+* 'Run Neighborhoods Via Kmeans Clustering' may be pressed to enact the community assignment.
 
 Algorithm Explanation
 ~~~~~~~~~~~~~~~~~~~~
@@ -719,8 +734,8 @@ Algorithm Explanation
     * If a column cannot be matched to an identity, the program will just take the median of the entire column to be the normalizing point, rather than the minimum value of the 'valid' points.
 2. The normalized data table is then masked to contain only the nodes of the specified identity/neighborhood/community.
 3. These resultant data are used to yield violin plots, with the channels corresponding to a violin, and the normalized node intensities within the masked data for that channel creating the violin.
-5. UMAP generation instead utilizes standard Z-scores. In this specific case, each node's intensity in each channel is normalized based on the Z-scores of the entirety of available nodes, rather than around a user-defined base line. This is done with sklearn's StandardScaler. The UMAP itself is created with the Python umap module.
-4. Neighborhood assignment is done via K-Means clustering. Normalization is done the same way as the UMAP. Sklearn's KMeans is used to do the actual cluster assignment. Despite this differing normalization strategy to the violin plots, the aforementioned user-defined baseline is still used when viewing the violin plots of these neighborhoods, mainly for ease of evaluation.
+4. UMAP generation instead utilizes standard Z-scores. In this specific case, each node's intensity in each channel is normalized based on the Z-scores of the entirety of available nodes, rather than around a user-defined base line. This is done with sklearn's StandardScaler. The UMAP itself is created with the Python umap module.
+5. Neighborhood assignment is done via K-Means clustering. Normalization is done the same way as the UMAP. Sklearn's KMeans is used to do the actual cluster assignment. Despite this differing normalization strategy to the violin plots, the aforementioned user-defined baseline is still used when viewing the violin plots of these neighborhoods, mainly for ease of evaluation.
 
 
 * The third submenu, 'Data/Overlays', has hybrid functions that both produce data while generating Overlays for the Image Viewer Window
@@ -768,9 +783,9 @@ Parameter Explanations
 * Press 'Get hubs' to run the method with the desired parameters. The output data will be used to create a new table in the tabulated data widget. The overlay will go into the Overlay 2 channel.
 * Note that the hubs are considered independently for each seperate, distinct network component. Additionally, components that have too few nodes will not return any hubs if the upper proportion threshold is particularly small.
 
-'Analyze -> Data/Overlays -> Get Mother Nodes'
+'Analyze -> Data/Overlays -> Get Transcommunity Nodes'
 --------------------------------------
-* This method can be used to extract information about 'mother nodes', which are we define as those nodes that contain connections between one community and another.
+* This method can be used to extract information about 'transcommunity nodes', which are we define as those nodes that contain connections between one community and another.
 * This method would be used to identify what nodes enable interaction between seperate communities.
 
 Parameter Explanations
@@ -778,9 +793,9 @@ Parameter Explanations
 * This method only has one parameter.
 
 1. Make Overlay.
-    * If enabled, this method will create an overlay isolating the mother nodes.
+    * If enabled, this method will create an overlay isolating the transcommunity nodes.
 
-* Press 'Get Mothers' to run the method with the desired parameters. The output data will be used to create a new table in the tabulated data widget. The overlay will go into the Overlay 1 channel.
+* Press 'Get Transcommunity Nodes' to run the method with the desired parameters. The output data will be used to create a new table in the tabulated data widget. The overlay will go into the Overlay 1 channel.
 
 'Analyze -> Data/Overlays -> Code Communities'
 --------------------------------------

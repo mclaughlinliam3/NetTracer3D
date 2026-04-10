@@ -5409,7 +5409,7 @@ class Network_3D:
 
 
     def purge_properties(self):
-        print("Trimming properties. Note this does not update the network...")
+        print("Trimming properties...")
 
         nodes_set = set(np.unique(self.nodes))
         nodes_set.discard(0)
@@ -5817,7 +5817,7 @@ class Network_3D:
         return stats
 
 
-    def neighborhood_identities(self, root, directory = None, mode = 0, search = 0, fastdil = False):
+    def neighborhood_identities(self, root, directory = None, mode = 0, search = 0, fastdil = False, show_graphs = True):
 
         targets = []
         total_dict = {}
@@ -5837,6 +5837,7 @@ class Network_3D:
             total_dict[val] = 0
             neighborhood_dict[val] = 0
         root = ast.literal_eval(root)
+
         if len(root) < 2:
             root = root[0]
             for node in node_identities:
@@ -5890,9 +5891,10 @@ class Network_3D:
         for identity in neighborhood_dict:
             proportion_dict[identity] = neighborhood_dict[identity]/total_dict[identity]
 
-        network_analysis.create_bar_graph(neighborhood_dict, title1, "Node Identity", "Amount", directory=directory)
+        if show_graphs:
+            network_analysis.create_bar_graph(neighborhood_dict, title1, "Node Identity", "Amount", directory=directory)
 
-        network_analysis.create_bar_graph(proportion_dict, title2, "Node Identity", "Proportion", directory=directory)
+            network_analysis.create_bar_graph(proportion_dict, title2, "Node Identity", "Proportion", directory=directory)
 
         try:
             network_analysis.create_bar_graph(densities, f'Relative Density of Node Identities with {search} from Node Type {root}', "Node Identity", "Density within search region/Density within entire image", directory=directory)
@@ -6303,15 +6305,6 @@ class Network_3D:
 
         return output
 
-    def centroid_umap(self):
-
-        from . import neighborhoods
-
-        id_dictionary = {node:str(val) for node, val in self.node_identities.items()}
-
-        neighborhoods.visualize_cluster_composition_umap(self.node_centroids, None, id_dictionary = id_dictionary, graph_label = "Node ID", title = 'UMAP Visualization of Node Centroids') 
-
-
     def identity_umap(self, data, mode = 0):
 
         try:
@@ -6695,19 +6688,29 @@ class Network_3D:
 
             return array
 
-    def community_cells(self, size = 32, xy_scale = 1, z_scale = 1):
-
-        size_x = int(size * xy_scale)
-        size_z = int(size * z_scale)
-
-        if size_x == size_z:
-
-            com_dict = proximity.partition_objects_into_cells(self.node_centroids, size_x)
-
-        else:
-
-            com_dict = proximity.partition_objects_into_cells(self.node_centroids, (size_z, size_x, size_x))
-
+    def community_hex_cells(self, side_length=32, xy_scale=1, z_scale=1, shape_3d='dodecahedron'):
+        from . import hexagons
+        # Determine bounding box from centroids
+        centroids = np.array(list(self.node_centroids.values()))
+        labels = list(self.node_centroids.keys())
+        max_coords = np.max(centroids, axis=0).astype(int)
+        # dims needs to cover all centroids (Z, Y, X) - add padding
+        dims = (max_coords[0] + 2, max_coords[1] + 2, max_coords[2] + 2)
+        # Generate hex label volume
+        hex_labels = hexagons.generate_hexagonal_labels(
+            side_length, dims, xy_scale=xy_scale, z_scale=z_scale, shape_3d=shape_3d
+        )
+        # Assign each node to the hex cell its centroid falls in
+        com_dict = {}
+        for label, centroid in self.node_centroids.items():
+            z, y, x = int(round(centroid[0])), int(round(centroid[1])), int(round(centroid[2]))
+            z = min(z, dims[0] - 1)
+            y = min(y, dims[1] - 1)
+            x = min(x, dims[2] - 1)
+            cell_id = int(hex_labels[z, y, x])
+            if cell_id not in com_dict:
+                com_dict[cell_id] = []
+            com_dict[cell_id].append(int(label))
         self.communities = revert_dict(com_dict)
 
     def community_heatmap(self, num_nodes = None, is3d = True, numpy = False):
@@ -6768,6 +6771,10 @@ class Network_3D:
         except:
             pass
 
+        select_nodes = np.unique(data)
+        if 0 in select_nodes:
+            select_nodes = select_nodes[1:]
+
         for i, img in enumerate(img_list):
             if img.endswith('.tiff') or img.endswith('.tif'):
                 print(f"Processing image {img}")
@@ -6775,7 +6782,7 @@ class Network_3D:
                 if len(mask.shape) == 2:
                     mask = np.expand_dims(mask, axis = 0)
 
-                id_dict = proximity.create_node_dictionary_id(data, mask, num_nodes, bounding_boxes)
+                id_dict = proximity.create_node_dictionary_id(data, mask, num_nodes, bounding_boxes, select_nodes)
                 id_dicts.append(id_dict)
 
         final_dicts = {}

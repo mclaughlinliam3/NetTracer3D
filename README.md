@@ -101,7 +101,7 @@ This gui is built from the PyQt6 package and therefore may not function on docke
 
 NetTracer3D is freely available for academic and nonprofit use and can obtained from pip (pip install nettracer3d), provided that citation is included in any abstract, paper, or presentation utilizing NetTracer3D.
 
-(The official paper to cite is coming soon)
+If you use NetTracer3D for your research, we just ask you please cite this paper: https://doi.org/10.64898/2026.03.25.714104
 
 NetTracer3D was developed by Liam McLaughlin while working under Dr. Sanjay Jain at Washington University School of Medicine.
 

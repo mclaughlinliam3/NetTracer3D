@@ -6,21 +6,21 @@
   <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
 
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Changelog &mdash; NetTracer3D 1.5.1 documentation</title>
+  <title>Changelog &mdash; NetTracer3D 1.5.7 documentation</title>
       <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=b86133f3" />
       <link rel="stylesheet" type="text/css" href="_static/css/theme.css?v=e59714d7" />
 
   
       <script src="_static/jquery.js?v=5d32c60e"></script>
       <script src="_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
-      <script src="_static/documentation_options.js?v=44dfd65d"></script>
+      <script src="_static/documentation_options.js?v=2b2ec289"></script>
       <script src="_static/doctools.js?v=9bcbadda"></script>
       <script src="_static/sphinx_highlight.js?v=dc90522c"></script>
     <script src="_static/js/theme.js"></script>
     <link rel="author" title="About these documents" href="about.html" />
     <link rel="index" title="Index" href="genindex.html" />
     <link rel="search" title="Search" href="search.html" />
-    <link rel="next" title="Road Map" href="roadmap.html" />
+    <link rel="next" title="About" href="about.html" />
     <link rel="prev" title="Contact" href="contact.html" /> 
 </head>
 
@@ -65,7 +65,6 @@
 <ul class="current">
 <li class="toctree-l1"><a class="reference internal" href="contact.html">Contact</a></li>
 <li class="toctree-l1 current"><a class="current reference internal" href="#">Changelog</a></li>
-<li class="toctree-l1"><a class="reference internal" href="roadmap.html">Road Map</a></li>
 <li class="toctree-l1"><a class="reference internal" href="about.html">About</a></li>
 <li class="toctree-l1"><a class="reference internal" href="usage.html">Usage</a></li>
 </ul>
@@ -336,6 +335,23 @@
 <li><p>Bug fixes</p></li>
 </ul>
 </dd>
+<dt>Version 1.5.2-1.5.7 updates</dt><dd><ul class="simple">
+<li><p>The napari 3d view is now interactive. Toggle to ‘selection mode’ in the napari instance to select nodes/edges, and use right click functions that select stuff based on properties.</p></li>
+<li><p>The function to assign communities just using arbitrarily sized cubes now uses the hexagon/rhomboid method instead. This is a tad slower but it’s probably the more correct way for these tessellation solutions to be done.</p></li>
+<li><p>The ‘identity distribution of neighbors’ menu method has an updated window view to reflect the implementation of the batch calculation. The neighbor distance matrices generated from this batch calculation can give you somewhat complete descriptions of what’s happening in a tissue so long as you set up the proximity network parameters correctly and have meaningful identities assigned.</p></li>
+<li><p>The find ‘mother nodes’ method has been changed to ‘transcommunity nodes’ because the latter more accurately describes what these are while the former is just more of a made up term.</p></li>
+<li><p>The ‘violin plot’ menu was renamed to ‘Cellular-Esque Analysis’. Additionally, this menu now lets you compare expression of two ‘node identity’ items in a flow cytometry like graph.</p></li>
+<li><p>Segmenter was upgraded - now uses more feature maps for both the quick and detailed models providing more accurate segmentation. Segmentation chunks use padding too so there are fewer edge artifacts. Also swapped the random forest classifier to use the lightgbm model (<a class="reference external" href="https://en.wikipedia.org/wiki/LightGBM">https://en.wikipedia.org/wiki/LightGBM</a>) which is sort of a faster version of the former; to help account for the speed loss due to computing more feature maps. As such, the quick model is actually now deeper than the previous detailed model and is a good segmenter for most tasks. The new detailed model uses a rather large number of features in its feature maps so it’s great for smaller images but you might want to stick with the quick for large ones.</p></li>
+<li><p>Added new capabilities to the interactable UMAP - Namely, can now assign groups of node identities to assign a score to each node and create a heatmap over the UMAP characterizing what node fits that profile the best.</p></li>
+<li><p>This is from the ‘violin plot’ dialog that uses the identities intensities spreadsheet.</p></li>
+<li><p>There you can assign different identity groups and calculate the umap. The heatmap data will be saved with the UMAP so you don’t have to calculate it again. If you’ve calculated the base heatmap for your set of nodes you can also use the</p></li>
+<li><p>Similarly, this new functionality also comes with a thresholder that you can use to easily rote threshold out these high scoring items, although the UMAP provides some additional visualization help.</p></li>
+<li><p>Also if you’ve calculated and saved the base umap, you can avoid recalculating it and instead assign different heatmap scores like this - run the threshold option for the heatmap scores, then with the base umap open - open the options and convert it to heatmap. It will try to use the most recent threshold dictionary as its data source.</p></li>
+<li><p>The UMAP itself now runs a bit better - mainly concerning highlighting objects. Before a bug was making this slower than it should be.</p></li>
+<li><p>The violin plots for node intensities can now be configured to show Z-scores directly (before it was just a modified Z-score that was easier to visually appraise but less applicable from a broad analytic standpoint. Now you can create either as desired).</p></li>
+<li><p>The data tables now show their full titles if you hover over their tab, and will include their table name as the default save value.</p></li>
+</ul>
+</dd>
 </dl>
 </section>
 
@@ -344,7 +360,7 @@
           </div>
           <footer><div class="rst-footer-buttons" role="navigation" aria-label="Footer">
         <a href="contact.html" class="btn btn-neutral float-left" title="Contact" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left" aria-hidden="true"></span> Previous</a>
-        <a href="roadmap.html" class="btn btn-neutral float-right" title="Road Map" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right" aria-hidden="true"></span></a>
+        <a href="about.html" class="btn btn-neutral float-right" title="About" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right" aria-hidden="true"></span></a>
     </div>
 
   <hr/>

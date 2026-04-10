@@ -1334,7 +1334,7 @@ def setup_basics_tutorial(window):
 
     tutorial.add_step(
         window.threed_button,
-        "This button can be used to create a 3D display of the current data. This can be called with additional optional settings from the 'Image' menu as well.",
+        "This button can be used to create an interactive 3D display of the current data. This can be called with additional optional settings from the 'Image' menu as well.",
         highlight_type="circle",
         message_position="bottom"
     )
@@ -1509,7 +1509,7 @@ def setup_file_tutorial(window):
 
     tutorial.add_step(
         None,
-        "This data table can be used to access this menu (Also available from 'Analyze -> Stats -> Show Identity Violins...'), where you can generate informative violin plots about shared marker expression amongst cells of different communities or shared expression between cells defined as some identity.",
+        "This data table can be used to access this menu (Also available from 'Cellular-Esque Analysis...'), where you can generate informative violin plots about shared marker expression amongst cells of different communities or shared expression between cells defined as some identity.",
         message_position="top_right",
         pre_action=open_dialog
         )
@@ -2436,7 +2436,7 @@ def setup_analysis_tutorial(window):
     tutorial.add_step(
         MenuHelper.create_submenu_action_rect_getter(window, "Analyze", "Network", "Show Network"),
 
-        f"""--Use 'Create Communities Based on Cuboidal Proximity Cells' as an alternative spatial method for grouping nodes into communities. This splits the image into user-defined cuboidal cells and assigns nodes to communities based on whether they share a cell, independent of the network structure. You would mostly use it for images where the nodes were chaotically arranged (and so not in meaningful network communities), and you were just interested in creating supercommunities to describe what is clustered with what.
+        f"""--Use 'Create Communities Based on Hexagonal/Rhomboid Proximity Cells' as an alternative spatial method for grouping nodes into communities. This splits the image into user-defined cells and assigns nodes to communities based on whether they share a cell, independent of the network structure. You would mostly use it for images where the nodes were chaotically arranged (and so not in meaningful network communities), and were just interested in quickly binning nodes by spatial regions without computing the more nuanced proximity network version.
         \n\n--Use 'Calculate Composition of Communities (And Show UMAP/Heatmaps)' to analyze the compositional makeup of your communities based on node identities. This function can provide per-community identity proportions or a weighted average across all communities, and can generate a UMAP to visualize compositional similarity between communities.
         \n\n--Use 'Convert Network Communities Into Supercommunities' to group similar communities into a smaller set of supercommunities using K-means or DBSCAN clustering. This function returns compositional heatmap graphs showing identity distributions across supercommunities, including optional robust heatmaps that highlight overrepresented node types. Note this will reassign the 'communities' property to neighborhoods.""",
 
@@ -2554,7 +2554,7 @@ def setup_analysis_tutorial(window):
 
         \n\n--Use 'Get Hub Information' to identify hub nodes with the fewest degrees of separation from other nodes. Can optionally create an overlay isolating hubs and specify the proportion of most connected hubs to return (e.g., top 10%). Hubs are evaluated independently per network component.
 
-        \n\n--Use 'Get Mother Nodes' to identify nodes that bridge connections between different communities. These nodes enable inter-community interactions. Can optionally create an overlay isolating mother nodes, which goes into the Overlay 1 channel.""",
+        \n\n--Use 'Get Transcommunity Nodes' to identify nodes that bridge connections between different communities. These nodes enable inter-community interactions. Can optionally create an overlay isolating these nodes, which goes into the Overlay 1 channel.""",
 
         highlight_type=None,
         message_position="top_right",

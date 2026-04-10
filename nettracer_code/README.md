@@ -13,7 +13,7 @@ Please see: https://www.youtube.com/watch?v=_4uDy0mzG94&list=PLsrhxiimzKJMZ3_gTW
 
 --- Using the windows installer ---
 
-If you are on windows, an installer will be available at the GitHub repo: https://github.com/mclaughlinliam3/NetTracer3D/releases/tag/v1.4.8
+If you are on windows, an installer will be available at the GitHub repo: https://github.com/mclaughlinliam3/NetTracer3D/releases
 
 Simply download and run the installer, then open the program in windows. You can also download the executable and its dependencies directly. Note that this version will be missing a few features compared to the Python package, namely GPU segmentation support. It will also not be updated as often.
 
@@ -101,13 +101,18 @@ This gui is built from the PyQt6 package and therefore may not function on docke
 
 NetTracer3D is freely available for academic and nonprofit use and can obtained from pip (pip install nettracer3d), provided that citation is included in any abstract, paper, or presentation utilizing NetTracer3D.
 
-(The official paper to cite is coming soon)
+If you use NetTracer3D for your research, we just ask you please cite this paper: https://doi.org/10.64898/2026.03.25.714104
 
 NetTracer3D was developed by Liam McLaughlin while working under Dr. Sanjay Jain at Washington University School of Medicine.
 
--- Version 1.5.1 Updates --
+-- Version 1.5.7 Updates --
+	
+	* Interactive 3D view highlight is now faster (uses numba instead of numpy).
+	* The violin plots for node intensities can now be configured to show Z-scores directly (before it was just a modified Z-score that was easier to visually appraise but less applicable from a broad analytic standpoint. Now you can create either as desired).
+	* The data tables now show their full titles if you hover over their tab, and will include their table name as the default save value.
+	* Other minor fixes.
+	
+	
 
-	* Added brightness norm function to normalize deep slices of 3d stacks to have similar brightness to surface ones.
-	* Bug fixes
 
 

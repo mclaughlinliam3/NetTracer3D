@@ -9,7 +9,7 @@
 project = 'NetTracer3D'
 copyright = '2026, Liam McLaughlin'
 author = 'Liam McLaughlin'
-release = '1.5.1'
+release = '1.5.7'
 
 # -- General configuration ---------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#general-configuration

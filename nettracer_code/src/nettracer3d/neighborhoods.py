@@ -20,6 +20,7 @@ import matplotlib.patches as mpatches
 import os
 os.environ['LOKY_MAX_CPU_COUNT'] = '4'
 
+
 def cluster_arrays_dbscan(data_input, seed=42):
     """
     Simple DBSCAN clustering of 1D arrays with sensible defaults.
@@ -1443,116 +1444,136 @@ def _generate_graph_consistent_colors(labels, idens=None):
     return [color_map.get(lbl, '#808080') for lbl in labels]
 
 
-def create_neighbor_heatmap(distance_dict, dpi=300, title = "Nearest Neighbor Distance Matrix", subtitle = "Average spatial distances between node populations", y_label = "Distance"):
+def create_neighbor_heatmap(distance_dict, identities, dpi=300, title="Nearest Neighbor Distance Matrix", subtitle="Average spatial distances between node populations", y_label="Distance", color_swap=False):
     """
     Create a professional heatmap from nearest neighbor distance data.
-    
-    Parameters:
-    -----------
+
+    Parameters
+    ----------
     distance_dict : dict
-        Dictionary with keys like 'Root Type vs Neighbors: Neighbor Type'
-        and values as distances
+        Keys are root identity names, values are lists of distances
+        where each index corresponds to the identity at that index
+        in the identities list. Values may contain None.
+    identities : list of str
+        Ordered list of identity names corresponding to the list
+        indices in distance_dict values.
     dpi : int
-        Resolution of the output image
+        Resolution of the output image.
+    color_swap : bool
+        If True, uses blue-to-red colormap with log1p normalization
+        to better handle left-skewed distributions.
     """
-    
-    # Parse the dictionary to extract cell types and create matrix
-    cell_types = set()
-    data_tuples = []
-    
-    for key, value in distance_dict.items():
-        # Extract root and neighbor from keys like:
-        # 'Includes: Tumor+ vs Neighbors: Includes Fibroblast+'
-        match = re.search(r':\s*(.+?)\s+vs\s+Neighbors:\s*(.+?)$', key)
-        if match:
-            root = match.group(1).strip()
-            neighbor = match.group(2).strip()
-            
-            # Remove 'Includes' or 'Includes:' prefix if present
-            root = re.sub(r'^Includes:?\s*', '', root).strip()
-            neighbor = re.sub(r'^Includes:?\s*', '', neighbor).strip()
-            
-            cell_types.add(root)
-            cell_types.add(neighbor)
-            data_tuples.append((root, neighbor, float(value)))
-    
-    # Sort cell types for consistent ordering
-    cell_types = sorted(list(cell_types))
-    n = len(cell_types)
-    
-    # Create matrix
+
+    class Log1pNorm(mcolors.Normalize):
+        """Normalize using log1p to handle zero values and left-skewed distributions."""
+        def __call__(self, value, clip=None):
+            arr = np.ma.array(value, dtype=float)
+            vmin = np.log1p(self.vmin)
+            vmax = np.log1p(self.vmax)
+            result = np.ma.array(np.log1p(np.ma.filled(arr, 0)), mask=np.ma.getmask(arr))
+            return np.ma.array((result - vmin) / (vmax - vmin))
+
+        def inverse(self, value):
+            vmin = np.log1p(self.vmin)
+            vmax = np.log1p(self.vmax)
+            return np.expm1(value * (vmax - vmin) + vmin)
+
+    def natural_sort_key(s):
+        return [int(c) if c.isdigit() else c.lower() for c in re.split(r'(\d+)', s)]
+
+    # Build a sorted index order for display
+    sorted_indices = sorted(range(len(identities)), key=lambda i: natural_sort_key(identities[i]))
+    sorted_identities = [identities[i] for i in sorted_indices]
+    n = len(identities)
+
+    # Build matrix in original order, treating None as NaN
     matrix = np.full((n, n), np.nan)
-    for root, neighbor, value in data_tuples:
-        i = cell_types.index(root)
-        j = cell_types.index(neighbor)
-        matrix[i, j] = value
-    
+    for root, distances in distance_dict.items():
+        i = identities.index(root)
+        for j, val in enumerate(distances):
+            if val is not None:
+                matrix[i, j] = float(val)
+
+    # Reorder rows and columns by natural sort
+    matrix = matrix[np.ix_(sorted_indices, sorted_indices)]
+
     # Create figure with specific styling
     fig, ax = plt.subplots(figsize=(10, 8))
     fig.patch.set_facecolor('#0f0f0f')
     ax.set_facecolor('#1a1a1a')
-    
-    # Create custom colormap: red (close/clustered) -> yellow -> blue (distant)
-    colors = ['#d32f2f', '#e57373', '#ff9800', '#ffc107', '#64b5f6', '#2196f3', '#1565c0']
-    n_bins = 100
-    cmap = LinearSegmentedColormap.from_list('custom', colors, N=n_bins)
-    cmap.set_bad(color='#1a1a1a')  # Set color for NaN values to match background
-    
+
+    if not color_swap:
+        colors = ['#d32f2f', '#e57373', '#ff9800', '#ffc107', '#64b5f6', '#2196f3', '#1565c0']
+        norm = None
+    else:
+        colors = ['#1565c0', '#2196f3', '#64b5f6', '#ffc107', '#ff9800', '#e57373', '#d32f2f']
+        valid_vals = matrix[~np.isnan(matrix)]
+        norm = Log1pNorm(vmin=np.min(valid_vals), vmax=np.max(valid_vals)) if valid_vals.size > 0 else None
+
+    cmap = LinearSegmentedColormap.from_list('custom', colors, N=100)
+    cmap.set_bad(color='#1a1a1a')
+
     # Plot heatmap
-    im = ax.imshow(matrix, cmap=cmap, aspect='auto', interpolation='nearest')
-    
-    # Set ticks and labels
+    im = ax.imshow(matrix, cmap=cmap, norm=norm, aspect='auto', interpolation='nearest')
+
+    # Set ticks and labels using sorted identities
     ax.set_xticks(np.arange(n))
     ax.set_yticks(np.arange(n))
-    ax.set_xticklabels(cell_types, color='#cccccc', fontsize=11, fontweight='500')
-    ax.set_yticklabels(cell_types, color='#cccccc', fontsize=11, fontweight='500')
-    
-    # Rotate x labels for better readability
+    ax.set_xticklabels(sorted_identities, color='#cccccc', fontsize=11, fontweight='500')
+    ax.set_yticklabels(sorted_identities, color='#cccccc', fontsize=11, fontweight='500')
+
     plt.setp(ax.get_xticklabels(), rotation=45, ha='right', rotation_mode='anchor')
-    
-    # Add axis labels to clarify root vs neighbor
-    ax.set_xlabel('Neighbor Node Type (searching to)', 
-                   fontsize=13, fontweight='600', color='#64c8ff', labelpad=15)
-    ax.set_ylabel('Root Node Type (searching from)', 
-                   fontsize=13, fontweight='600', color='#64c8ff', labelpad=15)
-    
-    # Add title
-    title = ax.text(0.5, 1.08, f'{title}',
-                    transform=ax.transAxes, fontsize=18, fontweight='700',
-                    color='#f5f5f5', ha='center')
-    
-    subtitle = ax.text(0.5, 1.03, f'{subtitle}',
-                       transform=ax.transAxes, fontsize=11,
-                       color='#888888', ha='center')
-    
-    # Add values as text in each cell only if n is not too large
+
+    ax.set_xlabel('Neighbor Node Type (searching to)',
+                  fontsize=13, fontweight='600', color='#64c8ff', labelpad=15)
+    ax.set_ylabel('Root Node Type (searching from)',
+                  fontsize=13, fontweight='600', color='#64c8ff', labelpad=15)
+
+    ax.text(0.5, 1.08, title,
+            transform=ax.transAxes, fontsize=18, fontweight='700',
+            color='#f5f5f5', ha='center')
+    ax.text(0.5, 1.03, subtitle,
+            transform=ax.transAxes, fontsize=11,
+            color='#888888', ha='center')
+
+    # Add cell values if matrix isn't too large (always show raw values)
     if n <= 20:
         for i in range(n):
             for j in range(n):
                 if not np.isnan(matrix[i, j]):
-                    # Always use black text
-                    text = ax.text(j, i, f'{matrix[i, j]:.1f}',
-                                 ha='center', va='center', color='#1a1a1a',
-                                 fontsize=12, fontweight='700', fontfamily='monospace')
-    
-    # Add colorbar with custom styling
+                    ax.text(j, i, f'{matrix[i, j]:.1f}',
+                            ha='center', va='center', color='#1a1a1a',
+                            fontsize=12, fontweight='700', fontfamily='monospace')
+
+    # Colorbar
     cbar = plt.colorbar(im, ax=ax, fraction=0.046, pad=0.04)
-    cbar.set_label(f'{y_label}', rotation=270, labelpad=20, 
+    cbar.set_label(y_label, rotation=270, labelpad=20,
                    fontsize=11, color='#aaaaaa', fontweight='500')
     cbar.ax.yaxis.set_tick_params(color='#666666', labelcolor='#aaaaaa')
     cbar.outline.set_edgecolor('#333333')
     cbar.ax.set_facecolor('#1a1a1a')
-    
-    # Style the grid
+
+    # Grid styling
     ax.set_xticks(np.arange(n) - 0.5, minor=True)
     ax.set_yticks(np.arange(n) - 0.5, minor=True)
     ax.grid(which='minor', color='#333333', linestyle='-', linewidth=1.5)
     ax.tick_params(which='minor', size=0)
     ax.tick_params(which='major', size=0)
-    
-    # Remove spines
+
     for spine in ax.spines.values():
         spine.set_visible(False)
-    
+
     plt.tight_layout()
     plt.show()
+
+def natural_sort_key(s):
+
+    try:
+
+        for i, iden in enumerate(s):
+            if iden.endswith('+') or iden.endswith('-'):
+                s[i] = iden[:-1]
+
+        return [int(c) if c.isdigit() else c.lower() for c in re.split(r'(\d+)', s)]
+    except:
+        return sorted(s)

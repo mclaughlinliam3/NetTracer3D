@@ -12,6 +12,7 @@ import random
 import copy
 import json
 import math
+import pickle
 from . import nettracer_gui as netg
 
 import os
@@ -26,9 +27,12 @@ class UMAPGraphWidget(QWidget):
     def __init__(self, parent=None,
                  community_dict=None,
                  identity_dict=None,
+                 heatmap_dict=None,
+                 heatmap_center=None,
                  labels=False,
                  node_size=10,
-                 color_mode='community'):
+                 color_mode='community',
+                 background='white'):
         """
         Parameters
         ----------
@@ -38,43 +42,60 @@ class UMAPGraphWidget(QWidget):
             {node_id: community_label} for community colouring.
         identity_dict : dict, optional
             {node_id: identity_label} for identity colouring.
+        heatmap_dict : dict, optional
+            {node_id: float} for heatmap colouring.  Values are mapped to a
+            blue (min) → red (max) gradient.
+        heatmap_center : float, optional
+            The value that maps to white (t=0.5) in the heatmap gradient.
+            Values below this are blue, values above are red.
         labels : bool
             Whether to render text labels on nodes.
         node_size : float
             Base node radius in px.
         color_mode : str
-            'community' or 'identity' – which dict drives the initial colouring.
+            'community', 'identity', 'colorless', or 'heatmap'.
+        background : str
+            Plot background colour: 'white', 'black', or 'green'.
         """
         super().__init__(parent)
 
         self.parent_window = parent
         self.community_dict = community_dict or {}
         self.identity_dict = identity_dict or {}
+        self.heatmap_dict = heatmap_dict or {}
+        self.heatmap_center = heatmap_center
         self.labels = labels
         self.node_size = node_size
-        self.color_mode = color_mode  # 'community' or 'identity'
+        self.color_mode = color_mode  # 'community', 'identity', 'colorless', or 'heatmap'
+
+        # Background: map friendly names to actual colour values
+        _bg_map = {'white': 'w', 'black': '#1a1a2e', 'green': '#c8d5a3'}
+        self.background = _bg_map.get(background, 'w')
 
         # --- data ---
         self.node_ids = []              # ordered list of node IDs matching embedding rows
         self.embedding = None           # np.ndarray (N, 2)
         self.node_positions = {}        # {node_id: np.array([x, y])}
         self.node_colors = []           # hex colours parallel to node_ids
+        self._node_alphas = []          # alpha values parallel to node_ids
         self.selected_nodes = set()
         self.rendered = False
 
         # --- caching for fast updates ---
-        self.cached_spots = []
-        self.cached_node_to_index = {}  # node_id -> spot index
-        self.cached_brushes = {}        # node_id -> {'normal': brush, 'selected': brush}
+        self.cached_node_to_index = {}  # node_id -> index (kept for O(1) selection)
         self.last_selected_set = set()
-        self.cached_sizes_for_lod = []
 
         # --- fast array-based rendering (avoids spot-dict rebuild) ---
         self._pos_array = None          # Nx2 float64 positions
         self._size_array = None         # N float64 current sizes
-        self._brush_list = None         # list of N QBrush (current, with selection)
+        self._brush_list = None         # list of N QBrush (base colours for base scatter)
+        self._normal_brush_list = None  # list of N QBrush (base colours, no selection)
         self._data_list = None          # list of N node_id values
         self._base_point_size = 10.0    # scalar base size (same for all nodes)
+
+        # Single shared brush for selected nodes – avoids N allocations
+        self._selected_brush = pg.mkBrush(255, 255, 0, 255)
+        self._highlight_size_boost = 3.0  # extra px added to highlighted nodes
 
         # --- LOD debounce timer ---
         self._lod_timer = None
@@ -128,7 +149,7 @@ class UMAPGraphWidget(QWidget):
 
         # pyqtgraph
         self.graphics_widget = pg.GraphicsLayoutWidget()
-        self.graphics_widget.setBackground('w')
+        self.graphics_widget.setBackground(self.background)
         self.plot = self.graphics_widget.addPlot()
         self.plot.setAspectLocked(True)
         self.plot.hideAxis('left')
@@ -150,11 +171,19 @@ class UMAPGraphWidget(QWidget):
         self.plot.vb.setMenuEnabled(False)
         self.plot.vb.setMouseMode(pg.ViewBox.PanMode)
 
-        # scatter
+        # scatter – base layer (all nodes, normal colours; never updated for selection)
         self.scatter = ScatterPlotItem(size=10, pen=pg.mkPen(None),
                                        brush=pg.mkBrush(74, 144, 226, 200))
         self.plot.addItem(self.scatter)
         self.scatter.sigClicked.connect(self._on_node_clicked)
+
+        # highlight scatter – overlay (selected nodes only; tiny, fast to update)
+        self.highlight_scatter = ScatterPlotItem(size=12, pen=pg.mkPen(None),
+                                                  brush=pg.mkBrush(255, 255, 0, 255))
+        self.highlight_scatter.setZValue(15)  # above base scatter (z=10)
+        self.plot.addItem(self.highlight_scatter)
+        self.highlight_scatter.sigClicked.connect(self._on_highlight_node_clicked)
+
         self.plot.scene().sigMouseClicked.connect(self._on_plot_clicked)
         self.plot.sigRangeChanged.connect(self._on_view_changed)
 
@@ -245,23 +274,30 @@ class UMAPGraphWidget(QWidget):
         dlg = netg.UMAPDisplayDialog(self, parent_window=self.parent_window)
         dlg.exec()
 
-    def set_color_mode(self, mode, new_dict=None):
+    def set_color_mode(self, mode, new_dict=None, heatmap_center=None):
         """
-        Switch colouring between 'community' and 'identity'.
+        Switch colouring between 'community', 'identity', 'colorless', or 'heatmap'.
 
         Parameters
         ----------
         mode : str
-            'community' or 'identity'
+            'community', 'identity', 'colorless', or 'heatmap'
         new_dict : dict, optional
-            New {node: label} dict.  If None, uses whatever is already stored.
+            New {node: label} dict (community/identity) or
+            {node: float} dict (heatmap).  If None, uses whatever is already stored.
+        heatmap_center : float, optional
+            Centre-point value for heatmap gradient.
         """
         self.color_mode = mode
         if new_dict is not None:
             if mode == 'community':
                 self.community_dict = new_dict
-            else:
+            elif mode == 'identity':
                 self.identity_dict = new_dict
+            elif mode == 'heatmap':
+                self.heatmap_dict = new_dict
+        if heatmap_center is not None:
+            self.heatmap_center = heatmap_center
 
         # Quick re‐colour (embedding stays the same)
         if self.rendered and len(self.node_ids) > 0:
@@ -269,16 +305,42 @@ class UMAPGraphWidget(QWidget):
 
     # --------------------------------------------------- save / load embedding --
     def _save_embedding(self):
-        """Save node IDs and their 2‑D embeddings to a JSON file."""
+        """Save the full graph state to a pickle file for fast reload."""
         if self.embedding is None or len(self.node_ids) == 0:
             QMessageBox.warning(self, "Nothing to save",
                                 "Compute a UMAP embedding first.")
             return
 
         filename, _ = QFileDialog.getSaveFileName(
-            self, "Save UMAP Embedding", "", "JSON Files (*.json)")
+            self, "Save UMAP Embedding", "",
+            "Pickle Files (*.pkl);;JSON Files (*.json);;TIFF Image (*.tiff)")
         if not filename:
             return
+
+        # JSON legacy path
+        if filename.endswith('.json'):
+            self._save_as_json(filename)
+            return
+
+        # TIFF raster path
+        if filename.endswith(('.tif', '.tiff')):
+            self._save_as_tiff(filename)
+            return
+
+        if not filename.endswith('.pkl'):
+            filename += '.pkl'
+
+        state = self._get_saveable_state()
+        try:
+            with open(filename, 'wb') as f:
+                pickle.dump(state, f, protocol=pickle.HIGHEST_PROTOCOL)
+            QMessageBox.information(self, "Saved",
+                                    f"Embedding saved to {filename}")
+        except Exception as e:
+            QMessageBox.critical(self, "Error", f"Failed to save: {e}")
+
+    def _save_as_json(self, filename):
+        """Legacy JSON save (embedding + heatmap state only)."""
         if not filename.endswith('.json'):
             filename += '.json'
 
@@ -287,6 +349,15 @@ class UMAPGraphWidget(QWidget):
                          for n in self.node_ids],
             'embedding': self.embedding.tolist()
         }
+
+        if self.color_mode == 'heatmap' and self.heatmap_dict:
+            data['color_mode'] = 'heatmap'
+            data['heatmap_dict'] = {
+                (int(k) if isinstance(k, (int, np.integer)) else k): float(v)
+                for k, v in self.heatmap_dict.items()
+            }
+            if self.heatmap_center is not None:
+                data['heatmap_center'] = float(self.heatmap_center)
         try:
             with open(filename, 'w') as f:
                 json.dump(data, f)
@@ -295,6 +366,163 @@ class UMAPGraphWidget(QWidget):
         except Exception as e:
             QMessageBox.critical(self, "Error", f"Failed to save: {e}")
 
+    def _save_as_tiff(self, filename):
+        """
+        Save the embedding as a TIFF image where each node's label (ID) is
+        written into a 2-D array at the node's approximate embedding position.
+
+        The embedding is rescaled so that nodes are at least a few pixels apart,
+        then cast to integer indices for the image array.  Background is 0;
+        each occupied pixel holds the node's ID.
+        """
+        import tifffile
+
+        if not filename.endswith(('.tif', '.tiff')):
+            filename += '.tiff'
+
+        coords = self.embedding.copy()          # (N, 2) float64
+        ids = np.array(self.node_ids)            # node labels
+
+        # --- shift so minimum is at origin ---
+        mins = coords.min(axis=0)
+        coords -= mins
+
+        # --- compute scale factor ---
+        # Target: average area per node ≈ (min_spacing)² pixels.
+        # Image area  = n_nodes * min_spacing²
+        # Image side  ≈ sqrt(image_area)
+        # Scale factor = image_side / embedding_range
+        n = len(ids)
+        min_spacing = 3                         # pixels between neighbours
+        target_area = n * (min_spacing ** 2)
+        target_side = int(np.sqrt(target_area))
+
+        ranges = coords.max(axis=0)             # (range_x, range_y)
+        max_range = max(ranges[0], ranges[1], 1e-9)
+        scale = (target_side / max_range) * 5
+
+        # Enforce a floor so tiny embeddings still produce visible images
+        scale = max(scale, 1.0)
+
+        coords *= scale
+
+        # --- add a small margin so edge nodes aren't on pixel 0 ---
+        margin = min_spacing
+        coords += margin
+
+        # --- integer pixel positions ---
+        px = np.round(coords).astype(np.int64)  # (N, 2)  col 0 = x, col 1 = y
+
+        # Image dimensions (height x width)
+        width  = int(px[:, 0].max()) + margin + 1
+        height = int(px[:, 1].max()) + margin + 1
+
+        # --- pick dtype to fit the largest node ID ---
+        max_id = int(np.max(ids)) if np.issubdtype(ids.dtype, np.integer) else n
+        if max_id <= np.iinfo(np.uint16).max:
+            dtype = np.uint16
+        elif max_id <= np.iinfo(np.uint32).max:
+            dtype = np.uint32
+        else:
+            dtype = np.int64
+
+        img = np.zeros((height, width), dtype=dtype)
+
+        # y -> row, x -> col
+        rows = np.clip(px[:, 1], 0, height - 1)
+        cols = np.clip(px[:, 0], 0, width - 1)
+
+        img[rows, cols] = ids.astype(dtype)
+
+        # -------------------------------------------------
+        # Detect which nodes were lost due to overwriting
+        # -------------------------------------------------
+        # Detect which nodes were lost due to overwriting
+        present_ids = img[img > 0]
+        missing_mask = ~np.isin(ids, present_ids)
+
+        missing_ids = ids[missing_mask]
+        missing_rows = rows[missing_mask]
+        missing_cols = cols[missing_mask]
+
+        # -------------------------------------------------
+        # Reinsert missing nodes by searching locally
+        # -------------------------------------------------
+        for nid, r, c in zip(missing_ids, missing_rows, missing_cols):
+
+            placed = False
+            radius = 1
+
+            while not placed:
+                rmin = max(0, r - radius)
+                rmax = min(height - 1, r + radius)
+                cmin = max(0, c - radius)
+                cmax = min(width - 1, c + radius)
+
+                # check perimeter of the square ring
+                # top row
+                for cc in range(cmin, cmax + 1):
+                    if img[rmin, cc] == 0:
+                        img[rmin, cc] = nid
+                        placed = True
+                        break
+                if placed: break
+
+                # bottom row
+                for cc in range(cmin, cmax + 1):
+                    if img[rmax, cc] == 0:
+                        img[rmax, cc] = nid
+                        placed = True
+                        break
+                if placed: break
+
+                # left column
+                for rr in range(rmin + 1, rmax):
+                    if img[rr, cmin] == 0:
+                        img[rr, cmin] = nid
+                        placed = True
+                        break
+                if placed: break
+
+                # right column
+                for rr in range(rmin + 1, rmax):
+                    if img[rr, cmax] == 0:
+                        img[rr, cmax] = nid
+                        placed = True
+                        break
+
+                radius += 1
+
+        img = np.flipud(img)
+
+        try:
+            tifffile.imwrite(filename, img)
+            QMessageBox.information(
+                self, "Saved",
+                f"TIFF saved to {filename}\n"
+                f"Image size: {width} x {height} px")
+        except Exception as e:
+            QMessageBox.critical(self, "Error", f"Failed to save TIFF: {e}")
+
+    def _get_saveable_state(self):
+        """Extract all picklable graph state (no Qt objects)."""
+        return {
+            'format': 'umap_pickle_v1',
+            'node_ids': list(self.node_ids),
+            'embedding': self.embedding.copy(),
+            'node_colors': list(self.node_colors),
+            '_node_alphas': list(self._node_alphas),
+            'color_mode': self.color_mode,
+            'community_dict': dict(self.community_dict),
+            'identity_dict': dict(self.identity_dict),
+            'heatmap_dict': dict(self.heatmap_dict),
+            'heatmap_center': self.heatmap_center,
+            'node_size': self.node_size,
+            'labels': self.labels,
+            'background': self.background,
+            '_base_point_size': self._base_point_size,
+        }
+
     def load_from_save(self, filepath_or_dict):
         """
         Load a previously saved embedding and render it.
@@ -302,22 +530,163 @@ class UMAPGraphWidget(QWidget):
         Parameters
         ----------
         filepath_or_dict : str or dict
-            Either a JSON file path or a dict with keys 'node_ids' and 'embedding'.
+            A ``.pkl`` file path for fast restore, a ``.json`` file path for
+            legacy re-render, or a raw dict with keys 'node_ids' and 'embedding'.
         """
-        if isinstance(filepath_or_dict, str):
-            with open(filepath_or_dict, 'r') as f:
-                data = json.load(f)
-        else:
-            data = filepath_or_dict
+        # --- raw dict (always treated as legacy JSON-style) ---
+        if isinstance(filepath_or_dict, dict):
+            self._load_from_json_data(filepath_or_dict)
+            return
 
+        filepath = filepath_or_dict
+
+        # --- pickle path ---
+        if filepath.endswith('.pkl'):
+            try:
+                with open(filepath, 'rb') as f:
+                    state = pickle.load(f)
+                self._restore_from_state(state)
+                return
+            except Exception as e:
+                QMessageBox.critical(self, "Error",
+                                     f"Failed to load pickle: {e}")
+                return
+
+        # --- JSON path (backwards compat) ---
+        try:
+            with open(filepath, 'r') as f:
+                data = json.load(f)
+            self._load_from_json_data(data)
+        except Exception as e:
+            QMessageBox.critical(self, "Error",
+                                 f"Failed to load JSON: {e}")
+
+    def _load_from_json_data(self, data):
+        """Legacy load path — restores embedding then re-renders."""
         node_ids = data['node_ids']
         embedding = np.array(data['embedding'], dtype=np.float64)
 
+        # Restore heatmap state if the saved file includes it
+        if data.get('color_mode') == 'heatmap' and 'heatmap_dict' in data:
+            raw = data['heatmap_dict']
+            if node_ids and isinstance(node_ids[0], int):
+                self.heatmap_dict = {int(k): float(v) for k, v in raw.items()}
+            else:
+                self.heatmap_dict = {k: float(v) for k, v in raw.items()}
+            self.heatmap_center = data.get('heatmap_center', None)
+
+            self.color_mode = 'heatmap'
+
+            self.parent_window.special_dict = self.heatmap_dict
+            thresh_window = netg.ThresholdWindow(self.parent(), 4)
+            thresh_window.show()
+
         self._apply_embedding(node_ids, embedding)
+
+    def _restore_from_state(self, state):
+        """
+        Fast restore from a pickle state dict.
+
+        Rebuilds only the Qt objects (brushes, scatter data, legend) from
+        pre-computed colour / position data — skips UMAP and colour computation.
+        """
+        self._clear_plot()
+        self._remove_loading_text()
+
+        # --- restore data attributes ---
+        self.node_ids = list(state['node_ids'])
+        self.embedding = np.array(state['embedding'], dtype=np.float64)
+        self.node_positions = {nid: self.embedding[i]
+                               for i, nid in enumerate(self.node_ids)}
+        self.node_colors = list(state['node_colors'])
+        self._node_alphas = list(state['_node_alphas'])
+        self.color_mode = state['color_mode']
+        self.community_dict = state.get('community_dict', {})
+        self.identity_dict = state.get('identity_dict', {})
+        self.heatmap_dict = state.get('heatmap_dict', {})
+        self.heatmap_center = state.get('heatmap_center', None)
+        self.node_size = state.get('node_size', self.node_size)
+        self.labels = state.get('labels', self.labels)
+        self.background = state.get('background', self.background)
+        self._base_point_size = state.get('_base_point_size', 10.0)
+
+        # Reconstruct label_data from node_ids + embedding
+        self.label_data = [{'node': nid, 'text': str(nid), 'pos': self.embedding[i]}
+                           for i, nid in enumerate(self.node_ids)]
+
+        n = len(self.node_ids)
+        point_size = self._base_point_size
+
+        # --- reconstruct brushes from hex + alpha ---
+        normal_brushes = []
+        for i in range(n):
+            hx = self.node_colors[i].lstrip('#')
+            r, g, b = (int(hx[j:j+2], 16) for j in (0, 2, 4))
+            normal_brushes.append(pg.mkBrush(r, g, b, int(self._node_alphas[i])))
+
+        # --- parallel arrays ---
+        self._pos_array = self.embedding.copy()
+        self._size_array = np.full(n, point_size, dtype=np.float64)
+        self._normal_brush_list = normal_brushes
+        self._brush_list = list(normal_brushes)
+        self._data_list = list(self.node_ids)
+
+        self.cached_node_to_index = {nid: i for i, nid in enumerate(self.node_ids)}
+
+        # --- clear highlight overlay (selection re‑applied at end) ---
+        self.highlight_scatter.clear()
+
+        # --- push to base scatter ---
+        self.scatter.setData(
+            pos=self._pos_array,
+            size=self._size_array,
+            brush=self._brush_list,
+            data=self._data_list,
+            pen=None,
+        )
+        self.scatter.setZValue(10)
+
+        # --- labels ---
+        if self.labels and n < 100:
+            self._update_labels_in_viewport(n)
+
+        # --- legend ---
+        if self.color_mode == 'heatmap':
+            active_dict, color_map = {}, {}
+        else:
+            active_dict = self._active_color_dict()
+            color_map = self._generate_community_colors(active_dict)
+        self._rebuild_legend(active_dict, color_map)
+
+        # --- heatmap parent window integration ---
+        if self.color_mode == 'heatmap' and self.heatmap_dict:
+            if self.parent_window is not None and hasattr(self.parent_window, 'special_dict'):
+                self.parent_window.special_dict = self.heatmap_dict
+                thresh_window = netg.ThresholdWindow(self.parent(), 4)
+                thresh_window.show()
+
+        self.rendered = True
+        self.current_zoom_factor = 1.0
+
+        # Apply background
+        self.graphics_widget.setBackground(self.background)
+
+        # Reset view
+        self.plot.blockSignals(True)
+        self._reset_view()
+        self.plot.blockSignals(False)
+
+        # Re-apply any selection the parent tracks
+        if (self.parent_window is not None
+                and hasattr(self.parent_window, 'clicked_values')
+                and len(self.parent_window.clicked_values.get('nodes', [])) > 0):
+            self.select_nodes(self.parent_window.clicked_values['nodes'])
 
     # ------------------------------------------------- main public API ----------
     def set_data(self, cluster_data,
                  community_dict=None, identity_dict=None,
+                 heatmap_dict=None,
+                 heatmap_center=None,
                  color_mode=None,
                  umap_kwargs=None):
         """
@@ -331,8 +700,12 @@ class UMAPGraphWidget(QWidget):
             {node_id: community_label}.
         identity_dict : dict, optional
             {node_id: identity_label}.
+        heatmap_dict : dict, optional
+            {node_id: float} for heatmap colouring.
+        heatmap_center : float, optional
+            Centre-point value for heatmap gradient.
         color_mode : str, optional
-            'community' or 'identity'.
+            'community', 'identity', 'colorless', or 'heatmap'.
         umap_kwargs : dict, optional
             Extra kwargs forwarded to umap.UMAP (e.g. n_neighbors, min_dist).
         """
@@ -342,6 +715,10 @@ class UMAPGraphWidget(QWidget):
             self.community_dict = community_dict
         if identity_dict is not None:
             self.identity_dict = identity_dict
+        if heatmap_dict is not None:
+            self.heatmap_dict = heatmap_dict
+        if heatmap_center is not None:
+            self.heatmap_center = heatmap_center
         if color_mode is not None:
             self.color_mode = color_mode
 
@@ -403,66 +780,52 @@ class UMAPGraphWidget(QWidget):
         self._base_point_size = float(point_size)
 
         # --- colours ---
-        active_dict = self._active_color_dict()
-        color_map = self._generate_community_colors(active_dict)
+        if self.color_mode == 'heatmap' and self.heatmap_dict:
+            normal_brushes, colors_hex, alphas, _hm_min, _hm_max = \
+                self._compute_heatmap_brushes(self.node_ids)
+            active_dict = {}
+            color_map = {}
+        else:
+            active_dict = self._active_color_dict()
+            color_map = self._generate_community_colors(active_dict)
 
-        colors_hex = []
-        alphas = []
-        for nid in self.node_ids:
-            if self.color_mode == 'colorless':
-                colors_hex.append('#4A90E2')
-                alphas.append(200)
-            else:
-                label = active_dict.get(nid, None)
-                if label is None:
-                    colors_hex.append('#808080')
-                    alphas.append(100)  # reduced alpha for unassigned
+            colors_hex = []
+            alphas = []
+            normal_brushes = []
+
+            for nid in self.node_ids:
+                if self.color_mode == 'colorless':
+                    hex_c, alpha = '#4A90E2', 200
                 else:
-                    c = color_map.get(label, '#808080')
-                    colors_hex.append(c)
-                    if c == '#808080':
-                        alphas.append(100)
+                    label = active_dict.get(nid, None)
+                    if label is None:
+                        hex_c, alpha = '#808080', 100
                     else:
-                        alphas.append(200)
+                        hex_c = color_map.get(label, '#808080')
+                        alpha = 100 if hex_c == '#808080' else 200
+
+                colors_hex.append(hex_c)
+                alphas.append(alpha)
+                hx = hex_c.lstrip('#')
+                r, g, b = (int(hx[j:j+2], 16) for j in (0, 2, 4))
+                normal_brushes.append(pg.mkBrush(r, g, b, alpha))
 
         self.node_colors = colors_hex
+        self._node_alphas = list(alphas)
 
-        # --- parallel arrays & brush cache (fast path) ---
+        # --- parallel arrays (fast path) ---
         self._pos_array = self.embedding.copy()
         self._size_array = np.full(n, point_size, dtype=np.float64)
-        self._brush_list = [None] * n
+        self._normal_brush_list = normal_brushes          # immutable base colours
+        self._brush_list = list(normal_brushes)            # base layer only (no selection)
         self._data_list = list(self.node_ids)
 
-        brush_cache = {}
-        spots = []  # kept for legacy compat with _recolor_nodes / spot-dict consumers
-        sizes = []
-
-        for i, nid in enumerate(self.node_ids):
-            hex_c = colors_hex[i].lstrip('#')
-            r, g, b = (int(hex_c[j:j+2], 16) for j in (0, 2, 4))
-            alpha = alphas[i]
-
-            normal_brush = pg.mkBrush(r, g, b, alpha)
-            selected_brush = pg.mkBrush(255, 255, 0, 255)
-
-            brush_cache[nid] = {'normal': normal_brush, 'selected': selected_brush}
-            self._brush_list[i] = normal_brush
-
-            spot = {
-                'pos': self.embedding[i],
-                'size': point_size,
-                'brush': normal_brush,
-                'data': nid
-            }
-            spots.append(spot)
-            sizes.append(point_size)
-
-        self.cached_spots = spots
-        self.cached_brushes = brush_cache
-        self.cached_sizes_for_lod = sizes[:]
         self.cached_node_to_index = {nid: i for i, nid in enumerate(self.node_ids)}
 
-        # --- render scatter (array path — much faster than spots dicts) ---
+        # --- clear highlight overlay (selection re‑applied at end) ---
+        self.highlight_scatter.clear()
+
+        # --- render base scatter (array path — much faster than spots dicts) ---
         self.scatter.setData(
             pos=self._pos_array,
             size=self._size_array,
@@ -490,6 +853,9 @@ class UMAPGraphWidget(QWidget):
         self.rendered = True
         self.current_zoom_factor = 1.0
 
+        # Apply current background colour
+        self.graphics_widget.setBackground(self.background)
+
         # Reset view
         self.plot.blockSignals(True)
         self._reset_view()
@@ -502,54 +868,51 @@ class UMAPGraphWidget(QWidget):
             self.select_nodes(self.parent_window.clicked_values['nodes'])
 
     def _recolor_nodes(self):
-        """Quick re‐colour without recomputing the embedding."""
-        if not self.cached_spots or len(self.node_ids) == 0:
+        """Quick re‐colour without recomputing the embedding.
+
+        Only the base scatter is rebuilt with new colours.  The highlight
+        overlay is left alone (it derives colour from _selected_brush).
+        """
+        if not self.rendered or len(self.node_ids) == 0:
             return
 
-        active_dict = self._active_color_dict()
-        color_map = self._generate_community_colors(active_dict)
+        if self.color_mode == 'heatmap' and self.heatmap_dict:
+            normal_brushes, colors_hex, alphas, _, _ = \
+                self._compute_heatmap_brushes(self.node_ids)
+            active_dict = {}
+            color_map = {}
+        else:
+            active_dict = self._active_color_dict()
+            color_map = self._generate_community_colors(active_dict)
 
-        colors_hex = []
-        for i, nid in enumerate(self.node_ids):
-            label = active_dict.get(nid, None)
-            if label is None:
-                hex_c = '#808080'
-                alpha = 100
-            else:
-                hex_c = color_map.get(label, '#808080')
-                alpha = 100 if hex_c == '#808080' else 200
+            colors_hex = []
+            alphas = []
+            normal_brushes = []
 
-            colors_hex.append(hex_c)
-            hx = hex_c.lstrip('#')
-            r, g, b = (int(hx[j:j+2], 16) for j in (0, 2, 4))
+            for nid in self.node_ids:
+                if self.color_mode == 'colorless':
+                    hex_c, alpha = '#4A90E2', 200
+                else:
+                    label = active_dict.get(nid, None)
+                    if label is None:
+                        hex_c, alpha = '#808080', 100
+                    else:
+                        hex_c = color_map.get(label, '#808080')
+                        alpha = 100 if hex_c == '#808080' else 200
 
-            normal_brush = pg.mkBrush(r, g, b, alpha)
-            selected_brush = pg.mkBrush(255, 255, 0, 255)
-
-            self.cached_brushes[nid] = {'normal': normal_brush, 'selected': selected_brush}
-
-            if nid in self.selected_nodes:
-                self.cached_spots[i]['brush'] = selected_brush
-                if self._brush_list is not None:
-                    self._brush_list[i] = selected_brush
-            else:
-                self.cached_spots[i]['brush'] = normal_brush
-                if self._brush_list is not None:
-                    self._brush_list[i] = normal_brush
+                colors_hex.append(hex_c)
+                alphas.append(alpha)
+                hx = hex_c.lstrip('#')
+                r, g, b = (int(hx[j:j+2], 16) for j in (0, 2, 4))
+                normal_brushes.append(pg.mkBrush(r, g, b, alpha))
 
         self.node_colors = colors_hex
+        self._node_alphas = list(alphas)
+        self._normal_brush_list = normal_brushes
+        self._brush_list = list(normal_brushes)  # base layer = normal colours only
 
-        # Use fast array path if available, fall back to spot dicts
-        if self._pos_array is not None:
-            self.scatter.setData(
-                pos=self._pos_array,
-                size=self._size_array,
-                brush=self._brush_list,
-                data=self._data_list,
-                pen=None,
-            )
-        else:
-            self.scatter.setData(spots=self.cached_spots)
+        # Push to base scatter (no selection state — that lives in highlight_scatter)
+        self._flush_brushes()
 
         # rebuild legend
         self._rebuild_legend(active_dict, color_map)
@@ -559,9 +922,134 @@ class UMAPGraphWidget(QWidget):
         """Return the dict that should drive colouring right now."""
         if self.color_mode == 'colorless':
             return {}
+        if self.color_mode == 'heatmap':
+            return {}  # heatmap is handled separately
         if self.color_mode == 'identity' and self.identity_dict:
             return self.identity_dict
         return self.community_dict
+
+    def _heatmap_color_for_value(self, value, vmin, vmax, vcenter=None):
+        """
+        Map *value* to a blue → white → red hex colour.
+        Uses centre-point normalisation: vcenter → white (t=0.5),
+        min → most-blue (t=0), max → most-red (t=1).
+        Alpha scales from 0.3 (midpoint) to 0.7 (extremes).
+
+        Returns (hex_str, alpha_0_255).
+        """
+        if vcenter is None:
+            vcenter = self.heatmap_center if self.heatmap_center is not None \
+                      else (vmin + vmax) / 2.0
+
+        if value <= vcenter:
+            lo_rng = vcenter - vmin
+            t = 0.5 * (value - vmin) / lo_rng if lo_rng > 0 else 0.5
+        else:
+            hi_rng = vmax - vcenter
+            t = 0.5 + 0.5 * (value - vcenter) / hi_rng if hi_rng > 0 else 0.5
+        t = max(0.0, min(1.0, t))
+
+        # Blue (0) → White (0.5) → Red (1)
+        if t <= 0.5:
+            s = t / 0.5
+            r = int(s * 255)
+            g = int(s * 255)
+            b = 255
+        else:
+            s = (t - 0.5) / 0.5
+            r = 255
+            g = int((1 - s) * 255)
+            b = int((1 - s) * 255)
+
+        # Alpha scales with distance from centre (intensity)
+        intensity = abs(2.0 * t - 1.0)  # 0 at midpoint, 1 at extremes
+        alpha = int((0.3 + 0.4 * intensity) * 255)
+
+        return '#{:02x}{:02x}{:02x}'.format(r, g, b), alpha
+
+    def _compute_heatmap_brushes(self, node_ids):
+        """
+        Vectorised heatmap brush computation.
+        Returns (brush_list, hex_list, alpha_list) parallel to *node_ids*.
+        """
+        n = len(node_ids)
+        hm = self.heatmap_dict
+
+        # Gather values; mark missing nodes with NaN
+        vals = np.empty(n, dtype=np.float64)
+        missing_mask = np.empty(n, dtype=np.bool_)
+        for i, nid in enumerate(node_ids):
+            v = hm.get(nid)
+            if v is None:
+                vals[i] = 0.0
+                missing_mask[i] = True
+            else:
+                vals[i] = v
+                missing_mask[i] = False
+
+        present = ~missing_mask
+        vmin = vals[present].min() if present.any() else 0.0
+        vmax = vals[present].max() if present.any() else 0.0
+        # Use the caller-supplied centre-point; fall back to midpoint
+        if self.heatmap_center is not None:
+            vcenter = float(self.heatmap_center)
+        else:
+            vcenter = (vmin + vmax) / 2.0
+
+        # Centre-point normalisation: vcenter → 0.5, min → 0, max → 1
+        t = np.full(n, 0.5)
+        if present.any():
+            below = present & (vals <= vcenter)
+            above = present & (vals > vcenter)
+            lo_rng = vcenter - vmin
+            hi_rng = vmax - vcenter
+            if lo_rng > 0:
+                t[below] = 0.5 * (vals[below] - vmin) / lo_rng
+            # else: already 0.5
+            if hi_rng > 0:
+                t[above] = 0.5 + 0.5 * (vals[above] - vcenter) / hi_rng
+            # else: already 0.5
+        np.clip(t, 0.0, 1.0, out=t)
+
+        # --- vectorised RGB ---
+        r = np.empty(n, dtype=np.int32)
+        g = np.empty(n, dtype=np.int32)
+        b = np.empty(n, dtype=np.int32)
+
+        lo = t <= 0.5
+        hi = ~lo
+
+        # Blue → White  (t 0→0.5)
+        s_lo = t[lo] / 0.5
+        r[lo] = (s_lo * 255).astype(np.int32)
+        g[lo] = (s_lo * 255).astype(np.int32)
+        b[lo] = 255
+
+        # White → Red  (t 0.5→1)
+        s_hi = (t[hi] - 0.5) / 0.5
+        r[hi] = 255
+        g[hi] = ((1 - s_hi) * 255).astype(np.int32)
+        b[hi] = ((1 - s_hi) * 255).astype(np.int32)
+
+        # Alpha: 0.3 → 0.7 scaling with intensity (distance from midpoint)
+        intensity = np.abs(2.0 * t - 1.0)
+        alpha = ((0.3 + 0.4 * intensity) * 255).astype(np.int32)
+
+        # Override missing nodes → grey
+        r[missing_mask] = 128
+        g[missing_mask] = 128
+        b[missing_mask] = 128
+        alpha[missing_mask] = 100
+
+        # Build QBrush list
+        brushes = [None] * n
+        hex_list = [None] * n
+        alpha_list = alpha.tolist()
+        for i in range(n):
+            brushes[i] = pg.mkBrush(int(r[i]), int(g[i]), int(b[i]), int(alpha[i]))
+            hex_list[i] = '#{:02x}{:02x}{:02x}'.format(int(r[i]), int(g[i]), int(b[i]))
+
+        return brushes, hex_list, alpha_list, vmin, vmax
 
     def _generate_community_colors(self, my_dict):
         """
@@ -607,6 +1095,61 @@ class UMAPGraphWidget(QWidget):
             w = self.legend_layout.itemAt(i).widget()
             if w:
                 w.setParent(None)
+
+        # --- heatmap gradient legend ---
+        if self.color_mode == 'heatmap' and self.heatmap_dict:
+            vals = list(self.heatmap_dict.values())
+            vmin, vmax = min(vals), max(vals)
+            if self.heatmap_center is not None:
+                vcenter = self.heatmap_center
+            else:
+                vcenter = (vmin + vmax) / 2.0
+
+            legend_widget = QWidget()
+            ll = QVBoxLayout()
+            ll.setContentsMargins(5, 5, 5, 5)
+            ll.setSpacing(4)
+
+            title = QLabel("Heatmap")
+            title.setStyleSheet("font-weight: bold; font-size: 11pt; padding: 3px;")
+            ll.addWidget(title)
+
+            # Gradient bar using CSS linear-gradient
+            gradient_bar = QLabel()
+            gradient_bar.setFixedHeight(20)
+            gradient_bar.setMinimumWidth(140)
+            gradient_bar.setStyleSheet(
+                "background: qlineargradient(x1:0,y1:0,x2:1,y2:0,"
+                "stop:0 #0000ff, stop:0.5 #ffffff, stop:1 #ff0000);"
+                "border: 1px solid #888;"
+            )
+            ll.addWidget(gradient_bar)
+
+            # Min / median / max labels
+            range_row = QWidget()
+            rl = QHBoxLayout()
+            rl.setContentsMargins(0, 0, 0, 0)
+            min_lbl = QLabel(f"{vmin:.3g}")
+            min_lbl.setStyleSheet("font-size: 8pt; color: #0000cc;")
+            med_lbl = QLabel(f"{vcenter:.3g}")
+            med_lbl.setStyleSheet("font-size: 8pt; color: #666666;")
+            med_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
+            max_lbl = QLabel(f"{vmax:.3g}")
+            max_lbl.setStyleSheet("font-size: 8pt; color: #cc0000;")
+            max_lbl.setAlignment(Qt.AlignmentFlag.AlignRight)
+            rl.addWidget(min_lbl)
+            rl.addStretch()
+            rl.addWidget(med_lbl)
+            rl.addStretch()
+            rl.addWidget(max_lbl)
+            range_row.setLayout(rl)
+            ll.addWidget(range_row)
+
+            ll.addStretch()
+            legend_widget.setLayout(ll)
+            self.legend_layout.addWidget(legend_widget)
+            self.legend_container.setMaximumWidth(200)
+            return
 
         if not active_dict or not color_map:
             self.legend_container.setMaximumWidth(0)
@@ -713,44 +1256,56 @@ class UMAPGraphWidget(QWidget):
         return None
 
     def push_selection(self):
-        if self.parent_window is not None and hasattr(self.parent_window, 'clicked_values'):
-            self.parent_window.clicked_values['nodes'] = list(self.selected_nodes)
-            if hasattr(self.parent_window, 'evaluate_mini'):
-                self.parent_window.evaluate_mini(subgraph_push=True)
-            if hasattr(self.parent_window, 'handle_info'):
-                self.parent_window.handle_info('node')
+        try:
+            if self.parent_window is not None and hasattr(self.parent_window, 'clicked_values'):
+                self.parent_window.clicked_values['nodes'] = list(self.selected_nodes)
+                if hasattr(self.parent_window, 'evaluate_mini'):
+                    self.parent_window.evaluate_mini(subgraph_push=True)
+                if hasattr(self.parent_window, 'handle_info'):
+                    self.parent_window.handle_info('node')
+        except:
+            pass
+
+    def create_context_menu(self, event):
+        # Get the index at the clicked position
+        # Create context menu
+        context_menu = QMenu(self)
+        
+        find_action = context_menu.addAction("Deselect 'Cold' Nodes")
+
+        find_action.triggered.connect(self.handle_cold_deselect)
+        
+        # Show the menu at cursor position
+        view_widget = self.plot.getViewWidget()
+        
+        # Map scene position to view coordinates
+        view_pos = view_widget.mapFromScene(event.scenePos())
+        
+        # Map to global screen coordinates
+        global_pos = view_widget.mapToGlobal(view_pos)
+        
+        # Show the menu
+        context_menu.exec(global_pos)
+
+    def handle_cold_deselect(self):
+
+        new_selected = set()
+
+        for node in self.selected_nodes:
+            if self.heatmap_dict[node] > self.heatmap_center:
+                new_selected.add(node)
+
+        self.selected_nodes = new_selected
+        self._render_nodes()
+        self.push_selection()
 
     # ------------------------------------------------------- render helpers -----
-    def _render_nodes(self):
-        """Only update brushes for nodes that changed selection state."""
-        if not self.cached_brushes:
-            return
-
-        newly_selected = self.selected_nodes - self.last_selected_set
-        newly_deselected = self.last_selected_set - self.selected_nodes
-
-        if not newly_selected and not newly_deselected:
-            return
-
-        for node in newly_selected:
-            if node in self.cached_node_to_index:
-                idx = self.cached_node_to_index[node]
-                brush = self.cached_brushes[node]['selected']
-                if self.cached_spots:
-                    self.cached_spots[idx]['brush'] = brush
-                if self._brush_list is not None:
-                    self._brush_list[idx] = brush
-
-        for node in newly_deselected:
-            if node in self.cached_node_to_index:
-                idx = self.cached_node_to_index[node]
-                brush = self.cached_brushes[node]['normal']
-                if self.cached_spots:
-                    self.cached_spots[idx]['brush'] = brush
-                if self._brush_list is not None:
-                    self._brush_list[idx] = brush
-
-        # Use fast array path if available
+    def _flush_brushes(self):
+        """Push current _brush_list to the scatter.
+        Uses array-based setData which is fast and reliably redraws brushes.
+        (In-place recarray mutation works for numeric fields like size but
+        does *not* invalidate pyqtgraph's cached symbol pixmaps for brush
+        changes, so we must go through setData here.)"""
         if self._pos_array is not None:
             self.scatter.setData(
                 pos=self._pos_array,
@@ -759,9 +1314,52 @@ class UMAPGraphWidget(QWidget):
                 data=self._data_list,
                 pen=None,
             )
-        else:
-            self.scatter.setData(spots=self.cached_spots)
+
+    def _render_nodes(self):
+        """Update the lightweight highlight overlay scatter.
+
+        Only the selected nodes are pushed to highlight_scatter — this is O(K)
+        where K is the number of selected nodes, regardless of total graph size.
+        The base scatter is never touched here.
+        """
+        if self._pos_array is None:
+            return
+
+        newly_selected = self.selected_nodes - self.last_selected_set
+        newly_deselected = self.last_selected_set - self.selected_nodes
+
+        if not newly_selected and not newly_deselected:
+            return
+
+        self._update_highlight_scatter()
         self.last_selected_set = self.selected_nodes.copy()
+
+    def _update_highlight_scatter(self):
+        """Rebuild the highlight scatter from the current selected_nodes set.
+
+        Because highlight_scatter only contains the selected nodes (typically a
+        tiny fraction of N), setData() here is very cheap even for million-node
+        graphs.
+        """
+
+        cached_idx = self.cached_node_to_index
+        indices = [cached_idx[n] for n in self.selected_nodes if n in cached_idx]
+
+        idx_arr = np.array(indices, dtype=np.int64)
+        sel_pos = self._pos_array[idx_arr]
+        sel_data = [self.node_ids[i] for i in indices]
+
+        # Highlight nodes get the current LOD size + a small boost
+        current_size = float(self._size_array[0]) if len(self._size_array) > 0 else self._base_point_size
+        sel_size = current_size + self._highlight_size_boost
+
+        self.highlight_scatter.setData(
+            pos=sel_pos,
+            size=sel_size,
+            brush=self._selected_brush,
+            data=sel_data,
+            pen=None,
+        )
 
     # ------------------------------------------------------- view / zoom --------
     def _on_view_changed(self):
@@ -860,9 +1458,9 @@ class UMAPGraphWidget(QWidget):
                 pen=None,
             )
 
-        # Keep legacy cached_spots in sync (for _recolor_nodes etc.)
-        for i in range(len(self.cached_sizes_for_lod)):
-            self.cached_spots[i]['size'] = new_size
+        # Keep highlight overlay in sync with new LOD size
+        if self.selected_nodes:
+            self._update_highlight_scatter()
 
         if self.labels:
             self._update_labels_for_zoom()
@@ -918,7 +1516,8 @@ class UMAPGraphWidget(QWidget):
         for info in labels_to_render:
             node = info['node']
             if node not in current_set:
-                ti = pg.TextItem(text=info['text'], color=(0, 0, 0), anchor=(0.5, 0.5))
+                label_color = (255, 255, 255) if self.background == '#1a1a2e' else (0, 0, 0)
+                ti = pg.TextItem(text=info['text'], color=label_color, anchor=(0.5, 0.5))
                 ti.setPos(info['pos'][0], info['pos'][1])
                 ti.setZValue(20)
                 self.plot.addItem(ti)
@@ -986,6 +1585,7 @@ class UMAPGraphWidget(QWidget):
         self._remove_loading_text()
 
         self.scatter.clear()
+        self.highlight_scatter.clear()
 
         for li in list(self.label_items.values()):
             try:
@@ -1020,11 +1620,8 @@ class UMAPGraphWidget(QWidget):
         # Clear caches
         self.node_positions.clear()
         self.selected_nodes.clear()
-        self.cached_spots.clear()
         self.cached_node_to_index.clear()
-        self.cached_brushes.clear()
         self.last_selected_set.clear()
-        self.cached_sizes_for_lod.clear()
         self.label_data.clear()
         self.rendered = False
 
@@ -1032,6 +1629,7 @@ class UMAPGraphWidget(QWidget):
         self._pos_array = None
         self._size_array = None
         self._brush_list = None
+        self._normal_brush_list = None
         self._data_list = None
 
         # Stop LOD timer
@@ -1057,6 +1655,30 @@ class UMAPGraphWidget(QWidget):
                 self.selected_nodes.remove(clicked_node)
             else:
                 self.selected_nodes.add(clicked_node)
+        else:
+            self.selected_nodes.clear()
+            self.selected_nodes.add(clicked_node)
+
+        self.push_selection()
+        self._render_nodes()
+        self.node_click_flag = True
+        self.node_selected.emit(list(self.selected_nodes))
+
+    def _on_highlight_node_clicked(self, scatter, points, ev):
+        """Handle clicks on already-highlighted nodes (the overlay scatter).
+
+        Ctrl-click on a highlighted node deselects it; plain click reduces
+        the selection to just that node.
+        """
+        if not self.selection_mode or len(points) == 0:
+            return
+
+        clicked_node = points[0].data()
+        modifiers = ev.modifiers()
+        ctrl = modifiers & Qt.KeyboardModifier.ControlModifier
+
+        if ctrl:
+            self.selected_nodes.discard(clicked_node)
         else:
             self.selected_nodes.clear()
             self.selected_nodes.add(clicked_node)
@@ -1371,6 +1993,10 @@ class UMAPGraphWidget(QWidget):
                 elif self._is_zoom_rect_selecting():
                     self._finish_zoom_rect(event)
                     return True
+            elif event.button() == Qt.MouseButton.RightButton and self.selection_mode and self.color_mode == 'heatmap':
+                mouse_point = self.plot.getViewBox().mapSceneToView(event.scenePos())
+                x, y = mouse_point.x(), mouse_point.y()
+                self.create_context_menu(event)
 
             # Zoom mode click zoom
             if self.zoom_mode and not self._is_zoom_rect_selecting():
@@ -1445,18 +2071,27 @@ class UMAPGraphWidget(QWidget):
 
     # ----------------------------------------------------------- utility --------
     def update_params(self, community_dict=None, identity_dict=None,
-                      labels=None, node_size=None, color_mode=None):
+                      heatmap_dict=None, heatmap_center=None,
+                      labels=None, node_size=None, color_mode=None,
+                      background=None):
         """Update visualization parameters without recomputing the embedding."""
         if community_dict is not None:
             self.community_dict = community_dict
         if identity_dict is not None:
             self.identity_dict = identity_dict
+        if heatmap_dict is not None:
+            self.heatmap_dict = heatmap_dict
+        if heatmap_center is not None:
+            self.heatmap_center = heatmap_center
         if labels is not None:
             self.labels = labels
         if node_size is not None:
             self.node_size = node_size
         if color_mode is not None:
             self.color_mode = color_mode
+        if background is not None:
+            _bg_map = {'white': 'w', 'black': '#1a1a2e', 'green': '#c8d5a3'}
+            self.background = _bg_map.get(background, 'w')
 
     def show_in_window(self, title="UMAP Visualization", width=1000, height=800):
         self.popup_window = _UMAPPopupWindow(self, parent=None)

@@ -6,14 +6,14 @@
   <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
 
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>All Analyze Menu Options &mdash; NetTracer3D 1.5.1 documentation</title>
+  <title>All Analyze Menu Options &mdash; NetTracer3D 1.5.7 documentation</title>
       <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=b86133f3" />
       <link rel="stylesheet" type="text/css" href="_static/css/theme.css?v=e59714d7" />
 
   
       <script src="_static/jquery.js?v=5d32c60e"></script>
       <script src="_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
-      <script src="_static/documentation_options.js?v=44dfd65d"></script>
+      <script src="_static/documentation_options.js?v=2b2ec289"></script>
       <script src="_static/doctools.js?v=9bcbadda"></script>
       <script src="_static/sphinx_highlight.js?v=dc90522c"></script>
     <script src="_static/js/theme.js"></script>
@@ -72,7 +72,7 @@
 <li class="toctree-l3"><a class="reference internal" href="#algorithm-explanations">Algorithm Explanations</a></li>
 </ul>
 </li>
-<li class="toctree-l2"><a class="reference internal" href="#analyze-network-create-communities-based-on-cuboidal-proximity-cells">‘Analyze -&gt; Network -&gt; Create Communities Based on Cuboidal Proximity Cells?’</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="#analyze-network-create-communities-based-on-hexagonal-rhomboid-proximity-cells">‘Analyze -&gt; Network -&gt; Create Communities Based on Hexagonal/Rhomboid Proximity Cells?’</a><ul>
 <li class="toctree-l3"><a class="reference internal" href="#id3">Parameter Explanations</a></li>
 </ul>
 </li>
@@ -137,7 +137,7 @@
 </ul>
 </li>
 <li class="toctree-l2"><a class="reference internal" href="#analyze-stats-significance-testing">‘Analyze -&gt; Stats -&gt; Significance Testing’</a></li>
-<li class="toctree-l2"><a class="reference internal" href="#analyze-stats-show-identities-violin-umap-assign-intensity-neighborhoods">‘Analyze -&gt; Stats -&gt; Show Identities Violin/UMAP/Assign Intensity Neighborhoods’</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="#analyze-stats-cellular-esque-analysis">‘Analyze -&gt; Stats -&gt; Cellular-Esque Analysis’</a><ul>
 <li class="toctree-l3"><a class="reference internal" href="#id22">Parameter Explanation</a></li>
 <li class="toctree-l3"><a class="reference internal" href="#id23">Algorithm Explanation</a></li>
 </ul>
@@ -150,7 +150,7 @@
 <li class="toctree-l3"><a class="reference internal" href="#id25">Parameter Explanations</a></li>
 </ul>
 </li>
-<li class="toctree-l2"><a class="reference internal" href="#analyze-data-overlays-get-mother-nodes">‘Analyze -&gt; Data/Overlays -&gt; Get Mother Nodes’</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="#analyze-data-overlays-get-transcommunity-nodes">‘Analyze -&gt; Data/Overlays -&gt; Get Transcommunity Nodes’</a><ul>
 <li class="toctree-l3"><a class="reference internal" href="#id26">Parameter Explanations</a></li>
 </ul>
 </li>
@@ -175,7 +175,6 @@
 <ul>
 <li class="toctree-l1"><a class="reference internal" href="contact.html">Contact</a></li>
 <li class="toctree-l1"><a class="reference internal" href="changelog.html">Changelog</a></li>
-<li class="toctree-l1"><a class="reference internal" href="roadmap.html">Road Map</a></li>
 <li class="toctree-l1"><a class="reference internal" href="about.html">About</a></li>
 <li class="toctree-l1"><a class="reference internal" href="usage.html">Usage</a></li>
 </ul>
@@ -404,11 +403,12 @@
 </ul>
 </section>
 </section>
-<section id="analyze-network-create-communities-based-on-cuboidal-proximity-cells">
-<h2>‘Analyze -&gt; Network -&gt; Create Communities Based on Cuboidal Proximity Cells?’<a class="headerlink" href="#analyze-network-create-communities-based-on-cuboidal-proximity-cells" title="Link to this heading"></a></h2>
+<section id="analyze-network-create-communities-based-on-hexagonal-rhomboid-proximity-cells">
+<h2>‘Analyze -&gt; Network -&gt; Create Communities Based on Hexagonal/Rhomboid Proximity Cells?’<a class="headerlink" href="#analyze-network-create-communities-based-on-hexagonal-rhomboid-proximity-cells" title="Link to this heading"></a></h2>
 <ul class="simple">
 <li><p>This method splits the image into cells (of user-defined size) and assigns nodes to be in communities based on whether they share a cell.</p></li>
-<li><p>It doesn’t have anything to do with the network but is an alternate way to group the nodes into communities, without a network focus.</p></li>
+<li><p>It will ask you for parameters about the hexagon side length, and whether you would prefer hexagonal prisms or dodecahedrons in 3D (2D uses hexagons always).</p></li>
+<li><p>It doesn’t have anything to do with the network but is an alternate way to group the nodes into communities, without a network or nearest neighbor focus.</p></li>
 <li><p>You can further group these resultant cells into supercommunities to find neighborhood motifs, although it won’t be as strong as the node neighborhood community assigment if you have enough channels.</p></li>
 </ul>
 <section id="id3">
@@ -995,6 +995,7 @@
 </ol>
 <ul class="simple">
 <li><p>Press ‘Get Neighborhood Identity Distribution’ to display a few matplotlib barcharts, with associated data tables being added to the tabulated data widget.</p></li>
+<li><p>Press ‘Batch: All Network Combinations…’ to compute the neighbor information for all identity combinations available. This will return a matrix (both a graph and tables) telling you the number of times each identity is able to find at least one neighbor of another identity. There are three of these - the first just gives the raw sums, the second gives the natural logs of the first, and the last gives percentile-based data (Where if I had A, B, and C as identities - it would tell me the percentage of A’s neighbor interactions that are A-B and the percentage that are A-C; this output excludes self pairing). This batch calculation is best combined with proximity networks to describe the border compositions between objects at some arbitrary distance.</p></li>
 <li><p>The following tables (and corresponding graphs) will appear:</p></li>
 <li><dl class="simple">
 <dt>If using mode 1:</dt><dd><ol class="arabic simple">
@@ -1390,8 +1391,8 @@
 <li><p>All of these tests are simply obtained by running their respective scipy.stats function on the inputted data. See <a class="reference external" href="https://docs.scipy.org/doc/scipy/reference/stats.html">https://docs.scipy.org/doc/scipy/reference/stats.html</a> for more info.</p></li>
 </ul>
 </section>
-<section id="analyze-stats-show-identities-violin-umap-assign-intensity-neighborhoods">
-<h2>‘Analyze -&gt; Stats -&gt; Show Identities Violin/UMAP/Assign Intensity Neighborhoods’<a class="headerlink" href="#analyze-stats-show-identities-violin-umap-assign-intensity-neighborhoods" title="Link to this heading"></a></h2>
+<section id="analyze-stats-cellular-esque-analysis">
+<h2>‘Analyze -&gt; Stats -&gt; Cellular-Esque Analysis’<a class="headerlink" href="#analyze-stats-cellular-esque-analysis" title="Link to this heading"></a></h2>
 <ul class="simple">
 <li><p>This method can be used to visualize normalized violin plots and UMAPs for nodes that were assigned identities via multiple channel markers (via ‘File -&gt; Images -&gt; Node Identities -&gt; Assign Node Identities from Overlap with Other Images’)</p></li>
 <li><p>The aforementioned identity assignment funtion produces a table that shows the average intensity of each node for each marker. Please save this table from the upper-right data tables for use in this function. This data is the only one natively compatible with this function.</p></li>
@@ -1400,27 +1401,57 @@
 </ul>
 <section id="id22">
 <h3>Parameter Explanation<a class="headerlink" href="#id22" title="Link to this heading"></a></h3>
-<ol class="arabic simple">
-<li><p>‘Return Identity Violin Plots?’ - ‘None’ by default, but the dropdown menu can be used to select one of the current node_identities in the session, which informs the program to yield a violin plot displaying the normalized intensity expression for each channel of all nodes belonging to the aforementioned identity. This is useful for seeing what other channels a particular identity is generally positive in.</p></li>
-<li><p>‘Return Neighborhood/Community Violin Plots?’ - ‘None’ by default, but the dropdown menu can be used to select one of the current communities (or rather Supercommunities, if communities have been grouped into Supercommunities) in the session, which informs the program to yield a violin plot displaying the normalized intensity expression for each channel of all nodes belonging to the aforementioned community/neighborhood. This is useful for seeing what channels constitute a particular community/neighborhood.</p></li>
+<ul>
 <li><dl class="simple">
-<dt>‘Execution Mode…’ - Dictates how the UMAP comparing intensities of nodes will label said nodes.</dt><dd><ul class="simple">
+<dt>Violin plot menu:</dt><dd><ol class="arabic simple">
+<li><p>‘Identity Violin Plots?’ - ‘None’ by default, but the dropdown menu can be used to select one of the current node_identities in the session, which informs the program to yield a violin plot displaying the normalized intensity expression for each channel of all nodes belonging to the aforementioned identity. This is useful for seeing what other channels a particular identity is generally positive in.</p></li>
+<li><p>‘Neighborhood/Community Violin Plots?’ - ‘None’ by default, but the dropdown menu can be used to select one of the current communities (or rather Supercommunities, if communities have been grouped into Supercommunities) in the session, which informs the program to yield a violin plot displaying the normalized intensity expression for each channel of all nodes belonging to the aforementioned community/neighborhood. This is useful for seeing what channels constitute a particular community/neighborhood.</p></li>
+<li><p>‘Format’ - Default setting (‘Z-score Like’) sets the 0 value for the violin plots to the lowest minimum expression of each identity/channel, as defined by the user during the thresholding segment. Change this to ‘Z-Score’ to have it return true Z-scores. The former is easier to visually compare shared expression between channels in graph form while the latter may be more applicable to different analysis applications.</p></li>
+</ol>
+</dd>
+</dl>
+</li>
+<li><dl class="simple">
+<dt>UMAP Menu</dt><dd><ul class="simple">
+<li><p>The UMAP is interactable - use a lasso to select groups of nodes. You can right click in the main window to assign them to their own communities. There are also some unique rendering options. These interactable UMAPs can be saved and later reloaded using the ‘folder icon’ that loads spreadsheets in the top right to skip embedding computation.</p></li>
+<li><dl class="simple">
+<dt>‘Label Mode…’ - Dictates how the UMAP comparing intensities of nodes will label said nodes.</dt><dd><ol class="arabic simple">
 <li><p>‘Label UMAP By Identity’ - Each node will be labeled by their identity value, or randomly by one of them if they have multiple.</p></li>
 <li><p>‘Label UMAP by Community’ - Each node will bear the label of their assigned community/neighborhood. Useful if they were assigned Supercommunities based on overlapped intensity values.</p></li>
-<li><p>The UMAP is interactable - use a lasso to select groups of nodes. You can right click in the main window to assign them to their own communities. There are also some unique rendering options. These interactable UMAPs can be saved and later reloaded using the ‘folder icon’ that loads spreadsheets in the top right to skip embedding computation.</p></li>
+<li><p>‘Label with Identity Plan Heatmap’ - Uses the information from the selected identities (see params below) to make nodes more ‘red’ or more ‘blue’. Redness denotes the presence of more characteristics fitting the combinations of pos/neg identity gates. The centerpoint for the redness will be based on your minimum assigned threshold for each identity, or just the median if that was not assigned.</p></li>
+</ol>
+</dd>
+</dl>
+</li>
 </ul>
 </dd>
 </dl>
 </li>
-<li><p>‘Plan Identities…’ - Use this to limit the number of node identities that are shown in the UMAPs and/or violin plots.</p></li>
-<li><p>‘Assign Neighborhoods Via Kmeans Clustering’ - Adjacent to this button, you can enter how many communities you want the nodes to be partitioned into, based on their similarity in intensity across the channels. If you leave it empty, the program will try to predict an ideal number of communities, but only up to 20. Note this is biased for lower values and you should probably just apply an arbitrary number.</p></li>
+<li><dl class="simple">
+<dt>Identity Planning Menu</dt><dd><ol class="arabic simple">
+<li><p>‘Plan Identities…’ - Use this to limit the number of node identities that are shown in the UMAPs and/or violin plots. Affects the below thresholding option.</p></li>
+<li><p>Threshold type menu - By default, will threshold nodes with a simple histogram that scores nodes that resemble your identity combination as higher. You will also be able to assign the identities weights to make certain ones affect the score more. If you have two identities selected, you can change this box to ‘Flow Cyto-Like Graph’ to instead show both identities on an axis and use the lasso to select nodes in the desired score range yourself.</p></li>
+</ol>
+</dd>
+</dl>
+</li>
+<li><dl>
+<dt>Kmeans Clustering Menu</dt><dd><ul class="simple">
+<li><p>Performs KMean’s Clustering using Z-Score values</p></li>
+</ul>
+<ol class="arabic simple">
+<li><p>Method - Use ‘Cluster by Expression Profle’ to cluster each node into groups based on the Z-scores of its intensity for each channel/identity. Use ‘Cluster by Neighbor Expression Profile’ to instead cluster the nodes based on the average expression profile of their neighbors in their network. You will have wanted to assign a proximity network first.</p></li>
+<li><p>Num Communities - enter how many communities you want the nodes to be partitioned into, based on their similarity in intensity across the channels. If you leave it empty, the program will try to predict an ideal number of communities, but only up to 20. Note this is biased for lower values and you should probably just apply an arbitrary number at first.</p></li>
 <li><p>‘Generate Intensity Heatmap’ - After the KMeans clustering, selecting this will return an informative heatmap showing you the differing relative expression in marker intensity between your channels for each community.</p></li>
 <li><p>‘Reassign Identities Based on Clustering Results?’ - Check this box, and while assigning communities with the above parameter, you will get the opportunity to also rename each community, in case you think they represent something more significant than their default names of 1, 2, 3, etc. For each communitiy, the program will show you the violin plot for the intensity profile of each communities to assist you in deciding what to rename it.</p></li>
 </ol>
-<ul class="simple">
+</dd>
+</dl>
+</li>
 <li><p>To view any designated violin plots, press ‘Show-Z-score-like Violin’. The plot will be shown, and the corresponding data will populate the upper right data tables.</p></li>
 <li><p>“Show Z-score UMAP” may be pressed to show a UMAP of the intensity Z-score for each node relative to the identity of each channel. (This is the same UMAP that can be displayed at the end of ‘File -&gt; Images -&gt; Node Identities -&gt; Assign Node Identities from Overlap with Other Images’)</p></li>
-<li><p>‘Assign Neighborhoods Via Kmeans Clustering’ may be pressed to enact the community assignment.</p></li>
+<li><p>‘Run Identity Plan Phenotyping’ may be pressed to create the identity combination thresholder/flow cyto-like graph.</p></li>
+<li><p>‘Run Neighborhoods Via Kmeans Clustering’ may be pressed to enact the community assignment.</p></li>
 </ul>
 </section>
 <section id="id23">
@@ -1436,10 +1467,10 @@
 </dl>
 </li>
 <li><p>The normalized data table is then masked to contain only the nodes of the specified identity/neighborhood/community.</p></li>
+<li><p>These resultant data are used to yield violin plots, with the channels corresponding to a violin, and the normalized node intensities within the masked data for that channel creating the violin.</p></li>
+<li><p>UMAP generation instead utilizes standard Z-scores. In this specific case, each node’s intensity in each channel is normalized based on the Z-scores of the entirety of available nodes, rather than around a user-defined base line. This is done with sklearn’s StandardScaler. The UMAP itself is created with the Python umap module.</p></li>
+<li><p>Neighborhood assignment is done via K-Means clustering. Normalization is done the same way as the UMAP. Sklearn’s KMeans is used to do the actual cluster assignment. Despite this differing normalization strategy to the violin plots, the aforementioned user-defined baseline is still used when viewing the violin plots of these neighborhoods, mainly for ease of evaluation.</p></li>
 </ol>
-<p>3. These resultant data are used to yield violin plots, with the channels corresponding to a violin, and the normalized node intensities within the masked data for that channel creating the violin.
-5. UMAP generation instead utilizes standard Z-scores. In this specific case, each node’s intensity in each channel is normalized based on the Z-scores of the entirety of available nodes, rather than around a user-defined base line. This is done with sklearn’s StandardScaler. The UMAP itself is created with the Python umap module.
-4. Neighborhood assignment is done via K-Means clustering. Normalization is done the same way as the UMAP. Sklearn’s KMeans is used to do the actual cluster assignment. Despite this differing normalization strategy to the violin plots, the aforementioned user-defined baseline is still used when viewing the violin plots of these neighborhoods, mainly for ease of evaluation.</p>
 <ul class="simple">
 <li><p>The third submenu, ‘Data/Overlays’, has hybrid functions that both produce data while generating Overlays for the Image Viewer Window</p></li>
 </ul>
@@ -1530,10 +1561,10 @@
 </ul>
 </section>
 </section>
-<section id="analyze-data-overlays-get-mother-nodes">
-<h2>‘Analyze -&gt; Data/Overlays -&gt; Get Mother Nodes’<a class="headerlink" href="#analyze-data-overlays-get-mother-nodes" title="Link to this heading"></a></h2>
+<section id="analyze-data-overlays-get-transcommunity-nodes">
+<h2>‘Analyze -&gt; Data/Overlays -&gt; Get Transcommunity Nodes’<a class="headerlink" href="#analyze-data-overlays-get-transcommunity-nodes" title="Link to this heading"></a></h2>
 <ul class="simple">
-<li><p>This method can be used to extract information about ‘mother nodes’, which are we define as those nodes that contain connections between one community and another.</p></li>
+<li><p>This method can be used to extract information about ‘transcommunity nodes’, which are we define as those nodes that contain connections between one community and another.</p></li>
 <li><p>This method would be used to identify what nodes enable interaction between seperate communities.</p></li>
 </ul>
 <section id="id26">
@@ -1544,14 +1575,14 @@
 <ol class="arabic simple">
 <li><dl class="simple">
 <dt>Make Overlay.</dt><dd><ul class="simple">
-<li><p>If enabled, this method will create an overlay isolating the mother nodes.</p></li>
+<li><p>If enabled, this method will create an overlay isolating the transcommunity nodes.</p></li>
 </ul>
 </dd>
 </dl>
 </li>
 </ol>
 <ul class="simple">
-<li><p>Press ‘Get Mothers’ to run the method with the desired parameters. The output data will be used to create a new table in the tabulated data widget. The overlay will go into the Overlay 1 channel.</p></li>
+<li><p>Press ‘Get Transcommunity Nodes’ to run the method with the desired parameters. The output data will be used to create a new table in the tabulated data widget. The overlay will go into the Overlay 1 channel.</p></li>
 </ul>
 </section>
 </section>
