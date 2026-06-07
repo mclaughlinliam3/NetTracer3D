@@ -175,6 +175,7 @@
 </ul>
 </li>
 <li class="toctree-l1"><a class="reference internal" href="image_menu.html">All Image Menu Options</a></li>
+<li class="toctree-l1"><a class="reference internal" href="extensions.html">NetTracer3D Plugin System</a></li>
 </ul>
 <p class="caption" role="heading"><span class="caption-text">Development:</span></p>
 <ul>
@@ -1253,6 +1254,14 @@
 </dl>
 </li>
 <li><dl class="simple">
+<dt>Spine removal mode:</dt><dd><ul class="simple">
+<li><p>If set to ‘external spines only’ - Will remove all spines below the designated length as long as they are not deep to other skeleton structures.</p></li>
+<li><p>If set to ‘Can remove deeper spines’ - Will remove spines beyond external ones as long as the involved vertices can be reached from any external segment. Essentially just chews down further, so if you have some kind of meshed up skeleton sticking out at points along a main filament, you can use this mode to get rid of those but keep the main filament.</p></li>
+</ul>
+</dd>
+</dl>
+</li>
+<li><dl class="simple">
 <dt>Attempt to Auto Correct Skeleton looping</dt><dd><ul class="simple">
 <li><p>The skeletonize algo used here has a tendency to leave fat loop artifacts in thick regions of skeletonization.</p></li>
 <li><p>Enabling this method will have NetTracer3D attempt to remove those artifacts and replace them with simple medial skeletons.</p></li>
@@ -1428,6 +1437,14 @@
 <li><p>The length (in pixels/voxels, not scaled) of terminal branches (or spines) to remove from the skeleton output.</p></li>
 <li><p>This method only removes terminal branches. Internal branches will never be effected regardless of how large this param is.</p></li>
 <li><p>Branches that are completely removed will not result in a branchpoint. Therefore, this parameter is an effective way to handle artifacts due to spiny skeletons.</p></li>
+</ul>
+</dd>
+</dl>
+</li>
+<li><dl class="simple">
+<dt>Spine removal mode:</dt><dd><ul class="simple">
+<li><p>If set to ‘external spines only’ - Will remove all spines below the designated length as long as they are not deep to other skeleton structures.</p></li>
+<li><p>If set to ‘Can remove deeper spines’ - Will remove spines beyond external ones as long as the involved vertices can be reached from any external segment. Essentially just chews down further, so if you have some kind of meshed up skeleton sticking out at points along a main filament, you can use this mode to get rid of those but keep the main filament.</p></li>
 </ul>
 </dd>
 </dl>
@@ -1642,6 +1659,9 @@
 </dd>
 </dl>
 </li>
+<li><p>Spine removal mode:
+* If set to ‘external spines only’ - Will remove all spines below the designated length as long as they are not deep to other skeleton structures.
+* If set to ‘Can remove deeper spines’ - Will remove spines beyond external ones as long as the involved vertices can be reached from any external segment. Essentially just chews down further, so if you have some kind of meshed up skeleton sticking out at points along a main filament, you can use this mode to get rid of those but keep the main filament.</p></li>
 </ol>
 <ul class="simple">
 <li><p>As a demo, here is the filament tracer applied to the below image:</p></li>
@@ -1838,7 +1858,7 @@
 </section>
 <section id="next-steps">
 <h2>Next Steps<a class="headerlink" href="#next-steps" title="Link to this heading"></a></h2>
-<p>This concludes the explanations of the analyze functions. Next, proceed to <a class="reference internal" href="image_menu.html"><span class="doc">All Image Menu Options</span></a> for information on the image menu functions.</p>
+<p>This concludes the explanations of the process menu. Next, proceed to <a class="reference internal" href="image_menu.html"><span class="doc">All Image Menu Options</span></a> for information on the image menu functions.</p>
 </section>
 </section>
 

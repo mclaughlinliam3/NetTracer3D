@@ -170,6 +170,7 @@
 </li>
 <li class="toctree-l1"><a class="reference internal" href="process_menu.html">All Process Menu Options</a></li>
 <li class="toctree-l1"><a class="reference internal" href="image_menu.html">All Image Menu Options</a></li>
+<li class="toctree-l1"><a class="reference internal" href="extensions.html">NetTracer3D Plugin System</a></li>
 </ul>
 <p class="caption" role="heading"><span class="caption-text">Development:</span></p>
 <ul>
@@ -881,7 +882,16 @@
 <li><p>Root Identity to Search for Neighbor IDs - Here you will have the option to choose what node types are searching for shortest paths (to the target type). This will be set to the highlighted nodes by default but you can also have it start from nodes of one of your node identity types.</p></li>
 <li><p>Neighbor Identities to Search For? - These are the node types that are being searched for by your root type. This will be set to the highlighted nodes by default but you can also have it search for nodes of one of your node identity types.</p></li>
 <li><p>Generate Heatmap - Renders a heatmap overlay in Overlay2 where closer nodes are red and further nodes are blue. The color schema is based on the average number of steps any node has to go to reach the target nodes with root nodes requiring more steps being bluer and those requiring less being redder.</p></li>
-<li><p>Generate Shortest Path Overlay - Renders a shortest path overlay in Overlay1 which shows the nodes and edges that yield the shortest path between your root and target nodes. If you’ve calculated a ‘Connectivity Network’ using ‘Prelabeled Edges’, this can be an interesting way to find the shortest path through a structure such as blood vessels or nerves.</p></li>
+<li><dl class="simple">
+<dt>Subgraph Computation - A dropdown menu with a set of minimized subgraphs that can be rendered for Overlay1 to show direct connections between objects.</dt><dd><ul class="simple">
+<li><p>By default, ‘No Overlay1’ makes this do nothing.</p></li>
+<li><p>‘Generate Shorest Path Overlay’ — Renders a shortest path overlay in Overlay1 which shows the nodes and edges that yield the shortest path between your root and target nodes. If you’ve calculated a ‘Connectivity Network’ using ‘Prelabeled Edges’, this can be an interesting way to find the shortest path through a structure such as blood vessels or nerves.</p></li>
+<li><p>Compute Minimal Connecting Subgraph — All the selected objects, if they are connected somehow (even if there is unselected nodes between them), they will be forced to find and render all those shortest connections to each other, resulting in a fully-connected, small-world optimized subgraph. Unlike the shorest paths option, this one forces the graphs to make all the nodes connect that can connect. Selected nodes that have other selected nodes between them will have to go through those intermediary nodes, though. Essentially, you are evaluating all the best routes between your selected groups of nodes. Uniquely, this option also returns the subgraph to the ‘Selection Table’ which can then be visualized or swapped into the main table.</p></li>
+<li><p>Compute Steiner Subgraph - Computes the Steiner sugraph, which like the ‘Minimal Connecting Subgraph’ forces all the nodes to be connected if there exists a path, however it will not find and render all the shorest paths, rather one single, snaking short path between all the nodes in question.</p></li>
+</ul>
+</dd>
+</dl>
+</li>
 </ol>
 <ul class="simple">
 <li><p>Click ‘Get Nearest Network Neighbors’ to yield the nearest neighbor distrubution for your root nodes (returns a table), and also the overlays you’ve selected.</p></li>
@@ -1356,6 +1366,14 @@
 <li><p>The length (in pixels/voxels, not scaled) of terminal branches (or spines) to remove from the skeleton output.</p></li>
 <li><p>This method only removes terminal branches. Internal branches will never be effected regardless of how large this param is.</p></li>
 <li><p>Branches that are completely removed will not result in a branchpoint. Therefore, this parameter is an effective way to handle artifacts due to spiny skeletons.</p></li>
+</ul>
+</dd>
+</dl>
+</li>
+<li><dl class="simple">
+<dt>Spine removal mode:</dt><dd><ul class="simple">
+<li><p>If set to ‘external spines only’ - Will remove all spines below the designated length as long as they are not deep to other skeleton structures.</p></li>
+<li><p>If set to ‘Can remove deeper spines’ - Will remove spines beyond external ones as long as the involved vertices can be reached from any external segment. Essentially just chews down further, so if you have some kind of meshed up skeleton sticking out at points along a main filament, you can use this mode to get rid of those but keep the main filament.</p></li>
 </ul>
 </dd>
 </dl>

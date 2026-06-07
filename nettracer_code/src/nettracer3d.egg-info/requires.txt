@@ -16,20 +16,13 @@ setuptools
 umap-learn
 numba
 lightgbm
+napari
 
 [CUDA11]
 cupy-cuda11x
 
 [CUDA12]
 cupy-cuda12x
-
-[all]
-cellpose[GUI]
-napari
-edt
-
-[cellpose]
-cellpose[GUI]
 
 [cupy]
 cupy
@@ -38,10 +31,6 @@ cupy
 edt
 
 [rec]
-napari
 edt
 igraph
 leidenalg
-
-[viz]
-napari

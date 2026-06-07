@@ -605,7 +605,10 @@ Parameter Explanations
     * This method only removes terminal branches. Internal branches will never be effected regardless of how large this param is.
     * This method will not trim branches that are longer than the designated length.
     * However, it will punch holes into branchpoints to fully remove branches. Holes can be filled by dilating the image once, then skeletonizing it again/eroding it once. Currently, these holes are not filled by default.
-2. Attempt to Auto Correct Skeleton looping
+2. Spine removal mode:
+    * If set to 'external spines only' - Will remove all spines below the designated length as long as they are not deep to other skeleton structures.
+    * If set to 'Can remove deeper spines' - Will remove spines beyond external ones as long as the involved vertices can be reached from any external segment. Essentially just chews down further, so if you have some kind of meshed up skeleton sticking out at points along a main filament, you can use this mode to get rid of those but keep the main filament.
+3. Attempt to Auto Correct Skeleton looping
     * The skeletonize algo used here has a tendency to leave fat loop artifacts in thick regions of skeletonization.
     * Enabling this method will have NetTracer3D attempt to remove those artifacts and replace them with simple medial skeletons.
 
@@ -727,6 +730,9 @@ Parameter Explanations
     * The length (in pixels/voxels, not scaled) of terminal branches (or spines) to remove from the skeleton output.
     * This method only removes terminal branches. Internal branches will never be effected regardless of how large this param is.
     * Branches that are completely removed will not result in a branchpoint. Therefore, this parameter is an effective way to handle artifacts due to spiny skeletons.
+#. Spine removal mode:
+    * If set to 'external spines only' - Will remove all spines below the designated length as long as they are not deep to other skeleton structures.
+    * If set to 'Can remove deeper spines' - Will remove spines beyond external ones as long as the involved vertices can be reached from any external segment. Essentially just chews down further, so if you have some kind of meshed up skeleton sticking out at points along a main filament, you can use this mode to get rid of those but keep the main filament.
 #. Amount to expand nodes...
     * If a numbered is entered here, branchpoint nodes will be enlarged before they are labeled, meaning nearby ones will merge. This can be a way to handle an abundance of nearby nodes resulting from odd skeleton structures, although I generally feel like it can be ignored.
 #. Use fast dilation:
@@ -832,6 +838,9 @@ Parameter Explanations
     * If you enable the above option, only detected spheroids that are larger than the indicated volume in this parameter will actually get removed. This is because small objects are better handled in param 6, so this is more to get out any obviously incorrect large spheres.
 9. Remove Branch Spines...?
     * When drawing filaments, enter a value here to remove spines along branches that are below the entered length. This can smooth out some potentially jagged filaments, although it usually can be skipped.
+10. Spine removal mode:
+    * If set to 'external spines only' - Will remove all spines below the designated length as long as they are not deep to other skeleton structures.
+    * If set to 'Can remove deeper spines' - Will remove spines beyond external ones as long as the involved vertices can be reached from any external segment. Essentially just chews down further, so if you have some kind of meshed up skeleton sticking out at points along a main filament, you can use this mode to get rid of those but keep the main filament.
 
 * As a demo, here is the filament tracer applied to the below image:
 
@@ -947,4 +956,4 @@ Parameter Explanations
 
 Next Steps
 ---------
-This concludes the explanations of the analyze functions. Next, proceed to :doc:`image_menu` for information on the image menu functions.
+This concludes the explanations of the process menu. Next, proceed to :doc:`image_menu` for information on the image menu functions.

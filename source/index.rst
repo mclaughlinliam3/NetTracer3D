@@ -54,6 +54,7 @@ A youtube tutorial on installing and using the program can be found here: https:
    analyze_menu
    process_menu
    image_menu
+   extensions
 
 .. toctree::
    :maxdepth: 1

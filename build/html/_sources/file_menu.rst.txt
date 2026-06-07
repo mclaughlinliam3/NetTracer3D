@@ -40,6 +40,8 @@ The save as menu will prompt the user to name files and select a directory while
 6. 'Save Highlight Overlay As'
     * Saves the Highlight Overlay as a .tif.
 
+* Note that for saving any .tif, if you end the save name with 'compressed.tif', the system will save a compressed version of the tif for you which can be way smaller for labeled images specifically but still readable by most tif readers.
+
 Load
 ---------
 The save as menu will prompt the user to find files to load. Note that when it comes to loading images, NetTracer3D does not like loading channels of different dimensions. If the user tries to do this, they will be prompted to have the image be auto-resized to the same dimensions as previous ones that exist in the Image Viewer Window. The user is advised to accept this, but can ignore it at their own risk of crashing the program.
@@ -63,7 +65,8 @@ The save as menu will prompt the user to find files to load. Note that when it c
     * Opens the excel helper, which is a seperate GUI to open less-structured .csv or .xlsx spreadsheets that the user may have obtained elsewhere, and more easily convert them into NetTracer3D properties. (See :doc:`excel_helper`)
     * As of now, this can be used to load in 'Node Centroids', 'Node Identities', or 'Node Communities'. 
 #. 'Load Misc Properties -> Load Node IDs'
-    * Prompts the user to find a .csv/.xlsx file containing Node IDs in the structure NetTracer3D expects (that is, the same structure it saves node IDs as).
+    * Prompts the user to find a .json/.csv/.xlsx file containing Node IDs in the structure NetTracer3D expects (that is, the same structure it saves node IDs as).
+    * The user will be further prompted if they want to update/merge or replace the existing node IDs. The update option will add any new, unique IDs for each node to its identity list. This is especially useful if you encode identities for the same nodes in different sessions and want to combine them. The replace will just overwrite what's present, which is the same behavior as when a new session is loaded.
 #. 'Load Misc Properties -> Load Node Centroids'
     * Prompts the user to find a .csv/.xlsx file containing Node Centroids in the structure NetTracer3D expects (that is, the same structure it saves Node Centroids as).
 #. 'Load Misc Properties -> Load Edge Centroids'
@@ -114,4 +117,4 @@ Parameter Explanations
 
 Next Steps
 ---------
-This concludes the explanations of the right click functions. Next, proceed to :doc:`analyze_menu` for information on the analyze menu functions.
+This concludes the explanations of the file menu. Next, proceed to :doc:`analyze_menu` for information on the analyze menu functions.

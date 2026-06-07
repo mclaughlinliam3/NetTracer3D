@@ -12,7 +12,7 @@ class EndpointConnector:
     if they're within a specified distance.
     """
     
-    def __init__(self, connection_distance=20, spine_removal = 0):
+    def __init__(self, connection_distance=20, spine_removal = 0, branch_mode = 0):
         """
         Parameters:
         -----------
@@ -22,6 +22,7 @@ class EndpointConnector:
         self.connection_distance = connection_distance
         self._sphere_cache = {}  # Cache sphere masks for different radii
         self.spine_removal = spine_removal
+        self.branch_mode = branch_mode
 
     def _get_sphere_mask(self, radius):
         """Get a cached sphere mask for the given radius"""
@@ -186,7 +187,10 @@ class EndpointConnector:
             skeleton = n3d.skeletonize(skeleton)
         if self.spine_removal > 0:
             print(f"removing spines: {self.spine_removal}")
-            skeleton = n3d.remove_branches_new(skeleton, self.spine_removal)
+            if self.branch_mode == 0:
+                skeleton = n3d.remove_branches(skeleton, self.spine_removal)
+            else:
+                skeleton = n3d.remove_branches_deep(skeleton, self.spine_removal)
             skeleton = n3d.dilate_3D(skeleton, 3, 3, 3)
             skeleton = n3d.skeletonize(skeleton)
 
@@ -252,7 +256,7 @@ class EndpointConnector:
         return result
 
 
-def connect_endpoints(binary_image, connection_distance=20, spine_removal = 0, verbose=True):
+def connect_endpoints(binary_image, connection_distance=20, spine_removal = 0, branch_mode = 0, verbose=True):
     """
     Simple function to connect skeleton endpoints
     
@@ -276,7 +280,7 @@ def connect_endpoints(binary_image, connection_distance=20, spine_removal = 0, v
     binary_image = (binary_image > 0).astype(np.uint8)
     
     # Create connector and run
-    connector = EndpointConnector(connection_distance=connection_distance, spine_removal = spine_removal)
+    connector = EndpointConnector(connection_distance=connection_distance, spine_removal = spine_removal, branch_mode = branch_mode)
     result = connector.connect_endpoints(binary_image, verbose=verbose)
     
     return result

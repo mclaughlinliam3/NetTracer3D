@@ -950,13 +950,13 @@ def setup_start_tutorial(window):
 
     tutorial.add_step(
         window.channel_buttons[1],
-        "Typically you would queue your image to be branch-labeled in the edges channel.",
+        "Typically you would queue your image to be branch-labeled in the edges channel. You can label branches in any channel, but to create the branch networks you'd need them in either of the first two channels.",
         highlight_type="rect",
         message_position="top")
 
     tutorial.add_step(
         window.channel_buttons[0],
-        "But you can also load them into the nodes channel, although note whatever is in the 'edges' channel takes priority. This is because the program has to actually make nodes at the branchpoints of your edges so it temporarily treats branches like edges.",
+        "You can load them into the nodes channel, although note whatever is in the 'edges' channel takes priority.",
         highlight_type="rect",
         message_position="top"
     )
@@ -1792,38 +1792,89 @@ def setup_branch_tutorial(window):
 
 
     tutorial.add_step(
-        MenuHelper.create_widget_getter(tutorial, 'branch_dialog', 'fix2'),
-        "The first auto-correction option will automatically merge any internal labels that arise with their outer-neighbors. This is something that can occasionally happen with fat, trunk-like branches that are tricky to algorithmically decipher. I have found that this merge handles these issues quite well, so this option is enabled by default. An alternate option will make the internal labels only merge with external structures that are not 'branch-like'. This is a good thing to enable if you are also enabling the 'reunify main branches' correction, as it will stop long branches from merging with core-like elements.",
-        highlight_type=None,
-        message_position="beside",
-        pre_action=MenuHelper.create_widget_interaction(tutorial, 'branch_dialog', 'fix2', 'showPopup()'),
-        action=MenuHelper.create_widget_interaction(tutorial, 'branch_dialog', 'fix2', 'hidePopup()')
+        None,
+        "The first box of parameters deal with how you'd like to detect your branch vertices. These happen to be the only options that will appear if you were to have chosen to create a 'Branchpoint Network', and so the description of this box applies to the 'branchpoint networks' as well.",
+        message_position="beside"
     )
 
     tutorial.add_step(
-        MenuHelper.create_widget_getter(tutorial, 'branch_dialog', 'fix3'),
+        MenuHelper.create_widget_getter(tutorial, 'branch_dialog', 'generate_nodes_btn'),
+        "If you have already created node vertices for your branch labeling scheme (ie via 'Process -> Generate -> Generate Nodes from Edge Vertices) and have loaded those nodes into the nodes channel (with your branches in the edges channel) you can forgo regenerating these vertices by disabling this. However, it is usually presumed you will be generating them from scratch, so this is enabled by default'.",
+        highlight_type=None,
+        message_position="beside",
+        pre_action=MenuHelper.create_widget_interaction(tutorial, 'branch_dialog', 'generate_nodes_btn', 'click()')
+    )
+
+    tutorial.add_step(
+        MenuHelper.create_widget_getter(tutorial, 'branch_dialog', 'branch_removal'),
+        "IMPORTANT - This branch removal parameter (Skeleton voxel branch to remove...) is something I would consider entering a value for. This is the length of terminal branches that will be removed prior to any vertex/branch labeling. Any branch shorter than the value here will be removed, but only if it is a terminal branch. For more jagged segmentations, this may be a necessity to prevent branchpoints from arising from spine-like artifacts. More internal branches will not be removed, so as a test it is generally safe to enter a large value here, which will preserve the majority of the branch schema and just risk losing occasional terminal branches.",
+        highlight_type=None,
+        message_position="beside",
+        pre_action=MenuHelper.create_widget_interaction(tutorial, 'branch_dialog', 'branch_removal', 'setText("INTEGER!")'),
+        action=MenuHelper.create_widget_interaction(tutorial, 'branch_dialog', 'branch_removal', 'setText("")')
+    )
+
+    tutorial.add_step(
+        MenuHelper.create_widget_getter(tutorial, 'branch_dialog', 'branch_mode'),
+        "If you do opt to trim spines, the first option in this dropdown here, 'external spines only' will only trim any spines that exist in the most external portion of the skeleton. Deeper branches will not be trimmed regardless of the trimming size you input. This is good for doing a trim of any artifactual external spines without risking relabelling deeper stuff. The second option, 'Can Remove Deeper Spines' will allow the trimming to continue deep into your branches. This can help fix any spine artifacts that propogate into deeper structures, but you'll have to be careful with your spine length here, so that larger main branches aren't being ignored.",
+        highlight_type=None,
+        message_position="beside",
+        pre_action=MenuHelper.create_widget_interaction(tutorial, 'branch_dialog', 'branch_mode', 'showPopup()'),
+        action=MenuHelper.create_widget_interaction(tutorial, 'branch_dialog', 'branch_mode', 'hidePopup()')
+    )
+
+    tutorial.add_step(
+        MenuHelper.create_widget_getter(tutorial, 'branch_dialog', 'comp_dil'),
+        "This final 'amount to expand nodes' will cause your vertices (branchpoint labels) to grow in size by the specified amount. They will fuse with any neighbors they encounter. Doing this will decrease the label splitting along a single branch that has many branches emerge from it in a tightly packed stretch, just as an example, because the system would instead see a single branchpoint there. This can generally be skipped, but if you notice a plethora of tightly packed vertices that you'd want to be treated as a single vertice, you could consider using it.",
+        highlight_type=None,
+        message_position="beside",
+        pre_action=MenuHelper.create_widget_interaction(tutorial, 'branch_dialog', 'comp_dil', 'setText("INTEGER!")'),
+        action=MenuHelper.create_widget_interaction(tutorial, 'branch_dialog', 'comp_dil', 'setText("")')
+    )
+
+    tutorial.add_step(
+        MenuHelper.create_widget_getter(tutorial, 'branch_dialog', 'fast_dil'),
+        "Enable fast dilation to use a parallelized distance transform to do 3D dilation which is a lot faster if you have a lot of CPU cores. Note that this only applies if you have chosen to merge your nodes.",        
+        highlight_type=None,
+        message_position="beside",
+        pre_action=MenuHelper.create_widget_interaction(tutorial, 'branch_dialog', 'fast_dil', 'click()'),
+        action=MenuHelper.create_widget_interaction(tutorial, 'branch_dialog', 'fast_dil', 'toggle()')
+    )
+
+
+    tutorial.add_step(
+        MenuHelper.create_widget_getter(tutorial, 'branch_dialog', 'internal_branch_mode'),
+        "The first auto-correction option will automatically merge any internal labels that arise with their outer-neighbors. This is something that can occasionally happen with fat, trunk-like branches that are tricky to algorithmically decipher. I have found that this merge handles these issues quite well, so this option is enabled by default. An alternate option will make the internal labels only merge with external structures that are not 'branch-like'. This is a good thing to enable if you are also enabling the 'reunify main branches' correction, as it will stop long branches from merging with core-like elements.",
+        highlight_type=None,
+        message_position="beside",
+        pre_action=MenuHelper.create_widget_interaction(tutorial, 'branch_dialog', 'internal_branch_mode', 'showPopup()'),
+        action=MenuHelper.create_widget_interaction(tutorial, 'branch_dialog', 'internal_branch_mode', 'hidePopup()')
+    )
+
+    tutorial.add_step(
+        MenuHelper.create_widget_getter(tutorial, 'branch_dialog', 'separate_nontouching'),
         "The second auto-correction step will automatically correct any branches that aren't contiguous in space. Rarely (Depending on the segmentation, really) a branch can initially be labeled non-contiguously, which is usually not correct. This is because the 'meat' of any branch is at first labeled based on which internal filament it's closest to. So if you have a very wide branch it may rarely aquire labels of nearby smaller branches across gaps. Enabling this will split those labels into seperate regions as to not confound the connectivity graph. The largest component is considered the 'correct one' and keeps its label, while smaller components inherit the label of the largest shared border of a 'real' branch they are bordering. It is enabled here by default to mitigate any potential errors, although note this does not apply to the branchpoint networks since they don't actually utilize the branches themselves.",
         highlight_type=None,
         message_position="beside",
-        pre_action=MenuHelper.create_widget_interaction(tutorial, 'branch_dialog', 'fix3', 'click()')
+        pre_action=MenuHelper.create_widget_interaction(tutorial, 'branch_dialog', 'separate_nontouching', 'click()')
         )
 
     tutorial.add_step(
-        MenuHelper.create_widget_getter(tutorial, 'branch_dialog', 'fix4'),
+        MenuHelper.create_widget_getter(tutorial, 'branch_dialog', 'reunify_branches'),
         "This final auto-correction step will try to automatically merge any similarly sized branches moving in the same direction, instead of just letting a larger branch with many sub-branches get chopped up. It is off by default because of its less predictable behavior, although its good if you want your branches to be more continuous. Just note each of these fixes does add extra processing time.",
         highlight_type=None,
         message_position="beside",
-        pre_action=MenuHelper.create_widget_interaction(tutorial, 'branch_dialog', 'fix4', 'click()'),
-        action=MenuHelper.create_widget_interaction(tutorial, 'branch_dialog', 'fix4', 'toggle()')
+        pre_action=MenuHelper.create_widget_interaction(tutorial, 'branch_dialog', 'reunify_branches', 'click()'),
+        action=MenuHelper.create_widget_interaction(tutorial, 'branch_dialog', 'reunify_branches', 'toggle()')
         )
 
     tutorial.add_step(
-        MenuHelper.create_widget_getter(tutorial, 'branch_dialog', 'fix4_val'),
+        MenuHelper.create_widget_getter(tutorial, 'branch_dialog', 'reunify_threshold'),
         "This threshold values controls how likely a junction is to merge any pair of its nearby branches. Regardless of what you enter here, only two branches at a time can merge at a junction. Values between 20-40 are more meaningful, while those lower tend to merge everything and those higher usually emrge nothing.",
         highlight_type=None,
         message_position="beside",
-        pre_action=MenuHelper.create_widget_interaction(tutorial, 'branch_dialog', 'fix4_val', 'setText("FLOAT!")'),
-        action=MenuHelper.create_widget_interaction(tutorial, 'branch_dialog', 'fix4_val', 'setText("")')
+        pre_action=MenuHelper.create_widget_interaction(tutorial, 'branch_dialog', 'reunify_threshold', 'setText("FLOAT!")'),
+        action=MenuHelper.create_widget_interaction(tutorial, 'branch_dialog', 'reunify_threshold', 'setText("")')
         )
 
     tutorial.add_step(
@@ -1853,15 +1904,6 @@ def setup_branch_tutorial(window):
         pre_action=MenuHelper.create_widget_interaction(tutorial, 'branch_dialog', 'compute', 'click()')
     )
 
-
-    tutorial.add_step(
-        MenuHelper.create_widget_getter(tutorial, 'branch_dialog', 'nodes'),
-        "If you have already created node vertices for your branch labeling scheme (ie via 'Process -> Generate -> Generate Nodes from Edge Vertices) and have loaded those nodes into the nodes channel (with your branches in the edges channel) you can forgo regenerating these vertices by disabling this. However, it is usually presumed you will be generating them from scratch, so this is enabled by default'.",
-        highlight_type=None,
-        message_position="beside",
-        pre_action=MenuHelper.create_widget_interaction(tutorial, 'branch_dialog', 'nodes', 'click()')
-    )
-
     def close_dialog():
         if hasattr(tutorial, 'branch_dialog') and tutorial.branch_dialog:
             tutorial.branch_dialog.close()
@@ -1869,83 +1911,16 @@ def setup_branch_tutorial(window):
 
     tutorial.add_step(
         None,
-        "Press 'Run Branch Label' to move on. This will move you to the step to generate nodes for your branch vertices.",
+        "Press 'Run Branch Label' to label your branches and also generate a network if you're calling this from the 'Calculate' rather than the 'Generate' menu.",
         message_position="beside",
-        pre_action=MenuHelper.create_widget_interaction(tutorial, 'branch_dialog', 'down_factor', 'close()'),
-        action=close_dialog
+        pre_action=MenuHelper.create_widget_interaction(tutorial, 'branch_dialog', 'down_factor', 'close()')
     )
-
-    open_dialog, _ = MenuHelper.create_dialog_opener(
-        window, tutorial, "show_gennodes_dialog", "GenNodesDialog", "gen_dialog",
-        tutorial_example = True
-    )
-
-    tutorial.add_step(
-        None,
-        "This also happens to be the only menu that will appear if you were to have chosen to create a 'Branchpoint Network', and so the description of this menu applies to both the initial step for the 'branchpoint network' and the second step for the 'branch adjacency network'.",
-        message_position="beside",
-        pre_action=open_dialog
-    )
-
-    tutorial.add_step(
-        MenuHelper.create_widget_getter(tutorial, 'gen_dialog', 'branch_removal'),
-        "IMPORTANT - This branch removal parameter (Skeleton voxel branch to remove...) is something I would consider entering a value for. This is the length of terminal branches that will be removed prior to any vertex/branch labeling. Any branch shorter than the value here will be removed, but only if it is a terminal branch. For more jagged segmentations, this may be a necessity to prevent branchpoints from arising from spine-like artifacts. More internal branches will not be removed, so as a test it is generally safe to enter a large value here, which will preserve the majority of the branch schema and just risk losing occasional terminal branches.",
-        highlight_type=None,
-        message_position="beside",
-        pre_action=MenuHelper.create_widget_interaction(tutorial, 'gen_dialog', 'branch_removal', 'setText("INTEGER!")'),
-        action=MenuHelper.create_widget_interaction(tutorial, 'gen_dialog', 'branch_removal', 'setText("")')
-    )
-
-    """
-    tutorial.add_step(
-        MenuHelper.create_widget_getter(tutorial, 'gen_dialog', 'auto'),
-        "This 'attempt to auto correct skeleton looping' option should generally be enabled for 3D data. In short it applies an extra algorithmic step to improve the branch detection algorithm. However, this does not really apply to 2D data. It will be enabled by default for 3D data and disabled by default for 2D data.",
-        highlight_type=None,
-        message_position="beside",
-        pre_action=MenuHelper.create_widget_interaction(tutorial, 'gen_dialog', 'auto', 'click()'),
-        action=MenuHelper.create_widget_interaction(tutorial, 'gen_dialog', 'auto', 'toggle()')
-    )
-    """
-
-    tutorial.add_step(
-        MenuHelper.create_widget_getter(tutorial, 'gen_dialog', 'comp_dil'),
-        "This final 'attempt to expand nodes' will cause your nodes (branchpoint labels) to grow in size by the specified amount. They will fuse with any neighbors they encounter. Doing this will decrease the label splitting along a single branch that has many branches emerge from it in a tightly packed stretch, just as an example, because the system would instead see a single branchpoint there. This can generally be skipped, but if you notice a plethora of tightly packed vertices that you'd want to be treated as a single vertice, you could consider using it.",
-        highlight_type=None,
-        message_position="beside",
-        pre_action=MenuHelper.create_widget_interaction(tutorial, 'gen_dialog', 'comp_dil', 'setText("INTEGER!")'),
-        action=MenuHelper.create_widget_interaction(tutorial, 'gen_dialog', 'comp_dil', 'setText("")')
-    )
-
-    tutorial.add_step(
-        MenuHelper.create_widget_getter(tutorial, 'gen_dialog', 'fast_dil'),
-        "Enable fast dilation to use a parallelized distance transform to do 3D dilation which is a lot faster if you have a lot of CPU cores. Note that this only applies if you have chosen to merge your nodes.",        
-        highlight_type=None,
-        message_position="beside",
-        pre_action=MenuHelper.create_widget_interaction(tutorial, 'gen_dialog', 'fast_dil', 'click()'),
-        action=MenuHelper.create_widget_interaction(tutorial, 'gen_dialog', 'fast_dil', 'toggle()')
-    )
-
-    tutorial.add_step(
-        MenuHelper.create_widget_getter(tutorial, 'gen_dialog', 'down_factor'),
-        "This integer value can be used to temporarily downsample the image while creating branchpoints. Aside from speeding up the process, this may alter branch detection, possibly performing a cleaner branch appraisal of very thick branches but losing network identification of smaller branches (Much like in the prior menu - note that any value entered in the prior menu will be applied by default here for consistency, and you won't see this option). It is disabled by default. Larger values will downsample more aggressively.",
-        highlight_type=None,
-        message_position="beside",
-        pre_action=MenuHelper.create_widget_interaction(tutorial, 'gen_dialog', 'down_factor', 'selectAll()'),
-        action=MenuHelper.create_widget_interaction(tutorial, 'gen_dialog', 'down_factor', 'deselect()')
-    )
-
-
-
-    def close_dialog():
-        if hasattr(tutorial, 'gen_dialog') and tutorial.gen_dialog:
-            tutorial.gen_dialog.close()
-            tutorial.gen_dialog = None
 
     tutorial.add_step(
         None,
         "That's it for creating branch networks!.",
         message_position="beside",
-        pre_action=MenuHelper.create_widget_interaction(tutorial, 'gen_dialog', 'down_factor', 'close()'),
+        pre_action=MenuHelper.create_widget_interaction(tutorial, 'branch_dialog', 'down_factor', 'close()'),
         action=close_dialog
     )
 

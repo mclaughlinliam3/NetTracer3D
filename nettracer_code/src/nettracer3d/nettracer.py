@@ -36,6 +36,7 @@ from skimage.segmentation import watershed as water
 import json
 from collections import defaultdict, deque
 import pickle
+from . import neighborhoods as nhoods
 import random
 from typing import Optional, Tuple
 
@@ -538,7 +539,7 @@ def _upsample_3d_array(data, factor, original_shape):
     return trimmed_array
 
 
-def remove_branches_new(skeleton, length):
+def remove_branches(skeleton, length):
     """Used to compensate for overly-branched skeletons resulting from the scipy 3d skeletonization algorithm"""
     def find_coordinate_difference(arr):
         try:
@@ -632,78 +633,382 @@ def remove_branches_new(skeleton, length):
     image_copy = (image_copy[1:-1, 1:-1, 1:-1]).astype(np.uint8)
     return image_copy
     
-def remove_branches(skeleton, length):
-    """Used to compensate for overly-branched skeletons resulting from the scipy 3d skeletonization algorithm"""
+def remove_branches_deep(skeleton, length):
+    """
+    Remove branches from a skeletonized 3D structure using iterative
+    leaf-peeling with a per-endpoint distance budget, then reconnect
+    any skeleton components that were accidentally split.
 
-    def find_coordinate_difference(arr):
-        try:
-            arr[1,1,1] = 0
-            # Find the indices of non-zero elements
-            indices = np.array(np.nonzero(arr)).T
-            
-            # Calculate the difference
-            diff = np.array([1,1,1]) - indices[0]
-            
-            return diff
-        except:
-            return
+    Pass 1 — Leaf peeling:
+      Endpoints are wave-0 leaves. Each removes its edge if budget
+      allows. Junctions become leaves once fully exposed (all edges
+      to processed nodes removed). Repeat until no new leaves.
 
+    Pass 2 — Reconnection:
+      Count connected components before and after removal. For each
+      original component that split, find shortest paths through the
+      original graph to rejoin sub-components, unmarking those edges.
+      Repeat until component count matches the original.
+    """
+    import numpy as np
+    from collections import defaultdict
+    import heapq
 
-    skeleton = np.pad(skeleton, pad_width=1, mode='constant', constant_values=0) #Add black planes over the 3d space to avoid index errors
+    skeleton = np.pad(skeleton, pad_width=1, mode='constant', constant_values=0)
+    image_copy = np.copy(skeleton)
 
-    # Find all nonzero voxel coordinates
-    nonzero_coords = np.transpose(np.nonzero(skeleton))
-    x, y, z = nonzero_coords[0]
-    threshold = 2 * skeleton[x, y, z]
-    nubs = []
-    
+    def get_neighbors(coord):
+        x, y, z = coord
+        result = []
+        for dx in range(-1, 2):
+            for dy in range(-1, 2):
+                for dz in range(-1, 2):
+                    if dx == 0 and dy == 0 and dz == 0:
+                        continue
+                    nc = (x + dx, y + dy, z + dz)
+                    if image_copy[nc] > 0:
+                        result.append(nc)
+        return result
 
-    for b in range(length):
+    # ---- classify voxels ----
+    nonzero_coords = list(zip(*np.nonzero(image_copy)))
+    if not nonzero_coords:
+        return image_copy[1:-1, 1:-1, 1:-1].astype(np.uint8)
 
-        new_coords = []
+    neighbor_cache = {}
+    for coord in nonzero_coords:
+        neighbor_cache[coord] = get_neighbors(coord)
 
-        # Create a copy of the image to modify
-        image_copy = np.copy(skeleton)
+    endpoints = set()
+    junctions = set()
+    for coord in nonzero_coords:
+        n = len(neighbor_cache[coord])
+        if n <= 1:
+            endpoints.add(coord)
+        elif n >= 3:
+            junctions.add(coord)
 
+    graph_nodes = endpoints | junctions
+    if not endpoints:
+        return image_copy[1:-1, 1:-1, 1:-1].astype(np.uint8)
 
-        # Iterate through each nonzero voxel
-        for x, y, z in nonzero_coords: #We are looking for endpoints, which designate a branch terminus, that will be removed and move onto the next endpoint equal for iterations equal to user length param
+    # ---- build graph ----
+    edges = []
+    node_edges = defaultdict(set)
+    visited_starts = set()
 
-            # Count nearby pixels including diagonals
-            mini = skeleton[x-1:x+2, y-1:y+2, z-1:z+2]
-            nearby_sum = np.sum(mini)
-            
-            # If sum is one, remove this endpoint
-            if nearby_sum <= threshold:
+    for node in graph_nodes:
+        for first_step in neighbor_cache[node]:
+            if (node, first_step) in visited_starts:
+                continue
+            if first_step in graph_nodes:
+                if (first_step, node) in visited_starts:
+                    continue
+                visited_starts.add((node, first_step))
+                visited_starts.add((first_step, node))
+                idx = len(edges)
+                edges.append((node, first_step, [], 1))
+                node_edges[node].add(idx)
+                node_edges[first_step].add(idx)
+            else:
+                visited_starts.add((node, first_step))
+                interior = []
+                prev, current = node, first_step
+                trace_visited = {node}
+                while current not in graph_nodes:
+                    if current in trace_visited:
+                        current = None
+                        break
+                    trace_visited.add(current)
+                    interior.append(current)
+                    nexts = [n for n in neighbor_cache[current] if n != prev]
+                    found = False
+                    for nx in nexts:
+                        if nx in graph_nodes:
+                            prev, current, found = current, nx, True
+                            break
+                    if not found:
+                        for nx in nexts:
+                            if nx not in trace_visited:
+                                prev, current, found = current, nx, True
+                                break
+                    if not found:
+                        current = None
+                        break
+                if current is not None and current in graph_nodes:
+                    visited_starts.add((current, prev))
+                    idx = len(edges)
+                    edges.append((node, current, interior, len(interior) + 1))
+                    node_edges[node].add(idx)
+                    node_edges[current].add(idx)
 
-                try:
+    def other_node(edge_idx, node):
+        na, nb = edges[edge_idx][0], edges[edge_idx][1]
+        return nb if na == node else na
 
-                    dif = find_coordinate_difference(mini)
-                    new_coord = [x - dif[0], y - dif[1], z - dif[2]]
-                    new_coords.append(new_coord)
-                except:
-                    pass
-                    
-                nonzero_coords = new_coords
+    # ---- build full original adjacency (for reconnection later) ----
+    orig_adj = defaultdict(set)
+    for idx in range(len(edges)):
+        na, nb = edges[idx][0], edges[idx][1]
+        orig_adj[na].add((nb, idx))
+        orig_adj[nb].add((na, idx))
 
-                image_copy[x, y, z] = 0
-            elif b > 0:
-                nub = [x, y, z]
-                nubs.append(nub)
+    # ================================================================
+    # PASS 1: LEAF PEELING
+    # ================================================================
+    edges_to_remove = set()
+    dist = {ep: 0 for ep in endpoints}
+    remaining = {n: set(node_edges[n]) for n in graph_nodes}
+    processed = set()
+    wave = [ep for ep in endpoints if remaining[ep]]
 
-        if b == length - 1:
-            for item in nubs: #The nubs are endpoints of length = 1. They appear a bit different in the array so we just note when one is created and remove them all at the end in a batch.
-                #x, y, z = item[0], item[1], item[2]
-                image_copy[item[0], item[1], item[2]] = 0
-                #image_copy[x-1:x+2, y-1:y+2, z-1:z+2] = 0
+    while wave:
+        unconditional_removals = set()
+        tentative_removals = {}
+        affected_targets = defaultdict(list)
 
+        for leaf in wave:
+            d_leaf = dist.get(leaf, 0)
+            for edge_idx in list(remaining[leaf]):
+                target = other_node(edge_idx, leaf)
+                elen = edges[edge_idx][3]
+                if target in endpoints and leaf in endpoints:
+                    continue
+                if d_leaf + elen > length:
+                    continue
+                new_d = d_leaf + elen
+                if leaf in endpoints:
+                    unconditional_removals.add(edge_idx)
+                    if target not in dist or new_d < dist[target]:
+                        dist[target] = new_d
+                else:
+                    tentative_removals[edge_idx] = (leaf, new_d)
+                    if target in junctions:
+                        affected_targets[target].append(
+                            (edge_idx, leaf, new_d))
 
+        for edge_idx in unconditional_removals:
+            edges_to_remove.add(edge_idx)
+            na, nb = edges[edge_idx][0], edges[edge_idx][1]
+            remaining[na].discard(edge_idx)
+            remaining[nb].discard(edge_idx)
 
-        skeleton = image_copy
+        for leaf in wave:
+            processed.add(leaf)
 
-    image_copy = (image_copy[1:-1, 1:-1, 1:-1]).astype(np.uint8)
+        finalized = set()
+        for target, incoming in affected_targets.items():
+            fully_exposed = True
+            for edge_idx in list(remaining[target]):
+                peer = other_node(edge_idx, target)
+                if peer not in processed:
+                    continue
+                if (edge_idx not in unconditional_removals
+                        and edge_idx not in tentative_removals):
+                    fully_exposed = False
+                    break
+            if fully_exposed:
+                for edge_idx, leaf, new_d in incoming:
+                    finalized.add(edge_idx)
+                    edges_to_remove.add(edge_idx)
+                    remaining[leaf].discard(edge_idx)
+                    remaining[target].discard(edge_idx)
+                    if target not in dist or new_d < dist[target]:
+                        dist[target] = new_d
 
-    return image_copy
+        for edge_idx, (leaf, new_d) in tentative_removals.items():
+            if edge_idx in finalized:
+                continue
+            target = other_node(edge_idx, leaf)
+            if target in endpoints:
+                edges_to_remove.add(edge_idx)
+                remaining[leaf].discard(edge_idx)
+                remaining[target].discard(edge_idx)
+
+        candidates = set()
+        for edge_idx in unconditional_removals | finalized:
+            na, nb = edges[edge_idx][0], edges[edge_idx][1]
+            if na in junctions and na not in processed:
+                candidates.add(na)
+            if nb in junctions and nb not in processed:
+                candidates.add(nb)
+
+        next_wave = []
+        for j in candidates:
+            all_backward_gone = True
+            for edge_idx in remaining[j]:
+                peer = other_node(edge_idx, j)
+                if peer in processed:
+                    all_backward_gone = False
+                    break
+            if all_backward_gone:
+                next_wave.append(j)
+
+        wave = next_wave
+
+    # ================================================================
+    # PASS 2: RECONNECTION
+    # ================================================================
+    # Find which nodes survive: any node with at least one surviving edge.
+    # Removed tips (isolated endpoints) are gone — they don't form
+    # components we need to reconnect.
+
+    def find_components(node_set, adj_func):
+        """BFS components within node_set using adj_func(node)->neighbors."""
+        visited = set()
+        components = []
+        for node in node_set:
+            if node in visited:
+                continue
+            comp = set()
+            stack = [node]
+            while stack:
+                n = stack.pop()
+                if n in visited:
+                    continue
+                visited.add(n)
+                comp.add(n)
+                for nb in adj_func(n):
+                    if nb in node_set and nb not in visited:
+                        stack.append(nb)
+            components.append(comp)
+        return components
+
+    # Original components: all graph nodes, all edges
+    def orig_neighbors(n):
+        return [nb for nb, _ in orig_adj[n]]
+
+    orig_components = find_components(graph_nodes, orig_neighbors)
+
+    # Surviving components: only nodes with surviving edges
+    surviving_nodes = {n for n in graph_nodes if remaining[n]}
+    surviving_edge_set = set()
+    for n in surviving_nodes:
+        surviving_edge_set |= remaining[n]
+
+    surv_adj = defaultdict(set)
+    for idx in surviving_edge_set:
+        na, nb = edges[idx][0], edges[idx][1]
+        surv_adj[na].add(nb)
+        surv_adj[nb].add(na)
+
+    def surv_neighbors(n):
+        return surv_adj[n]
+
+    surv_components = find_components(surviving_nodes, surv_neighbors)
+
+    # Map each surviving node to its original component index
+    node_to_orig = {}
+    for i, comp in enumerate(orig_components):
+        for n in comp:
+            node_to_orig[n] = i
+
+    # Group surviving sub-components by their original component
+    orig_to_surv = defaultdict(list)
+    for sc in surv_components:
+        sample = next(iter(sc))
+        oc = node_to_orig[sample]
+        orig_to_surv[oc].append(sc)
+
+    # For each original component that split, reconnect sub-components
+    counter = 0
+    for oc_idx, sub_comps in orig_to_surv.items():
+        if len(sub_comps) <= 1:
+            continue
+
+        orig_comp_nodes = orig_components[oc_idx]
+
+        # Iteratively merge: start with first sub-component, connect
+        # nearest unmerged sub-component via shortest path in original graph
+        merged = set(sub_comps[0])
+        unmerged = list(sub_comps[1:])
+
+        while unmerged:
+            # Dijkstra from all merged nodes through the original graph
+            # (restricted to this original component) to find the nearest
+            # node in any unmerged sub-component
+            d = {}
+            prev_edge = {}
+            prev_node = {}
+            pq = []
+
+            for n in merged:
+                d[n] = 0
+                prev_edge[n] = None
+                prev_node[n] = None
+                heapq.heappush(pq, (0, counter, n))
+                counter += 1
+
+            # Build lookup: node -> index in unmerged list
+            target_lookup = {}
+            for i, sc in enumerate(unmerged):
+                for n in sc:
+                    target_lookup[n] = i
+
+            found_target = None
+
+            while pq:
+                dd, _, node = heapq.heappop(pq)
+                if dd > d.get(node, float('inf')):
+                    continue
+                if node in target_lookup:
+                    found_target = node
+                    break
+                for neighbor, edge_idx in orig_adj[node]:
+                    if neighbor not in orig_comp_nodes:
+                        continue
+                    elen = edges[edge_idx][3]
+                    new_d = dd + elen
+                    if new_d < d.get(neighbor, float('inf')):
+                        d[neighbor] = new_d
+                        prev_edge[neighbor] = edge_idx
+                        prev_node[neighbor] = node
+                        counter += 1
+                        heapq.heappush(pq, (new_d, counter, neighbor))
+
+            if found_target is None:
+                break  # can't reach — shouldn't happen in same component
+
+            # Trace back and unmark edges along the path
+            cur = found_target
+            while prev_edge.get(cur) is not None:
+                eidx = prev_edge[cur]
+                edges_to_remove.discard(eidx)
+                na, nb = edges[eidx][0], edges[eidx][1]
+                remaining[na].add(eidx)
+                remaining[nb].add(eidx)
+                cur = prev_node[cur]
+
+            # Merge the found sub-component into merged, plus any
+            # intermediate nodes along the reconnection path
+            target_idx = target_lookup[found_target]
+            merged |= unmerged[target_idx]
+            cur = found_target
+            while prev_node.get(cur) is not None:
+                merged.add(cur)
+                cur = prev_node[cur]
+            unmerged.pop(target_idx)
+
+    # ================================================================
+    # APPLY REMOVAL
+    # ================================================================
+    voxels_to_remove = set()
+    for idx in edges_to_remove:
+        na, nb, interior, elen = edges[idx]
+        for v in interior:
+            voxels_to_remove.add(v)
+        voxels_to_remove.add(na)
+        voxels_to_remove.add(nb)
+
+    # Preserve any node that still has a surviving edge
+    for node in graph_nodes:
+        if remaining[node]:
+            voxels_to_remove.discard(node)
+
+    for v in voxels_to_remove:
+        image_copy[v] = 0
+
+    return image_copy[1:-1, 1:-1, 1:-1].astype(np.uint8)
 
 
 
@@ -933,64 +1238,29 @@ def get_background_perimeter_proportion(labeled, xy_scale=1):
     
     return proportions
 
-def break_and_label_skeleton(skeleton, peaks = 1, branch_removal = 0, comp_dil = 0, max_vol = 0, directory = None, return_skele = False, nodes = None, compute = True, unify = False, xy_scale = 1, z_scale = 1):
-    """Internal method to break open a skeleton at its branchpoints and label the remaining components, for an 8bit binary array"""
-
-    if type(skeleton) == str:
-        broken_skele = skeleton
-        skeleton = tifffile.imread(skeleton)
-    else:
-        broken_skele = None
-
-    if nodes is None:
-
-        verts = label_vertices(skeleton, peaks = peaks, branch_removal = branch_removal, comp_dil = comp_dil, max_vol = max_vol, return_skele = return_skele, compute = compute)
-
-    else:
-        verts = nodes
-
-    verts = invert_array(verts)
-
+def break_and_label_skeleton(skeleton, nodes, unify=False):
     """
-    if compute: # We are interested in the endpoints if we are doing the optional computation later
-        endpoints = []
-        image_copy = np.pad(skeleton, pad_width=1, mode='constant', constant_values=0)
-        nonzero_coords = np.transpose(np.nonzero(image_copy))
-        for x, y, z in nonzero_coords:
-            mini = image_copy[x-1:x+2, y-1:y+2, z-1:z+2]
-            nearby_sum = np.sum(mini)
-            threshold = 2 * image_copy[x, y, z]
-            
-            if nearby_sum <= threshold:
-                endpoints.append((x, y, z))
+    Break a skeleton at its branchpoints (nodes) and label the resulting
+    connected components.
+
+    Parameters
+    ----------
+    skeleton : ndarray — binary skeleton
+    nodes : ndarray — labelled branchpoint regions
+    unify : bool
+        If True, also return the node array (used later by branch_stitcher).
+
+    Returns
+    -------
+    labeled : ndarray — each skeleton segment gets a unique label
+    verts : ndarray or None — the original nodes (only when unify=True)
     """
+    inverted_nodes = invert_array(nodes)
+    broken = skeleton * inverted_nodes
+    labeled, _ = label_objects(broken)
 
-    image_copy = skeleton * verts
-
- 
-    # Label the modified image to assign new labels for each branch
-    #labeled_image, num_labels = measure.label(image_copy, connectivity=2, return_num=True)
-    labeled_image, num_labels = label_objects(image_copy)
-
-    if type(broken_skele) == str:
-        if directory is None:
-            filename = f'broken_skeleton_with_labels.tif'
-        else:
-            filename = f'{directory}/broken_skeleton_with_labels.tif'
-
-        tifffile.imwrite(filename, labeled_image, photometric='minisblack')
-        print(f"Broken skeleton saved to {filename}")
-
-    if not unify:
-        verts = None
-    else:
-        verts = invert_array(verts)
-
-    if compute:
-
-        return labeled_image, verts, skeleton, None
-
-    return labeled_image, verts, None, None
+    verts = nodes if unify else None
+    return labeled, verts
 
 def compute_optional_branchstats(verts, labeled_array, endpoints, xy_scale = 1, z_scale = 1):
 
@@ -2473,89 +2743,137 @@ def skeletonize(arrayimage, directory = None):
 
     return arrayimage
 
-def label_branches(array, peaks = 0, branch_removal = 0, comp_dil = 0, max_vol = 0, down_factor = None, directory = None, nodes = None, bonus_array = None, GPU = True, arrayshape = None, compute = False, unify = False, union_val = 10, mode = 0, xy_scale = 1, z_scale = 1):
+def correct_internal_branches(labeled, consider_prop=False):
     """
-    Can be used to label branches a binary image. Labelled output will be saved to the active directory if none is specified. Note this works better on already thin filaments and may over-divide larger trunkish objects.
-    :param array: (Mandatory, string or ndarray) - If string, a path to a tif file to label. Note that the ndarray alternative is for internal use mainly and will not save its output.
-    :param branch_removal: (Optional, Val = None; int) - An optional into to specify what size of pixels to remove branches. Use this if the skeleton is branchy and you want to remove the branches from the larger filaments.
-    :param comp_dil: (Optional, Val = 0; int) - An optional value to merge nearby vertices. This algorithm may be prone to leaving a few, disconnected vertices next to each other that otherwise represent the same branch point but will confound the network a bit. These can be combined into a single object by dilation. Note this dilation will be applied post downsample, so take that into account when assigning a value, as the value will not take resampling into account and will just apply as is on a downsample.
-    :param max_vol: (Optional, Val = 0, int) - An optional value of the largest volume of an object to keep in the vertices output. Will only filter if > 0.
-    :param down_factor: (Optional, Val = None; int) - An optional factor to downsample internally to speed up computation. Note that this method will try to use the GPU if one is available, which may
-    default to some internal downsampling.
-    :param directory: (Optional - Val = None; string) - A filepath to save outputs.
-    :returns: an ndarray with labelled branches.
+    Merge internal branch labels with their external neighbours.
+
+    Parameters
+    ----------
+    labeled : ndarray
+        Branch-labelled image.
+    consider_prop : bool
+        If False, merge with ALL external neighbours.
+        If True, merge only with non-branch-like external neighbours.
+
+    Returns
+    -------
+    ndarray — corrected labelled image (same shape as input).
     """
-    if type(array) == str:
-        stringbool = True
-        array = tifffile.imread(array)
-    else:
-        stringbool = False
+    print("Correcting Internal Branches...")
+    temp_network = Network_3D(nodes=labeled)
+    max_val = np.max(temp_network.nodes)
 
-    if down_factor is not None and nodes is None:
-        array = downsample(array, down_factor)
-        arrayshape = array.shape
-    else:
-        arrayshape = arrayshape
+    # Temporarily fill background with max_val so proximity detection
+    # doesn't treat background as a single giant component
+    background = (temp_network.nodes == 0).astype(temp_network.nodes.dtype) * max_val
+    temp_network.nodes = temp_network.nodes + background
+    del background
 
-    if nodes is None:
+    temp_network.morph_proximity(search=[3, 3], fastdil=True)
+    return fix_branches(labeled, temp_network.network, max_val,
+                        consider_prop=consider_prop)
 
-        array = array > 0
 
-        other_array = skeletonize(array)
+def correct_nontouching_branches(labeled):
+    """
+    Split disconnected components that share a label and reassign the
+    smaller fragments to neighbouring legal labels.
 
-        other_array, verts, skele, endpoints = break_and_label_skeleton(other_array, peaks = peaks, branch_removal = branch_removal, comp_dil = comp_dil, max_vol = max_vol, nodes = nodes, compute = compute, unify = unify, xy_scale = xy_scale, z_scale = z_scale)
+    Parameters
+    ----------
+    labeled : ndarray
+        Branch-labelled image.
 
-    else:
+    Returns
+    -------
+    ndarray — corrected labelled image.
+    """
+    return separate_nontouching_objects(labeled, max_val=np.max(labeled),
+                                       branches=True)
+
+
+def label_branches(edges, nodes, skeleton=None, down_factor=None,
+                   original_shape=None, reunify=False, reunify_threshold=10,
+                   mode=0, xy_scale=1, z_scale=1):
+    """
+    Label branches on an edge image using pre-computed (or internally derived)
+    nodes and skeleton.
+
+    Parameters
+    ----------
+    edges : ndarray
+        Original (full-resolution) edge image.
+    nodes : ndarray
+        Labelled branchpoint array (from generate_nodes or prior run).
+    skeleton : ndarray or None
+        Skeleton matching `nodes`. If None one is computed from `edges`.
+    down_factor : int or None
+        Internal downsample factor. Both edges and the final output are
+        resampled so the caller always gets a result at `original_shape`.
+    original_shape : tuple or None
+        Shape to upsample back to.  Defaults to edges.shape.
+    reunify : bool
+        Attempt to re-merge fragmented main branches via branch_stitcher.
+    reunify_threshold : float
+        Minimum score for reunification mergers (lower = more merging).
+    mode : int
+        0 = standard algorithm, 1 = fast (rougher along adjacent labels).
+    xy_scale, z_scale : float
+        Voxel dimensions (passed through to branch_stitcher when reunifying).
+
+    Returns
+    -------
+    labeled : ndarray — branch-labelled image at original resolution
+    skeleton : ndarray — the skeleton that was used
+    """
+    if original_shape is None:
+        original_shape = edges.shape
+
+    # Derive skeleton from edges if not provided
+    if skeleton is None:
+        tmp = edges.copy()
         if down_factor is not None:
-            bonus_array = downsample(bonus_array, down_factor)
-        array, verts, skele, endpoints = break_and_label_skeleton(array, peaks = peaks, branch_removal = branch_removal, comp_dil = comp_dil, max_vol = max_vol, nodes = nodes, compute = compute, unify = unify, xy_scale = xy_scale, z_scale = z_scale)
+            tmp = downsample(tmp, down_factor)
+        skeleton = skeletonize(tmp > 0)
 
-    if unify is True and nodes is not None:
+    # Downsample edges to match the (possibly downsampled) skeleton/nodes
+    working_edges = edges
+    if down_factor is not None:
+        working_edges = downsample(edges, down_factor)
+
+    # Break skeleton at nodes → labelled segments
+    labeled, verts = break_and_label_skeleton(skeleton, nodes, unify=reunify)
+
+    # Reunify fragmented main branches
+    if reunify and verts is not None:
         from . import branch_stitcher
-        verts = dilate_3D_old(verts, 3, 3, 3,)
+        verts = dilate_3D_old(verts, 3, 3, 3)
         verts, _ = label_objects(verts)
         print("Merging branches...")
-        array = branch_stitcher.trace(bonus_array, array, verts, score_thresh = union_val, xy_scale = xy_scale, z_scale = z_scale)
-        verts = None
+        labeled = branch_stitcher.trace(
+            working_edges, labeled, verts,
+            score_thresh=reunify_threshold,
+            xy_scale=xy_scale, z_scale=z_scale,
+        )
 
-
-    if nodes is None:
-
-        array = smart_dilate.smart_label(array, other_array, GPU = GPU, remove_template = True, mode = mode)
-        #distance = smart_dilate.compute_distance_transform_distance(array)
-        #array = water(-distance, other_array, mask=array) #Tried out skimage watershed as shown and found it did not label branches as well as smart_label (esp combined combined with post-processing label splitting if needed)
-
+    # Expand segment labels to fill the full edge volume
+    if down_factor is not None:
+        labeled = smart_dilate.smart_label(
+            working_edges, labeled, GPU=False,
+            predownsample=down_factor, remove_template=True, mode=mode,
+        )
     else:
-        if down_factor is not None:
-            array = smart_dilate.smart_label(bonus_array, array, GPU = GPU, predownsample = down_factor, remove_template = True, mode = mode)
-            #distance = smart_dilate.compute_distance_transform_distance(bonus_array)
-            #array = water(-distance, array, mask=bonus_array)
-        else:
+        labeled = smart_dilate.smart_label(
+            working_edges, labeled, GPU=False,
+            remove_template=True, mode=mode,
+        )
 
-            array = smart_dilate.smart_label(bonus_array, array, GPU = GPU, remove_template = True, mode = mode)
-            #distance = smart_dilate.compute_distance_transform_distance(bonus_array)
-            #array = water(-distance, array, mask=bonus_array)
+    # Upsample back to original resolution
+    if down_factor is not None:
+        labeled = upsample_with_padding(labeled, down_factor, original_shape)
 
-
-    if down_factor is not None and nodes is None:
-        array = upsample_with_padding(array, down_factor, arrayshape)
-
-    if stringbool:
-        if directory is not None:
-            filename = f'{directory}/labelled_branches.tif'
-        else:
-            filename = f'labelled_branches.tif'
-
-        tifffile.imwrite(filename, other_array)
-        print(f"Labelled branches saved to {filename}")
-    else:
-        print("Branches labelled")
-
-    if nodes is not None and down_factor is not None:
-        array = upsample_with_padding(array, down_factor, arrayshape)
-
-
-    return array, verts, skele, endpoints
+    print("Branches labelled")
+    return labeled, skeleton
 
 def fix_branches_network(array, G, communities, fix_val = None):
 
@@ -2669,60 +2987,111 @@ def fix_branches(array, G, max_val, consider_prop = True):
     
     return array
 
-
-def label_vertices(array, peaks = 0, branch_removal = 0, comp_dil = 0, max_vol = 0, down_factor = 0, directory = None, return_skele = False, order = 0, fastdil = True):
+def generate_nodes(edges, branch_removal=0, branch_mode=0, comp_dil=0,
+                   down_factor=None, fastdil=True):
     """
-    Can be used to label vertices (where multiple branches connect) a binary image. Labelled output will be saved to the active directory if none is specified. Note this works better on already thin filaments and may over-divide larger trunkish objects.
-    Note that this can be used in tandem with an edge segmentation to create an image containing 'pseudo-nodes', meaning we can make a network out of just a single edge file.
-    :param array: (Mandatory, string or ndarray) - If string, a path to a tif file to label. Note that the ndarray alternative is for internal use mainly and will not save its output.
-    :param peaks: (Optional, Val = 0; int) - An optional value on what size of peaks to keep. A peak is peak in the histogram of volumes of objects in the array. The number of peaks that will be kept start on the left (low volume). The point of this is to remove large, erroneous vertices that may result from skeletonizing large objects. 
-    :param branch_removal: (Optional, Val = 0; int) - An optional into to specify what size of pixels to remove branches. Use this if the skeleton is branchy and you want to remove the branches from the larger filaments. Large objects tend to produce branches when skeletonized. Enabling this in the right situations will make the output significantly more accurate.
-    :param comp_dil: (Optional, Val = 0; int) - An optional value to merge nearby vertices. This algorithm may be prone to leaving a few, disconnected vertices next to each other that otherwise represent the same branch point but will confound the network a bit. These can be combined into a single object by dilation. Note this dilation will be applied post downsample, so take that into account when assigning a value, as the value will not take resampling into account and will just apply as is on a downsample.
-    :param max_vol: (Optional, Val = 0, int) - An optional value of the largest volume of an object to keep in the vertices output. Will only filter if > 0.
-    :param directory: (Optional - Val = None; string) - A filepath to save outputs.
-    :returns: an ndarray with labelled vertices.
-    """    
+    Generate nodes (branchpoints) from an edge image.
+
+    Returns (nodes, skeleton) as new arrays — does NOT mutate the input or any
+    external state.
+
+    Parameters
+    ----------
+    edges : ndarray
+        Binary or labelled edge image.
+    branch_removal : int
+        Skeleton branch length (in voxels) to prune before vertex detection.
+    branch_mode : int
+        0 = external spines only, 1 = can remove deeper spines.
+    comp_dil : int
+        Dilation amount to merge nearby nodes.
+    down_factor : int or None
+        If > 1, downsample edges before processing (speeds up computation).
+    fastdil : bool
+        Use parallelized dilation when merging nodes.
+
+    Returns
+    -------
+    nodes : ndarray  — labelled branchpoint regions
+    skeleton : ndarray — the skeleton used for detection
+    """
+    working = edges.copy()
+
+    if down_factor is not None and down_factor > 1:
+        working = downsample(working, down_factor, order=0)
+
+    # Auto-correction: skeletonize → fill holes → (label_vertices skeletonizes
+    # again internally, which is intentional — fill_holes sits between the two)
+    if working.ndim == 3 and working.shape[0] > 1:
+        working = skeletonize(working)
+        working = fill_holes_3d(working)
+
+    nodes, skeleton = label_vertices(
+        working,
+        branch_removal=branch_removal,
+        comp_dil=comp_dil,
+        return_skele=True,
+        fastdil=fastdil,
+        branch_mode=branch_mode,
+    )
+
+    return nodes, skeleton
+
+def label_vertices(array, branch_removal=0, comp_dil=0,
+                   return_skele=False, fastdil=True, branch_mode=0):
+    """
+    Detect branchpoint (vertex) regions in a binary image.
+
+    The input is binarised and skeletonised internally, then each voxel whose
+    3×3×3 neighbourhood connects more than two skeleton arms is marked as a
+    vertex.
+
+    Parameters
+    ----------
+    array : ndarray
+        Binary (or binarisable) image.
+    branch_removal : int
+        Length of skeleton spines to prune before detection.
+    comp_dil : int
+        Dilation radius to merge nearby vertex regions.
+    return_skele : bool
+        If True, also return the skeleton used for detection.
+    fastdil : bool
+        Use parallelised dilation.
+    branch_mode : int
+        0 = external spines only, 1 = deeper spine removal.
+
+    Returns
+    -------
+    labeled_image : ndarray — labelled vertex regions
+    old_skeleton : ndarray — (only when return_skele=True)
+    """
     print("Breaking Skeleton...")
 
-    if type(array) == str:
-        broken_skele = array
-        array = tifffile.imread(array)
-    else:
-        broken_skele = None
-
-    if down_factor > 1:
-        array_shape = array.shape
-        array = downsample(array, down_factor, order)
-        if order == 3:
-            array = binarize(array)
-
     array = array > 0
-
     array = skeletonize(array)
 
     if return_skele:
-        old_skeleton = copy.deepcopy(array) # The skeleton might get modified in label_vertices so we can make a preserved copy of it to use later
+        old_skeleton = copy.deepcopy(array)
 
     if branch_removal > 0:
-        array = remove_branches_new(array, branch_removal)
+        if branch_mode == 0:
+            array = remove_branches(array, branch_removal)
+        else:
+            array = remove_branches_deep(array, branch_removal)
 
     array = np.pad(array, pad_width=1, mode='constant', constant_values=0)
 
-    # Find all nonzero voxel coordinates
     nonzero_coords = np.transpose(np.nonzero(array))
     x, y, z = nonzero_coords[0]
     threshold = 3 * array[x, y, z]
 
-    # Create a copy of the image to modify
     image_copy = np.zeros_like(array)
 
-    # Iterate through each nonzero voxel
     for x, y, z in nonzero_coords:
-
-        # Count nearby pixels including diagonals
         mini = array[x-1:x+2, y-1:y+2, z-1:z+2]
         nearby_sum = np.sum(mini)
-        
+
         if nearby_sum > threshold:
             mini = mini.copy()
             mini[1, 1, 1] = 0
@@ -2732,108 +3101,216 @@ def label_vertices(array, peaks = 0, branch_removal = 0, comp_dil = 0, max_vol =
 
     image_copy = (image_copy[1:-1, 1:-1, 1:-1]).astype(np.uint8)
 
+    if comp_dil > 0:
+        image_copy = dilate_3D_dt(image_copy, comp_dil, fast_dil=fastdil)
 
-    # Label the modified image to assign new labels for each branch
-    #labeled_image, num_labels = measure.label(image_copy, connectivity=2, return_num=True)
-
-    if peaks > 0:
-        image_copy = filter_size_by_peaks(image_copy, peaks)
-        if comp_dil > 0:
-            image_copy = dilate_3D_dt(image_copy, comp_dil, fast_dil = fastdil)
-
-        labeled_image, num_labels = label_objects(image_copy)
-    elif max_vol > 0:
-        image_copy = filter_size_by_vol(image_copy, max_vol)
-        if comp_dil > 0:
-            image_copy = dilate_3D_dt(image_copy, comp_dil, fast_dil = fastdil)
-
-        labeled_image, num_labels = label_objects(image_copy)
-    else:
-        if comp_dil > 0:
-            image_copy = dilate_3D_dt(image_copy, comp_dil, fast_dil = fastdil)
-        labeled_image, num_labels = label_objects(image_copy)
-
-    #if down_factor > 0:
-        #labeled_image = upsample_with_padding(labeled_image, down_factor, array_shape)
-
-    if type(broken_skele) == str:
-        if directory is None:
-            filename = f'labelled_vertices.tif'
-        else:
-            filename = f'{directory}/labelled_vertices.tif'
-
-        tifffile.imwrite(filename, labeled_image, photometric='minisblack')
-        print(f"Broken skeleton saved to {filename}")
+    labeled_image, _ = label_objects(image_copy)
 
     if return_skele:
-
         return labeled_image, old_skeleton
+    return labeled_image
 
-    else:
 
-        return labeled_image
+def separate_nontouching_objects(input_array, max_val=None, branches=False):
+    """
+    Two-pass algorithm:
+      Pass 1 — split disconnected components (largest keeps its label,
+               others get new incremental labels).
+      Pass 2 — (branches=True only) reassign the new "illegal" labels to
+               a legal neighbour.
 
-def filter_size_by_peaks(binary_array, num_peaks_to_keep=1):
+    Parameters
+    ----------
+    input_array : ndarray
+    max_val : int or None
+    branches : bool
 
-    binary_array = binary_array > 0
-    # Label connected components
-    labeled_array, num_features = ndimage.label(binary_array)
-    
-    # Calculate the volume of each object
-    volumes = np.bincount(labeled_array.ravel())[1:]
-    
-    # Create a histogram of volumes
-    hist, bin_edges = np.histogram(volumes, bins='auto')
-    
-    # Find peaks in the histogram
-    peaks, _ = find_peaks(hist, distance=1)
-    
-    if len(peaks) < num_peaks_to_keep + 1:
-        print(f"Warning: Found only {len(peaks)} peaks. Keeping all objects up to the last peak.")
-        num_peaks_to_keep = len(peaks) - 1
-    
-    if num_peaks_to_keep < 1:
-        print("Warning: Invalid number of peaks to keep. Keeping all objects.")
-        return binary_array
+    Returns
+    -------
+    ndarray
+    """
+    if max_val is None:
+        max_val = np.max(input_array)
 
-    print(f"Keeping all peaks up to {num_peaks_to_keep} of {len(peaks)} peaks")
-    
-    # Find the valley after the last peak we want to keep
-    if num_peaks_to_keep == len(peaks):
-        # If we're keeping all peaks, set the threshold to the maximum volume
-        volume_threshold = volumes.max()
-    else:
-        valley_start = peaks[num_peaks_to_keep - 1]
-        valley_end = peaks[num_peaks_to_keep]
-        valley = valley_start + np.argmin(hist[valley_start:valley_end])
-        volume_threshold = bin_edges[valley + 1]
-    
-    # Create a mask for objects larger than the threshold
-    mask = np.isin(labeled_array, np.where(volumes > volume_threshold)[0] + 1)
-    
-    # Set larger objects to 0
-    result = binary_array.copy()
-    result[mask] = 0
-    
-    return result
+    print("Splitting nontouching objects - Pass 1")
 
-def filter_size_by_vol(binary_array, volume_threshold):
+    binary_mask = input_array > 0
+    if not np.any(binary_mask):
+        return np.zeros_like(input_array)
 
-    binary_array = binary_array > 0
-    # Label connected components
-    labeled_array, num_features = ndimage.label(binary_array)
-    
-    # Calculate the volume of each object
-    volumes = np.bincount(labeled_array.ravel())[1:]
-    
-    # Create a mask for objects larger than the threshold
-    mask = np.isin(labeled_array, np.where(volumes > volume_threshold)[0] + 1)
-    
-    # Set larger objects to 0
-    result = binary_array.copy()
-    result[mask] = 0
-    
-    return result
+    unique_labels = np.unique(input_array[binary_mask])
+    print(f"Processing {len(unique_labels)} unique labels")
+
+    original_max_val = int(max_val)
+    bounding_boxes = ndimage.find_objects(input_array)
+
+    work_items = []
+    for orig_label in unique_labels:
+        bbox_index = orig_label - 1
+        if (bbox_index >= 0
+                and bbox_index < len(bounding_boxes)
+                and bounding_boxes[bbox_index] is not None):
+            work_items.append((orig_label, bounding_boxes[bbox_index]))
+
+    if len(work_items) == 0:
+        print("No valid work items found!")
+        return np.zeros_like(input_array)
+
+    # --- Pass 1: split components ----------------------------------------
+    max_workers = min(mp.cpu_count(), len(work_items))
+
+    with ThreadPoolExecutor(max_workers=max_workers) as executor:
+        process_func = lambda item: process_label_split_only(item, input_array)
+        results = list(executor.map(process_func, work_items))
+
+    current_label = original_max_val + 1
+    pass1_array = np.zeros_like(input_array)
+
+    for orig_label, bbox, labeled_sub, num_cc, largest_cc_id in results:
+        if num_cc > 0 and labeled_sub is not None:
+            for cc_id in range(1, num_cc + 1):
+                mask = labeled_sub == cc_id
+
+                if cc_id == largest_cc_id:
+                    assigned_label = orig_label
+                else:
+                    assigned_label = current_label
+                    current_label += 1
+
+                try:
+                    pass1_array[bbox][mask] = assigned_label
+                except Exception:
+                    if assigned_label < 256:
+                        dtype = np.uint8
+                    elif assigned_label < 65535:
+                        dtype = np.uint16
+                    else:
+                        dtype = np.uint32
+                    pass1_array = pass1_array.astype(dtype)
+                    pass1_array[bbox][mask] = assigned_label
+
+    print(f"Pass 1 complete. Created {current_label - original_max_val - 1} new labels")
+
+    if not branches:
+        return pass1_array
+
+    # --- Pass 2: reassign illegal labels ---------------------------------
+    print("Pass 2: Reassigning illegal labels based on legal neighbors")
+
+    illegal_mask = pass1_array > original_max_val
+    if not np.any(illegal_mask):
+        return pass1_array
+
+    illegal_labels = np.unique(pass1_array[illegal_mask])
+    print(f"Processing {len(illegal_labels)} illegal labels")
+
+    illegal_bboxes = ndimage.find_objects(pass1_array)
+
+    work_items_pass2 = []
+    for illegal_label in illegal_labels:
+        bbox_index = illegal_label - 1
+        if (bbox_index >= 0
+                and bbox_index < len(illegal_bboxes)
+                and illegal_bboxes[bbox_index] is not None):
+            work_items_pass2.append((illegal_label, illegal_bboxes[bbox_index]))
+
+    with ThreadPoolExecutor(max_workers=max_workers) as executor:
+        process_func = lambda item: process_illegal_label_reassign(
+            item, pass1_array, original_max_val
+        )
+        results_pass2 = list(executor.map(process_func, work_items_pass2))
+
+    def _replace_labels_in_chunk(args):
+        pass1_chunk, replacements = args
+        pass2_chunk = pass1_chunk.copy()
+        unique_in_chunk = set(np.unique(pass1_chunk))
+        for illegal_label, new_label in replacements:
+            if new_label is not None and new_label != illegal_label:
+                if illegal_label in unique_in_chunk:
+                    pass2_chunk[pass1_chunk == illegal_label] = new_label
+        return pass2_chunk
+
+    num_cores = mp.cpu_count()
+    chunks = np.array_split(pass1_array, num_cores, axis=1)
+    chunk_args = [(chunk, results_pass2) for chunk in chunks]
+
+    with ThreadPoolExecutor(max_workers=num_cores) as executor:
+        processed_chunks = list(executor.map(_replace_labels_in_chunk, chunk_args))
+
+    pass2_array = np.concatenate(processed_chunks, axis=1)
+    print("Pass 2 complete")
+    return pass2_array
+
+
+def expand_bbox(bbox, array_shape, padding=1):
+    """Expand a bounding box by `padding` in each dimension, clamped to array bounds."""
+    expanded = []
+    for i, slice_obj in enumerate(bbox):
+        start = max(0, slice_obj.start - padding)
+        stop = min(array_shape[i], slice_obj.stop + padding)
+        expanded.append(slice(start, stop, None))
+    return tuple(expanded)
+
+
+def process_label_split_only(item, input_array):
+    """Pass 1 helper: split disconnected components for a single label, identify largest."""
+    orig_label, bbox = item
+
+    try:
+        label_subarray = input_array[bbox]
+        binary_mask = label_subarray == orig_label
+
+        if not np.any(binary_mask):
+            return orig_label, bbox, None, 0, None
+
+        labeled_cc, num_cc = label_objects(binary_mask)
+
+        if num_cc == 0:
+            return orig_label, bbox, None, 0, None
+
+        volumes = np.bincount(labeled_cc.ravel())[1:]
+        largest_cc_id = np.argmax(volumes) + 1
+
+        return orig_label, bbox, labeled_cc, num_cc, largest_cc_id
+
+    except Exception as e:
+        print(f"Error processing label {orig_label}: {e}")
+        return orig_label, bbox, None, 0, None
+
+
+def process_illegal_label_reassign(item, pass1_array, original_max_val):
+    """Pass 2 helper: find the best legal neighbour for an illegal label."""
+    illegal_label, bbox = item
+
+    try:
+        expanded_bbox = expand_bbox(bbox, pass1_array.shape, padding=1)
+        subarray = pass1_array[expanded_bbox]
+
+        illegal_mask = subarray == illegal_label
+
+        if not np.any(illegal_mask):
+            return illegal_label, None
+
+        dilated_mask = dilate_3D_old(illegal_mask, 3, 3, 3)
+
+        border_mask = dilated_mask & ~illegal_mask & (subarray > 0)
+        border_labels = subarray * border_mask
+
+        legal_border_labels = border_labels.copy()
+        legal_border_labels[border_labels > original_max_val] = 0
+
+        unique_borders = np.bincount(legal_border_labels.ravel())[1:]  # skip 0
+
+        if len(unique_borders) > 0 and np.max(unique_borders) > 0:
+            chosen_label = np.argmax(unique_borders) + 1
+            return illegal_label, chosen_label
+        else:
+            return illegal_label, None
+
+    except Exception as e:
+        print(f"Error processing illegal label {illegal_label}: {e}")
+        return illegal_label, None
+
 
 def gray_watershed(image, min_distance = 1, threshold_abs = None):
 
@@ -3531,6 +4008,9 @@ class Network_3D:
         elif not filename.endswith(('.tif', '.tiff')):
             filename += '.tif'
 
+        if filename.endswith('compressed.tif'): #sneaky compression options
+            compression = 'zlib'
+
         if self._nodes is not None:
             if directory is None:
                 try:
@@ -3587,6 +4067,9 @@ class Network_3D:
             filename = "labelled_edges.tif"
         elif not filename.endswith(('.tif', '.tiff')):
             filename += '.tif'
+
+        if filename.endswith('compressed.tif'): #sneaky compression options
+            compression = 'zlib'
 
         if self._edges is not None:
             if directory is None:
@@ -3680,7 +4163,7 @@ class Network_3D:
                 network_analysis._save_centroid_dictionary({}, f'{directory}/edge_centroids.xlsx', index = 'Edge ID')
                 print(f"Centroids saved to {directory}/edge_centroids.xlsx")
 
-    def save_search_region(self, directory = None, compression = None):
+    def save_search_region(self, directory = None, compression = 'zlib'):
         """
         Can be called on a Network_3D object to save the search_region property to hard mem as a tif. It will save to the active directory if none is specified.
         :param directory: (Optional - Val = None; String). The path to an indended directory to save the search_region to.
@@ -3783,6 +4266,8 @@ class Network_3D:
             filename = "overlay_1.tif"
         elif not filename.endswith(('.tif', '.tiff')):
             filename += '.tif'
+        if filename.endswith('compressed.tif'): #sneaky compression options
+            compression = 'zlib'
 
         if self._network_overlay is not None:
             if directory is None:
@@ -3828,6 +4313,8 @@ class Network_3D:
             filename = "overlay_2.tif"
         if not filename.endswith(('.tif', '.tiff')):
             filename += '.tif'
+        if filename.endswith('compressed.tif'): #sneaky compression options
+            compression = 'zlib'
 
         if self._id_overlay is not None:
             if directory is None:
@@ -4110,82 +4597,87 @@ class Network_3D:
         print("Could not find node centroids. They must be in the specified directory and named 'node_centroids.xlsx'")
 
 
-    def load_node_identities(self, directory = None, file_path = None):
+    def load_node_identities(self, directory=None, file_path=None, update=False):
         """
-        Can be called on a Network_3D object to load a .xlsx into the node_identities property as a dictionary. It will look for a file called 'node_identities.xlsx' in the specified directory,
-        or the active directory if none has been selected. Alternatively, a file path to any .xlsx file may be passed to load into the node_identities property, however they must be formatted the same way as the 'node_identities.xlsx' file.
-        :param directory: (Optional - Val = None; String). The path to an intended directory to search for the 'node_identities.xlsx' file.
-        :param file_path: (Optional - Val = None; String). A path to any .xlsx to load into the node_identities property.
+        Load a .xlsx/.csv/.json into the node_identities property as a dictionary.
+        
+        :param directory: Path to search for 'node_identities.*'.
+        :param file_path: Direct path to a specific file.
+        :param update: If True, merge new data into existing node_identities rather than replacing.
         """
-        import json
-        import ast
 
         def normalize_to_lists(d):
-            """Convert dict values: strings -> [string], string-lists -> parsed lists."""
             result = {}
             for k, v in d.items():
                 if isinstance(v, str):
                     if v.startswith('['):
                         try:
-                            # Try JSON first (faster)
                             result[k] = json.loads(v)
                         except json.JSONDecodeError:
-                            # Fall back to ast.literal_eval for Python-style strings
                             result[k] = ast.literal_eval(v)
                     else:
-                        result[k] = [v]  # "hello" -> ["hello"]
+                        result[k] = [v]
                 else:
-                    result[k] = v  # Already a list
+                    result[k] = v
             return result
 
-        if file_path is not None:
-            self._node_identities = network_analysis.read_excel_to_singval_dict(file_path)
-            self._node_identities = self.clear_null(self._node_identities)
+        def clean_and_normalize(d):
             try:
-                if type(list(self._node_identities.values())[0]) == str:
-                    self._node_identities = normalize_to_lists(self._node_identities)
+                d = self.clear_null(d)
+                try:
+                    if isinstance(next(iter(d.values())), str):
+                        d = normalize_to_lists(d)
+                except StopIteration:
+                    pass
+                return d
             except:
-                pass
-            print("Succesfully loaded node identities")
+                return None
+
+        def resolve_file_path():
+            if file_path is not None:
+                return file_path
+
+            items = directory_info(directory)
+            valid_names = {'node_identities.json', 'node_identities.csv', 'node_identities.xlsx'}
+            found = [item for item in items if item in valid_names]
+
+            if not found:
+                return None
+
+            prefix = f'{directory}/' if directory else ''
+            # prefer .json, fall back to whatever was found
+            for ext in ('node_identities.json', found[0]):
+                path = f'{prefix}{ext}'
+                data = network_analysis.read_excel_to_singval_dict(path)
+                if data:
+                    return path
+            return f'{prefix}{found[0]}'
+
+        def merge_identities(existing, new):
+            for key, values in new.items():
+                if key in existing:
+                    merged = set(existing[key])
+                    merged.update(values)
+                    existing[key] = list(merged)
+                else:
+                    existing[key] = values
+            return existing
+
+        resolved = resolve_file_path()
+        if resolved is None:
+            print("Could not find node identities. They must be in the specified directory "
+                  "and named 'node_identities.json' or 'node_identities.csv' or 'node_identities.xlsx'")
             return
 
-        items = directory_info(directory)
+        new_data = network_analysis.read_excel_to_singval_dict(resolved)
+        new_data = clean_and_normalize(new_data)
 
-        for item in items:
-            if item == 'node_identities.xlsx' or item == 'node_identities.csv' or item == 'node_identities.json':
-                if directory is not None:
-                    self._node_identities = network_analysis.read_excel_to_singval_dict(f'{directory}/node_identities.json')
-                    if self._node_identities == {}:
-                        try:
-                            self._node_identities = network_analysis.read_excel_to_singval_dict(f'{directory}/{item}')
-                        except:
-                            pass
-                    self._node_identities = self.clear_null(self._node_identities)
-                    try:
-                        if type(list(self._node_identities.values())[0]) == str:
-                            self._node_identities = normalize_to_lists(self._node_identities)
-                    except:
-                        pass
+        if update and self._node_identities:
+            self._node_identities = merge_identities(self._node_identities, new_data)
+        else:
+            self._node_identities = new_data
 
-                    print("Succesfully loaded node identities")
-                    return
-                else:
-                    self._node_identities = network_analysis.read_excel_to_singval_dict('node_identities.json')
-                    if self._node_identities == {}:
-                        try:
-                            self._node_identities = network_analysis.read_excel_to_singval_dict(item)
-                        except:
-                            pass
-
-                    self._node_identities = self.clear_null(self._node_identities)
-                    try:
-                        if type(list(self._node_identities.values())[0]) == str:
-                            self._node_identities = normalize_to_lists(self._node_identities)
-                    except:
-                        pass
-                    print("Succesfully loaded node identities")
-                    return
-        print("Could not find node identities. They must be in the specified directory and named 'node_identities.json' or 'node_identities.csv' or 'node_identities.xlsx")
+        print("Successfully loaded node identities")
 
     def load_communities(self, directory = None, file_path = None):
         """
@@ -5836,26 +6328,14 @@ class Network_3D:
         for val in all_idens:
             total_dict[val] = 0
             neighborhood_dict[val] = 0
-        root = ast.literal_eval(root)
 
-        if len(root) < 2:
-            root = root[0]
-            for node in node_identities:
-                nodeid = node_identities[node]
-                for node_iden in nodeid:
-                    total_dict[node_iden] += 1
-                if root in nodeid:
-                    targets.append(node)
-            list_root = False
-        else:
-            root = str(root)
-            for node in node_identities:
-                nodeid = node_identities[node]
-                for node_iden in nodeid:
-                    total_dict[node_iden] += 1
-                if str(nodeid) == root:
-                    targets.append(node)
-            list_root = True
+        for node in node_identities:
+            nodeid = node_identities[node]
+            for node_iden in nodeid:
+                total_dict[node_iden] += 1
+            if root in nodeid:
+                targets.append(node)
+
         if mode == 0: #search neighbor ids within the network
 
             for node in G.nodes():
@@ -5863,18 +6343,15 @@ class Network_3D:
                     nodeid = node_identities[node]
                     neighbors = list(G.neighbors(node))
                     for subnode in neighbors:
-                        subnodeid = node_identities[subnode]
-
-                        if not list_root:
+                        try:
+                            subnodeid = node_identities[subnode]
                             if root in subnodeid:
                                 for iden in nodeid:
                                     neighborhood_dict[iden] += 1
                                 break
-                        else: # The string looks like a list in this case
-                            if str(subnodeid) == root:
-                                for iden in nodeid:
-                                    neighborhood_dict[iden] += 1
-                                break
+                        except:
+                            pass
+
                 except:
                     pass
 
@@ -5904,6 +6381,51 @@ class Network_3D:
 
         return neighborhood_dict, proportion_dict, title1, title2, densities
 
+    def batch_neighborhood_identities(self):
+        G = self._network
+        node_identities = self._node_identities
+        all_idens = set()
+        for iden in node_identities.values():
+            all_idens.update(iden)
+        available = sorted(list(all_idens), key=nhoods.natural_sort_key)
+        ref_dict = {item: i for i, item in enumerate(available)}
+        returned_dict = {item: [0] * len(available) for item in available}
+        counting_dict = dict.fromkeys(available, 0)
+
+        for node in G.nodes():
+            try:
+                nodeid = node_identities[node]
+            except KeyError:
+                continue
+            # Collect the set of identities present across ALL neighbors
+            neighbor_idens = set()
+            for neighbor in G.neighbors(node):
+                try:
+                    neighbor_idens.update(node_identities[neighbor])
+                except KeyError:
+                    pass
+            # For each neighbor identity acting as "root":
+            # this node has at least one neighbor with that root identity,
+            # so credit each of this node's own identities once.
+            # Using a set mirrors the `break` in the original single-root method.
+            for root_iden in neighbor_idens:
+                for node_iden in nodeid:
+                    returned_dict[root_iden][ref_dict[node_iden]] += 1
+
+
+
+        if self.nodes is not None:
+            print("Normalizing rows based on what nodes exist in nodes channel... (delete the nodes channel if this behavior is undesired and you want to normalize based on what's available in the node_identities property)")
+            temp_network = Network_3D(nodes = self.nodes, node_identities = copy.copy(self.node_identities))
+            temp_network.purge_properties()
+            idens = invert_dict_special(temp_network.node_identities)
+        else:
+            idens = invert_dict_special(self.node_identities)
+        for iden in available:
+            counting_dict[iden] = len(idens[iden])
+        del temp_network
+
+        return returned_dict, available, ref_dict, counting_dict
 
 
     def get_ripley(self, root = None, targ = None, distance = 1, edgecorrect = True, bounds = None, ignore_dims = False, proportion = 0.5, mode = 0, safe = False, factor = 0.25):
@@ -7155,12 +7677,12 @@ class Network_3D:
         return avg, output, quant_overlay, pred
 
 
-    def shortest_distances_to_targets(self, root_nodes, target_nodes, return_path_edges=False):
+    def shortest_distances_to_targets(self, root_nodes, target_nodes, return_path_edges=False, compute_subgraph=False, compute_steiner = False):
         G = self.network
-        target_set = set(target_nodes)
-        root_set = set(root_nodes)
+        available_nodes = set(G.nodes())
+        target_set = set(set(target_nodes) & available_nodes)
+        root_set = set(set(root_nodes) & available_nodes)
 
-        # Manual multi-source BFS from all target nodes
         distances = {}
         predecessors = {}
         queue = deque()
@@ -7169,7 +7691,6 @@ class Network_3D:
                 distances[t] = 0
                 predecessors[t] = None
                 queue.append(t)
-
         while queue:
             node = queue.popleft()
             for neighbor in G.neighbors(node):
@@ -7180,8 +7701,7 @@ class Network_3D:
 
         result = {}
         path_edges = set()
-
-        for node in root_nodes:
+        for node in root_set:
             if node in distances:
                 dist = distances[node]
                 if dist == 0:
@@ -7210,11 +7730,138 @@ class Network_3D:
                 else:
                     result[node] = dist
                     if return_path_edges:
-                        # Walk back through predecessors, collecting edge pairs
                         current = node
                         while predecessors[current] is not None:
                             path_edges.add((current, predecessors[current]))
                             current = predecessors[current]
+        if compute_steiner:
+            terminal_nodes = list((root_set | target_set) & available_nodes)
+            subgraph_info = {
+                'subgraph_edges': [],
+                'avg_shortest_path_length': 0.0,
+                'path_length_distribution': {}
+            }
+            if len(terminal_nodes) >= 2:
+                try:
+                    work_graph = G.to_undirected() if G.is_directed() else G
+                    terminal_set = set(terminal_nodes)
+
+                    # Run steiner_tree independently per connected component
+                    all_steiner_edges = []
+                    for comp_nodes in nx.connected_components(work_graph):
+                        comp_terminals = list(terminal_set & comp_nodes)
+                        if len(comp_terminals) >= 2:
+                            steiner = nx.approximation.steiner_tree(
+                                work_graph.subgraph(comp_nodes),
+                                comp_terminals,
+                                method='mehlhorn'
+                            )
+                            all_steiner_edges.extend(steiner.edges())
+
+                    subgraph_info['subgraph_edges'] = all_steiner_edges
+
+                    # Build combined subgraph for stats
+                    if all_steiner_edges:
+                        combined = nx.Graph()
+                        combined.add_edges_from(all_steiner_edges)
+
+                        lengths = dict(nx.all_pairs_shortest_path_length(combined))
+                        nodes = list(combined.nodes())
+                        all_dists = []
+                        for i, u in enumerate(nodes):
+                            for v in nodes[i + 1:]:
+                                # Only counts reachable pairs — cross-component
+                                # pairs are silently excluded
+                                if v in lengths.get(u, {}):
+                                    all_dists.append(lengths[u][v])
+
+                        distribution = {}
+                        for d in all_dists:
+                            distribution[d] = distribution.get(d, 0) + 1
+
+                        subgraph_info['avg_shortest_path_length'] = (
+                            sum(all_dists) / len(all_dists) if all_dists else 0.0
+                        )
+                        subgraph_info['path_length_distribution'] = distribution
+                except Exception:
+                    pass
+
+            if return_path_edges:
+                return result, list(path_edges), subgraph_info
+            return result, subgraph_info
+
+        if compute_subgraph:
+            terminal_nodes = list((root_set | target_set) & available_nodes)
+            subgraph_info = {
+                'subgraph_edges': [],
+                'avg_shortest_path_length': 0.0,
+                'path_length_distribution': {}
+            }
+            if len(terminal_nodes) >= 2:
+                try:
+                    work_graph = G
+                    terminal_set = set(terminal_nodes)
+
+                    # Build contracted mini graph: two terminals share an edge
+                    # only if reachable through non-terminal intermediaries
+                    mini_graph = nx.Graph()
+                    mini_graph.add_nodes_from(terminal_nodes)
+
+                    for source in terminal_set:
+                        visited = {source}
+                        queue = deque([source])
+                        while queue:
+                            node = queue.popleft()
+                            for neighbor in work_graph.neighbors(node):
+                                if neighbor not in visited:
+                                    visited.add(neighbor)
+                                    if neighbor in terminal_set:
+                                        # Adjacent terminal found — record edge, don't expand through it
+                                        mini_graph.add_edge(source, neighbor)
+                                    else:
+                                        # Non-terminal intermediate — keep searching
+                                        queue.append(neighbor)
+
+                    # For each edge in the mini graph, find the actual
+                    # shortest path through the original graph
+                    all_path_edges = set()
+                    for u, v in mini_graph.edges():
+                        try:
+                            path = nx.shortest_path(work_graph, u, v)
+                            for j in range(len(path) - 1):
+                                all_path_edges.add((path[j], path[j + 1]))
+                        except nx.NetworkXNoPath:
+                            continue
+
+                    subgraph_info['subgraph_edges'] = list(all_path_edges)
+
+                    if all_path_edges:
+                        combined = nx.Graph()
+                        combined.add_edges_from(all_path_edges)
+
+                        lengths = dict(nx.all_pairs_shortest_path_length(combined))
+                        nodes = list(combined.nodes())
+                        all_dists = []
+                        for i, u in enumerate(nodes):
+                            for v in nodes[i + 1:]:
+                                if v in lengths.get(u, {}):
+                                    all_dists.append(lengths[u][v])
+
+                        distribution = {}
+                        for d in all_dists:
+                            distribution[d] = distribution.get(d, 0) + 1
+
+                        subgraph_info['avg_shortest_path_length'] = (
+                            sum(all_dists) / len(all_dists) if all_dists else 0.0
+                        )
+                        subgraph_info['path_length_distribution'] = distribution
+                        subgraph_info['mini_graph'] = mini_graph
+                except Exception:
+                    pass
+
+            if return_path_edges:
+                return result, list(path_edges), subgraph_info
+            return result, subgraph_info
 
         if return_path_edges:
             return result, list(path_edges)

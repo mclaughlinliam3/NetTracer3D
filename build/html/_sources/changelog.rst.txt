@@ -209,3 +209,6 @@ Version 1.5.2-1.5.7 updates
 	* The UMAP itself now runs a bit better - mainly concerning highlighting objects. Before a bug was making this slower than it should be.
 	* The violin plots for node intensities can now be configured to show Z-scores directly (before it was just a modified Z-score that was easier to visually appraise but less applicable from a broad analytic standpoint. Now you can create either as desired).
 	* The data tables now show their full titles if you hover over their tab, and will include their table name as the default save value.
+
+Version 1.5.8-1.6.0 updates
+	

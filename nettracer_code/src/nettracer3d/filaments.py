@@ -27,6 +27,7 @@ class DenoisingState:
         # Parameters used to create this state
         self.kernel_spacing = None
         self.spine_removal = None
+        self.branch_mode = None
         self.trace_length = None
         self.xy_scale = None
         self.z_scale = None
@@ -50,6 +51,7 @@ class VesselDenoiser:
                  z_scale=1,
                  radius_aware_distance=True,
                  trace_length=10,
+                 branch_mode = 0,
                  cached_state=None):
         """
         Parameters:
@@ -83,6 +85,7 @@ class VesselDenoiser:
         self.score_thresh = score_thresh
         self.xy_scale = xy_scale
         self.z_scale = z_scale
+        self.branch_mode = branch_mode
         self.trace_length = trace_length
         
         # Handle cached state
@@ -1049,7 +1052,8 @@ class VesselDenoiser:
         # Check if parameters that affect cached computations have changed
         needs_kernel_recompute = (
             state.kernel_spacing != self.kernel_spacing or
-            state.spine_removal != self.spine_removal
+            state.spine_removal != self.spine_removal or
+            state.branch_mode != self.branch_mode
         )
         
         needs_feature_recompute = (
@@ -1127,7 +1131,10 @@ class VesselDenoiser:
                 state.skeleton = n3d.fill_holes_3d(state.skeleton)
                 state.skeleton = n3d.skeletonize(state.skeleton)
             if self.spine_removal > 0:
-                state.skeleton = n3d.remove_branches_new(state.skeleton, self.spine_removal)
+                if self.branch_mode == 0:
+                    state.skeleton = n3d.remove_branches(state.skeleton, self.spine_removal)
+                else:
+                    state.skeleton = n3d.remove_branches_deep(state.skeleton, self.spine_removal)
                 state.skeleton = n3d.dilate_3D(state.skeleton, 3, 3, 3)
                 state.skeleton = n3d.skeletonize(state.skeleton)
             
@@ -1151,6 +1158,7 @@ class VesselDenoiser:
             # Update state parameters
             state.kernel_spacing = self.kernel_spacing
             state.spine_removal = self.spine_removal
+            state.branch_mode = self.branch_mode
             state.trace_length = self.trace_length
             
             # Force feature recomputation since kernels changed
@@ -1251,7 +1259,7 @@ class VesselDenoiser:
 
 def trace(data, kernel_spacing=1, max_distance=20, min_component=20, gap_tolerance=5, 
           blob_sphericity=1.0, blob_volume=200, spine_removal=0, score_thresh=2, 
-          xy_scale=1, z_scale=1, trace_length=10, cached_state=None):
+          xy_scale=1, z_scale=1, branch_mode = 0, trace_length=10, cached_state=None):
     """
     Main function with caching support for rapid parameter iteration
     
@@ -1304,6 +1312,7 @@ def trace(data, kernel_spacing=1, max_distance=20, min_component=20, gap_toleran
         xy_scale=xy_scale,
         z_scale=z_scale,
         trace_length=trace_length,
+        branch_mode = branch_mode,
         cached_state=cached_state
     )
     

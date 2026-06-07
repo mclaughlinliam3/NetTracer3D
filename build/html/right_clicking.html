@@ -81,6 +81,7 @@
 <li class="toctree-l3"><a class="reference internal" href="#id2">‘Sort’</a></li>
 <li class="toctree-l3"><a class="reference internal" href="#id3">‘Save As’</a></li>
 <li class="toctree-l3"><a class="reference internal" href="#use-to-threshold-nodes">‘Use to Threshold Nodes’</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#filter-for-selected-nodes">‘Filter for Selected Nodes’</a></li>
 <li class="toctree-l3"><a class="reference internal" href="#close-all">‘Close All’</a></li>
 </ul>
 </li>
@@ -91,6 +92,7 @@
 <li class="toctree-l1"><a class="reference internal" href="analyze_menu.html">All Analyze Menu Options</a></li>
 <li class="toctree-l1"><a class="reference internal" href="process_menu.html">All Process Menu Options</a></li>
 <li class="toctree-l1"><a class="reference internal" href="image_menu.html">All Image Menu Options</a></li>
+<li class="toctree-l1"><a class="reference internal" href="extensions.html">NetTracer3D Plugin System</a></li>
 </ul>
 <p class="caption" role="heading"><span class="caption-text">Development:</span></p>
 <ul>
@@ -264,6 +266,13 @@
 <li><dl class="simple">
 <dt>‘Edges in Network’</dt><dd><ul class="simple">
 <li><p>Selects and adds all edges participating in the current network property to the highlight display.</p></li>
+</ul>
+</dd>
+</dl>
+</li>
+<li><dl class="simple">
+<dt>‘Select Nodes that Match Labels from Active Channel’</dt><dd><ul class="simple">
+<li><p>If you have some subset of labeled node masks contained in a separate image (such as an overlay) and want those nodes all selected to manipulate somehow, you can set the channel with the sub-image as active, while having your main node masks in the nodes channel — then, using this will cause all the node labels from the sub-image to be selected in the main nodes image.</p></li>
 </ul>
 </dd>
 </dl>
@@ -517,6 +526,10 @@ The only exception is the following option:</p>
 <h3>‘Use to Threshold Nodes’<a class="headerlink" href="#use-to-threshold-nodes" title="Link to this heading"></a></h3>
 <p>If a table is of the structure {col 1 - Integers : col 2 - Numbers}, it can be used to try to threshold what is in the nodes channel (mainly, if this table was generated in reference to said nodes).
 This can be used to interactively sort out any set of data that was used to analyze the nodes.</p>
+</section>
+<section id="filter-for-selected-nodes">
+<h3>‘Filter for Selected Nodes’<a class="headerlink" href="#filter-for-selected-nodes" title="Link to this heading"></a></h3>
+<p>If the table is organized such that the numerical node identifiers are in the first column, and you have some set of nodes selected, using this will create a subtable just containing those nodes. You can use this to isolate specific node communities/identities within tables by first selecting them with the right click options in the main window, then filtering the table.</p>
 </section>
 <section id="close-all">
 <h3>‘Close All’<a class="headerlink" href="#close-all" title="Link to this heading"></a></h3>

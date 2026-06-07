@@ -74,6 +74,8 @@ Clicking 'Select All' reveals the following options:
     * Selects and adds all nodes and edges participating in the current network property to the highlight display.
 6. 'Edges in Network'
     * Selects and adds all edges participating in the current network property to the highlight display.
+7. 'Select Nodes that Match Labels from Active Channel'
+    * If you have some subset of labeled node masks contained in a separate image (such as an overlay) and want those nodes all selected to manipulate somehow, you can set the channel with the sub-image as active, while having your main node masks in the nodes channel — then, using this will cause all the node labels from the sub-image to be selected in the main nodes image.
 
 
 'Selection'
@@ -211,6 +213,11 @@ Selecting 'Save As provides the following options':
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 If a table is of the structure {col 1 - Integers : col 2 - Numbers}, it can be used to try to threshold what is in the nodes channel (mainly, if this table was generated in reference to said nodes).
 This can be used to interactively sort out any set of data that was used to analyze the nodes.
+
+'Filter for Selected Nodes'
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+If the table is organized such that the numerical node identifiers are in the first column, and you have some set of nodes selected, using this will create a subtable just containing those nodes. You can use this to isolate specific node communities/identities within tables by first selecting them with the right click options in the main window, then filtering the table.
+
 
 'Close All'
 ~~~~~~~~~~~~~~~~~~~~~~~

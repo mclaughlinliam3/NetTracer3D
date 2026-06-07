@@ -70,6 +70,7 @@
 <li class="toctree-l1"><a class="reference internal" href="analyze_menu.html">All Analyze Menu Options</a></li>
 <li class="toctree-l1"><a class="reference internal" href="process_menu.html">All Process Menu Options</a></li>
 <li class="toctree-l1"><a class="reference internal" href="image_menu.html">All Image Menu Options</a></li>
+<li class="toctree-l1"><a class="reference internal" href="extensions.html">NetTracer3D Plugin System</a></li>
 </ul>
 <p class="caption" role="heading"><span class="caption-text">Development:</span></p>
 <ul>
@@ -201,6 +202,9 @@
 </dl>
 </li>
 </ol>
+<ul class="simple">
+<li><p>Note that for saving any .tif, if you end the save name with ‘compressed.tif’, the system will save a compressed version of the tif for you which can be way smaller for labeled images specifically but still readable by most tif readers.</p></li>
+</ul>
 </section>
 <section id="load">
 <h2>Load<a class="headerlink" href="#load" title="Link to this heading"></a></h2>
@@ -266,7 +270,8 @@
 </li>
 <li><dl class="simple">
 <dt>‘Load Misc Properties -&gt; Load Node IDs’</dt><dd><ul class="simple">
-<li><p>Prompts the user to find a .csv/.xlsx file containing Node IDs in the structure NetTracer3D expects (that is, the same structure it saves node IDs as).</p></li>
+<li><p>Prompts the user to find a .json/.csv/.xlsx file containing Node IDs in the structure NetTracer3D expects (that is, the same structure it saves node IDs as).</p></li>
+<li><p>The user will be further prompted if they want to update/merge or replace the existing node IDs. The update option will add any new, unique IDs for each node to its identity list. This is especially useful if you encode identities for the same nodes in different sessions and want to combine them. The replace will just overwrite what’s present, which is the same behavior as when a new session is loaded.</p></li>
 </ul>
 </dd>
 </dl>
@@ -360,7 +365,7 @@
 </section>
 <section id="next-steps">
 <h2>Next Steps<a class="headerlink" href="#next-steps" title="Link to this heading"></a></h2>
-<p>This concludes the explanations of the right click functions. Next, proceed to <a class="reference internal" href="analyze_menu.html"><span class="doc">All Analyze Menu Options</span></a> for information on the analyze menu functions.</p>
+<p>This concludes the explanations of the file menu. Next, proceed to <a class="reference internal" href="analyze_menu.html"><span class="doc">All Analyze Menu Options</span></a> for information on the analyze menu functions.</p>
 </section>
 </section>
 

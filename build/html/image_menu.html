@@ -20,7 +20,7 @@
     <link rel="author" title="About these documents" href="about.html" />
     <link rel="index" title="Index" href="genindex.html" />
     <link rel="search" title="Search" href="search.html" />
-    <link rel="next" title="Contact" href="contact.html" />
+    <link rel="next" title="NetTracer3D Plugin System" href="extensions.html" />
     <link rel="prev" title="All Process Menu Options" href="process_menu.html" /> 
 </head>
 
@@ -75,9 +75,10 @@
 <li class="toctree-l3"><a class="reference internal" href="#id1">Parameter Explanations</a></li>
 </ul>
 </li>
-<li class="toctree-l2"><a class="reference internal" href="#image-cellpose">‘Image -&gt; Cellpose’</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#next-steps">Next Steps</a></li>
 </ul>
 </li>
+<li class="toctree-l1"><a class="reference internal" href="extensions.html">NetTracer3D Plugin System</a></li>
 </ul>
 <p class="caption" role="heading"><span class="caption-text">Development:</span></p>
 <ul>
@@ -299,6 +300,7 @@
 </dl>
 </li>
 <li><p>This requires Napari to be installed in NetTracer3D’s package environment.</p></li>
+<li><p>The Napari 3D window is interactable like the main image viewer window. Press ‘S’ to toggle selection mode, in which you can click on the 3D objects to select them, with full access to the main viewer window’s right click functions.</p></li>
 </ul>
 <section id="id1">
 <h3>Parameter Explanations<a class="headerlink" href="#id1" title="Link to this heading"></a></h3>
@@ -324,20 +326,29 @@
 </dd>
 </dl>
 </li>
+<li><dl class="simple">
+<dt>Node Rendering’</dt><dd><ul class="simple">
+<li><p>By Default, Nodes are rendered in a single color. If you want, you can change this to ‘Label Render’ to use Napari’s label render system, which assigns a unique color to all nodes.</p></li>
+</ul>
+</dd>
+</dl>
+</li>
+<li><dl class="simple">
+<dt>Edge Rendering</dt><dd><ul class="simple">
+<li><p>By Default, Edges are rendered in a single color. If you want, you can change this to ‘Label Render’ to use Napari’s label render system, which assigns a unique color to all edges.</p></li>
+</ul>
+</dd>
+</dl>
+</li>
 </ol>
 <ul class="simple">
 <li><p>Press ‘Show 3D’ to create the 3D display with the desired params. A new Napari window will open and show your desired channels. Note that any RGB images will be split into three seperate red, green, and blue channels.</p></li>
 </ul>
 </section>
 </section>
-<section id="image-cellpose">
-<h2>‘Image -&gt; Cellpose’<a class="headerlink" href="#image-cellpose" title="Link to this heading"></a></h2>
-<ul class="simple">
-<li><p>Selecting this just opens the Cellpose3 GUI (Stringer, C., Pachitariu, M. Cellpose3: one-click image restoration for improved cellular segmentation. Nat Methods 22, 592–599 (2025). <a class="reference external" href="https://doi.org/10.1038/s41592-025-02595-5">https://doi.org/10.1038/s41592-025-02595-5</a>), provided it has been installed in NetTracer3D’s package environment.</p></li>
-<li><p>Cellpose3 is my favorite open-source tool to segment cells with, so I added this option as a suggestion to use it together with NetTracer3d.</p></li>
-<li><p>This requires Cellpose3 to be installed in NetTracer3D’s package environment.</p></li>
-<li><p>If NetTracer3D has a 3D image or no image is present, the 3D-stack version of cellpose will open. If a 2D image is open in NetTracer3D, the 2D-stack version of cellpose will open.</p></li>
-</ul>
+<section id="next-steps">
+<h2>Next Steps<a class="headerlink" href="#next-steps" title="Link to this heading"></a></h2>
+<p>This concludes the explanations of the image menu. Next, proceed to <a class="reference internal" href="extensions.html"><span class="doc">NetTracer3D Plugin System</span></a> for information extension manager, including how to load and make extensions.</p>
 </section>
 </section>
 
@@ -346,7 +357,7 @@
           </div>
           <footer><div class="rst-footer-buttons" role="navigation" aria-label="Footer">
         <a href="process_menu.html" class="btn btn-neutral float-left" title="All Process Menu Options" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left" aria-hidden="true"></span> Previous</a>
-        <a href="contact.html" class="btn btn-neutral float-right" title="Contact" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right" aria-hidden="true"></span></a>
+        <a href="extensions.html" class="btn btn-neutral float-right" title="NetTracer3D Plugin System" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right" aria-hidden="true"></span></a>
     </div>
 
   <hr/>

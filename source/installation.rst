@@ -13,7 +13,6 @@ Before installing NetTracer3D, ensure your system meets the following requiremen
 * CPU: Multi-core processor (4+ cores recommended)
 * RAM: Minimum 8GB (16GB+ recommended for larger images. For very large images such as lightsheet data, you would even want a workstation with 128+, for example, or downsample the data accordingly)
 * GPU: NVIDIA dedicated GPU (Optional)
-* Storage: ~7GB for installation (at least, that's how big the compiled version's dependencies get), additional space for captured data
 * Python: 3.12
 
 
@@ -43,31 +42,25 @@ You can try reinstalling them, if perhaps the wrong setting was selected, or you
 
     pip install nettracer3d
 
-
-3. **Optional — For 3D Displays**: Or if you want the 3D visualization options to be included:
-
-.. code-block:: bash
-
-    pip install nettracer3d[viz]
-
-4. **Optional — Performance Boost for Large Data**: If you are trying to process large images, you may also want to include the 'edt' module in your package. This will allow parallelized CPU calculations for several of the search functions which can increase their speed by an order of magnitude or more depending on how many cores your CPU has. This can be a major benefit if you have a strong CPU and sufficient RAM. It requires an extra pre-installation step, thus is not included by default. You will also have to install the C++ build tools from windows. Please head to this link, then download and run the installer: https://visualstudio.microsoft.com/visual-cpp-build-tools/. In the menu of the installer, select the 'Desktop Development with C++' option, then proceed to download/install it using the installation menu. You will likely want to be using the Python distributed from the actual Python website and not the windows store (or elsewhere) or the edt module may not work properly. To bundle with edt use:
+3. **Optional — Performance Boost for Large Data**: If you are trying to process large images, you may also want to include the 'edt' module in your package. This will allow parallelized CPU calculations for several of the search functions which can increase their speed by an order of magnitude or more depending on how many cores your CPU has. This can be a major benefit if you have a strong CPU and sufficient RAM. It requires an extra pre-installation step, thus is not included by default. You will also have to install the C++ build tools from windows. Please head to this link, then download and run the installer: https://visualstudio.microsoft.com/visual-cpp-build-tools/. In the menu of the installer, select the 'Desktop Development with C++' option, then proceed to download/install it using the installation menu. You will likely want to be using the Python distributed from the actual Python website and not the windows store (or elsewhere) or the edt module may not work properly. To bundle with edt use:
 
 .. code-block:: bash
 
     pip install nettracer3d[edt]
 
-5. **Optional — Recommended full package**: Or if you want to just get both edt and napari at once:
+4. **Optional — Recommended full package**: Or if you want to just get both edt with the leiden partition dependencies:
 	
 .. code-block:: bash
 
     pip install nettracer3d[rec]
 
-6. Likewise, if you already installed the default version, you can add napari and/or edt with just:
+6. Likewise, if you already installed the default version, you can add the leiden elements and/or edt with just:
 
 .. code-block:: bash
 
     pip install edt
-    pip install napari
+    pip install leidenalg
+    pip install igraph
 
 This will install NetTracer3D and all its core dependencies. Then, if you want to run nettracer3d, open the command terminal like before and enter the following command:
 
@@ -101,29 +94,6 @@ This should install the program in the 'nettracer3d' environment in conda. Then,
 
     nettracer3d
 
-Optional Packages
-~~~~~~~~~~~~~~~~~~
-This was touched on above, but I recommend including Napari (Chi-Li Chiu, Nathan Clack, the napari community, napari: a Python Multi-Dimensional Image Viewer Platform for the Research Community, Microscopy and Microanalysis, Volume 28, Issue S1, 1 August 2022, Pages 1576–1577, https://doi.org/10.1017/S1431927622006328) in the download as well, which allows NetTracer3D to use 3D displays. The standard package only comes with its native 2D slice display window. 
-If Napari is present, all 3D images and overlays from NetTracer3D can be easily displayed in 3D with a click of a button. To package with Napari, use this install command instead: 
-
-.. code-block:: bash
-
-    pip install nettracer3d[viz]
-
-Additionally, for easy access to high-quality cell segmentation, as of version 0.8.2, NetTracer3D can be optionally packaged with Cellpose3. (Stringer, C., Pachitariu, M. Cellpose3: one-click image restoration for improved cellular segmentation. Nat Methods 22, 592–599 (2025). https://doi.org/10.1038/s41592-025-02595-5)
-Cellpose3 is not involved with the rest of the program in any way, although its GUI can be opened from NetTracer3D's GUI, provided both are installed in the same environment. It is a top-tier cell segmenter which can assist in the production of cell networks.
-To include Cellpose3 in the install, use this command:
-
-.. code-block:: bash
-
-    pip install nettracer3d[cellpose]
-
-Alternatively, both Napari, Cellpose, and edt can be included in the package with this command: (Or they can be independently installed with pip from the base package env)
-
-.. code-block:: bash
-
-    pip install nettracer3d[all]
-
 GPU
 ~~~~~~~~~~~~~~~~~~
 NetTracer3D is mostly CPU-bound, but a few functions can optionally use the GPU. To install optional GPU functionalities, first set up a CUDA toolkit that runs with the GPU on your machine. This requires an NVIDIA GPU. Then, find your GPUs compatible CUDA toolkit and install it with the auto-installer from the NVIDIA website: https://developer.nvidia.com/cuda-toolkit
@@ -144,9 +114,7 @@ Or if you've already installed the NetTracer3D base package and want to get just
     pip install cupy-cuda12x #If your CUDA toolkit is version 12
     pip install cupy #For the generic cupy library (The above two are usually the ones you want)
 
-While not related to NetTracer3D, if you want to use Cellpose3 (for which GPU-usage is somewhat obligatory) to help segment cells for any networks, you will also want to install pytorch here: https://pytorch.org/. Use the pytorch build menu on this webpage to find a pip install command that is compatible with Python and your CUDA version.
-
-
+If you want to use Cellpose plugin (for which GPU-usage is somewhat obligatory) to help segment cells for any networks, you will also want to install pytorch here: https://pytorch.org/. Use the pytorch build menu on this webpage to find a pip install command that is compatible with Python and your CUDA version.
 
 Verifying Installation
 ---------------------

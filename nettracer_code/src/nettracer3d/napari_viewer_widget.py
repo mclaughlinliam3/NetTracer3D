@@ -346,6 +346,10 @@ class NapariViewerWidget:
         self._right_click_filter = None
         self._canvas_native = None
 
+        # Labels layers (add_labels path, optional)
+        self._node_labels_layer = None
+        self._edge_labels_layer = None
+
         # Bounding-box acceleration for highlight
         self._node_bboxes = None   # dict {label: (z0,z1,y0,y1,x0,x1)} or None
         self._edge_bboxes = None
@@ -370,6 +374,8 @@ class NapariViewerWidget:
         edge_data=None,
         names_3d=None,
         names_4d=None,
+        nodes_as_labels=False,
+        edges_as_labels=False,
     ):
         """
         Open the napari viewer with the provided data.
@@ -389,6 +395,11 @@ class NapariViewerWidget:
                       (e.g. ["Nodes", "Edges", "Highlight"]).
             names_4d: Display names for each *arrays_4d* entry
                       (e.g. ["Overlay 1", "Overlay 2"]).
+            nodes_as_labels: If True, add *node_data* as a napari Labels
+                layer (solid isosurface rendering, per-label colours,
+                paint/erase tools) instead of only using it for picking.
+            edges_as_labels: If True, add *edge_data* as a napari Labels
+                layer with the same benefits as *nodes_as_labels*.
         """
         if not HAS_NAPARI:
             raise ImportError(
@@ -433,9 +444,53 @@ class NapariViewerWidget:
         self._image_layers = []
         shape = None
 
-        # ---- Add 3D image layers (nodes, edges, highlight, etc.) ----
+        # ---- Determine which parent channels are present in arrays_3d ----
+        # Parent channel indices: 0 = nodes, 1 = edges.  A channel is
+        # absent from arrays_3d when its data is None or its visibility
+        # is False.  We need to map from "nodes" / "edges" to the actual
+        # index inside arrays_3d so we can skip the right image layer
+        # when a labels flag is set.
+        _node_present = True
+        _edge_present = True
+
+        if self.parent is not None:
+            ch_data = getattr(self.parent, "channel_data", None)
+            ch_vis  = getattr(self.parent, "channel_visible", None)
+            if ch_data is not None:
+                if len(ch_data) > 0 and ch_data[0] is None:
+                    _node_present = False
+                if len(ch_data) > 1 and ch_data[1] is None:
+                    _edge_present = False
+            if ch_vis is not None:
+                if len(ch_vis) > 0 and not ch_vis[0]:
+                    _node_present = False
+                if len(ch_vis) > 1 and not ch_vis[1]:
+                    _edge_present = False
+
+        # Build a mapping from role → arrays_3d index.  Only present
+        # channels occupy slots; the rest are packed in order after them.
+        _node_arr_idx = None
+        _edge_arr_idx = None
+        _slot = 0
+        if _node_present:
+            _node_arr_idx = _slot
+            _slot += 1
+        if _edge_present:
+            _edge_arr_idx = _slot
+            _slot += 1
+
+        # Decide which arrays_3d indices to skip (replaced by labels).
+        _skip_image = set()
+        if nodes_as_labels and _node_present and _node_arr_idx is not None:
+            _skip_image.add(_node_arr_idx)
+        if edges_as_labels and _edge_present and _edge_arr_idx is not None:
+            _skip_image.add(_edge_arr_idx)
+
+        # ---- Add 3D image layers ----
         for i, (arr, color) in enumerate(zip(arrays_3d, colors)):
             shape = arr.shape
+            if i in _skip_image:
+                continue
             if names_3d and i < len(names_3d):
                 name = names_3d[i]
             else:
@@ -488,6 +543,36 @@ class NapariViewerWidget:
                 blending="additive",
                 opacity=0.5,
                 name="Bounding Box",
+            )
+
+        # ---- Optional Labels layers (solid isosurface rendering) ----
+        self._node_labels_layer = None
+        self._edge_labels_layer = None
+
+        if nodes_as_labels and _node_present and node_data is not None:
+            lbl = node_data if np.issubdtype(node_data.dtype, np.integer) \
+                  else node_data.astype(np.int32)
+            node_lbl_name = (names_3d[_node_arr_idx]
+                             if names_3d and _node_arr_idx < len(names_3d)
+                             else "Node Labels")
+            self._node_labels_layer = self.viewer.add_labels(
+                lbl,
+                scale=self._scale,
+                name=node_lbl_name,
+                opacity=0.7,
+            )
+
+        if edges_as_labels and _edge_present and edge_data is not None:
+            lbl = edge_data if np.issubdtype(edge_data.dtype, np.integer) \
+                  else edge_data.astype(np.int32)
+            edge_lbl_name = (names_3d[_edge_arr_idx]
+                             if names_3d and _edge_arr_idx < len(names_3d)
+                             else "Edge Labels")
+            self._edge_labels_layer = self.viewer.add_labels(
+                lbl,
+                scale=self._scale,
+                name=edge_lbl_name,
+                opacity=0.7,
             )
 
         # Highlight layer
@@ -1292,6 +1377,8 @@ class NapariViewerWidget:
         self.viewer = None
         self._highlight_layer = None
         self._image_layers = []
+        self._node_labels_layer = None
+        self._edge_labels_layer = None
         self._node_data = None
         self._edge_data = None
         self._scale = [1, 1, 1]

@@ -1,0 +1,33 @@
+# Cellpose Plugin — Python Dependencies
+# =======================================
+#
+# This file is read automatically by the NetTracer3D plugin manager.
+# When you enable this plugin and it detects missing packages, it will
+# offer to install everything listed here via pip.
+#
+# PYTORCH / GPU NOTE:
+# -------------------
+# Cellpose depends on PyTorch.  By default, pip installs CPU-only torch.
+# The plugin manager will ask you about GPU support during installation
+# and add the correct --extra-index-url automatically.
+#
+# If you prefer to install torch manually beforehand:
+#
+#   CPU only:
+#     pip install torch --index-url https://download.pytorch.org/whl/cpu
+#
+#   CUDA 11.8:
+#     pip install torch --index-url https://download.pytorch.org/whl/cu118
+#
+#   CUDA 12.1:
+#     pip install torch --index-url https://download.pytorch.org/whl/cu121
+#
+#   CUDA 12.4:
+#     pip install torch --index-url https://download.pytorch.org/whl/cu124
+#
+#   See https://pytorch.org/get-started/locally/ for the full matrix.
+#
+# If torch is already installed when you run the plugin manager's
+# installer, pip will skip it and only install cellpose.
+
+cellpose[GUI]>=3.0

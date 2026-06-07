@@ -1,0 +1,883 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="./">
+<head>
+  <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>NetTracer3D Plugin System &mdash; NetTracer3D 1.5.7 documentation</title>
+      <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=b86133f3" />
+      <link rel="stylesheet" type="text/css" href="_static/css/theme.css?v=e59714d7" />
+
+  
+      <script src="_static/jquery.js?v=5d32c60e"></script>
+      <script src="_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+      <script src="_static/documentation_options.js?v=2b2ec289"></script>
+      <script src="_static/doctools.js?v=9bcbadda"></script>
+      <script src="_static/sphinx_highlight.js?v=dc90522c"></script>
+    <script src="_static/js/theme.js"></script>
+    <link rel="author" title="About these documents" href="about.html" />
+    <link rel="index" title="Index" href="genindex.html" />
+    <link rel="search" title="Search" href="search.html" />
+    <link rel="next" title="Contact" href="contact.html" />
+    <link rel="prev" title="All Image Menu Options" href="image_menu.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="index.html" class="icon icon-home">
+            NetTracer3D
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">User Guide:</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="installation.html">Installation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="quickstart.html">Quickstart - Segmenting Data and Generating Connectivity Networks</a></li>
+<li class="toctree-l1"><a class="reference internal" href="proximity.html">Proximity Networks - Ideal for Cellular Data</a></li>
+<li class="toctree-l1"><a class="reference internal" href="branches.html">Labeling Branches and Branch Networks</a></li>
+<li class="toctree-l1"><a class="reference internal" href="properties.html">Properties of a Network3D Object</a></li>
+<li class="toctree-l1"><a class="reference internal" href="excel_helper.html">Using the Spreadsheet Loader</a></li>
+<li class="toctree-l1"><a class="reference internal" href="keyboard_shortcuts.html">Available Keyboard Shortcuts</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Detailed Function Guide:</span></p>
+<ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="right_clicking.html">Right Clicking - All Options Available by Right Clicking in the GUI</a></li>
+<li class="toctree-l1"><a class="reference internal" href="file_menu.html">All File Menu Options</a></li>
+<li class="toctree-l1"><a class="reference internal" href="analyze_menu.html">All Analyze Menu Options</a></li>
+<li class="toctree-l1"><a class="reference internal" href="process_menu.html">All Process Menu Options</a></li>
+<li class="toctree-l1"><a class="reference internal" href="image_menu.html">All Image Menu Options</a></li>
+<li class="toctree-l1 current"><a class="current reference internal" href="#">NetTracer3D Plugin System</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="#user-guide">User Guide</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#what-are-plugins">What Are Plugins?</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#where-do-plugins-live">Where Do Plugins Live?</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#the-extensions-panel">The Extensions Panel</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#installing-plugin-dependencies">Installing Plugin Dependencies</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#built-in-plugins">Built-In Plugins</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="#cellpose-segmentation">Cellpose Segmentation</a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="#developer-guide">Developer Guide</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#plugin-structure">Plugin Structure</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#plugin-info">PLUGIN_INFO</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#register-and-unregister">register() and unregister()</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#plugin-api-reference">Plugin API Reference</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="#data-access-read">Data Access — Read</a></li>
+<li class="toctree-l4"><a class="reference internal" href="#data-access-write">Data Access — Write</a></li>
+<li class="toctree-l4"><a class="reference internal" href="#ui-output">UI Output</a></li>
+<li class="toctree-l4"><a class="reference internal" href="#menu-context-registration">Menu &amp; Context Registration</a></li>
+<li class="toctree-l4"><a class="reference internal" href="#display-hooks">Display Hooks</a></li>
+<li class="toctree-l4"><a class="reference internal" href="#events">Events</a></li>
+<li class="toctree-l4"><a class="reference internal" href="#utilities">Utilities</a></li>
+<li class="toctree-l4"><a class="reference internal" href="#unsafe-escape-hatches">Unsafe Escape Hatches</a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="#dependency-management">Dependency Management</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="#pip-environments-pip-install-nettracer3d">Pip environments (<code class="docutils literal notranslate"><span class="pre">pip</span> <span class="pre">install</span> <span class="pre">nettracer3d</span></code>)</a></li>
+<li class="toctree-l4"><a class="reference internal" href="#pyinstaller-compiled-builds">PyInstaller / compiled builds</a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="#packaging-for-pypi">Packaging for PyPI</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#minimal-example-plugin">Minimal Example Plugin</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#complete-plugin-checklist">Complete Plugin Checklist</a></li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Development:</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="contact.html">Contact</a></li>
+<li class="toctree-l1"><a class="reference internal" href="changelog.html">Changelog</a></li>
+<li class="toctree-l1"><a class="reference internal" href="about.html">About</a></li>
+<li class="toctree-l1"><a class="reference internal" href="usage.html">Usage</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="index.html">NetTracer3D</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="index.html" class="icon icon-home" aria-label="Home"></a></li>
+      <li class="breadcrumb-item active">NetTracer3D Plugin System</li>
+      <li class="wy-breadcrumbs-aside">
+            <a href="_sources/extensions.rst.txt" rel="nofollow"> View page source</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <section id="nettracer3d-plugin-system">
+<span id="extensions"></span><h1>NetTracer3D Plugin System<a class="headerlink" href="#nettracer3d-plugin-system" title="Link to this heading"></a></h1>
+<p>NetTracer3D supports a plugin system that allows both developers and users
+to extend the application with new analysis tools, processing methods,
+visualisations, and integrations — without modifying the core codebase.</p>
+<p>Plugins are discovered automatically at startup and managed through the
+<strong>Extensions</strong> panel in the menu bar.</p>
+<nav class="contents local" id="on-this-page">
+<p class="topic-title">On this page</p>
+<ul class="simple">
+<li><p><a class="reference internal" href="#user-guide" id="id1">User Guide</a></p>
+<ul>
+<li><p><a class="reference internal" href="#what-are-plugins" id="id2">What Are Plugins?</a></p></li>
+<li><p><a class="reference internal" href="#where-do-plugins-live" id="id3">Where Do Plugins Live?</a></p></li>
+<li><p><a class="reference internal" href="#the-extensions-panel" id="id4">The Extensions Panel</a></p></li>
+<li><p><a class="reference internal" href="#installing-plugin-dependencies" id="id5">Installing Plugin Dependencies</a></p></li>
+<li><p><a class="reference internal" href="#built-in-plugins" id="id6">Built-In Plugins</a></p></li>
+</ul>
+</li>
+<li><p><a class="reference internal" href="#developer-guide" id="id7">Developer Guide</a></p>
+<ul>
+<li><p><a class="reference internal" href="#plugin-structure" id="id8">Plugin Structure</a></p></li>
+<li><p><a class="reference internal" href="#plugin-info" id="id9">PLUGIN_INFO</a></p></li>
+<li><p><a class="reference internal" href="#register-and-unregister" id="id10">register() and unregister()</a></p></li>
+<li><p><a class="reference internal" href="#plugin-api-reference" id="id11">Plugin API Reference</a></p></li>
+<li><p><a class="reference internal" href="#dependency-management" id="id12">Dependency Management</a></p></li>
+<li><p><a class="reference internal" href="#packaging-for-pypi" id="id13">Packaging for PyPI</a></p></li>
+<li><p><a class="reference internal" href="#minimal-example-plugin" id="id14">Minimal Example Plugin</a></p></li>
+<li><p><a class="reference internal" href="#complete-plugin-checklist" id="id15">Complete Plugin Checklist</a></p></li>
+</ul>
+</li>
+</ul>
+</nav>
+<section id="user-guide">
+<h2><a class="toc-backref" href="#id1" role="doc-backlink">User Guide</a><a class="headerlink" href="#user-guide" title="Link to this heading"></a></h2>
+<section id="what-are-plugins">
+<h3><a class="toc-backref" href="#id2" role="doc-backlink">What Are Plugins?</a><a class="headerlink" href="#what-are-plugins" title="Link to this heading"></a></h3>
+<p>Plugins are small Python modules that add functionality to NetTracer3D.
+They can add new menu items, new right-click options, new analysis tabs,
+custom overlays, or entirely new dialog windows.  Several plugins ship
+with NetTracer3D by default (e.g. <strong>Cellpose Segmentation</strong>,
+<strong>Cell Preview Grid</strong>, <strong>Channel Expansion</strong>), and you can install
+additional ones or write your own.</p>
+</section>
+<section id="where-do-plugins-live">
+<h3><a class="toc-backref" href="#id3" role="doc-backlink">Where Do Plugins Live?</a><a class="headerlink" href="#where-do-plugins-live" title="Link to this heading"></a></h3>
+<p>NetTracer3D searches for plugins in several locations, in order:</p>
+<ol class="arabic">
+<li><p><strong>User plugin directory</strong></p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="o">~/.</span><span class="n">nettracer3d</span><span class="o">/</span><span class="n">plugins</span><span class="o">/</span>
+</pre></div>
+</div>
+<p>On Windows this is typically <code class="docutils literal notranslate"><span class="pre">C:\Users\&lt;you&gt;\.nettracer3d\plugins\</span></code>.
+Place any <code class="docutils literal notranslate"><span class="pre">.py</span></code> file or plugin folder here and NetTracer3D will find
+it on the next launch.  The Extensions panel has an
+<strong>Open User Plugin Folder</strong> button that opens this directory in your
+file manager.</p>
+</li>
+<li><p><strong>Package plugin directory</strong></p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="o">&lt;</span><span class="n">python</span><span class="o">&gt;/</span><span class="n">Lib</span><span class="o">/</span><span class="n">site</span><span class="o">-</span><span class="n">packages</span><span class="o">/</span><span class="n">nettracer3d</span><span class="o">/</span><span class="n">plugins</span><span class="o">/</span>
+</pre></div>
+</div>
+<p>Plugins that ship with the <code class="docutils literal notranslate"><span class="pre">pip</span> <span class="pre">install</span> <span class="pre">nettracer3d</span></code> package live
+here.  You generally do not need to touch this directory — it is
+populated automatically by the installer.</p>
+</li>
+<li><p><strong>Environment variable</strong></p>
+<p>Set <code class="docutils literal notranslate"><span class="pre">NETTRACER3D_PLUGIN_PATH</span></code> to a colon-separated (or
+semicolon-separated on Windows) list of directories containing
+additional plugins.</p>
+</li>
+<li><p><strong>Pip entry points</strong></p>
+<p>Plugins distributed as their own pip packages can declare the entry
+point group <code class="docutils literal notranslate"><span class="pre">nettracer3d.plugins</span></code> and be discovered automatically
+after <code class="docutils literal notranslate"><span class="pre">pip</span> <span class="pre">install</span></code>.</p>
+</li>
+</ol>
+</section>
+<section id="the-extensions-panel">
+<h3><a class="toc-backref" href="#id4" role="doc-backlink">The Extensions Panel</a><a class="headerlink" href="#the-extensions-panel" title="Link to this heading"></a></h3>
+<p>Open the Extensions panel from the menu bar:</p>
+<blockquote>
+<div><p><strong>Extensions → Manage Extensions…</strong></p>
+</div></blockquote>
+<p>The panel shows every discovered plugin, colour-coded by status:</p>
+<table class="docutils align-default">
+<colgroup>
+<col style="width: 15.0%" />
+<col style="width: 85.0%" />
+</colgroup>
+<thead>
+<tr class="row-odd"><th class="head"><p>Colour</p></th>
+<th class="head"><p>Meaning</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>Green</p></td>
+<td><p><strong>Loaded</strong> — the plugin is active and its menu items / hooks are
+registered.</p></td>
+</tr>
+<tr class="row-odd"><td><p>Blue</p></td>
+<td><p><strong>Needs Deps</strong> — the plugin was found but could not be imported
+because one or more Python packages are missing.  Click
+<strong>Install Deps</strong> to install them automatically via pip.</p></td>
+</tr>
+<tr class="row-even"><td><p>Red</p></td>
+<td><p><strong>Failed</strong> — the plugin raised an error during import or
+registration.  Select it to see the error traceback.</p></td>
+</tr>
+<tr class="row-odd"><td><p>Orange</p></td>
+<td><p><strong>Incompatible</strong> — the plugin requires a newer version of the
+plugin API than this build of NetTracer3D provides.</p></td>
+</tr>
+<tr class="row-even"><td><p>Grey</p></td>
+<td><p><strong>Disabled</strong> — you manually disabled this plugin.  Click
+<strong>Enable</strong> to re-activate it.</p></td>
+</tr>
+</tbody>
+</table>
+<p>Available buttons:</p>
+<ul class="simple">
+<li><p><strong>Enable</strong> — re-enable a disabled plugin and attempt to load it.</p></li>
+<li><p><strong>Disable</strong> — unload the plugin and prevent it from loading on future
+launches.</p></li>
+<li><p><strong>Install Deps</strong> — (pip environments only) reads the plugin’s
+<code class="docutils literal notranslate"><span class="pre">requirements.txt</span></code>, asks about GPU / CUDA preferences if PyTorch is
+involved, and runs <code class="docutils literal notranslate"><span class="pre">pip</span> <span class="pre">install</span></code> in the current environment.</p></li>
+<li><p><strong>Reload</strong> — unload and re-import the plugin without restarting
+NetTracer3D.  Useful during development.</p></li>
+<li><p><strong>Rescan</strong> — re-scan all plugin directories for new files and attempt
+to load any newly discovered plugins.</p></li>
+</ul>
+</section>
+<section id="installing-plugin-dependencies">
+<h3><a class="toc-backref" href="#id5" role="doc-backlink">Installing Plugin Dependencies</a><a class="headerlink" href="#installing-plugin-dependencies" title="Link to this heading"></a></h3>
+<p>When a plugin is marked <strong>Needs Deps</strong> (blue):</p>
+<ol class="arabic simple">
+<li><p>Select it in the list.</p></li>
+<li><p>Click <strong>Install Deps</strong>.</p></li>
+<li><p>If the plugin requires PyTorch, a dialog appears asking which GPU /
+CUDA version you have.  The manager will try to auto-detect your CUDA
+installation.  Choose <strong>Auto-detect</strong> unless you know you need a
+specific version.</p></li>
+<li><p>A confirmation dialog shows exactly which packages will be installed
+and the full pip command.  Click <strong>Yes</strong> to proceed.</p></li>
+<li><p>pip runs in the background.  When it finishes, the plugin is
+automatically loaded.</p></li>
+</ol>
+<div class="admonition note">
+<p class="admonition-title">Note</p>
+<p>If you are running the compiled (PyInstaller / installer) version of
+NetTracer3D, pip is not available.  Plugins for the compiled version
+must be distributed with a <code class="docutils literal notranslate"><span class="pre">_vendor/</span></code> folder containing
+pre-compiled dependencies.  See the Developer Guide below for details.</p>
+</div>
+</section>
+<section id="built-in-plugins">
+<h3><a class="toc-backref" href="#id6" role="doc-backlink">Built-In Plugins</a><a class="headerlink" href="#built-in-plugins" title="Link to this heading"></a></h3>
+<section id="cellpose-segmentation">
+<h4>Cellpose Segmentation<a class="headerlink" href="#cellpose-segmentation" title="Link to this heading"></a></h4>
+<p>Integrates the <a class="reference external" href="https://cellpose.readthedocs.io/">Cellpose</a> instance
+segmentation pipeline directly into NetTracer3D.</p>
+<ul class="simple">
+<li><p><strong>Menu</strong>: Extensions → Cellpose → Open Cellpose Panel…</p></li>
+<li><p>Choose which channel to segment and optionally a secondary context
+channel (e.g. a nuclear stain).</p></li>
+<li><p>Select a model (built-in or custom <code class="docutils literal notranslate"><span class="pre">.pth</span></code> file).</p></li>
+<li><p>Adjust parameters: diameter, flow threshold, cell probability
+threshold, minimum size, stitch threshold.</p></li>
+<li><p>Enable <strong>Chunked Processing</strong> to segment large images in pieces that
+fit in GPU memory.</p></li>
+<li><p>Dimensionality (2-D vs 3-D) is auto-detected from the input data.</p></li>
+<li><p>The segmented mask is written to the channel of your choice.</p></li>
+<li><p><strong>Requires</strong>: <code class="docutils literal notranslate"><span class="pre">cellpose&gt;=3.0</span></code> (installed via the Extensions panel).</p></li>
+</ul>
+</section>
+</section>
+</section>
+<section id="developer-guide">
+<h2><a class="toc-backref" href="#id7" role="doc-backlink">Developer Guide</a><a class="headerlink" href="#developer-guide" title="Link to this heading"></a></h2>
+<p>This section explains how to write, package, and distribute your own
+NetTracer3D plugins.</p>
+<section id="plugin-structure">
+<h3><a class="toc-backref" href="#id8" role="doc-backlink">Plugin Structure</a><a class="headerlink" href="#plugin-structure" title="Link to this heading"></a></h3>
+<p>Please reference the built in Cellpose plugin _init_.py and requirements.txt files for a clear example of how to integrate a plugin</p>
+<p>A plugin is either a single <code class="docutils literal notranslate"><span class="pre">.py</span></code> file or a folder (Python package).</p>
+<p><strong>Single file</strong> (no dependencies beyond NetTracer3D base):</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">my_plugin</span><span class="o">.</span><span class="n">py</span>
+</pre></div>
+</div>
+<p><strong>Folder / package</strong> (has its own dependencies or bundled assets):</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span>my_plugin/
+├── __init__.py          # plugin code
+├── requirements.txt     # pip dependencies
+└── _vendor/             # (optional) bundled deps for PyInstaller
+</pre></div>
+</div>
+<p>Every plugin must expose two things at module level:</p>
+<ol class="arabic simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">PLUGIN_INFO</span></code> — a dictionary of metadata.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">register(api)</span></code> — a function called once when the plugin loads.</p></li>
+</ol>
+<p>Optionally:</p>
+<ol class="arabic simple" start="3">
+<li><p><code class="docutils literal notranslate"><span class="pre">unregister(api)</span></code> — called when the plugin is disabled or the app
+closes.</p></li>
+</ol>
+</section>
+<section id="plugin-info">
+<h3><a class="toc-backref" href="#id9" role="doc-backlink">PLUGIN_INFO</a><a class="headerlink" href="#plugin-info" title="Link to this heading"></a></h3>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">PLUGIN_INFO</span> <span class="o">=</span> <span class="p">{</span>
+    <span class="s1">&#39;name&#39;</span><span class="p">:</span> <span class="s1">&#39;My Plugin&#39;</span><span class="p">,</span>              <span class="c1"># display name</span>
+    <span class="s1">&#39;version&#39;</span><span class="p">:</span> <span class="s1">&#39;1.0.0&#39;</span><span class="p">,</span>               <span class="c1"># semver string</span>
+    <span class="s1">&#39;author&#39;</span><span class="p">:</span> <span class="s1">&#39;Your Name&#39;</span><span class="p">,</span>
+    <span class="s1">&#39;description&#39;</span><span class="p">:</span> <span class="s1">&#39;What it does.&#39;</span><span class="p">,</span>
+    <span class="s1">&#39;api_version&#39;</span><span class="p">:</span> <span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="mi">0</span><span class="p">),</span>            <span class="c1"># minimum API version required</span>
+    <span class="s1">&#39;requires&#39;</span><span class="p">:</span> <span class="p">[],</span>                    <span class="c1"># other plugin names (inter-plugin deps)</span>
+    <span class="s1">&#39;category&#39;</span><span class="p">:</span> <span class="s1">&#39;analysis&#39;</span><span class="p">,</span>           <span class="c1"># analysis | processing | visualization | io | other</span>
+<span class="p">}</span>
+</pre></div>
+</div>
+</section>
+<section id="register-and-unregister">
+<h3><a class="toc-backref" href="#id10" role="doc-backlink">register() and unregister()</a><a class="headerlink" href="#register-and-unregister" title="Link to this heading"></a></h3>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">_api</span> <span class="o">=</span> <span class="kc">None</span>
+
+<span class="k">def</span><span class="w"> </span><span class="nf">register</span><span class="p">(</span><span class="n">api</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Called once when the plugin is loaded.&quot;&quot;&quot;</span>
+    <span class="k">global</span> <span class="n">_api</span>
+    <span class="n">_api</span> <span class="o">=</span> <span class="n">api</span>
+
+    <span class="c1"># Register menu items, event listeners, display hooks, etc.</span>
+    <span class="n">api</span><span class="o">.</span><span class="n">register_menu_action</span><span class="p">(</span>
+        <span class="s2">&quot;Extensions/My Plugin/Do Something&quot;</span><span class="p">,</span>
+        <span class="n">my_callback</span><span class="p">)</span>
+
+    <span class="n">api</span><span class="o">.</span><span class="n">on</span><span class="p">(</span><span class="s2">&quot;slice_changed&quot;</span><span class="p">,</span> <span class="n">on_slice_changed</span><span class="p">)</span>
+
+<span class="k">def</span><span class="w"> </span><span class="nf">unregister</span><span class="p">(</span><span class="n">api</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Called when the plugin is disabled or the app closes.&quot;&quot;&quot;</span>
+    <span class="c1"># Clean up any resources.</span>
+    <span class="k">pass</span>
+</pre></div>
+</div>
+</section>
+<section id="plugin-api-reference">
+<h3><a class="toc-backref" href="#id11" role="doc-backlink">Plugin API Reference</a><a class="headerlink" href="#plugin-api-reference" title="Link to this heading"></a></h3>
+<p>The <code class="docutils literal notranslate"><span class="pre">api</span></code> object passed to <code class="docutils literal notranslate"><span class="pre">register()</span></code> is an instance of
+<code class="docutils literal notranslate"><span class="pre">PluginAPI</span></code>.  All methods listed below are part of the <strong>stable public
+API</strong> and will not change without a major version bump.</p>
+<section id="data-access-read">
+<h4>Data Access — Read<a class="headerlink" href="#data-access-read" title="Link to this heading"></a></h4>
+<table class="docutils align-default">
+<colgroup>
+<col style="width: 40.0%" />
+<col style="width: 60.0%" />
+</colgroup>
+<thead>
+<tr class="row-odd"><th class="head"><p>Method</p></th>
+<th class="head"><p>Description</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">api.get_channel_data(index)</span> <span class="pre">→</span> <span class="pre">ndarray</span> <span class="pre">|</span> <span class="pre">None</span></code></p></td>
+<td><p>Return a reference to channel data (0 = Nodes, 1 = Edges,
+2 = Overlay 1, 3 = Overlay 2).</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">api.get_channel_names()</span> <span class="pre">→</span> <span class="pre">list[str]</span></code></p></td>
+<td><p>Return the four channel names.</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">api.get_active_channel()</span> <span class="pre">→</span> <span class="pre">int</span></code></p></td>
+<td><p>Index of the currently selected channel.</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">api.get_current_slice()</span> <span class="pre">→</span> <span class="pre">int</span></code></p></td>
+<td><p>Current Z-slice index.</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">api.get_shape()</span> <span class="pre">→</span> <span class="pre">tuple</span> <span class="pre">|</span> <span class="pre">None</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">(Z,</span> <span class="pre">Y,</span> <span class="pre">X)</span></code> shape of the loaded data, or <code class="docutils literal notranslate"><span class="pre">None</span></code>.</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">api.get_selection()</span> <span class="pre">→</span> <span class="pre">dict</span></code></p></td>
+<td><p>Deep copy of <code class="docutils literal notranslate"><span class="pre">{'nodes':</span> <span class="pre">[...],</span> <span class="pre">'edges':</span> <span class="pre">[...]}</span></code>.</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">api.get_highlight_overlay()</span> <span class="pre">→</span> <span class="pre">ndarray</span> <span class="pre">|</span> <span class="pre">None</span></code></p></td>
+<td><p>The current highlight overlay array.</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">api.get_network()</span> <span class="pre">→</span> <span class="pre">nx.Graph</span> <span class="pre">|</span> <span class="pre">None</span></code></p></td>
+<td><p>The networkx Graph object.</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">api.get_network_lists()</span> <span class="pre">→</span> <span class="pre">list</span> <span class="pre">|</span> <span class="pre">None</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">[node_a_list,</span> <span class="pre">node_b_list,</span> <span class="pre">edge_list]</span></code>.</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">api.get_node_centroids()</span> <span class="pre">→</span> <span class="pre">dict</span> <span class="pre">|</span> <span class="pre">None</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">{node_id:</span> <span class="pre">[z,</span> <span class="pre">y,</span> <span class="pre">x],</span> <span class="pre">...}</span></code>.</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">api.get_edge_centroids()</span> <span class="pre">→</span> <span class="pre">dict</span> <span class="pre">|</span> <span class="pre">None</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">{edge_id:</span> <span class="pre">[z,</span> <span class="pre">y,</span> <span class="pre">x],</span> <span class="pre">...}</span></code>.</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">api.get_node_identities()</span> <span class="pre">→</span> <span class="pre">dict</span> <span class="pre">|</span> <span class="pre">None</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">{node_id:</span> <span class="pre">[identity,</span> <span class="pre">...],</span> <span class="pre">...}</span></code>.</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">api.get_communities()</span> <span class="pre">→</span> <span class="pre">dict</span> <span class="pre">|</span> <span class="pre">None</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">{node_id:</span> <span class="pre">community_id,</span> <span class="pre">...}</span></code>.</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">api.get_xy_scale()</span> <span class="pre">→</span> <span class="pre">float</span></code></p></td>
+<td><p>Physical pixel size in XY.</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">api.get_z_scale()</span> <span class="pre">→</span> <span class="pre">float</span></code></p></td>
+<td><p>Physical pixel size in Z.</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">api.get_visible_channels()</span> <span class="pre">→</span> <span class="pre">list[int]</span></code></p></td>
+<td><p>Indices of currently visible channels.</p></td>
+</tr>
+</tbody>
+</table>
+</section>
+<section id="data-access-write">
+<h4>Data Access — Write<a class="headerlink" href="#data-access-write" title="Link to this heading"></a></h4>
+<p>Write methods validate inputs, update the UI, and trigger display
+refreshes automatically.</p>
+<table class="docutils align-default">
+<colgroup>
+<col style="width: 40.0%" />
+<col style="width: 60.0%" />
+</colgroup>
+<thead>
+<tr class="row-odd"><th class="head"><p>Method</p></th>
+<th class="head"><p>Description</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">api.set_channel_data(index,</span> <span class="pre">array)</span></code></p></td>
+<td><p>Replace channel data.  Handles shape validation, undo snapshot,
+button/slider state, and display refresh.</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">api.set_highlight(node_indices,</span> <span class="pre">edge_indices)</span></code></p></td>
+<td><p>Update the highlight overlay from index lists.</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">api.set_communities(dict)</span></code></p></td>
+<td><p>Replace the community partition.</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">api.set_node_identities(dict)</span></code></p></td>
+<td><p>Replace node identities.</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">api.set_node_centroids(dict)</span></code></p></td>
+<td><p>Replace node centroids.</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">api.set_xy_scale(float)</span></code></p></td>
+<td><p>Update the XY physical scale.</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">api.set_z_scale(float)</span></code></p></td>
+<td><p>Update the Z physical scale.</p></td>
+</tr>
+</tbody>
+</table>
+</section>
+<section id="ui-output">
+<h4>UI Output<a class="headerlink" href="#ui-output" title="Link to this heading"></a></h4>
+<table class="docutils align-default">
+<colgroup>
+<col style="width: 40.0%" />
+<col style="width: 60.0%" />
+</colgroup>
+<thead>
+<tr class="row-odd"><th class="head"><p>Method</p></th>
+<th class="head"><p>Description</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">api.add_table(title,</span> <span class="pre">dataframe)</span></code></p></td>
+<td><p>Add a pandas DataFrame as a tab in the upper-right data panel.</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">api.add_table_from_dict(data,</span> <span class="pre">metric,</span> <span class="pre">value,</span> <span class="pre">title)</span></code></p></td>
+<td><p>Format a Python dict into a table tab.</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">api.add_widget_tab(title,</span> <span class="pre">widget)</span></code></p></td>
+<td><p>Add an arbitrary QWidget as a tab.</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">api.show_message(title,</span> <span class="pre">text,</span> <span class="pre">level)</span></code></p></td>
+<td><p>Show a message box.  <code class="docutils literal notranslate"><span class="pre">level</span></code>: <code class="docutils literal notranslate"><span class="pre">&quot;info&quot;</span></code>, <code class="docutils literal notranslate"><span class="pre">&quot;warning&quot;</span></code>,
+or <code class="docutils literal notranslate"><span class="pre">&quot;error&quot;</span></code>.</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">api.print(msg)</span></code></p></td>
+<td><p>Print a message to the console.</p></td>
+</tr>
+</tbody>
+</table>
+</section>
+<section id="menu-context-registration">
+<h4>Menu &amp; Context Registration<a class="headerlink" href="#menu-context-registration" title="Link to this heading"></a></h4>
+<table class="docutils align-default">
+<colgroup>
+<col style="width: 40.0%" />
+<col style="width: 60.0%" />
+</colgroup>
+<thead>
+<tr class="row-odd"><th class="head"><p>Method</p></th>
+<th class="head"><p>Description</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">api.register_menu_action(menu_path,</span> <span class="pre">callback,</span> <span class="pre">tooltip=&quot;&quot;)</span></code></p></td>
+<td><p>Add a menu item.  <code class="docutils literal notranslate"><span class="pre">menu_path</span></code> uses <code class="docutils literal notranslate"><span class="pre">/</span></code> separators, e.g.
+<code class="docutils literal notranslate"><span class="pre">&quot;Extensions/My</span> <span class="pre">Plugin/Run&quot;</span></code>.  Intermediate menus are created
+automatically.</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">api.register_context_action(label,</span> <span class="pre">callback)</span></code></p></td>
+<td><p>Add an entry to the image right-click context menu.
+<code class="docutils literal notranslate"><span class="pre">callback</span></code> receives <code class="docutils literal notranslate"><span class="pre">{'x':</span> <span class="pre">int,</span> <span class="pre">'y':</span> <span class="pre">int,</span> <span class="pre">'z':</span> <span class="pre">int}</span></code>.</p></td>
+</tr>
+</tbody>
+</table>
+</section>
+<section id="display-hooks">
+<h4>Display Hooks<a class="headerlink" href="#display-hooks" title="Link to this heading"></a></h4>
+<table class="docutils align-default">
+<colgroup>
+<col style="width: 40.0%" />
+<col style="width: 60.0%" />
+</colgroup>
+<thead>
+<tr class="row-odd"><th class="head"><p>Method</p></th>
+<th class="head"><p>Description</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">api.register_display_hook(callback)</span></code></p></td>
+<td><p>Register a function called at the end of every display update.
+Signature: <code class="docutils literal notranslate"><span class="pre">callback(view,</span> <span class="pre">current_slice,</span> <span class="pre">view_range)</span></code> where
+<code class="docutils literal notranslate"><span class="pre">view</span></code> is the pyqtgraph <code class="docutils literal notranslate"><span class="pre">ViewBox</span></code>.</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">api.add_view_item(item)</span></code></p></td>
+<td><p>Add a pyqtgraph graphics item to the image view.</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">api.remove_view_item(item)</span></code></p></td>
+<td><p>Remove a previously added graphics item.</p></td>
+</tr>
+</tbody>
+</table>
+</section>
+<section id="events">
+<h4>Events<a class="headerlink" href="#events" title="Link to this heading"></a></h4>
+<p>Subscribe to application events with <code class="docutils literal notranslate"><span class="pre">api.on(event,</span> <span class="pre">callback)</span></code>.
+The callback receives a single <code class="docutils literal notranslate"><span class="pre">data</span></code> argument whose type depends on
+the event.</p>
+<table class="docutils align-default">
+<colgroup>
+<col style="width: 25.0%" />
+<col style="width: 35.0%" />
+<col style="width: 40.0%" />
+</colgroup>
+<thead>
+<tr class="row-odd"><th class="head"><p>Event</p></th>
+<th class="head"><p>Data</p></th>
+<th class="head"><p>Fired When</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">slice_changed</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">int</span></code> (new slice index)</p></td>
+<td><p>User navigates to a different Z slice.</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">selection_changed</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">dict</span></code> (clicked_values)</p></td>
+<td><p>User clicks or rectangle-selects nodes/edges.</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">channel_loaded</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">int</span></code> (channel index)</p></td>
+<td><p>A channel’s data is loaded or replaced.</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">channel_deleted</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">int</span></code> (channel index)</p></td>
+<td><p>A channel is deleted.</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">network_changed</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">None</span></code></p></td>
+<td><p>The network graph is recalculated.</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">communities_changed</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">dict</span></code></p></td>
+<td><p>The community partition is updated.</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">identities_changed</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">dict</span></code></p></td>
+<td><p>Node identities are updated.</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">centroids_changed</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">dict</span></code></p></td>
+<td><p>Node centroids are updated.</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">session_loaded</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">str</span></code> (directory path)</p></td>
+<td><p>A previous session is loaded.</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">session_saved</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">str</span></code> (save name)</p></td>
+<td><p>The current session is saved.</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">plugin_loaded</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">str</span></code> (plugin name)</p></td>
+<td><p>Another plugin finishes loading.</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">plugin_unloaded</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">str</span></code> (plugin name)</p></td>
+<td><p>A plugin is unloaded.</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">display_updated</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">None</span></code></p></td>
+<td><p>The display finishes a full redraw.</p></td>
+</tr>
+</tbody>
+</table>
+</section>
+<section id="utilities">
+<h4>Utilities<a class="headerlink" href="#utilities" title="Link to this heading"></a></h4>
+<table class="docutils align-default">
+<colgroup>
+<col style="width: 40.0%" />
+<col style="width: 60.0%" />
+</colgroup>
+<thead>
+<tr class="row-odd"><th class="head"><p>Method</p></th>
+<th class="head"><p>Description</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">api.refresh_display()</span></code></p></td>
+<td><p>Request a full display redraw.</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">api.navigate_to_slice(z)</span></code></p></td>
+<td><p>Change the current Z slice.</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">api.api_version</span> <span class="pre">→</span> <span class="pre">(int,</span> <span class="pre">int)</span></code></p></td>
+<td><p>The current API version as a <code class="docutils literal notranslate"><span class="pre">(major,</span> <span class="pre">minor)</span></code> tuple.</p></td>
+</tr>
+</tbody>
+</table>
+</section>
+<section id="unsafe-escape-hatches">
+<h4>Unsafe Escape Hatches<a class="headerlink" href="#unsafe-escape-hatches" title="Link to this heading"></a></h4>
+<div class="admonition warning">
+<p class="admonition-title">Warning</p>
+<p>These methods return direct references to internal objects.  Anything
+accessed through them may be renamed, removed, or restructured in any
+future release without notice.  Use only for prototyping or accessing
+functionality not yet in the public API.  <strong>Do not ship published
+plugins that depend on internals obtained this way.</strong></p>
+</div>
+<table class="docutils align-default">
+<colgroup>
+<col style="width: 40.0%" />
+<col style="width: 60.0%" />
+</colgroup>
+<thead>
+<tr class="row-odd"><th class="head"><p>Method</p></th>
+<th class="head"><p>Description</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">api.get_unsafe_window()</span></code></p></td>
+<td><p>Returns the <code class="docutils literal notranslate"><span class="pre">ImageViewerWindow</span></code> instance.</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">api.get_unsafe_network()</span></code></p></td>
+<td><p>Returns the <code class="docutils literal notranslate"><span class="pre">Network_3D</span></code> object (<code class="docutils literal notranslate"><span class="pre">my_network</span></code>).</p></td>
+</tr>
+</tbody>
+</table>
+</section>
+</section>
+<section id="dependency-management">
+<h3><a class="toc-backref" href="#id12" role="doc-backlink">Dependency Management</a><a class="headerlink" href="#dependency-management" title="Link to this heading"></a></h3>
+<p>Plugins declare their Python dependencies in a <code class="docutils literal notranslate"><span class="pre">requirements.txt</span></code> file
+placed alongside the plugin code.</p>
+<section id="pip-environments-pip-install-nettracer3d">
+<h4>Pip environments (<code class="docutils literal notranslate"><span class="pre">pip</span> <span class="pre">install</span> <span class="pre">nettracer3d</span></code>)<a class="headerlink" href="#pip-environments-pip-install-nettracer3d" title="Link to this heading"></a></h4>
+<p>When the plugin manager cannot import a plugin due to a missing package,
+it checks for <code class="docutils literal notranslate"><span class="pre">requirements.txt</span></code> in the plugin’s directory.  If found,
+the plugin is marked <strong>Needs Deps</strong> instead of <strong>Failed</strong>.  The user can
+then click <strong>Install Deps</strong> in the Extensions panel.</p>
+<p>The <code class="docutils literal notranslate"><span class="pre">requirements.txt</span></code> uses standard pip format:</p>
+<div class="highlight-text notranslate"><div class="highlight"><pre><span></span>cellpose&gt;=3.0
+some-other-package
+</pre></div>
+</div>
+<p>You do <strong>not</strong> need to list transitive dependencies — pip resolves them
+automatically.  For example, listing <code class="docutils literal notranslate"><span class="pre">cellpose&gt;=3.0</span></code> is sufficient;
+torch and all of cellpose’s other dependencies are pulled in
+automatically.</p>
+<p>If your plugin requires PyTorch, the plugin manager will detect this
+from the requirements file and present a GPU / CUDA selection dialog
+before running pip.  It auto-detects the installed CUDA version via
+<code class="docutils literal notranslate"><span class="pre">nvidia-smi</span></code>, <code class="docutils literal notranslate"><span class="pre">nvcc</span></code>, or an existing torch installation, and adds
+the appropriate <code class="docutils literal notranslate"><span class="pre">--extra-index-url</span></code> to the pip command.</p>
+</section>
+<section id="pyinstaller-compiled-builds">
+<h4>PyInstaller / compiled builds<a class="headerlink" href="#pyinstaller-compiled-builds" title="Link to this heading"></a></h4>
+<p>In a frozen (PyInstaller) environment, pip is not available.  Plugins
+must bundle their dependencies in a <code class="docutils literal notranslate"><span class="pre">_vendor/</span></code> folder:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span>my_plugin/
+├── __init__.py
+├── requirements.txt       # still included for reference
+└── _vendor/
+    ├── cellpose/
+    ├── torch/
+    └── ...
+</pre></div>
+</div>
+<p>The plugin manager detects <code class="docutils literal notranslate"><span class="pre">sys.frozen</span></code>, prepends <code class="docutils literal notranslate"><span class="pre">_vendor/</span></code> to
+<code class="docutils literal notranslate"><span class="pre">sys.path</span></code> before importing the plugin, and the bundled packages
+resolve normally.</p>
+<p>To create a <code class="docutils literal notranslate"><span class="pre">_vendor/</span></code> folder:</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>pip<span class="w"> </span>install<span class="w"> </span>--target<span class="w"> </span>my_plugin/_vendor<span class="w"> </span>cellpose
+
+<span class="c1"># For GPU support:</span>
+pip<span class="w"> </span>install<span class="w"> </span>--target<span class="w"> </span>my_plugin/_vendor<span class="w"> </span>cellpose<span class="w"> </span>torch<span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>--extra-index-url<span class="w"> </span>https://download.pytorch.org/whl/cu124
+</pre></div>
+</div>
+<div class="admonition note">
+<p class="admonition-title">Note</p>
+<p><code class="docutils literal notranslate"><span class="pre">_vendor/</span></code> folders can be very large (&gt;1 GB with PyTorch + CUDA).
+Consider distributing CPU-only and GPU versions separately.</p>
+</div>
+</section>
+</section>
+<section id="packaging-for-pypi">
+<h3><a class="toc-backref" href="#id13" role="doc-backlink">Packaging for PyPI</a><a class="headerlink" href="#packaging-for-pypi" title="Link to this heading"></a></h3>
+<p>If you want your plugin to be installable via pip and auto-discovered:</p>
+<ol class="arabic">
+<li><p>Create a Python package with an entry point:</p>
+<div class="highlight-toml notranslate"><div class="highlight"><pre><span></span><span class="c1"># pyproject.toml</span>
+<span class="k">[project.entry-points.</span><span class="s2">&quot;nettracer3d.plugins&quot;</span><span class="k">]</span>
+<span class="n">my_plugin</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;my_package.my_plugin&quot;</span>
+</pre></div>
+</div>
+</li>
+<li><p>Your module must expose <code class="docutils literal notranslate"><span class="pre">PLUGIN_INFO</span></code> and <code class="docutils literal notranslate"><span class="pre">register(api)</span></code> at the
+top level of the entry point target.</p></li>
+<li><p>After <code class="docutils literal notranslate"><span class="pre">pip</span> <span class="pre">install</span> <span class="pre">my-plugin-package</span></code>, NetTracer3D will discover it
+automatically on the next launch.</p></li>
+</ol>
+<p>Alternatively, for plugins bundled <em>inside</em> the <code class="docutils literal notranslate"><span class="pre">nettracer3d</span></code> package
+itself (i.e. shipped with the default install), place the plugin folder
+in <code class="docutils literal notranslate"><span class="pre">nettracer3d/plugins/</span></code> and add a <code class="docutils literal notranslate"><span class="pre">package-data</span></code> directive to
+<code class="docutils literal notranslate"><span class="pre">pyproject.toml</span></code>:</p>
+<div class="highlight-toml notranslate"><div class="highlight"><pre><span></span><span class="k">[tool.setuptools.package-data]</span>
+<span class="s2">&quot;nettracer3d.plugins&quot;</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span>
+<span class="w">    </span><span class="s2">&quot;*/requirements.txt&quot;</span><span class="p">,</span>
+<span class="w">    </span><span class="s2">&quot;*/_vendor/**/*&quot;</span><span class="p">,</span>
+<span class="p">]</span>
+</pre></div>
+</div>
+<p>This ensures that <code class="docutils literal notranslate"><span class="pre">requirements.txt</span></code> files and <code class="docutils literal notranslate"><span class="pre">_vendor/</span></code> contents
+are included in the wheel alongside the Python code.</p>
+</section>
+<section id="minimal-example-plugin">
+<h3><a class="toc-backref" href="#id14" role="doc-backlink">Minimal Example Plugin</a><a class="headerlink" href="#minimal-example-plugin" title="Link to this heading"></a></h3>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">Example plugin that adds a menu item to count objects in the</span>
+<span class="sd">active channel.</span>
+<span class="sd">&quot;&quot;&quot;</span>
+
+<span class="kn">import</span><span class="w"> </span><span class="nn">numpy</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">np</span>
+
+<span class="n">PLUGIN_INFO</span> <span class="o">=</span> <span class="p">{</span>
+    <span class="s2">&quot;name&quot;</span><span class="p">:</span> <span class="s2">&quot;Object Counter&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;version&quot;</span><span class="p">:</span> <span class="s2">&quot;0.1.0&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;author&quot;</span><span class="p">:</span> <span class="s2">&quot;Your Name&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;description&quot;</span><span class="p">:</span> <span class="s2">&quot;Count unique non-zero labels in the active channel.&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;api_version&quot;</span><span class="p">:</span> <span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="mi">0</span><span class="p">),</span>
+    <span class="s2">&quot;requires&quot;</span><span class="p">:</span> <span class="p">[],</span>
+    <span class="s2">&quot;category&quot;</span><span class="p">:</span> <span class="s2">&quot;analysis&quot;</span><span class="p">,</span>
+<span class="p">}</span>
+
+<span class="n">_api</span> <span class="o">=</span> <span class="kc">None</span>
+
+<span class="k">def</span><span class="w"> </span><span class="nf">register</span><span class="p">(</span><span class="n">api</span><span class="p">):</span>
+    <span class="k">global</span> <span class="n">_api</span>
+    <span class="n">_api</span> <span class="o">=</span> <span class="n">api</span>
+    <span class="n">api</span><span class="o">.</span><span class="n">register_menu_action</span><span class="p">(</span>
+        <span class="s2">&quot;Extensions/Object Counter/Count Objects&quot;</span><span class="p">,</span>
+        <span class="n">_count_objects</span><span class="p">,</span>
+    <span class="p">)</span>
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_count_objects</span><span class="p">():</span>
+    <span class="n">channel</span> <span class="o">=</span> <span class="n">_api</span><span class="o">.</span><span class="n">get_active_channel</span><span class="p">()</span>
+    <span class="n">data</span> <span class="o">=</span> <span class="n">_api</span><span class="o">.</span><span class="n">get_channel_data</span><span class="p">(</span><span class="n">channel</span><span class="p">)</span>
+    <span class="k">if</span> <span class="n">data</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="n">_api</span><span class="o">.</span><span class="n">show_message</span><span class="p">(</span><span class="s2">&quot;No Data&quot;</span><span class="p">,</span> <span class="s2">&quot;Active channel is empty.&quot;</span><span class="p">,</span> <span class="s2">&quot;warning&quot;</span><span class="p">)</span>
+        <span class="k">return</span>
+    <span class="n">unique</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">unique</span><span class="p">(</span><span class="n">data</span><span class="p">)</span>
+    <span class="n">n</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">unique</span><span class="p">)</span> <span class="o">-</span> <span class="p">(</span><span class="mi">1</span> <span class="k">if</span> <span class="mi">0</span> <span class="ow">in</span> <span class="n">unique</span> <span class="k">else</span> <span class="mi">0</span><span class="p">)</span>
+    <span class="n">_api</span><span class="o">.</span><span class="n">show_message</span><span class="p">(</span>
+        <span class="s2">&quot;Object Count&quot;</span><span class="p">,</span>
+        <span class="sa">f</span><span class="s2">&quot;Channel </span><span class="si">{</span><span class="n">channel</span><span class="si">}</span><span class="s2">: </span><span class="si">{</span><span class="n">n</span><span class="si">}</span><span class="s2"> unique objects&quot;</span><span class="p">,</span>
+        <span class="s2">&quot;info&quot;</span><span class="p">,</span>
+    <span class="p">)</span>
+</pre></div>
+</div>
+</section>
+<section id="complete-plugin-checklist">
+<h3><a class="toc-backref" href="#id15" role="doc-backlink">Complete Plugin Checklist</a><a class="headerlink" href="#complete-plugin-checklist" title="Link to this heading"></a></h3>
+<div class="highlight-text notranslate"><div class="highlight"><pre><span></span>✓  PLUGIN_INFO dict with name, version, api_version, category
+✓  register(api) function
+✓  unregister(api) function (optional but recommended)
+✓  requirements.txt if any non-base dependencies
+✓  _vendor/ folder if distributing for PyInstaller
+✓  Menu items under &quot;Extensions/&lt;Your Plugin&gt;/&quot; namespace
+✓  Console output prefixed with [YourPlugin] for debuggability
+✓  Error handling — plugins should not crash the host application
+✓  No direct access to internals (use api methods; get_unsafe_*
+   only as a last resort with the understanding it may break)
+</pre></div>
+</div>
+</section>
+</section>
+</section>
+
+
+           </div>
+          </div>
+          <footer><div class="rst-footer-buttons" role="navigation" aria-label="Footer">
+        <a href="image_menu.html" class="btn btn-neutral float-left" title="All Image Menu Options" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left" aria-hidden="true"></span> Previous</a>
+        <a href="contact.html" class="btn btn-neutral float-right" title="Contact" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right" aria-hidden="true"></span></a>
+    </div>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2026, Liam McLaughlin.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

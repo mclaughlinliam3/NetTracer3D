@@ -105,6 +105,7 @@ Parameter Explanations
     * However this visualization does not utilize image pyramids in this case. If your images' sizes exceed the VRAM of your card, please downsample it or it will lag. (This is a feature that I may implement in the future).
     * If your monitor is not currently using the GPU, this visualization will be limited to small images.
 * This requires Napari to be installed in NetTracer3D's package environment.
+* The Napari 3D window is interactable like the main image viewer window. Press 'S' to toggle selection mode, in which you can click on the 3D objects to select them, with full access to the main viewer window's right click functions.
 
 Parameter Explanations
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -114,12 +115,13 @@ Parameter Explanations
     * Enable this to use the cubic resample algorithm, which is slower but may better preserve shapes.
 #. Include Bounding Box
     * Enable this to draw in a bounding box around your channels in the visualization. Note the bounding box is an equivalently sized array as the other channels so it will demand the necesarry RAM.
+#. Node Rendering'
+    * By Default, Nodes are rendered in a single color. If you want, you can change this to 'Label Render' to use Napari's label render system, which assigns a unique color to all nodes.
+#. Edge Rendering
+    * By Default, Edges are rendered in a single color. If you want, you can change this to 'Label Render' to use Napari's label render system, which assigns a unique color to all edges.
 
 * Press 'Show 3D' to create the 3D display with the desired params. A new Napari window will open and show your desired channels. Note that any RGB images will be split into three seperate red, green, and blue channels.
 
-'Image -> Cellpose'
---------------------------
-* Selecting this just opens the Cellpose3 GUI (Stringer, C., Pachitariu, M. Cellpose3: one-click image restoration for improved cellular segmentation. Nat Methods 22, 592–599 (2025). https://doi.org/10.1038/s41592-025-02595-5), provided it has been installed in NetTracer3D's package environment.
-* Cellpose3 is my favorite open-source tool to segment cells with, so I added this option as a suggestion to use it together with NetTracer3d.
-* This requires Cellpose3 to be installed in NetTracer3D's package environment.
-* If NetTracer3D has a 3D image or no image is present, the 3D-stack version of cellpose will open. If a 2D image is open in NetTracer3D, the 2D-stack version of cellpose will open.
+Next Steps
+---------
+This concludes the explanations of the image menu. Next, proceed to :doc:`extensions` for information extension manager, including how to load and make extensions.
