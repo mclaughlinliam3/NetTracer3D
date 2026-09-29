@@ -6,14 +6,14 @@
   <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
 
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Using the Spreadsheet Loader &mdash; NetTracer3D 1.6.0 documentation</title>
+  <title>Using the Spreadsheet Loader &mdash; NetTracer3D 2.0.0 documentation</title>
       <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=b86133f3" />
       <link rel="stylesheet" type="text/css" href="_static/css/theme.css?v=e59714d7" />
 
   
       <script src="_static/jquery.js?v=5d32c60e"></script>
       <script src="_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
-      <script src="_static/documentation_options.js?v=72d88caf"></script>
+      <script src="_static/documentation_options.js?v=51b770b3"></script>
       <script src="_static/doctools.js?v=9bcbadda"></script>
       <script src="_static/sphinx_highlight.js?v=dc90522c"></script>
     <script src="_static/js/theme.js"></script>
@@ -46,12 +46,14 @@
               <p class="caption" role="heading"><span class="caption-text">User Guide:</span></p>
 <ul class="current">
 <li class="toctree-l1"><a class="reference internal" href="installation.html">Installation</a></li>
-<li class="toctree-l1"><a class="reference internal" href="quickstart.html">Quickstart - Segmenting Data and Generating Connectivity Networks</a></li>
-<li class="toctree-l1"><a class="reference internal" href="proximity.html">Proximity Networks - Ideal for Cellular Data</a></li>
+<li class="toctree-l1"><a class="reference internal" href="quickstart.html">Quickstart — Segmenting Data and Generating Connectivity Networks</a></li>
+<li class="toctree-l1"><a class="reference internal" href="proximity.html">Proximity Networks — Ideal for Cellular Data</a></li>
 <li class="toctree-l1"><a class="reference internal" href="branches.html">Labeling Branches and Branch Networks</a></li>
 <li class="toctree-l1"><a class="reference internal" href="properties.html">Properties of a Network3D Object</a></li>
 <li class="toctree-l1 current"><a class="current reference internal" href="#">Using the Spreadsheet Loader</a><ul>
 <li class="toctree-l2"><a class="reference internal" href="#opening-the-excel-helper">Opening the Excel Helper</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#reclassifying-node-identities">Reclassifying Node Identities</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#enhanced-search">Enhanced Search</a></li>
 <li class="toctree-l2"><a class="reference internal" href="#next-steps">Next Steps</a></li>
 </ul>
 </li>
@@ -59,12 +61,12 @@
 </ul>
 <p class="caption" role="heading"><span class="caption-text">Detailed Function Guide:</span></p>
 <ul>
-<li class="toctree-l1"><a class="reference internal" href="right_clicking.html">Right Clicking - All Options Available by Right Clicking in the GUI</a></li>
+<li class="toctree-l1"><a class="reference internal" href="right_clicking.html">Right Clicking — All Options Available by Right Clicking in the GUI</a></li>
 <li class="toctree-l1"><a class="reference internal" href="file_menu.html">All File Menu Options</a></li>
 <li class="toctree-l1"><a class="reference internal" href="analyze_menu.html">All Analyze Menu Options</a></li>
 <li class="toctree-l1"><a class="reference internal" href="process_menu.html">All Process Menu Options</a></li>
 <li class="toctree-l1"><a class="reference internal" href="image_menu.html">All Image Menu Options</a></li>
-<li class="toctree-l1"><a class="reference internal" href="extensions.html">NetTracer3D Plugin System</a></li>
+<li class="toctree-l1"><a class="reference internal" href="extensions.html">NetTracer3D Plugin System and Instructions on Using Prebundled Plugins</a></li>
 </ul>
 <p class="caption" role="heading"><span class="caption-text">Development:</span></p>
 <ul>
@@ -100,120 +102,112 @@
              
   <section id="using-the-spreadsheet-loader">
 <span id="excel-helper"></span><h1>Using the Spreadsheet Loader<a class="headerlink" href="#using-the-spreadsheet-loader" title="Link to this heading"></a></h1>
-<ul class="simple">
-<li><p>The excel helper is a small GUI to help the user import data from excel (.xlsx or .csv) spreadsheets and convert them directly to NetTracer3D properties.</p></li>
-<li><p>It is designed specifically for QuPath spreadsheet outputs, specfically for handling multitudinous cell phenotypes.</p></li>
-</ul>
+<p>The excel helper is a small GUI for importing data from <code class="docutils literal notranslate"><span class="pre">.xlsx</span></code> or <code class="docutils literal notranslate"><span class="pre">.csv</span></code>
+spreadsheets and converting it directly into NetTracer3D properties. It is
+designed specifically for QuPath spreadsheet outputs — or those of similar
+software such as Xenium — and for handling large numbers of cell phenotypes.</p>
 <section id="opening-the-excel-helper">
 <h2>Opening the Excel Helper<a class="headerlink" href="#opening-the-excel-helper" title="Link to this heading"></a></h2>
-<ul class="simple">
-<li><p>Use ‘File -&gt; Load -&gt; Load From Excel From Helper’ to open the Excel Helper. You will get this window:</p></li>
-</ul>
+<p>Use <strong>File → Load → Load From Excel From Helper</strong> to open the tool:</p>
 <a class="reference internal image-reference" href="_images/excel_helper_1.png"><img alt="Excel Helper" src="_images/excel_helper_1.png" style="width: 800px;" />
 </a>
+<p>Drag a spreadsheet onto the panel on the left marked <em>Drag Excel (.xlsx) or CSV
+files here</em> to open it in the widget. The tool expects data organised in columns,
+with column headers indicating what each entry refers to; row-organised data is
+not currently supported.</p>
+<p>Use the <strong>Templates</strong> dropdown in the top left to open an entry on the right for
+building a NetTracer3D property. Only exports from these template designs are
+supported — custom exports are not implemented in the backend. Supported
+properties are <strong>Node Centroids</strong>, <strong>Node Identities</strong>, and <strong>Node Communities</strong>.</p>
+<p>Each cell that appears on the right has a header, indicating what NetTracer3D
+expects the data placed there to refer to, and a lower box marked <em>Drop Column
+Here</em>. Once a spreadsheet has been imported, entire columns can be lifted and
+dropped into that space, telling NetTracer3D that the associated header refers to
+that column’s data. Columns must refer to the same object within a given row —
+for centroids, for example, the X and Y entries in a row must belong to the same
+cell.</p>
+<p>Certain fields are auto-populated if left empty at export:</p>
 <ul class="simple">
-<li><dl class="simple">
-<dt>On the left, where it says ‘Drag Excel (.xlsx) or CSV files here’, dragging said spreadsheet there will open the spreadsheet in the widget.</dt><dd><ul>
-<li><p>This tool expects said spreadsheet to organize the data in columns, with column headers indicating what the data entry refers to (not rows at the moment).</p></li>
+<li><p>If <strong>Numerical IDs</strong> is not populated, for any property, IDs are assumed to
+begin at 1 and extend to the row length of the other columns.</p></li>
+<li><p>For centroids, if <strong>Z</strong> is not populated, the data is assumed to be 2D and all
+Z values are assigned 1.</p></li>
 </ul>
-</dd>
-</dl>
-</li>
-<li><dl class="simple">
-<dt>Use the dropdown that says ‘Templates’ in the top left to open an entry in the right to help build a NetTracer3D Property.</dt><dd><ul>
-<li><p>As of now, only exporting data from these template designs will work. Custom exports are not built in the backend.</p></li>
-<li><p>Supported properties are ‘Node Centroids’, ‘Node Identities’, and ‘Node Communities’.</p></li>
-</ul>
-</dd>
-</dl>
-</li>
-<li><dl class="simple">
-<dt>The cells on the right that appear feature a header (referring to what NetTracer3D expects the data placed there to refer to), and a lower box that says ‘Drop Column Here’.</dt><dd><ul>
-<li><p>After an excel spreadsheet has been imported, entire columns can be lifted and dropped into that space. This will tell NetTracer3D that the associated rightside header refers to that column’s data.</p></li>
-<li><p>The columns themselves should refer to the same object in their row. (i.e., here I want centroids, so if I have a spreadsheet of cell centroids, the ‘X’, ‘Y’, etc, entries from the columns should refer to the same cell within a row).</p></li>
-</ul>
-</dd>
-</dl>
-</li>
-<li><dl class="simple">
-<dt>Certain right-sided cells will be autopopulated if nothing is placed there but the data is exported.</dt><dd><ul>
-<li><p>If ‘Numerical IDs’ is not populated (for any of the properties), it will auto-assume that the IDs begin with 1 and extend to the row length for the other columns.</p></li>
-<li><p>For centroids, if ‘Z’ is not populated, it will assume the data is 2D and just assign all Z’s to ‘1’.</p></li>
-</ul>
-</dd>
-</dl>
-</li>
-<li><p>This tool is specifically for ‘node identities’ to help reclassify extrated phenotype-organized data to NetTracer3D Node IDs. Using the ‘node identities’ template will show this instead:</p></li>
-</ul>
+</section>
+<section id="reclassifying-node-identities">
+<h2>Reclassifying Node Identities<a class="headerlink" href="#reclassifying-node-identities" title="Link to this heading"></a></h2>
+<p>The <strong>Node Identities</strong> template additionally helps reclassify extracted,
+phenotype-organised data to NetTracer3D node IDs:</p>
 <a class="reference internal image-reference" href="_images/excel_helper_2.png"><img alt="Excel Helper 2" src="_images/excel_helper_2.png" style="width: 800px;" />
 </a>
-<ul class="simple">
-<li><p>In this case, I’ve opened some data on the left side featuring some cell phenotypes I’m interested in, with a QuPath exported spreadsheet.</p></li>
-<li><p>I picked up the data under ‘Class’ on the left and dragged it to ‘Identity Column’ on the right.</p></li>
-<li><dl class="simple">
-<dt>In the bottom right is a new widget specific to IDs. This is to help us reassign IDs if we want. On the left is the original IDs (built from the unique set of the ‘Identity Column’).</dt><dd><ul>
-<li><p>In the middle under ‘New ID’ there are spots to enter new identities that we want the entry on the left to be reassigned to.</p></li>
-<li><p>Alternatively, by clicking the red X on the right, we can just have any objects associated with that original class/identity not be included in the export to NetTracer3D.</p></li>
-</ul>
-</dd>
-</dl>
-</li>
-<li><p>Whenever you are ready to send the data to NetTracer3D, click ‘Export to NetTracer3D’ on the bottom right. The command prompt window will let you know if the export succeeded.</p></li>
-<li><p>In some cases, the amount of unique class permutations may be overwelming for manual assignment. To deal with that, click the button that says ‘enhanced search’ to yield the following menu:</p></li>
-</ul>
+<p>In this example, a QuPath-exported spreadsheet containing cell phenotypes has
+been opened on the left, and the <strong>Class</strong> data dragged into <strong>Identity Column</strong>
+on the right.</p>
+<p>The widget in the bottom right assists with reassigning IDs. The original IDs,
+built from the unique set of the identity column, appear on the left. Under <strong>New
+ID</strong> in the middle are fields for the identities they should be reassigned to.
+Clicking the red <strong>X</strong> on the right instead excludes any objects associated with
+that original class from the export.</p>
+<p>When ready, click <strong>Export to NetTracer3D</strong> in the bottom right. The command
+prompt window reports whether the export succeeded.</p>
+</section>
+<section id="enhanced-search">
+<h2>Enhanced Search<a class="headerlink" href="#enhanced-search" title="Link to this heading"></a></h2>
+<p>Where the number of unique class permutations is too large for manual
+assignment, click <strong>Enhanced Search</strong>:</p>
 <a class="reference internal image-reference" href="_images/excel_helper_3.png"><img alt="Excel Helper 2" src="_images/excel_helper_3.png" style="width: 800px;" />
 </a>
+<div class="admonition note">
+<p class="admonition-title">Note</p>
+<p>Using classifiers here is no longer the preferred way to reassign identities;
+this is now handled primarily through <strong>Process → Modify Network/Properties →
+Change/Remove Identities</strong>. The options below remain available, but importing
+identities directly and changing them in the GUI is recommended.</p>
+</div>
+<p>Enhanced search adds classifiers that sort through abundant strings to assign IDs
+to new classes automatically. After adding a classifier, enter in the substrings
+textbox the specific chunks of text to be assigned to a new class, where that
+text exists in any original ID in the identity remapping window.</p>
+<p>The substring search is inclusive for all substrings added: any original ID
+containing that exact group of substrings anywhere in its text, in any order, is
+assigned a new ID by the classifier. Enter the target identity in the <strong>New ID</strong>
+text window. In the example shown, original IDs containing both <code class="docutils literal notranslate"><span class="pre">CD45</span> <span class="pre">pos</span></code> and
+<code class="docutils literal notranslate"><span class="pre">CD20</span> <span class="pre">neg</span></code> are assigned to <em>Class 1</em>, while the reverse is assigned to <em>Class
+2</em>.</p>
+<p><strong>Hierarchal</strong> determines assignment order:</p>
 <ul class="simple">
-<li><p>In enhanced search, we can add classifiers to help sort through abundant strings to automatively assign IDs to new classes that we want.</p></li>
-<li><dl class="simple">
-<dt>After adding a new classifier, in the substrings textbox, add specific chunks of text that you want to be assigned to a new class (if that text exists in any ‘original ID’ the identity remapping window).</dt><dd><ul>
-<li><p>The substring search is inclusive for all substrings that the user adds. Any ‘original ID’ that contains (anywhere in its text) that exact group of substrings (in whatever order) will be assigned a new ID by the classifier.</p></li>
+<li><p>When checked, lower-numbered classes are assigned first — any original ID
+matching classifier 1 is reassigned first and is not considered by later
+classifiers. Categories with larger groups of specific markers, such as those
+matching multiple subphenotypes, should be given lower classifier numbers,
+while more specific subphenotypes are assigned later. Broad categories with
+less specific matches should likewise be assigned later.</p></li>
+<li><p>When unchecked, nodes are assigned multiple identities.</p></li>
+<li><p>Unmatched original IDs are discarded by default. To prevent this, place an
+empty classifier at the end of the classifier list to catch anything that does
+not match.</p></li>
 </ul>
-</dd>
-</dl>
-</li>
-<li><dl class="simple">
-<dt>For any ‘original ID’ deemed a match by a classifier, enter the new ID you want it to be assigned in the ‘New ID’ text window.</dt><dd><ul>
-<li><p>In this case, I’m assigning any ‘original IDs’ that contain ‘CD45 pos’ and ‘CD20 neg’ to ‘Class 1’, while the reverse is being assigned to ‘Class 2’</p></li>
-</ul>
-</dd>
-</dl>
-</li>
-<li><dl class="simple">
-<dt>If the box that says ‘hierarchal’ is checked, then class assignment will be hierarchal. This means that the lower number classes will be assigned first (ie any ‘original id’ that matches classifier 1 will be reassigned first and thereafter not be considered for later classifiers).</dt><dd><ul>
-<li><dl class="simple">
-<dt>If using hierarchies, categories with larger groups of specific markers (say that match multiple subphenotypes) should be assigned to lower number classifiers, while those more specific subphenotypes would want to be assigned later.</dt><dd><ul>
-<li><p>Similarly, broad categories (with less specific matches) should be assigned later.</p></li>
-</ul>
-</dd>
-</dl>
-</li>
-<li><p>However if the hierarchy box is unchecked, nodes will be assigned multiple identities.</p></li>
-<li><p>Unmatched ‘Original IDs’ will be kicked out by default. To prevent this, an empty classifier at the end of the classifier lists can be used to catch anything that doesn’t match.</p></li>
-</ul>
-</dd>
-</dl>
-</li>
-<li><dl class="simple">
-<dt>Note that when assigning IDs, if no number column is dragged into the ‘Numerical IDs’ area, they will get assigned ascending labels starting from 1 by default. This will by default override any current node labels in the program.</dt><dd><ul>
-<li><p>However, if the little plus sign in the lower right corner next to the export button is checked, any auto-generated ascending labels will instead get tacked on to the current highest label, assuming nodes are already assigned labels.</p></li>
-</ul>
-</dd>
-</dl>
-</li>
-<li><p>Within a classifier, the up and down arrow buttons can be used to change its order in the hierarchy. Additionally, the green copy button will duplicate a classifier (say to make a more stringent version).</p></li>
-<li><p>Press ‘Preview Classification’ to use the classifiers to label all the ‘Original IDs’ in the ‘Identity Remapping’ window.</p></li>
-<li><p>Afterwards, we can press ‘Identity Remapping’ to see how the ‘Original IDs’ have been auto-assigned ‘New IDs’. (Reload your data to the identity column to start over):</p></li>
-</ul>
+<p>If no number column is dragged into the <strong>Numerical IDs</strong> area, IDs are assigned
+ascending labels starting from 1, overriding any current node labels in the
+program. Checking the small plus sign beside the export button instead appends
+auto-generated ascending labels to the current highest label, assuming nodes are
+already labeled.</p>
+<p>Within a classifier, the up and down arrows change its position in the hierarchy,
+and the green copy button duplicates it — useful for creating a more stringent
+version.</p>
+<p>Press <strong>Preview Classification</strong> to label all original IDs in the identity
+remapping window using the classifiers, then <strong>Identity Remapping</strong> to review how
+the original IDs have been assigned their new IDs. To start over, reload your
+data into the identity column.</p>
 <a class="reference internal image-reference" href="_images/excel_helper_4.png"><img alt="Excel Helper 2" src="_images/excel_helper_4.png" style="width: 800px;" />
 </a>
-<ul class="simple">
-<li><p>To reuse identity and classifier configurations, use the save and load buttons to save or load a json file containing the configuration.</p></li>
-</ul>
+<p>Identity and classifier configurations can be saved to, and loaded from, a JSON
+file using the save and load buttons.</p>
 </section>
 <section id="next-steps">
 <h2>Next Steps<a class="headerlink" href="#next-steps" title="Link to this heading"></a></h2>
-<p>Next, you may want to read <a class="reference internal" href="keyboard_shortcuts.html"><span class="doc">Available Keyboard Shortcuts</span></a> to learn about the avaible keyboard shortcuts.</p>
+<p>Next, read <a class="reference internal" href="keyboard_shortcuts.html"><span class="doc">Available Keyboard Shortcuts</span></a> for a summary of the available keyboard
+shortcuts.</p>
 </section>
 </section>
 

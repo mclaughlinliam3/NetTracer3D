@@ -4,8 +4,29 @@
 Usage
 ==========
 
-NetTracer3D is freely available for academic and nonprofit use and can obtained from pip (pip install nettracer3d), provided that citation is included in any abstract, paper, or presentation utilizing NetTracer3D.
+NetTracer3D is freely available for academic and nonprofit use and can obtained from pip (pip install nettracer3d).
 
-Please cite the following preprint paper: https://doi.org/10.64898/2026.03.25.714104
+Please cite the following preprint paper: https://doi.org/10.64898/2026.03.25.714104 
 
-Commercial use is available for a fee. Copyright © is held by Washington University. Please direct all commercial requests for licensing, information, and limited evaluation copies to Washington University's Office of Technology Management at OTM@wustl.edu.
+See below for exact license langauge:
+
+©2026 Washington University
+
+Washington University hereby grants to you a non-transferable, non-exclusive, royalty-free, non-commercial, non-clinical, 
+not-for-use with human subjects, research license to use and copy the computer code that may be downloaded within this site 
+(the “Software”). You agree to include this license and the above copyright notice in all copies of the Software.  
+The Software may not be distributed, shared, or transferred to any third party. This license does not grant any rights 
+or licenses to any other patents, copyrights, or other forms of intellectual property owned or controlled by Washington University.
+
+ 
+
+If seeking a commercial license, please contact Washington University’s Office of Technology Management to request a licensing agreement: otm@wustl.edu. 
+
+ 
+
+YOU AGREE THAT THE SOFTWARE PROVIDED HEREUNDER IS EXPERIMENTAL AND IS PROVIDED “AS IS”, WITHOUT ANY WARRANTY OF ANY KIND, 
+EXPRESSED OR IMPLIED, INCLUDING WITHOUT LIMITATION WARRANTIES OF MERCHANTABILITY OR FITNESS FOR ANY PARTICULAR PURPOSE, 
+OR NON-INFRINGEMENT OF ANY THIRD-PARTY PATENT, COPYRIGHT, OR ANY OTHER THIRD-PARTY RIGHT.  IN NO EVENT SHALL THE CREATORS OF 
+THE SOFTWARE OR WASHINGTON UNIVERSITY BE LIABLE FOR ANY DIRECT, INDIRECT, SPECIAL, OR CONSEQUENTIAL DAMAGES ARISING OUT OF OR 
+IN ANY WAY CONNECTED WITH THE SOFTWARE, THE USE OF THE SOFTWARE, OR THIS AGREEMENT, WHETHER IN BREACH OF CONTRACT, TORT OR OTHERWISE, 
+EVEN IF SUCH PARTY IS ADVISED OF THE POSSIBILITY OF SUCH DAMAGES.

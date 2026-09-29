@@ -6,7 +6,8 @@ Provides a comprehensive cellpose interface as a plugin, including:
 - All major cellpose parameters exposed as controls
 - Input / context / output channel selection
 - Built-in and custom model support
-- Chunked (piecemeal) segmentation for large images on limited GPUs
+- Chunked (piecemeal) segmentation for large images on limited GPUs,
+  with optional overlapping padding so objects are not clipped at seams
 - Option to open the standalone cellpose GUI
 """
 
@@ -33,12 +34,13 @@ from PyQt6.QtCore import Qt, pyqtSignal, QObject, QThread
 
 PLUGIN_INFO = {
     "name": "Cellpose Segmentation",
-    "version": "1.0.0",
+    "version": "1.1.0",
     "author": "NetTracer3D Contributors",
     "description": (
         "Integrates Cellpose segmentation into NetTracer3D.  "
         "Run cellpose directly from the app with full parameter control, "
-        "chunked processing for large volumes, and custom model support."
+        "chunked processing (with padded, overlap-aware reassembly) for "
+        "large volumes, and custom model support."
     ),
     "api_version": (1, 0),
     "requires": [],
@@ -46,6 +48,97 @@ PLUGIN_INFO = {
 }
 
 _api = None
+
+
+# ──────────────────────────────────────────────────────────────────────
+#  Chunk-grid / padding helpers
+#  (module level so both the worker and the dialog agree on the layout)
+# ──────────────────────────────────────────────────────────────────────
+
+def _compute_chunk_grid(shape_zyx, n_chunks):
+    """
+    Choose a (nz, ny, nx) division of a (Z, Y, X) volume whose product is
+    >= n_chunks and whose resulting sub-volumes are as close to cubic as
+    possible.
+
+    Returns
+    -------
+    (nz, ny, nx)
+    """
+    d, h, w = (max(1, int(s)) for s in shape_zyx)
+    n_chunks = max(1, int(n_chunks))
+
+    if n_chunks == 1:
+        return (1, 1, 1)
+
+    best = (1, 1, 1)
+    best_score = float("inf")
+
+    max_z = min(n_chunks, d)
+    for nz in range(1, max_z + 1):
+        max_y = min(n_chunks, h)
+        for ny in range(1, max_y + 1):
+            if nz * ny > n_chunks * 2:
+                break
+            nx = max(1, math.ceil(n_chunks / (nz * ny)))
+            nx = min(nx, w)
+            total = nz * ny * nx
+            if total < n_chunks:
+                continue
+            cz, cy, cx = d / nz, h / ny, w / nx
+            mean = (cz + cy + cx) / 3.0
+            # How far from cubic (normalised so it is scale-independent)
+            aspect = ((cz - mean) ** 2 + (cy - mean) ** 2 + (cx - mean) ** 2) \
+                / (mean ** 2 + 1e-9)
+            # Penalise producing many more chunks than the user asked for
+            excess = (total - n_chunks) / float(n_chunks)
+            score = aspect + 2.0 * excess
+            if score < best_score:
+                best, best_score = (nz, ny, nx), score
+
+    return best
+
+
+def _suggest_padding(shape_zyx, n_chunks, fraction=0.10,
+                     min_pad=8, max_fraction=0.25):
+    """
+    Estimate a sensible overlap (padding) for chunked segmentation.
+
+    The guess is a fraction of the *chunk* extent along each axis, so it
+    automatically shrinks as the user asks for more chunks, and it is hard
+    capped at ``max_fraction`` of the chunk extent so that the padding can
+    never dwarf the chunk it is padding.  The cap matters: padding grows
+    the block actually handed to cellpose, and chunking is usually being
+    used precisely because that block has to stay small.
+
+    XY and Z are estimated separately because the data may be anisotropic.
+
+    Returns
+    -------
+    (pad_xy, pad_z) : ints, in voxels
+    """
+    if not shape_zyx:
+        return 32, 4
+
+    d, h, w = (max(1, int(s)) for s in shape_zyx)
+    nz, ny, nx = _compute_chunk_grid((d, h, w), n_chunks)
+
+    cz, cy, cx = d / nz, h / ny, w / nx
+
+    def _est(extent, n_div):
+        if n_div <= 1 or extent <= 1:
+            return 0
+        cap = int(extent * max_fraction)
+        if cap < 1:
+            return 0
+        pad = int(round(extent * fraction))
+        pad = max(pad, min(min_pad, cap))   # floor, but never above the cap
+        return int(max(0, min(pad, cap)))
+
+    pad_xy = max(_est(cy, ny), _est(cx, nx))
+    pad_z = _est(cz, nz)
+
+    return pad_xy, pad_z
 
 
 # ──────────────────────────────────────────────────────────────────────
@@ -66,11 +159,12 @@ def register(api):
         _quick_launch_gui,
         tooltip="Open the standalone cellpose GUI (requires cellpose[gui])",
     )
-    api.print("Cellpose plugin loaded.")
+    #api.print("Cellpose plugin loaded.")
 
 
 def unregister(api):
-    api.print("Cellpose plugin unloaded.")
+    #api.print("Cellpose plugin unloaded.")
+    pass
 
 
 # ──────────────────────────────────────────────────────────────────────
@@ -156,6 +250,16 @@ class _SegmentationWorker(QObject):
             min_size = self.p["min_size"]
             chunk_count = self.p["chunk_count"]      # 1 = no chunking
 
+            # ── Padding (overlap) settings ───────────────────────────
+            use_padding = bool(self.p.get("use_padding", True))
+            pad_xy = int(self.p.get("pad_xy", 0)) if use_padding else 0
+            pad_z = int(self.p.get("pad_z", 0)) if use_padding else 0
+            pad_xy = max(0, pad_xy)
+            pad_z = max(0, pad_z)
+            recover_seams = bool(self.p.get("recover_seams", True))
+            filter_artifacts = bool(self.p.get("filter_artifacts", True))
+            artifact_percent = float(self.p.get("artifact_percent", 10.0))
+
             # ── Squeeze out artificial Z=1 dimension ─────────────────
             # NetTracer3D always stores images as (Z,Y,X) even for 2-D,
             # adding Z=1.  Cellpose needs the real dimensionality.
@@ -201,18 +305,43 @@ class _SegmentationWorker(QObject):
                 combined = image
 
             # ── Chunk planning ───────────────────────────────────────
-            if chunk_count <= 1 or is_2d:
-                chunks = [(combined, (0, 0, 0))]
+            # NB: 2-D images are chunked too (tiled in Y/X only) — the
+            # planner forces nz = 1 and pad_z = 0 for them.
+            if chunk_count <= 1:
+                # One "chunk" covering everything — keeps the write-back
+                # loop below uniform.
+                chunks = [{
+                    "data": combined,
+                    "core_slice": (slice(None), slice(None), slice(None)),
+                    "core_origin": (0, 0, 0),
+                    "pad_origin": (0, 0, 0),
+                }]
                 total = 1
+                pad_xy = pad_z = 0
             else:
                 chunks, chunk_grid = self._plan_chunks(
-                    combined, chunk_count, overlap=diameter or 30)
+                    combined, chunk_count,
+                    is_2d=is_2d, has_context=has_context,
+                    pad_xy=pad_xy, pad_z=pad_z)
                 total = len(chunks)
+                pad_msg = (f"padding XY={pad_xy}, Z={pad_z}"
+                           if (pad_xy or pad_z) else "no padding")
                 self.status.emit(
                     f"Planned {total} chunks "
-                    f"({chunk_grid[0]}×{chunk_grid[1]}×{chunk_grid[2]})")
+                    f"({chunk_grid[0]}×{chunk_grid[1]}×{chunk_grid[2]}), "
+                    f"{pad_msg}")
                 print(f"[Cellpose] Chunked into {total} pieces "
-                      f"({chunk_grid[0]}×{chunk_grid[1]}×{chunk_grid[2]})")
+                      f"({chunk_grid[0]}×{chunk_grid[1]}×{chunk_grid[2]}), "
+                      f"{pad_msg}")
+                if pad_xy or pad_z:
+                    print("[Cellpose] Padded regions are segmented but "
+                          "discarded on reassembly"
+                          + (" (objects crossing a seam are kept whole)"
+                             if recover_seams else ""))
+
+            # Seam recovery is only meaningful when there is padding to
+            # recover the object from.
+            recover_seams = recover_seams and (pad_xy > 0 or pad_z > 0)
 
             # ── Build eval kwargs ────────────────────────────────────
             eval_kwargs = dict(
@@ -242,11 +371,17 @@ class _SegmentationWorker(QObject):
             sys.stdout.flush()
 
             # ── Segment each chunk ───────────────────────────────────
-            output_shape = image.shape[:3] if is_3d else image.shape[:2]
+            # Work in 3-D internally (Z=1 for 2-D images) so the write-back
+            # bookkeeping only has to be written once.
+            if is_2d:
+                output_shape = (1,) + tuple(image.shape[:2])
+            else:
+                output_shape = tuple(image.shape[:3])
             output = np.zeros(output_shape, dtype=np.int32)
             label_offset = 0
 
-            for idx, (chunk_data, origin) in enumerate(chunks):
+            for idx, chunk in enumerate(chunks):
+                chunk_data = chunk["data"]
                 self.progress.emit(idx + 1, total)
                 self.status.emit(f"Segmenting chunk {idx + 1}/{total}...")
                 print(f"[Cellpose] Segmenting chunk {idx + 1}/{total}, "
@@ -257,6 +392,9 @@ class _SegmentationWorker(QObject):
                     chunk_data, **eval_kwargs)
 
                 masks = np.asarray(masks, dtype=np.int32)
+                if masks.ndim == 2:                 # 2-D → (1, Y, X)
+                    masks = masks[np.newaxis, :, :]
+
                 n_objects = len(np.unique(masks)) - (1 if 0 in masks else 0)
                 print(f"[Cellpose] Chunk {idx + 1} done: "
                       f"{n_objects} objects, mask shape={masks.shape}")
@@ -264,38 +402,43 @@ class _SegmentationWorker(QObject):
                 # Re-label so IDs don't collide across chunks
                 if masks.max() > 0:
                     masks[masks > 0] += label_offset
-                    label_offset = masks.max()
+                    label_offset = int(masks.max())
 
-                # Write into output (trimming overlap)
-                if is_2d:
-                    oz, oy, ox = origin
-                    sy, sx = masks.shape[:2]
-                    out_y = slice(oy, min(oy + sy, output.shape[0]))
-                    out_x = slice(ox, min(ox + sx, output.shape[1]))
+                # ── Discard the padding ──────────────────────────────
+                # The padded border was only ever there to give cellpose
+                # the surrounding context; the labels we keep come from
+                # the chunk's central (core) region, which tiles the
+                # volume exactly once with no overlap.
+                cz_sl, cy_sl, cx_sl = chunk["core_slice"]
+                core = masks[cz_sl, cy_sl, cx_sl]
 
-                    region = output[out_y, out_x]
-                    new_mask = masks[:region.shape[0], :region.shape[1]]
-                    merge_mask = (region == 0) & (new_mask > 0)
-                    region[merge_mask] = new_mask[merge_mask]
-                    output[out_y, out_x] = region
-                else:
-                    oz, oy, ox = origin
-                    sz, sy, sx = masks.shape[:3]
-                    out_z = slice(oz, min(oz + sz, output.shape[0]))
-                    out_y = slice(oy, min(oy + sy, output.shape[1]))
-                    out_x = slice(ox, min(ox + sx, output.shape[2]))
+                self._merge_block(output, chunk["core_origin"], core)
 
-                    region = output[out_z, out_y, out_x]
-                    new_mask = masks[:region.shape[0],
-                                     :region.shape[1],
-                                     :region.shape[2]]
-                    merge_mask = (region == 0) & (new_mask > 0)
-                    region[merge_mask] = new_mask[merge_mask]
-                    output[out_z, out_y, out_x] = region
+                # ── Optionally keep seam-crossing objects whole ───────
+                # An object straddling a core boundary was segmented in
+                # full inside this chunk's padded field of view, so let
+                # it claim its voxels beyond the core as long as no other
+                # chunk has written there yet.  Whichever chunk reaches
+                # the object first keeps it in one piece.
+                if recover_seams and masks.max() > 0:
+                    core_labels = np.unique(core)
+                    core_labels = core_labels[core_labels > 0]
+                    if core_labels.size:
+                        lut = np.zeros(int(masks.max()) + 1, dtype=bool)
+                        lut[core_labels] = True
+                        spill = np.where(lut[masks], masks, 0)
+                        self._merge_block(output, chunk["pad_origin"], spill)
 
-            # ── Re-expand to match NetTracer3D's 3-D convention ──────
-            if output.ndim == 2:
-                output = output[np.newaxis, :, :]
+            # ── Clean up seam artifacts ──────────────────────────────
+            if filter_artifacts and total > 1:
+                removed, n_kept, thresh = self._filter_small_objects(
+                    output, artifact_percent)
+                if removed:
+                    msg = (f"Removed {removed} fragment(s) smaller than "
+                           f"{thresh} voxels ({artifact_percent}% of the "
+                           f"median object)")
+                    print(f"[Cellpose] {msg}; {n_kept} objects remain")
+                    self.status.emit(msg)
 
             n_total = len(np.unique(output)) - (1 if 0 in output else 0)
             print(f"[Cellpose] Segmentation complete: "
@@ -315,81 +458,215 @@ class _SegmentationWorker(QObject):
         except Exception:
             self.error.emit(traceback.format_exc())
 
+    # ── reassembly helpers ───────────────────────────────────────────
+
+    @staticmethod
+    def _merge_block(output, origin, block, absorb_fraction=0.5):
+        """
+        Write *block*'s labels into *output* at *origin*, filling only
+        voxels that are still background.
+
+        The important part is what happens on collision.  Two chunks that
+        both see the same object will not agree on its boundary to the
+        voxel, so once one chunk has claimed the object, the other chunk's
+        copy has a thin rim of voxels that are still background.  Filling
+        those naively stamps a *new* label along the seam — the one- or
+        two-voxel strands clinging to chunk borders.
+
+        So: if a label in *block* lands mostly on top of a label already
+        present in *output*, the two are taken to be the same object and
+        the leftover rim adopts the existing id instead of becoming a new
+        object.  ``absorb_fraction`` is how much of the incoming label has
+        to overlap before that kicks in; a genuinely distinct neighbour
+        only grazes its neighbour's boundary and stays independent.
+        """
+        oz, oy, ox = origin
+        region = output[oz:oz + block.shape[0],
+                        oy:oy + block.shape[1],
+                        ox:ox + block.shape[2]]
+        block = block[:region.shape[0], :region.shape[1], :region.shape[2]]
+
+        if block.size == 0 or block.max() <= 0:
+            return
+
+        fill = (region == 0) & (block > 0)
+        if not fill.any():
+            return
+
+        collide = (region > 0) & (block > 0)
+        if absorb_fraction and collide.any():
+            b_hit = block[collide]
+            e_hit = region[collide]
+
+            # Compress the label ids before cross-tabulating — raw ids can
+            # be in the millions after many chunks, so a dense id×id table
+            # is not an option.
+            b_vals, b_inv = np.unique(b_hit, return_inverse=True)
+            e_vals, e_inv = np.unique(e_hit, return_inverse=True)
+            counts = np.bincount(b_inv * len(e_vals) + e_inv)
+
+            # Total size of each colliding label within this block
+            flat = block[block > 0]
+            pos = np.searchsorted(b_vals, flat)
+            np.clip(pos, 0, len(b_vals) - 1, out=pos)
+            valid = b_vals[pos] == flat
+            totals = np.bincount(pos[valid], minlength=len(b_vals))
+
+            # Walk pairs by descending overlap so each incoming label is
+            # matched to the existing label it overlaps most.
+            nz = np.nonzero(counts)[0]
+            order = nz[np.argsort(-counts[nz])]
+            claimed = np.zeros(len(b_vals), dtype=bool)
+            src, dst = [], []
+            for k in order:
+                bi, ei = divmod(int(k), len(e_vals))
+                if claimed[bi]:
+                    continue
+                claimed[bi] = True
+                if counts[k] >= absorb_fraction * max(1, totals[bi]):
+                    src.append(int(b_vals[bi]))
+                    dst.append(int(e_vals[ei]))
+
+            if src:
+                src_arr = np.asarray(src)
+                order = np.argsort(src_arr)
+                src_arr = src_arr[order]
+                dst_arr = np.asarray(dst)[order]
+
+                pos = np.searchsorted(src_arr, block)
+                np.clip(pos, 0, len(src_arr) - 1, out=pos)
+                hit = src_arr[pos] == block
+                block = np.where(hit, dst_arr[pos], block)
+
+        region[fill] = block[fill]
+
+    @staticmethod
+    def _filter_small_objects(output, percent_of_median):
+        """
+        Drop labels whose volume is below *percent_of_median* percent of
+        the median object volume, in place.
+
+        The median is used rather than the mean because the fragments we
+        are trying to remove are both numerous and tiny, which drags a
+        mean down toward them; and because real object-size distributions
+        are right-skewed, so a large share of perfectly good objects sit
+        below the mean anyway.
+
+        Returns (n_removed, n_remaining, threshold_voxels).
+        """
+        counts = np.bincount(output.ravel())
+        if counts.size < 2:
+            return 0, 0, 0
+        counts[0] = 0                       # ignore background
+
+        labels = np.nonzero(counts)[0]
+        if labels.size < 2:
+            return 0, int(labels.size), 0
+
+        sizes = counts[labels]
+        threshold = int(np.median(sizes) * (percent_of_median / 100.0))
+        if threshold < 1:
+            return 0, int(labels.size), 0
+
+        small = labels[sizes < threshold]
+        if small.size == 0:
+            return 0, int(labels.size), threshold
+
+        drop = np.zeros(counts.size, dtype=bool)
+        drop[small] = True
+        output[drop[output]] = 0
+
+        return int(small.size), int(labels.size - small.size), threshold
+
     # ── chunk planner ────────────────────────────────────────────────
 
     @staticmethod
-    def _plan_chunks(volume, n_chunks, overlap=30):
+    def _plan_chunks(volume, n_chunks, is_2d=False, has_context=False,
+                     pad_xy=0, pad_z=0):
         """
-        Divide a volume into approximately *n_chunks* cuboid sub-volumes
-        that are as close to cubic as possible, with *overlap* voxels of
-        padding between neighbours so that border objects are segmented
-        properly.
+        Divide a volume into approximately *n_chunks* sub-volumes that are
+        as close to cubic as possible.
+
+        Each chunk has two extents:
+
+          * the **core** — the chunk's own exclusive slab.  The cores tile
+            the volume exactly once, with no overlap and no gaps.
+          * the **padded block** — the core grown by ``pad_xy`` voxels in
+            Y/X and ``pad_z`` voxels in Z (clipped at the volume border).
+            This is what actually gets handed to cellpose, so objects
+            sitting on a core boundary are seen in full rather than being
+            cut off by an artificial image edge.
+
+        The padding is thrown away when the volume is reassembled: only
+        the labels falling inside the core are written back.
 
         Returns
         -------
-        chunks : list of (sub_array, (oz, oy, ox))
+        chunks : list of dicts with keys
+                 'data'        padded sub-array to feed cellpose
+                 'core_slice'  (z, y, x) slices selecting the core out of
+                               a mask of the padded block
+                 'core_origin' (oz, oy, ox) of the core in the full volume
+                 'pad_origin'  (pz, py, px) of the padded block
         grid   : (nz, ny, nx) — how many divisions along each axis
         """
-        if volume.ndim == 2 or (volume.ndim == 3 and volume.shape[-1] in (1, 2, 3, 4)):
-            # Effectively 2-D (or 2-D + channels) — no Z chunking
-            h, w = volume.shape[:2]
-            nz = 1
-            ny = max(1, round(math.sqrt(n_chunks * h / w)))
-            nx = max(1, round(n_chunks / ny))
+        # Trailing channel axis (from a stacked context image) rides along
+        # with the spatial slicing and is not chunked.
+        spatial = volume.shape[:-1] if has_context else volume.shape
+
+        if is_2d:
+            d = 1
+            h, w = spatial[:2]
         else:
-            d, h, w = volume.shape[:3]
-            # Optimise grid so each chunk is as cuboid as possible
-            best, best_score = (1, 1, 1), float("inf")
-            for nz in range(1, n_chunks + 1):
-                rem = n_chunks / nz
-                for ny in range(1, int(rem) + 2):
-                    nx = rem / ny
-                    if nx < 1 or nx != int(nx) and abs(nx - round(nx)) > 0.5:
-                        continue
-                    nx = max(1, round(nx))
-                    if nz * ny * nx > n_chunks * 1.25:
-                        continue
-                    # Score: how far from cubic each chunk is
-                    cz = d / nz
-                    cy = h / ny
-                    cx = w / nx
-                    mean = (cz + cy + cx) / 3
-                    score = ((cz - mean) ** 2 + (cy - mean) ** 2 + (cx - mean) ** 2)
-                    if score < best_score and nz * ny * nx >= n_chunks:
-                        best, best_score = (nz, ny, nx), score
-            nz, ny, nx = best
+            d, h, w = spatial[:3]
 
-        d = volume.shape[0] if volume.ndim >= 3 and volume.shape[-1] not in (1, 2, 3, 4) else 1
-        h, w = volume.shape[0] if d == 1 else volume.shape[1], \
-               volume.shape[1] if d == 1 else volume.shape[2]
+        nz, ny, nx = _compute_chunk_grid((d, h, w), n_chunks)
+        if is_2d or d <= 1:
+            nz = 1
 
-        def _slices(length, n):
-            step = length / n
+        pad_xy = max(0, int(pad_xy))
+        pad_z = 0 if nz <= 1 else max(0, int(pad_z))
+
+        def _axis(length, n, pad):
+            """Yield (core_start, core_end, pad_start, pad_end) per division."""
             out = []
             for i in range(n):
-                s = max(0, int(i * step) - (overlap if i > 0 else 0))
-                e = min(length, int((i + 1) * step) + (overlap if i < n - 1 else 0))
-                out.append((s, e))
+                s = int(round(i * length / n))
+                e = length if i == n - 1 else int(round((i + 1) * length / n))
+                if e <= s:
+                    continue
+                out.append((s, e, max(0, s - pad), min(length, e + pad)))
             return out
 
-        z_slices = _slices(d, nz) if d > 1 else [(0, d)]
-        y_slices = _slices(h, ny)
-        x_slices = _slices(w, nx)
+        z_ax = _axis(d, nz, pad_z) if d > 1 else [(0, max(1, d), 0, max(1, d))]
+        y_ax = _axis(h, ny, pad_xy)
+        x_ax = _axis(w, nx, pad_xy)
 
         chunks = []
-        for zs, ze in z_slices:
-            for ys, ye in y_slices:
-                for xs, xe in x_slices:
-                    if d == 1:
-                        sub = volume[ys:ye, xs:xe] if volume.ndim <= 3 else volume[ys:ye, xs:xe, :]
-                        origin = (0, ys, xs)
+        for zs, ze, pzs, pze in z_ax:
+            for ys, ye, pys, pye in y_ax:
+                for xs, xe, pxs, pxe in x_ax:
+                    if is_2d or d <= 1:
+                        sub = volume[pys:pye, pxs:pxe]
+                        core_slice = (slice(0, 1),
+                                      slice(ys - pys, ye - pys),
+                                      slice(xs - pxs, xe - pxs))
+                        core_origin = (0, ys, xs)
+                        pad_origin = (0, pys, pxs)
                     else:
-                        if volume.ndim > 3:
-                            sub = volume[zs:ze, ys:ye, xs:xe, :]
-                        else:
-                            sub = volume[zs:ze, ys:ye, xs:xe]
-                        origin = (zs, ys, xs)
-                    chunks.append((sub, origin))
+                        sub = volume[pzs:pze, pys:pye, pxs:pxe]
+                        core_slice = (slice(zs - pzs, ze - pzs),
+                                      slice(ys - pys, ye - pys),
+                                      slice(xs - pxs, xe - pxs))
+                        core_origin = (zs, ys, xs)
+                        pad_origin = (pzs, pys, pxs)
+
+                    chunks.append({
+                        "data": sub,
+                        "core_slice": core_slice,
+                        "core_origin": core_origin,
+                        "pad_origin": pad_origin,
+                    })
 
         return chunks, (nz, ny, nx)
 
@@ -409,6 +686,9 @@ class CellposeDialog(QDialog):
         self._worker = None
         self._thread = None
         self._custom_models = {}  # display_name → path
+        # Padding boxes track the chunk count automatically until the user
+        # types their own value into one of them.
+        self._padding_is_auto = True
 
         self._build_ui()
 
@@ -426,6 +706,7 @@ class CellposeDialog(QDialog):
         chan_grid.addWidget(QLabel("Image to segment:"), 0, 0)
         self.input_combo = QComboBox()
         self.input_combo.addItems(channel_items)
+        self.input_combo.currentIndexChanged.connect(self._on_input_changed)
         chan_grid.addWidget(self.input_combo, 0, 1)
 
         chan_grid.addWidget(QLabel("Secondary context image:"), 1, 0)
@@ -546,7 +827,8 @@ class CellposeDialog(QDialog):
 
         # ── Chunked / piecemeal ──────────────────────────────────────
         chunk_box = QGroupBox("Chunked Processing")
-        chunk_layout = QHBoxLayout(chunk_box)
+        chunk_grid = QGridLayout(chunk_box)
+        crow = 0
 
         self.chunk_check = QCheckBox("Enable")
         self.chunk_check.setToolTip(
@@ -554,9 +836,9 @@ class CellposeDialog(QDialog):
             "separately.  Useful when the full volume is too large for\n"
             "your GPU's VRAM.")
         self.chunk_check.toggled.connect(self._on_chunk_toggled)
-        chunk_layout.addWidget(self.chunk_check)
+        chunk_grid.addWidget(self.chunk_check, crow, 0)
 
-        chunk_layout.addWidget(QLabel("Number of chunks:"))
+        chunk_grid.addWidget(QLabel("Number of chunks:"), crow, 1)
         self.chunk_spin = QSpinBox()
         self.chunk_spin.setRange(2, 512)
         self.chunk_spin.setValue(8)
@@ -564,9 +846,111 @@ class CellposeDialog(QDialog):
         self.chunk_spin.setToolTip(
             "Total number of sub-volumes.  The plugin will try to make\n"
             "each chunk as cuboid as possible.")
-        chunk_layout.addWidget(self.chunk_spin)
+        self.chunk_spin.valueChanged.connect(self._on_chunk_count_changed)
+        chunk_grid.addWidget(self.chunk_spin, crow, 2)
+        crow += 1
+
+        self.pad_check = QCheckBox("Use padding")
+        self.pad_check.setChecked(True)
+        self.pad_check.setEnabled(False)
+        self.pad_check.setToolTip(
+            "Give each chunk an overlapping border of surrounding voxels\n"
+            "when it is sent to cellpose, then throw that border away when\n"
+            "the volume is put back together.\n\n"
+            "Objects sitting on a chunk boundary are then segmented with\n"
+            "their real surroundings visible instead of being cut off by an\n"
+            "artificial image edge, so they are far less likely to be\n"
+            "clipped.\n\n"
+            "Note that padding enlarges the block sent to cellpose, so it\n"
+            "raises peak VRAM per chunk — reduce it (or add chunks) if you\n"
+            "run out of memory.")
+        self.pad_check.toggled.connect(self._on_pad_toggled)
+        chunk_grid.addWidget(self.pad_check, crow, 0)
+
+        chunk_grid.addWidget(QLabel("XY padding (voxels):"), crow, 1)
+        self.pad_xy_spin = QSpinBox()
+        self.pad_xy_spin.setRange(0, 4096)
+        self.pad_xy_spin.setEnabled(False)
+        self.pad_xy_spin.setToolTip(
+            "Overlap added on each side of every chunk in Y and X.\n\n"
+            "Auto-filled from the image size and chunk count, and capped so\n"
+            "the padding can never exceed half the chunk itself.  Editing it\n"
+            "by hand switches this field to manual — press 'Auto' to hand it\n"
+            "back to the estimator.\n\n"
+            "A good manual value is roughly one object diameter.")
+        self.pad_xy_spin.valueChanged.connect(self._on_padding_edited)
+        chunk_grid.addWidget(self.pad_xy_spin, crow, 2)
+        crow += 1
+
+        self.pad_auto_btn = QPushButton("Auto")
+        self.pad_auto_btn.setEnabled(False)
+        self.pad_auto_btn.setToolTip(
+            "Re-estimate both padding values from the current image size\n"
+            "and chunk count, and resume updating them automatically.")
+        self.pad_auto_btn.clicked.connect(self._reset_padding_to_auto)
+        chunk_grid.addWidget(self.pad_auto_btn, crow, 0)
+
+        chunk_grid.addWidget(QLabel("Z padding (voxels):"), crow, 1)
+        self.pad_z_spin = QSpinBox()
+        self.pad_z_spin.setRange(0, 4096)
+        self.pad_z_spin.setEnabled(False)
+        self.pad_z_spin.setToolTip(
+            "Overlap added above and below every chunk in Z.\n\n"
+            "Kept separate from XY because the data may be anisotropic —\n"
+            "with thick slices you usually want far less padding here.\n"
+            "Ignored when the chunk grid does not divide Z.")
+        self.pad_z_spin.valueChanged.connect(self._on_padding_edited)
+        chunk_grid.addWidget(self.pad_z_spin, crow, 2)
+        crow += 1
+
+        self.seam_check = QCheckBox("Keep objects crossing chunk seams whole")
+        self.seam_check.setChecked(True)
+        self.seam_check.setEnabled(False)
+        self.seam_check.setToolTip(
+            "An object straddling a chunk boundary was segmented in full\n"
+            "inside the padded region, so let the first chunk that sees it\n"
+            "keep the whole object rather than splitting it at the seam.\n\n"
+            "Turn this off for a strict crop, where each chunk contributes\n"
+            "only the labels inside its own core region.\n"
+            "Requires padding.")
+        chunk_grid.addWidget(self.seam_check, crow, 0, 1, 3)
+        crow += 1
+
+        self.artifact_check = QCheckBox("Filter seam artifacts")
+        self.artifact_check.setChecked(True)
+        self.artifact_check.setEnabled(False)
+        self.artifact_check.setToolTip(
+            "After the volume is reassembled, drop labels far smaller than\n"
+            "a typical object.  These are usually thin slivers left along a\n"
+            "chunk seam where two chunks segmented the same object and\n"
+            "disagreed about its boundary by a voxel or two.\n\n"
+            "Turn this off if you would rather keep every label and filter\n"
+            "the noise yourself downstream — expect some very small\n"
+            "fragments along the chunk borders if you do.")
+        self.artifact_check.toggled.connect(self._on_artifact_toggled)
+        chunk_grid.addWidget(self.artifact_check, crow, 0)
+
+        chunk_grid.addWidget(QLabel("Drop below (% of median):"), crow, 1)
+        self.artifact_spin = QDoubleSpinBox()
+        self.artifact_spin.setRange(0.1, 100.0)
+        self.artifact_spin.setValue(10.0)
+        self.artifact_spin.setSingleStep(5.0)
+        self.artifact_spin.setDecimals(1)
+        self.artifact_spin.setEnabled(False)
+        self.artifact_spin.setToolTip(
+            "An object is discarded if its volume is below this percentage\n"
+            "of the median object volume.\n\n"
+            "The median is used rather than the mean because seam fragments\n"
+            "are numerous and tiny, which drags a mean down toward them, and\n"
+            "because object sizes are right-skewed — plenty of legitimate\n"
+            "objects sit below the mean.  10% is conservative; raise it if\n"
+            "fragments survive, lower it if real objects are disappearing.")
+        chunk_grid.addWidget(self.artifact_spin, crow, 2)
 
         root.addWidget(chunk_box)
+
+        # Seed the padding estimates from the image that is loaded now.
+        self._reset_padding_to_auto()
 
         # ── Progress ─────────────────────────────────────────────────
         self.progress_bar = QProgressBar()
@@ -610,8 +994,84 @@ class CellposeDialog(QDialog):
             items.append(f"{i}: {name}{tag}")
         return items
 
+    # ── chunking / padding ───────────────────────────────────────────
+
     def _on_chunk_toggled(self, checked):
         self.chunk_spin.setEnabled(checked)
+        self.pad_check.setEnabled(checked)
+        self.pad_auto_btn.setEnabled(checked)
+        self.artifact_check.setEnabled(checked)
+        self._on_artifact_toggled(self.artifact_check.isChecked())
+        self._on_pad_toggled(self.pad_check.isChecked())
+
+    def _on_artifact_toggled(self, checked):
+        self.artifact_spin.setEnabled(
+            checked and self.chunk_check.isChecked())
+
+    def _on_pad_toggled(self, checked):
+        on = checked and self.chunk_check.isChecked()
+        self.pad_xy_spin.setEnabled(on)
+        self.pad_z_spin.setEnabled(on)
+        self.pad_auto_btn.setEnabled(on)
+        self.seam_check.setEnabled(on)
+
+    def _on_chunk_count_changed(self, _value):
+        # Sensible padding depends on how big a chunk ends up being, so it
+        # has to follow the chunk count — unless the user took the wheel.
+        if self._padding_is_auto:
+            self._apply_auto_padding()
+
+    def _on_input_changed(self, _index):
+        if self._padding_is_auto:
+            self._apply_auto_padding()
+
+    def _on_padding_edited(self, _value):
+        # Only fires for genuine user edits; programmatic updates below are
+        # made with signals blocked.
+        self._padding_is_auto = False
+
+    def _reset_padding_to_auto(self):
+        self._padding_is_auto = True
+        self._apply_auto_padding()
+
+    def _apply_auto_padding(self):
+        """Fill the padding boxes from the image size and chunk count."""
+        shape = self._current_shape()
+        if shape is None:
+            pad_xy, pad_z = 32, 4
+        else:
+            pad_xy, pad_z = _suggest_padding(shape, self.chunk_spin.value())
+
+        for spin, value in ((self.pad_xy_spin, pad_xy),
+                            (self.pad_z_spin, pad_z)):
+            blocked = spin.blockSignals(True)
+            spin.setValue(int(value))
+            spin.blockSignals(blocked)
+
+    def _current_shape(self):
+        """Best available (Z, Y, X) of the image to be segmented."""
+        try:
+            data = self.api.get_channel_data(self.input_combo.currentIndex())
+            if data is not None and getattr(data, "ndim", 0) >= 2:
+                shape = tuple(int(s) for s in data.shape[:3])
+                if len(shape) == 2:          # (Y, X) → (1, Y, X)
+                    shape = (1,) + shape
+                return shape
+        except Exception:
+            pass
+
+        try:
+            shape = self.api.get_shape()
+            if shape:
+                shape = tuple(int(s) for s in shape[:3])
+                if len(shape) == 2:
+                    shape = (1,) + shape
+                if len(shape) == 3:
+                    return shape
+        except Exception:
+            pass
+
+        return None
 
     def _load_custom_model(self):
         path, _ = QFileDialog.getOpenFileName(
@@ -693,6 +1153,12 @@ class CellposeDialog(QDialog):
             stitch_threshold=self.stitch_spin.value(),
             min_size=self.minsize_spin.value(),
             chunk_count=self.chunk_spin.value() if self.chunk_check.isChecked() else 1,
+            use_padding=self.pad_check.isChecked(),
+            pad_xy=self.pad_xy_spin.value(),
+            pad_z=self.pad_z_spin.value(),
+            recover_seams=self.seam_check.isChecked(),
+            filter_artifacts=self.artifact_check.isChecked(),
+            artifact_percent=self.artifact_spin.value(),
         )
 
         # Disable controls while running

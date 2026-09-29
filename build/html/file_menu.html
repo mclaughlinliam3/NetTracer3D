@@ -6,14 +6,14 @@
   <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
 
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>All File Menu Options &mdash; NetTracer3D 1.6.0 documentation</title>
+  <title>All File Menu Options &mdash; NetTracer3D 2.0.0 documentation</title>
       <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=b86133f3" />
       <link rel="stylesheet" type="text/css" href="_static/css/theme.css?v=e59714d7" />
 
   
       <script src="_static/jquery.js?v=5d32c60e"></script>
       <script src="_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
-      <script src="_static/documentation_options.js?v=72d88caf"></script>
+      <script src="_static/documentation_options.js?v=51b770b3"></script>
       <script src="_static/doctools.js?v=9bcbadda"></script>
       <script src="_static/sphinx_highlight.js?v=dc90522c"></script>
     <script src="_static/js/theme.js"></script>
@@ -21,7 +21,7 @@
     <link rel="index" title="Index" href="genindex.html" />
     <link rel="search" title="Search" href="search.html" />
     <link rel="next" title="All Analyze Menu Options" href="analyze_menu.html" />
-    <link rel="prev" title="Right Clicking - All Options Available by Right Clicking in the GUI" href="right_clicking.html" /> 
+    <link rel="prev" title="Right Clicking — All Options Available by Right Clicking in the GUI" href="right_clicking.html" /> 
 </head>
 
 <body class="wy-body-for-nav"> 
@@ -46,8 +46,8 @@
               <p class="caption" role="heading"><span class="caption-text">User Guide:</span></p>
 <ul>
 <li class="toctree-l1"><a class="reference internal" href="installation.html">Installation</a></li>
-<li class="toctree-l1"><a class="reference internal" href="quickstart.html">Quickstart - Segmenting Data and Generating Connectivity Networks</a></li>
-<li class="toctree-l1"><a class="reference internal" href="proximity.html">Proximity Networks - Ideal for Cellular Data</a></li>
+<li class="toctree-l1"><a class="reference internal" href="quickstart.html">Quickstart — Segmenting Data and Generating Connectivity Networks</a></li>
+<li class="toctree-l1"><a class="reference internal" href="proximity.html">Proximity Networks — Ideal for Cellular Data</a></li>
 <li class="toctree-l1"><a class="reference internal" href="branches.html">Labeling Branches and Branch Networks</a></li>
 <li class="toctree-l1"><a class="reference internal" href="properties.html">Properties of a Network3D Object</a></li>
 <li class="toctree-l1"><a class="reference internal" href="excel_helper.html">Using the Spreadsheet Loader</a></li>
@@ -55,13 +55,15 @@
 </ul>
 <p class="caption" role="heading"><span class="caption-text">Detailed Function Guide:</span></p>
 <ul class="current">
-<li class="toctree-l1"><a class="reference internal" href="right_clicking.html">Right Clicking - All Options Available by Right Clicking in the GUI</a></li>
+<li class="toctree-l1"><a class="reference internal" href="right_clicking.html">Right Clicking — All Options Available by Right Clicking in the GUI</a></li>
 <li class="toctree-l1 current"><a class="current reference internal" href="#">All File Menu Options</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="#new-session">New Session</a></li>
 <li class="toctree-l2"><a class="reference internal" href="#save">Save</a></li>
 <li class="toctree-l2"><a class="reference internal" href="#save-as">Save As</a></li>
 <li class="toctree-l2"><a class="reference internal" href="#load">Load</a></li>
-<li class="toctree-l2"><a class="reference internal" href="#images-node-identities">Images -&gt; Node Identities</a><ul>
-<li class="toctree-l3"><a class="reference internal" href="#parameter-explanations">Parameter Explanations</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#images-node-identities">Images → Node Identities</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#id1">Merge Nodes</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#assign-node-identities-from-overlap-with-other-images">Assign Node Identities From Overlap With Other Images</a></li>
 </ul>
 </li>
 <li class="toctree-l2"><a class="reference internal" href="#next-steps">Next Steps</a></li>
@@ -70,7 +72,7 @@
 <li class="toctree-l1"><a class="reference internal" href="analyze_menu.html">All Analyze Menu Options</a></li>
 <li class="toctree-l1"><a class="reference internal" href="process_menu.html">All Process Menu Options</a></li>
 <li class="toctree-l1"><a class="reference internal" href="image_menu.html">All Image Menu Options</a></li>
-<li class="toctree-l1"><a class="reference internal" href="extensions.html">NetTracer3D Plugin System</a></li>
+<li class="toctree-l1"><a class="reference internal" href="extensions.html">NetTracer3D Plugin System and Instructions on Using Prebundled Plugins</a></li>
 </ul>
 <p class="caption" role="heading"><span class="caption-text">Development:</span></p>
 <ul>
@@ -106,266 +108,235 @@
              
   <section id="all-file-menu-options">
 <span id="file-menu"></span><h1>All File Menu Options<a class="headerlink" href="#all-file-menu-options" title="Link to this heading"></a></h1>
-<p>The file menu is purely used for Saving and Loading things. Note that saving networks should be done in the network table in the bottom right and not here.</p>
+<p>The file menu is used exclusively for saving and loading. Networks should be
+saved from the network table in the bottom right rather than from here.</p>
+<nav class="contents local" id="on-this-page">
+<p class="topic-title">On this page</p>
+<ul class="simple">
+<li><p><a class="reference internal" href="#new-session" id="id2">New Session</a></p></li>
+<li><p><a class="reference internal" href="#save" id="id3">Save</a></p></li>
+<li><p><a class="reference internal" href="#save-as" id="id4">Save As</a></p></li>
+<li><p><a class="reference internal" href="#load" id="id5">Load</a></p></li>
+<li><p><a class="reference internal" href="#images-node-identities" id="id6">Images → Node Identities</a></p>
+<ul>
+<li><p><a class="reference internal" href="#id1" id="id7">Merge Nodes</a></p></li>
+<li><p><a class="reference internal" href="#assign-node-identities-from-overlap-with-other-images" id="id8">Assign Node Identities From Overlap With Other Images</a></p></li>
+</ul>
+</li>
+<li><p><a class="reference internal" href="#next-steps" id="id9">Next Steps</a></p></li>
+</ul>
+</nav>
+<section id="new-session">
+<h2><a class="toc-backref" href="#id2" role="doc-backlink">New Session</a><a class="headerlink" href="#new-session" title="Link to this heading"></a></h2>
+<p>Selecting ‘New Session’ will give a confirmation prompt asking to make sure your current session is saved. If you proceed, the session will be reset.</p>
+</section>
 <section id="save">
-<h2>Save<a class="headerlink" href="#save" title="Link to this heading"></a></h2>
-<p>The save menu saves everything to the active directory (as referenced by the command window running the program) using generic names. This can be used for quick saving.</p>
+<h2><a class="toc-backref" href="#id3" role="doc-backlink">Save</a><a class="headerlink" href="#save" title="Link to this heading"></a></h2>
+<p>The save menu writes everything to the active directory — as referenced by the
+command window running the program — using generic names, making it suitable for
+quick saves.</p>
 <ol class="arabic simple">
-<li><dl class="simple">
-<dt>‘Save Current Session’</dt><dd><ul class="simple">
-<li><p>Saves all of the active core NetTracer3D properties (see <a class="reference internal" href="properties.html"><span class="doc">Properties of a Network3D Object</span></a>) into the current session folder, or prompts you to create one if you haven’t.</p></li>
-</ul>
-</dd>
-</dl>
-</li>
-<li><dl class="simple">
-<dt>‘Save Nodes’</dt><dd><ul class="simple">
-<li><p>Saves the nodes channel into the current session folder as ‘labelled_nodes.tif’</p></li>
-</ul>
-</dd>
-</dl>
-</li>
-<li><dl class="simple">
-<dt>‘Save Edges’</dt><dd><ul class="simple">
-<li><p>Saves the edges channel into the current session folder as ‘labelled_edges.tif’</p></li>
-</ul>
-</dd>
-</dl>
-</li>
-<li><dl class="simple">
-<dt>‘Save Overlay 1’</dt><dd><ul class="simple">
-<li><p>Saves Overlay 1 into the current session folder as ‘overlay_1.tif’</p></li>
-</ul>
-</dd>
-</dl>
-</li>
-<li><dl class="simple">
-<dt>‘Save Overlay 2’</dt><dd><ul class="simple">
-<li><p>Saves Overlay 2 into the current session folder as ‘overlay_2.tif’</p></li>
-</ul>
-</dd>
-</dl>
-</li>
-<li><dl class="simple">
-<dt>‘Save Highlight Overlay’</dt><dd><ul class="simple">
-<li><p>Saves the Highlight Overlay into the current session folder as ‘Highlighted_Element.tif’</p></li>
-</ul>
-</dd>
-</dl>
-</li>
+<li><p><strong>Save Current Session</strong> — saves all active core NetTracer3D properties (see
+<a class="reference internal" href="properties.html"><span class="doc">Properties of a Network3D Object</span></a>) into the current session folder, prompting you to create
+one if none exists.</p></li>
+<li><p><strong>Save Nodes</strong> — saves the nodes channel into the current session folder as
+<code class="docutils literal notranslate"><span class="pre">labelled_nodes.tif</span></code>.</p></li>
+<li><p><strong>Save Edges</strong> — saves the edges channel into the current session folder as
+<code class="docutils literal notranslate"><span class="pre">labelled_edges.tif</span></code>.</p></li>
+<li><p><strong>Save Overlay 1</strong> — saves Overlay 1 into the current session folder as
+<code class="docutils literal notranslate"><span class="pre">overlay_1.tif</span></code>.</p></li>
+<li><p><strong>Save Overlay 2</strong> — saves Overlay 2 into the current session folder as
+<code class="docutils literal notranslate"><span class="pre">overlay_2.tif</span></code>.</p></li>
+<li><p><strong>Save Highlight Overlay</strong> — saves the highlight overlay into the current
+session folder as <code class="docutils literal notranslate"><span class="pre">Highlighted_Element.tif</span></code>.</p></li>
 </ol>
 </section>
 <section id="save-as">
-<h2>Save As<a class="headerlink" href="#save-as" title="Link to this heading"></a></h2>
-<p>The save as menu will prompt the user to name files and select a directory while saving.</p>
+<h2><a class="toc-backref" href="#id4" role="doc-backlink">Save As</a><a class="headerlink" href="#save-as" title="Link to this heading"></a></h2>
+<p>The save as menu prompts for a filename and directory.</p>
 <ol class="arabic simple">
-<li><dl class="simple">
-<dt>‘Save Current Session As’</dt><dd><ul class="simple">
-<li><p>Prompt the create a new folder/directory to dump all the properties (see <a class="reference internal" href="properties.html"><span class="doc">Properties of a Network3D Object</span></a>) of the current session. This folder can later be used to reload this session, provided you have not changed any of the filenames within.</p></li>
-</ul>
-</dd>
-</dl>
-</li>
-<li><dl class="simple">
-<dt>‘Save Nodes As’</dt><dd><ul class="simple">
-<li><p>Prompts the user to save the nodes channel as a .tif.</p></li>
-</ul>
-</dd>
-</dl>
-</li>
-<li><dl class="simple">
-<dt>‘Save Edges As’</dt><dd><ul class="simple">
-<li><p>Prompts the user to save the edges channel as a .tif.</p></li>
-</ul>
-</dd>
-</dl>
-</li>
-<li><dl class="simple">
-<dt>‘Save Overlay 1 As’</dt><dd><ul class="simple">
-<li><p>Prompts the user to save the Overlay 1 as a .tif.</p></li>
-</ul>
-</dd>
-</dl>
-</li>
-<li><dl class="simple">
-<dt>‘Save Overlay 2 As’</dt><dd><ul class="simple">
-<li><p>Prompts the user to save the Overlay 2 as a .tif.</p></li>
-</ul>
-</dd>
-</dl>
-</li>
-<li><dl class="simple">
-<dt>‘Save Highlight Overlay As’</dt><dd><ul class="simple">
-<li><p>Saves the Highlight Overlay as a .tif.</p></li>
-</ul>
-</dd>
-</dl>
-</li>
+<li><p><strong>Save Current Session As</strong> — prompts for a new folder in which to dump all
+properties of the current session (see <a class="reference internal" href="properties.html"><span class="doc">Properties of a Network3D Object</span></a>). This folder can
+later reload the session, provided the filenames within are unchanged.</p></li>
+<li><p><strong>Save Nodes As</strong> — saves the nodes channel as a <code class="docutils literal notranslate"><span class="pre">.tif</span></code>.</p></li>
+<li><p><strong>Save Edges As</strong> — saves the edges channel as a <code class="docutils literal notranslate"><span class="pre">.tif</span></code>.</p></li>
+<li><p><strong>Save Overlay 1 As</strong> — saves Overlay 1 as a <code class="docutils literal notranslate"><span class="pre">.tif</span></code>.</p></li>
+<li><p><strong>Save Overlay 2 As</strong> — saves Overlay 2 as a <code class="docutils literal notranslate"><span class="pre">.tif</span></code>.</p></li>
+<li><p><strong>Save Highlight Overlay As</strong> — saves the highlight overlay as a <code class="docutils literal notranslate"><span class="pre">.tif</span></code>.</p></li>
+<li><p><strong>Save Misc Property</strong> - Use to save the node_identities as both a <code class="docutils literal notranslate"><span class="pre">.csv</span></code> and <code class="docutils literal notranslate"><span class="pre">.json</span></code>, the node_centroids as a <code class="docutils literal notranslate"><span class="pre">.csv</span></code>, or the node communities as a <code class="docutils literal notranslate"><span class="pre">.csv</span></code>.</p></li>
 </ol>
-<ul class="simple">
-<li><p>Note that for saving any .tif, if you end the save name with ‘compressed.tif’, the system will save a compressed version of the tif for you which can be way smaller for labeled images specifically but still readable by most tif readers.</p></li>
-</ul>
+<div class="admonition tip">
+<p class="admonition-title">Tip</p>
+<p>Ending any <code class="docutils literal notranslate"><span class="pre">.tif</span></code> save name with <code class="docutils literal notranslate"><span class="pre">compressed.tif</span></code> writes a compressed
+version, which can be considerably smaller for labeled images while remaining
+readable by most TIFF readers.</p>
+</div>
 </section>
 <section id="load">
-<h2>Load<a class="headerlink" href="#load" title="Link to this heading"></a></h2>
-<p>The save as menu will prompt the user to find files to load. Note that when it comes to loading images, NetTracer3D does not like loading channels of different dimensions. If the user tries to do this, they will be prompted to have the image be auto-resized to the same dimensions as previous ones that exist in the Image Viewer Window. The user is advised to accept this, but can ignore it at their own risk of crashing the program.</p>
-<ol class="arabic simple">
-<li><dl class="simple">
-<dt>‘Load Previous Session’</dt><dd><ul class="simple">
-<li><p>Prompts the user to find a folder containing the saved outputs from their previous session. These folders will typically be generated by the ‘Save(As) Network3D Object’ function. When the Network3D Object is assembling, the program will look for files that have the generic names that were assigned with the ‘Save(As) Network3D Object’ function (Or the generic Save (Not Save As) options in general). Files under different names will be ignored.</p></li>
-</ul>
-</dd>
-</dl>
+<h2><a class="toc-backref" href="#id5" role="doc-backlink">Load</a><a class="headerlink" href="#load" title="Link to this heading"></a></h2>
+<p>The load menu prompts for files to open.</p>
+<div class="admonition note">
+<p class="admonition-title">Note</p>
+<p>NetTracer3D does not handle channels of differing dimensions well. Attempting
+to load one prompts to auto-resize the image to match the dimensions of those
+already in the image viewer window. Accepting is advised; declining risks
+crashing the program.</p>
+</div>
+<ol class="arabic">
+<li><p><strong>Load Previous Session</strong> — prompts for a folder containing saved outputs from
+a previous session, typically generated by <strong>Save (As) Network3D Object</strong>. When
+assembling the Network3D object, the program looks for the generic filenames
+assigned by that function, or by the generic Save options; files under other
+names are ignored.</p></li>
+<li><p><strong>Load Nodes</strong> — loads a <code class="docutils literal notranslate"><span class="pre">.tif</span></code>/<code class="docutils literal notranslate"><span class="pre">.tiff</span></code>/<code class="docutils literal notranslate"><span class="pre">.nii</span></code>/<code class="docutils literal notranslate"><span class="pre">.jpg</span></code>/<code class="docutils literal notranslate"><span class="pre">.jpeg</span></code>/
+<code class="docutils literal notranslate"><span class="pre">.png</span></code> image into the nodes channel. Grayscale only; color images are
+converted.</p></li>
+<li><p><strong>Load Edges</strong> — loads a <code class="docutils literal notranslate"><span class="pre">.tif</span></code>/<code class="docutils literal notranslate"><span class="pre">.tiff</span></code>/<code class="docutils literal notranslate"><span class="pre">.nii</span></code>/<code class="docutils literal notranslate"><span class="pre">.jpg</span></code>/<code class="docutils literal notranslate"><span class="pre">.jpeg</span></code>/
+<code class="docutils literal notranslate"><span class="pre">.png</span></code> image into the edges channel. Grayscale only; color images are
+converted.</p></li>
+<li><p><strong>Load Overlay 1</strong> — loads a <code class="docutils literal notranslate"><span class="pre">.tif</span></code>/<code class="docutils literal notranslate"><span class="pre">.tiff</span></code>/<code class="docutils literal notranslate"><span class="pre">.nii</span></code>/<code class="docutils literal notranslate"><span class="pre">.jpg</span></code>/<code class="docutils literal notranslate"><span class="pre">.jpeg</span></code>/
+<code class="docutils literal notranslate"><span class="pre">.png</span></code> image into the Overlay 1 channel. Supports color images.</p></li>
+<li><p><strong>Load Overlay 2</strong> — loads a <code class="docutils literal notranslate"><span class="pre">.tif</span></code>/<code class="docutils literal notranslate"><span class="pre">.tiff</span></code>/<code class="docutils literal notranslate"><span class="pre">.nii</span></code>/<code class="docutils literal notranslate"><span class="pre">.jpg</span></code>/<code class="docutils literal notranslate"><span class="pre">.jpeg</span></code>/
+<code class="docutils literal notranslate"><span class="pre">.png</span></code> image into the Overlay 2 channel. Supports color images.</p></li>
+<li><p><strong>Load Full Sized Highlight Overlay</strong> — loads a <code class="docutils literal notranslate"><span class="pre">.tif</span></code>/<code class="docutils literal notranslate"><span class="pre">.tiff</span></code>/<code class="docutils literal notranslate"><span class="pre">.nii</span></code>/
+<code class="docutils literal notranslate"><span class="pre">.jpg</span></code>/<code class="docutils literal notranslate"><span class="pre">.jpeg</span></code>/<code class="docutils literal notranslate"><span class="pre">.png</span></code> image into the highlight overlay.</p>
+<p>For sufficiently large images, the highlight overlay is rendered only on the
+visible plane rather than as a full 3D image, though the full overlay is
+rendered for any method requiring it, such as 3D visualization. In such cases,
+if a highlight overlay referencing the nodes exists and something else is
+loaded into the nodes channel, the overlay is altered to reference the new
+nodes. Loading the desired overlay directly with this function bypasses the
+plane-based overlay — useful for 3D visualization.</p>
 </li>
-<li><dl class="simple">
-<dt>‘Load Nodes’</dt><dd><ul class="simple">
-<li><p>Prompts the user to find a .tif/.tiff/.nii/.jpg/.jpeg/.png image to load into the nodes channel. Only supports grayscale (Color images will be converted to grayscale).</p></li>
-</ul>
-</dd>
-</dl>
-</li>
-<li><dl class="simple">
-<dt>‘Load Edges’</dt><dd><ul class="simple">
-<li><p>Prompts the user to find a .tif/.tiff/.nii/.jpg/.jpeg/.png image to load into the edges channel. Only supports grayscale (Color images will be converted to grayscale).</p></li>
-</ul>
-</dd>
-</dl>
-</li>
-<li><dl class="simple">
-<dt>‘Load Overlay 1’</dt><dd><ul class="simple">
-<li><p>Prompts the user to find a .tif/.tiff/.nii/.jpg/.jpeg/.png image to load into the Overlay 1 channel. Supports color images.</p></li>
-</ul>
-</dd>
-</dl>
-</li>
-<li><dl class="simple">
-<dt>‘Load Overlay 2’</dt><dd><ul class="simple">
-<li><p>Prompts the user to find a .tif/.tiff/.nii/.jpg/.jpeg/.png image to load into the Overlay 2 channel. Supports color images.</p></li>
-</ul>
-</dd>
-</dl>
-</li>
-<li><dl class="simple">
-<dt>‘Load Full Sized Highlight Overlay’</dt><dd><ul class="simple">
-<li><p>Prompts the user to find a .tif/.tiff/.nii/.jpg/.jpeg/.png image to load into the Highlight Overlay.</p></li>
-<li><p>Note that this exists because for images that are sufficiently large, the highlight overlay is rendered only on the visible plane rather than making a 3D image. However, the full highlight overlay is rendered for any method that needs it (such as showing 3D visualization). If a highlight overlay is present in reference to the nodes (for example) in such a case of a large image, and the user loads something else into the nodes channel, the highlight overlay will be altered to instead reference the new nodes. Loading the desired overlay directly with this function bypasses the mini plane-based highlight overlay, for example for 3D visualization.</p></li>
-</ul>
-</dd>
-</dl>
-</li>
-<li><dl class="simple">
-<dt>‘Load Network’</dt><dd><ul class="simple">
-<li><p>Prompts the user to find a .csv/.xlsx file containing network data in the structure NetTracer3D expects (that is, the same structure it saves .csv/.xlsx networks as).</p></li>
-</ul>
-</dd>
-</dl>
-</li>
-<li><dl class="simple">
-<dt>‘Load From Excel Helper’</dt><dd><ul class="simple">
-<li><p>Opens the excel helper, which is a seperate GUI to open less-structured .csv or .xlsx spreadsheets that the user may have obtained elsewhere, and more easily convert them into NetTracer3D properties. (See <a class="reference internal" href="excel_helper.html"><span class="doc">Using the Spreadsheet Loader</span></a>)</p></li>
-<li><p>As of now, this can be used to load in ‘Node Centroids’, ‘Node Identities’, or ‘Node Communities’.</p></li>
-</ul>
-</dd>
-</dl>
-</li>
-<li><dl class="simple">
-<dt>‘Load Misc Properties -&gt; Load Node IDs’</dt><dd><ul class="simple">
-<li><p>Prompts the user to find a .json/.csv/.xlsx file containing Node IDs in the structure NetTracer3D expects (that is, the same structure it saves node IDs as).</p></li>
-<li><p>The user will be further prompted if they want to update/merge or replace the existing node IDs. The update option will add any new, unique IDs for each node to its identity list. This is especially useful if you encode identities for the same nodes in different sessions and want to combine them. The replace will just overwrite what’s present, which is the same behavior as when a new session is loaded.</p></li>
-</ul>
-</dd>
-</dl>
-</li>
-<li><dl class="simple">
-<dt>‘Load Misc Properties -&gt; Load Node Centroids’</dt><dd><ul class="simple">
-<li><p>Prompts the user to find a .csv/.xlsx file containing Node Centroids in the structure NetTracer3D expects (that is, the same structure it saves Node Centroids as).</p></li>
-</ul>
-</dd>
-</dl>
-</li>
-<li><dl class="simple">
-<dt>‘Load Misc Properties -&gt; Load Edge Centroids’</dt><dd><ul class="simple">
-<li><p>Prompts the user to find a .csv/.xlsx file containing Edge Centroids in the structure NetTracer3D expects (that is, the same structure it saves Edge Centroids as).</p></li>
-</ul>
-</dd>
-</dl>
-</li>
-<li><dl class="simple">
-<dt>‘Load Misc Properties -&gt; Load Node Communities</dt><dd><ul class="simple">
-<li><p>Prompts the user to find a .csv/.xlsx file containing network communities in the structure NetTracer3D expects (that is, the same structure it saves communities as).</p></li>
-</ul>
-</dd>
-</dl>
-</li>
+<li><p><strong>Load Network</strong> — loads a <code class="docutils literal notranslate"><span class="pre">.csv</span></code>/<code class="docutils literal notranslate"><span class="pre">.xlsx</span></code> file containing network data in
+the structure NetTracer3D expects, which is the same structure it saves to.</p></li>
+<li><p><strong>Load From Excel Helper</strong> — opens the excel helper, a separate GUI for
+converting less-structured <code class="docutils literal notranslate"><span class="pre">.csv</span></code> or <code class="docutils literal notranslate"><span class="pre">.xlsx</span></code> spreadsheets obtained
+elsewhere into NetTracer3D properties (see <a class="reference internal" href="excel_helper.html"><span class="doc">Using the Spreadsheet Loader</span></a>). Currently
+supports <strong>Node Centroids</strong>, <strong>Node Identities</strong>, and <strong>Node Communities</strong>.</p></li>
+<li><p><strong>Load Misc Properties → Load Node IDs</strong> — loads a <code class="docutils literal notranslate"><span class="pre">.json</span></code>/<code class="docutils literal notranslate"><span class="pre">.csv</span></code>/
+<code class="docutils literal notranslate"><span class="pre">.xlsx</span></code> file containing node IDs in the structure NetTracer3D expects. You
+are then asked whether to update/merge or replace the existing node IDs.
+Updating adds any new, unique IDs to each node’s identity list, which is
+useful for combining identities encoded for the same nodes across different
+sessions. Replacing overwrites what is present, matching the behaviour when a
+new session is loaded.</p></li>
+<li><p><strong>Load Misc Properties → Load Node Centroids</strong> — loads a <code class="docutils literal notranslate"><span class="pre">.csv</span></code>/<code class="docutils literal notranslate"><span class="pre">.xlsx</span></code>
+file containing node centroids in the structure NetTracer3D expects.</p></li>
+<li><p><strong>Load Misc Properties → Load Edge Centroids</strong> — loads a <code class="docutils literal notranslate"><span class="pre">.csv</span></code>/<code class="docutils literal notranslate"><span class="pre">.xlsx</span></code>
+file containing edge centroids in the structure NetTracer3D expects.</p></li>
+<li><p><strong>Load Misc Properties → Load Node Communities</strong> — loads a <code class="docutils literal notranslate"><span class="pre">.csv</span></code>/<code class="docutils literal notranslate"><span class="pre">.xlsx</span></code>
+file containing network communities in the structure NetTracer3D expects.</p></li>
 </ol>
 </section>
 <section id="images-node-identities">
-<span id="merge-nodes"></span><h2>Images -&gt; Node Identities<a class="headerlink" href="#images-node-identities" title="Link to this heading"></a></h2>
-<ol class="arabic simple">
-<li><dl class="simple">
-<dt>‘Load Misc Properties -&gt; Merge Nodes’</dt><dd><ul class="simple">
-<li><p>Prompts the user to find a .tif/.tiff file corresponding to an additional labeled nodes image they would like to merge with the current nodes channel (Alternatively, the user can select a directory containing a set of .tif/.tiff images if they would like to merge many nodes images at once).</p></li>
-<li><p>The point of this function is to allow nodes from several types of images to be compared, for example, heterogenous structures or cell types.</p></li>
-<li><p>Note that at this point in time, these labels cannot overlap as they are being combined into one image.</p></li>
-<li><p>However, to address the above, the user is prompted to generate the centroids for each image prior to merging. Please select this if you want the image’s true centroid to enter NetTracer3D, regardless of what the merged output looks like. An optional downsample factor may also be entered, which finds centroids on a downsampled image before transposing the result, however note that this risks losing nodes that are especially small.</p></li>
-<li><p>Generally one would segment the images and label them individually before trying to merge them.</p></li>
-<li><p>Merging nodes auto-assigns the nodes IDs based on the name of the .tif/.tiff that is being merged, while the original nodes aquire the name ‘root_nodes’.</p></li>
-<li><p>These IDs cannot be changed in NetTracer3D. To change them, please save the Node IDs as described above, then reassign the names with the excel helper, or edit the names directly in a spreadsheet-editing software like Microsoft Excel, then reload the Node IDs with ‘Load -&gt; Load Misc Properties -&gt; Load Node IDs’</p></li>
+<span id="merge-nodes"></span><h2><a class="toc-backref" href="#id6" role="doc-backlink">Images → Node Identities</a><a class="headerlink" href="#images-node-identities" title="Link to this heading"></a></h2>
+<section id="id1">
+<h3><a class="toc-backref" href="#id7" role="doc-backlink">Merge Nodes</a><a class="headerlink" href="#id1" title="Link to this heading"></a></h3>
+<p>Prompts for a <code class="docutils literal notranslate"><span class="pre">.tif</span></code>/<code class="docutils literal notranslate"><span class="pre">.tiff</span></code> file corresponding to an additional labeled
+nodes image to merge with the current nodes channel. A directory containing a set
+of <code class="docutils literal notranslate"><span class="pre">.tif</span></code>/<code class="docutils literal notranslate"><span class="pre">.tiff</span></code> images may be selected instead to merge many at once.</p>
+<p>This allows nodes from several types of images — heterogeneous structures or cell
+types, for example — to be compared. Images are generally segmented and labeled
+individually before merging.</p>
+<ul class="simple">
+<li><p>Labels cannot currently overlap, as they are being combined into a single
+image.</p></li>
+<li><p>To mitigate this, you are prompted to generate centroids for each image prior
+to merging. Select this to have each image’s true centroid enter NetTracer3D
+regardless of the appearance of the merged output. An optional downsample
+factor finds centroids on a downsampled image before transposing the result,
+at the risk of losing especially small nodes.</p></li>
+<li><p>Merging auto-assigns node IDs based on the name of the <code class="docutils literal notranslate"><span class="pre">.tif</span></code>/<code class="docutils literal notranslate"><span class="pre">.tiff</span></code> being
+merged, while the original nodes acquire the name <code class="docutils literal notranslate"><span class="pre">root_nodes</span></code>. These IDs
+cannot be changed within NetTracer3D — save the node IDs as described above,
+reassign the names with the excel helper or directly in spreadsheet software,
+then reload with <strong>Load → Load Misc Properties → Load Node IDs</strong>.</p></li>
 </ul>
-</dd>
-</dl>
-</li>
-<li><dl class="simple">
-<dt>Assign Node Identities From Overlap With Other Images’</dt><dd><ul class="simple">
-<li><p>This is going to be the main way to assign node identities for multichannel data. You can either segment your cells or create hexagon nodes from the generate menu, place all desired channels in a folder, and run this.</p></li>
-<li><p>Essentially, you will have a few options to iterate through the channels in your folder and assigning your cells as having that identity based on min/max thresholds of that cells’ fluorescent intensity.</p></li>
-<li><p>Once you have your labeled nodes loaded into the nodes channel, running this will open this menu:</p></li>
-</ul>
-</dd>
-</dl>
-</li>
-</ol>
+</section>
+<section id="assign-node-identities-from-overlap-with-other-images">
+<h3><a class="toc-backref" href="#id8" role="doc-backlink">Assign Node Identities From Overlap With Other Images</a><a class="headerlink" href="#assign-node-identities-from-overlap-with-other-images" title="Link to this heading"></a></h3>
+<p>This is the main route for assigning node identities in multichannel data. Either
+segment your cells or create hexagon nodes from the generate menu, place all
+desired channels in a folder, and run this function. It iterates through the
+channels in the folder, assigning cells an identity based on minimum and maximum
+thresholds of that cell’s fluorescent intensity.</p>
+<p>With labeled nodes loaded into the nodes channel, running this opens the
+following menu:</p>
 <a class="reference internal image-reference" href="_images/iden_assign_menu.png"><img alt="iden_assign_menu" src="_images/iden_assign_menu.png" style="width: 500px;" />
 </a>
-<section id="parameter-explanations">
-<h3>Parameter Explanations<a class="headerlink" href="#parameter-explanations" title="Link to this heading"></a></h3>
-<ul class="simple">
-<li><dl class="simple">
-<dt>The first set of options is to optionally expand your nodes’ search regions:</dt><dd><ol class="arabic simple">
-<li><p>Step-out distance - The node markers can search outwards for overlap (estimating a cell radius) based on a user defined distance (or this can be precomputed in ‘Process -&gt; Image -&gt; Dilate’).</p></li>
-<li><p>xy_scale - The true scale of the xy plane of the image.</p></li>
-<li><p>z_scale - The true scale of the z-step size of the image (note that for params 2 and 3, if entered correctly you will want to enter a true biological distance in param 1).</p></li>
+<p><strong>Search region expansion</strong></p>
+<ol class="arabic simple">
+<li><p><strong>Step-out distance</strong> — the distance node markers search outwards for overlap,
+estimating a cell radius. This can also be precomputed in <strong>Process → Image →
+Dilate</strong>.</p></li>
+<li><p><strong>xy_scale</strong> — the true scale of the xy plane of the image.</p></li>
+<li><p><strong>z_scale</strong> — the true scale of the z-step size of the image. With parameters
+2 and 3 entered correctly, parameter 1 should be given as a true biological
+distance.</p></li>
 </ol>
-</dd>
-</dl>
-</li>
-<li><dl class="simple">
-<dt>The second box (Binarization Strategy) allows you to control how the system will choose to decide to assign your nodes as having an identity. It has these options:</dt><dd><ol class="arabic simple">
-<li><p>Auto-Binarize - If you already had binarized your channels or the SNR is particularly good, you can try this one. For pre-binarized, you’d essentially segmente every channel for what you feel is ‘real’ and arrange those segmented channels in the target folder. If it sees any non-binary data, it will predict the foreground with Otus algorithm, which won’t necessarily give you ideal results.</p></li>
-<li><p>Manual - This is the default setting and the main way to use this function. If you choose this, every channel will be loaded into the GUI one by one, allowing you to manipulate thresholds to choose which cells get assigned an identity. Please see the tutorial on proximity networks for more info.</p></li>
-<li><p>Auto with ML Predictor - You will have to have trained a neural network model on some prior dataset. After that, you can load the ML model back to this window. If you choose this setting, the neural network will predict the threshold bounds based on its training data.</p></li>
-<li><p>Using Previous Threshodls - If you’ve thresholded before for a set of channels, you can reapply these thresholds by loading the same spreadsheet back (That NetTracer3D generates at the end of the thresholding session).</p></li>
+<p><strong>Binarization Strategy</strong></p>
+<p>Controls how the system decides to assign an identity to a node.</p>
+<ol class="arabic simple">
+<li><p><strong>Auto-Binarize</strong> — suitable for pre-binarized channels or particularly good
+SNR. For pre-binarized data, segment every channel for what you consider real
+and arrange the segmented channels in the target folder. Any non-binary data
+encountered has its foreground predicted with Otsu’s algorithm, which will not
+necessarily give ideal results.</p></li>
+<li><p><strong>Manual</strong> — the default setting and the primary way to use this function.
+Each channel is loaded into the GUI in turn, allowing thresholds to be
+manipulated to choose which cells receive an identity. See the proximity
+networks tutorial for details.</p></li>
+<li><p><strong>Auto with ML Predictor</strong> — requires a neural network model trained on a
+prior dataset, loaded back into this window. The network then predicts the
+threshold bounds from its training data.</p></li>
+<li><p><strong>Using Previous Thresholds</strong> — reapplies thresholds from an earlier session
+for a set of channels by loading back the spreadsheet NetTracer3D generates at
+the end of a thresholding session.</p></li>
 </ol>
-</dd>
-</dl>
+<p><strong>Load Previous</strong></p>
+<p>Loads a table from a previous session containing the average intensity expression
+for every cell. This normally has to be calculated for every channel of interest,
+after which you are prompted to save the resulting spreadsheet. Reloading it here
+skips preprocessing for channels that already have data, which is worthwhile when
+reapplying thresholds or adding channels to a previous session. You are prompted
+to save a new spreadsheet at the end containing both old and new data.</p>
+<p><strong>ML model training</strong></p>
+<p>The model is currently a neural network trained to associate the shape of the
+histogram curve with your preferred thresholds; this may be adjusted in future.</p>
+<ol class="arabic">
+<li><p>The top button enables training a model for this session. After training on
+all channels, you are prompted to save the model. Combined with a previously
+loaded model, training builds on top of the old one.</p></li>
+<li><p>The bottom button loads a previous model, saved as a <code class="docutils literal notranslate"><span class="pre">.pkl</span></code> file. Once
+loaded, the model can predict every threshold as described above, or manual
+thresholding can continue with a new option to have the system make an initial
+guess for each.</p>
+<div class="admonition warning">
+<p class="admonition-title">Warning</p>
+<p>Do not load <code class="docutils literal notranslate"><span class="pre">.pkl</span></code> files from untrusted sources — they can execute
+arbitrary code on your system.</p>
+</div>
 </li>
-<li><p>The third box (Load Previous) allows you to load a table from a previous session containing the average intensity expression for every cell. Normally, this will have to be calculated for every channel of interest, and you will be prompt to save the resultant spreadsheet. If you are reapplying thresholds or want to add additional channels, you can load that same spreadsheet back here to skip pre-processing for channels that already have data. If you are adding additional channels to a previous session, I recommend loading the old spreadsheet like so. You will be prompted to save a new spreadsheet at the end with the old + new data in it.</p></li>
-<li><dl class="simple">
-<dt>The fourth box concerns training the ML model. Currently this model is a neural network trained to associate the shape of the curve of the histogram with the thresholds you like. This may be tweaked in the future.</dt><dd><ol class="arabic simple">
-<li><p>The top button allows you to enable training an ML model for this session. After training on all your channels, you will be prompted to save the model. If you load a previous model and choose this, you will train atop the old one.</p></li>
-<li><p>The bottom button loads a previous model, which will be saved as a .pkl file. Please be aware to not load .pkl files you don’t trust (as in you don’t know who made them) as they can execute arbitrary code on your system. Once you’ve loaded a previous model, you can either have the ML model predict every threshold as mentioned above, or you can continue with the manual threshold, and you’ll have a new option for each to have the system make an initial guess.</p></li>
 </ol>
-</dd>
-</dl>
-</li>
-<li><p>The last box (Include Negative IDs) assigns nodes a ‘negative’ ID for each channel they don’t have, in addition to the one’s they do. This can bloat your data quite a bit and isn’t necessary usually, but the option is available if you want that level of detail.</p></li>
-<li><p>When you’re ready, hit ‘Select Directory and Start Processing’. You will be prompted to navigate to the directory where you’ve stored your channels (as either 2D or 3D tiffs). Stored channels should be serial, not all in one tiff. If you already have node identities, any new ones from your thresholding session will be added onto the existing ones, allowing you to add more channels to previous sessions. Any channels that exist in the identities currently that are also in the current session will be overridden by the new thresholds, which can be used to correct past mistakes.</p></li>
-</ul>
+<p><strong>Include Negative IDs</strong></p>
+<p>Assigns nodes a negative ID for each channel they lack, in addition to those they
+have. This can bloat the data considerably and is not usually necessary, but is
+available where that level of detail is wanted.</p>
+<p><strong>Running the function</strong></p>
+<p>Click <strong>Select Directory and Start Processing</strong> and navigate to the directory
+containing your channels, stored as serial 2D or 3D TIFFs rather than a single
+combined TIFF. If node identities already exist, new ones from this thresholding
+session are added to them, allowing further channels to be added to previous
+sessions. Channels present in both the existing identities and the current
+session are overridden by the new thresholds, which allows past mistakes to be
+corrected.</p>
 </section>
 </section>
 <section id="next-steps">
-<h2>Next Steps<a class="headerlink" href="#next-steps" title="Link to this heading"></a></h2>
-<p>This concludes the explanations of the file menu. Next, proceed to <a class="reference internal" href="analyze_menu.html"><span class="doc">All Analyze Menu Options</span></a> for information on the analyze menu functions.</p>
+<h2><a class="toc-backref" href="#id9" role="doc-backlink">Next Steps</a><a class="headerlink" href="#next-steps" title="Link to this heading"></a></h2>
+<p>This concludes the file menu. Next, proceed to <a class="reference internal" href="analyze_menu.html"><span class="doc">All Analyze Menu Options</span></a> for
+information on the analyze menu functions.</p>
 </section>
 </section>
 
@@ -373,7 +344,7 @@
            </div>
           </div>
           <footer><div class="rst-footer-buttons" role="navigation" aria-label="Footer">
-        <a href="right_clicking.html" class="btn btn-neutral float-left" title="Right Clicking - All Options Available by Right Clicking in the GUI" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left" aria-hidden="true"></span> Previous</a>
+        <a href="right_clicking.html" class="btn btn-neutral float-left" title="Right Clicking — All Options Available by Right Clicking in the GUI" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left" aria-hidden="true"></span> Previous</a>
         <a href="analyze_menu.html" class="btn btn-neutral float-right" title="All Analyze Menu Options" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right" aria-hidden="true"></span></a>
     </div>
 

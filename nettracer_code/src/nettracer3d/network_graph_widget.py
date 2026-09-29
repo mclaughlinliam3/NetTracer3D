@@ -8,6 +8,24 @@ from PyQt6.QtGui import QColor, QPen, QBrush, QPainterPath, QPolygonF
 import pyqtgraph as pg
 from pyqtgraph import ScatterPlotItem, PlotCurveItem, GraphicsLayoutWidget, ROI
 import colorsys
+from . import color_schemes as _cschemes
+
+
+# Canvas backgrounds this widget supports. Accepts the friendly names used by
+# the dialog AND the already-resolved pyqtgraph values, so a value round-
+# tripped through self.background (e.g. when spawning a popout copy) maps to
+# itself instead of silently falling back to white.
+_NGW_BG_MAP = {
+    'white': 'w', 'w': 'w',
+    'black': '#1a1a2e', '#1a1a2e': '#1a1a2e', 'k': '#1a1a2e',
+}
+
+
+def _normalize_bg(background):
+    """Map any accepted background spelling to a pyqtgraph background value."""
+    if background is None:
+        return 'w'
+    return _NGW_BG_MAP.get(str(background).strip().lower(), 'w')
 import random
 import copy
 import math
@@ -34,7 +52,8 @@ class GraphLoadThread(QThread):
     
     def __init__(self, graph, geometric, component, centroids, communities, 
                  community_dict, identities, identity_dict, weight, z_size,
-                 shell, node_size, edge_size):
+                 shell, node_size, edge_size, color_scheme='Default',
+                 background='w', custom_color_map=None):
         super().__init__()
         self.graph = graph
         self.geometric = geometric
@@ -49,6 +68,9 @@ class GraphLoadThread(QThread):
         self.shell = shell
         self.node_size = node_size
         self.edge_size = edge_size
+        self.color_scheme = color_scheme
+        self.background = background
+        self.custom_color_map = custom_color_map
     
     def run(self):
         """Compute layout and colors in background thread"""
@@ -616,10 +638,17 @@ class GraphLoadThread(QThread):
 
         # Determine coloring mode
         if self.identities and self.identity_dict:
-            color_map = self._generate_community_colors(self.identity_dict)
+            # Must go through the IDENTITY resolver, not the community one:
+            # the domain decides which 'Previous' palette is read and which
+            # slot the result is recorded into. Using the community resolver
+            # here made the render pull community colors while the legend
+            # pulled identity colors, so the two disagreed.
+            color_map = self._generate_identity_colors()
             for node in self.graph.nodes():
-                identity = self.identity_dict.get(node, 'Unknown')
-                identity = str(identity)
+                # Identity values are lists; the palette is keyed by the
+                # individual identity, so normalize before looking up.
+                identity = _cschemes.normalize_label(
+                    self.identity_dict.get(node), 'Unknown')
                 colors.append(color_map.get(identity, '#808080'))
         elif self.communities and self.community_dict:
             color_map = self._generate_community_colors(self.community_dict)
@@ -677,66 +706,38 @@ class GraphLoadThread(QThread):
         return sizes
     
     def _generate_identity_colors(self):
-        """Generate colors for identities using the specified strategy"""
-        unique_categories = list(set(self.identity_dict.values()))
-        num_categories = len(unique_categories)
-        
-        if num_categories <= 12:
-            base_colors = [
-                '#FF0000', '#0066FF', '#00CC00', '#FF8800',
-                '#8800FF', '#FFFF00', '#FF0088', '#00FFFF',
-                '#88FF00', '#FF4400', '#0088FF', '#CC00FF'
-            ]
-            colors = base_colors[:num_categories]
-        else:
-            colors = []
-            for i in range(num_categories):
-                hue = (i * 360 / num_categories) % 360
-                sat = 0.85 if i % 2 == 0 else 0.95
-                val = 0.95 if i % 3 != 0 else 0.85
-                
-                rgb = colorsys.hsv_to_rgb(hue/360, sat, val)
-                hex_color = '#{:02x}{:02x}{:02x}'.format(
-                    int(rgb[0]*255), int(rgb[1]*255), int(rgb[2]*255)
-                )
-                colors.append(hex_color)
-        
-        return dict(zip(unique_categories, colors))
-    
+        """Map identities to colors through the shared palette contract."""
+        return _cschemes.resolve_palette(
+            self.identity_dict.values(),
+            scheme=getattr(self, 'color_scheme', 'Default'),
+            background=getattr(self, 'background', 'w'),
+            custom_map=getattr(self, 'custom_color_map', None),
+            shuffle='seeded',
+            domain=_cschemes.DOMAIN_IDENTITIES,
+        )
+
     def _generate_community_colors(self, my_dict):
-        """Generate colors for communities using the specified strategy"""
-        from collections import Counter
-        
-        try:
-            unique_communities = sorted(set(my_dict.values()))
-            some_dict = my_dict
-        except:
-            some_dict = {node: str(comm) for node, comm in my_dict.items()}
-            unique_communities = sorted(set(some_dict.values()))
+        """Map communities to colors through the shared palette contract."""
+        return _cschemes.resolve_palette(
+            my_dict.values(),
+            scheme=getattr(self, 'color_scheme', 'Default'),
+            background=getattr(self, 'background', 'w'),
+            custom_map=getattr(self, 'custom_color_map', None),
+            shuffle='seeded',
+            domain=_cschemes.DOMAIN_COMMUNITIES,
+        )
 
-        community_sizes = Counter(some_dict.values())
-        sorted_communities = random.Random(42).sample(unique_communities, len(unique_communities))
-        colors_rgb = self._generate_distinct_colors_rgb(len(unique_communities))
-        color_map = {comm: colors_rgb[i] for i, comm in enumerate(sorted_communities)}
-        if 0 in unique_communities:
-            color_map[0] = "#8B4513"
-
-        return color_map
-    
     def _generate_distinct_colors_rgb(self, n_colors):
         """
-        Generate visually distinct RGB colors using HSV color space.
-        Colors are generated with maximum saturation and value, varying only in hue.
+        Generate n visually distinct colors under the active scheme.
+
+        'Default' reproduces the original HSV hue wheel exactly; the other
+        schemes are background-aware and perceptually spaced.
         """
-        colors = []
-        for i in range(n_colors):
-            hue = i / n_colors
-            rgb = colorsys.hsv_to_rgb(hue, 1.0, 1.0)  # S=1, V=1 for max saturation/brightness
-            hex_color = '#{:02x}{:02x}{:02x}'.format(
-                int(rgb[0] * 255), int(rgb[1] * 255), int(rgb[2] * 255)
-            )
-            colors.append(hex_color)
-        return colors
+        return _cschemes.generate_scheme_hex(
+            n_colors,
+            getattr(self, 'color_scheme', 'Default'),
+            getattr(self, 'background', 'w'))
     
     def _compute_edge_data(self, pos):
         """Compute edge coordinates and weights"""
@@ -758,7 +759,9 @@ class NetworkGraphWidget(QWidget):
     def __init__(self, parent=None, weight=False, geometric=False, component = False, 
                  centroids=None, communities=False, community_dict=None,
                  identities=False, identity_dict=None, labels=False, z_size = False, 
-                 shell = False, node_size = 10, black_edges = False, edge_size = 1, popout = False):
+                 shell = False, node_size = 10, black_edges = False, edge_size = 1, popout = False,
+                 color_scheme = None, background = 'white',
+                 custom_color_map = None):
         super().__init__(parent)
         
         self.parent_window = parent
@@ -777,6 +780,19 @@ class NetworkGraphWidget(QWidget):
         self.black_edges = black_edges
         self.edge_size = edge_size
         self.popout = popout
+        # None means "decide for me": start from whatever was rendered last
+        # for this kind of coding, so a freshly built widget matches the UMAP
+        # view and the extractor overlays instead of drawing a brand-new
+        # palette. 'Previous' degrades to the default scheme on its own when
+        # nothing has been recorded yet, so this is safe on a cold start.
+        # Pass an explicit scheme name to override.
+        self.color_scheme = (color_scheme if color_scheme is not None
+                             else _cschemes.SCHEME_PREVIOUS)
+        # Canvas background. The palette engine reads this to decide whether
+        # to darken or lighten, and labels/edges flip with it.
+        self.background = _normalize_bg(background)
+        # {label: '#rrggbb'} used when color_scheme == 'Custom'
+        self.custom_color_map = custom_color_map
         
         # Graph data
         self.graph = None
@@ -858,7 +874,7 @@ class NetworkGraphWidget(QWidget):
         
         # Create graphics layout widget
         self.graphics_widget = pg.GraphicsLayoutWidget()
-        self.graphics_widget.setBackground('w')
+        self.graphics_widget.setBackground(getattr(self, 'background', 'w'))
         
         # Create plot
         self.plot = self.graphics_widget.addPlot()
@@ -926,49 +942,76 @@ class NetworkGraphWidget(QWidget):
         self.graphics_widget.viewport().installEventFilter(self)
         self.plot.scene().installEventFilter(self)
     
+    # ------------------------------------------------- background helpers ----
+    def _is_dark_background(self):
+        """True when the canvas is dark and foreground ink must be light."""
+        return str(getattr(self, 'background', 'w')).lower() not in ('w', 'white')
+
+    def _label_color(self):
+        """Node label ink: near-black on light canvas, near-white on dark."""
+        return (235, 235, 235) if self._is_dark_background() else (0, 0, 0)
+
+    def _edge_color(self, alpha=None):
+        """
+        Edge ink for the current background.
+
+        'Solid' edges invert with the canvas (black on white, white on dark).
+        Translucent edges stay mid-grey but lighten slightly on dark canvases,
+        where a mid-grey reads as darker than it does on white.
+        """
+        dark = self._is_dark_background()
+        if self.black_edges:
+            return (235, 235, 235) if dark else (0, 0, 0)
+        base = 170 if dark else 150
+        return (base, base, base, 100 if alpha is None else alpha)
+
+    def set_background(self, background):
+        """
+        Switch the canvas background at runtime and restyle everything that
+        depends on it: palette, labels and edges.
+        """
+        self.background = _normalize_bg(background)
+        if hasattr(self, 'graphics_widget'):
+            self.graphics_widget.setBackground(self.background)
+
     def _create_identity_legend(self):
         """Create a legend panel for node identities"""
 
-        def _generate_distinct_colors_rgb(n_colors: int):
+        def _resolve(labels, domain):
             """
-            Generate visually distinct RGB colors using HSV color space.
-            Colors are generated with maximum saturation and value, varying only in hue.
+            Match the node colors exactly -- same engine, same scheme.
+
+            record=False: the nodes were already resolved and recorded by the
+            load thread, and the legend must not redefine what 'Previous'
+            means on its way to drawing the same colors again.
             """
-            colors = []
-            for i in range(n_colors):
-                hue = i / n_colors
-                rgb = colorsys.hsv_to_rgb(hue, 1.0, 1.0)  # S=1, V=1 for max saturation/brightness
-                hex_color = '#{:02x}{:02x}{:02x}'.format(
-                    int(rgb[0] * 255), int(rgb[1] * 255), int(rgb[2] * 255)
-                )
-                colors.append(hex_color)
-            return colors
+            return _cschemes.resolve_palette(
+                labels,
+                scheme=getattr(self, 'color_scheme', 'Default'),
+                background=getattr(self, 'background', 'w'),
+                custom_map=getattr(self, 'custom_color_map', None),
+                shuffle='seeded',
+                domain=domain,
+                record=False)
 
         if self.identities:
             from collections import Counter
-            try:
-                unique_identities = sorted(set(self.identity_dict.values()))
-                community_sizes = Counter(self.identity_dict.values())
-            except:
-                some_dict = {node: str(comm) for node, comm in self.identity_dict.items()}
-                unique_identities = sorted(set(some_dict.values()))
-                community_sizes = Counter(some_dict.values())
+            # Identity values are lists. Count over the normalized scalar so
+            # the legend's tallies and swatch keys match the node colors.
+            normalized = [_cschemes.normalize_label(v, 'Unknown')
+                          for v in self.identity_dict.values()]
+            community_sizes = Counter(normalized)
+            unique_identities = sorted(set(normalized), key=str)
 
-            sorted_communities = random.Random(42).sample(unique_identities, len(unique_identities))
-            colors_rgb = _generate_distinct_colors_rgb(len(unique_identities))
-            color_map = {comm: colors_rgb[i] for i, comm in enumerate(sorted_communities)}
-            if 0 in unique_identities:
-                color_map[0] = "#8B4513"
+            color_map = _resolve(self.identity_dict.values(),
+                                 _cschemes.DOMAIN_IDENTITIES)
         elif self.communities:
             from collections import Counter
             
             unique_identities = sorted(set(self.community_dict.values()))
             community_sizes = Counter(self.community_dict.values())
-            sorted_communities = random.Random(42).sample(unique_identities, len(unique_identities))
-            colors_rgb = _generate_distinct_colors_rgb(len(unique_identities))
-            color_map = {comm: colors_rgb[i] for i, comm in enumerate(sorted_communities)}
-            if 0 in unique_identities:
-                color_map[0] = "#8B4513"
+            color_map = _resolve(self.community_dict.values(),
+                                 _cschemes.DOMAIN_COMMUNITIES)
 
         # Create legend widget
         legend_widget = QWidget()
@@ -1094,7 +1137,7 @@ class NetworkGraphWidget(QWidget):
         self.refresh_btn = QPushButton("🔄")
         self.refresh_btn.setToolTip("Refresh Graph")
         self.refresh_btn.setMaximumSize(32, 32)
-        self.refresh_btn.clicked.connect(self.load_graph)
+        self.refresh_btn.clicked.connect(self.refresh_graph)
 
         self.settings_btn = QPushButton("⚙")
         self.settings_btn.setToolTip("Render Settings")
@@ -1163,6 +1206,25 @@ class NetworkGraphWidget(QWidget):
             self.loading_text.setPos(0, 0)  # Center of view
             self.plot.addItem(self.loading_text)
     
+    def refresh_graph(self):
+        """
+        Re-render, reusing the colors from the last color-coded render.
+
+        Refresh is meant to redraw what you are already looking at, so a
+        color-coded graph should come back in the SAME colors rather than
+        being reshuffled by a fresh palette draw. Falls back to the current
+        scheme when nothing has been recorded yet, and leaves uncolored
+        renders alone entirely.
+        """
+        if (self.identities and self.identity_dict) or \
+           (self.communities and self.community_dict):
+            domain = (_cschemes.DOMAIN_IDENTITIES
+                      if (self.identities and self.identity_dict)
+                      else _cschemes.DOMAIN_COMMUNITIES)
+            if _cschemes.has_previous(domain):
+                self.color_scheme = _cschemes.SCHEME_PREVIOUS
+        self.load_graph()
+
     def load_graph(self):
         """Load and render the graph (in separate thread)"""
 
@@ -1203,7 +1265,10 @@ class NetworkGraphWidget(QWidget):
             self.graph, self.geometric, self.component, self.centroids,
             self.communities, self.community_dict,
             self.identities, self.identity_dict, self.weight, self.z_size,
-            self.shell, self.node_size, self.edge_size
+            self.shell, self.node_size, self.edge_size,
+            getattr(self, 'color_scheme', 'Default'),
+            getattr(self, 'background', 'w'),
+            getattr(self, 'custom_color_map', None)
         )
         self.load_thread.finished.connect(self._on_graph_loaded)
         self.load_thread.start()
@@ -1281,10 +1346,7 @@ class NetworkGraphWidget(QWidget):
             self.plot.removeItem(label_item)
         self.label_items.clear()
 
-        if self.black_edges:
-            edge_color = (0, 0, 0)
-        else:
-            edge_color = (150, 150, 150, 100)
+        edge_color = self._edge_color()
         
         # Render edges - batched by weight for efficiency
         edge_batches = result['edge_pens']
@@ -1387,7 +1449,7 @@ class NetworkGraphWidget(QWidget):
         for i, label_info in enumerate(label_data_subset):
             text_item = pg.TextItem(
                 text=label_info['text'],
-                color=(0, 0, 0),
+                color=self._label_color(),
                 anchor=(0.5, 0.5)
             )
             text_item.setPos(label_info['pos'][0], label_info['pos'][1])
@@ -1471,7 +1533,7 @@ class NetworkGraphWidget(QWidget):
             if node in nodes_to_add:
                 text_item = pg.TextItem(
                     text=label_info['text'],
-                    color=(0, 0, 0),
+                    color=self._label_color(),
                     anchor=(0.5, 0.5)
                 )
                 text_item.setPos(label_info['pos'][0], label_info['pos'][1])
@@ -2198,7 +2260,10 @@ class NetworkGraphWidget(QWidget):
             shell = self.shell,
             node_size = self.node_size,
             black_edges = self.black_edges,
-            edge_size = self.edge_size
+            edge_size = self.edge_size,
+            color_scheme = getattr(self, 'color_scheme', 'Default'),
+            background = getattr(self, 'background', 'w'),
+            custom_color_map = getattr(self, 'custom_color_map', None),
         )
 
         temp_graph_widget.set_graph(self.graph)
@@ -2503,10 +2568,7 @@ class NetworkGraphWidget(QWidget):
         else:
             edge_alpha = 100
 
-        if self.black_edges:
-            edge_color = (0, 0, 0)
-        else:
-            edge_color = (150, 150, 150, edge_alpha)
+        edge_color = self._edge_color(edge_alpha)
         
         # Update edge rendering (batched edge items)
         if self.edge_items:

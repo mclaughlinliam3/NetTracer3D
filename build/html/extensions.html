@@ -6,14 +6,14 @@
   <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
 
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>NetTracer3D Plugin System &mdash; NetTracer3D 1.6.0 documentation</title>
+  <title>NetTracer3D Plugin System and Instructions on Using Prebundled Plugins &mdash; NetTracer3D 2.0.0 documentation</title>
       <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=b86133f3" />
       <link rel="stylesheet" type="text/css" href="_static/css/theme.css?v=e59714d7" />
 
   
       <script src="_static/jquery.js?v=5d32c60e"></script>
       <script src="_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
-      <script src="_static/documentation_options.js?v=72d88caf"></script>
+      <script src="_static/documentation_options.js?v=51b770b3"></script>
       <script src="_static/doctools.js?v=9bcbadda"></script>
       <script src="_static/sphinx_highlight.js?v=dc90522c"></script>
     <script src="_static/js/theme.js"></script>
@@ -46,8 +46,8 @@
               <p class="caption" role="heading"><span class="caption-text">User Guide:</span></p>
 <ul>
 <li class="toctree-l1"><a class="reference internal" href="installation.html">Installation</a></li>
-<li class="toctree-l1"><a class="reference internal" href="quickstart.html">Quickstart - Segmenting Data and Generating Connectivity Networks</a></li>
-<li class="toctree-l1"><a class="reference internal" href="proximity.html">Proximity Networks - Ideal for Cellular Data</a></li>
+<li class="toctree-l1"><a class="reference internal" href="quickstart.html">Quickstart — Segmenting Data and Generating Connectivity Networks</a></li>
+<li class="toctree-l1"><a class="reference internal" href="proximity.html">Proximity Networks — Ideal for Cellular Data</a></li>
 <li class="toctree-l1"><a class="reference internal" href="branches.html">Labeling Branches and Branch Networks</a></li>
 <li class="toctree-l1"><a class="reference internal" href="properties.html">Properties of a Network3D Object</a></li>
 <li class="toctree-l1"><a class="reference internal" href="excel_helper.html">Using the Spreadsheet Loader</a></li>
@@ -55,12 +55,12 @@
 </ul>
 <p class="caption" role="heading"><span class="caption-text">Detailed Function Guide:</span></p>
 <ul class="current">
-<li class="toctree-l1"><a class="reference internal" href="right_clicking.html">Right Clicking - All Options Available by Right Clicking in the GUI</a></li>
+<li class="toctree-l1"><a class="reference internal" href="right_clicking.html">Right Clicking — All Options Available by Right Clicking in the GUI</a></li>
 <li class="toctree-l1"><a class="reference internal" href="file_menu.html">All File Menu Options</a></li>
 <li class="toctree-l1"><a class="reference internal" href="analyze_menu.html">All Analyze Menu Options</a></li>
 <li class="toctree-l1"><a class="reference internal" href="process_menu.html">All Process Menu Options</a></li>
 <li class="toctree-l1"><a class="reference internal" href="image_menu.html">All Image Menu Options</a></li>
-<li class="toctree-l1 current"><a class="current reference internal" href="#">NetTracer3D Plugin System</a><ul>
+<li class="toctree-l1 current"><a class="current reference internal" href="#">NetTracer3D Plugin System and Instructions on Using Prebundled Plugins</a><ul>
 <li class="toctree-l2"><a class="reference internal" href="#user-guide">User Guide</a><ul>
 <li class="toctree-l3"><a class="reference internal" href="#what-are-plugins">What Are Plugins?</a></li>
 <li class="toctree-l3"><a class="reference internal" href="#where-do-plugins-live">Where Do Plugins Live?</a></li>
@@ -97,6 +97,30 @@
 <li class="toctree-l3"><a class="reference internal" href="#complete-plugin-checklist">Complete Plugin Checklist</a></li>
 </ul>
 </li>
+<li class="toctree-l2"><a class="reference internal" href="#bundled-extensions">Bundled Extensions</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#cellpose-extension">Cellpose Segmentation</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="#opening-the-panel">Opening the panel</a></li>
+<li class="toctree-l4"><a class="reference internal" href="#choosing-channels">Choosing channels</a></li>
+<li class="toctree-l4"><a class="reference internal" href="#model-selection">Model selection</a></li>
+<li class="toctree-l4"><a class="reference internal" href="#segmentation-parameters">Segmentation parameters</a></li>
+<li class="toctree-l4"><a class="reference internal" href="#chunked-processing">Chunked processing</a></li>
+<li class="toctree-l4"><a class="reference internal" href="#reading-the-console">Reading the console</a></li>
+<li class="toctree-l4"><a class="reference internal" href="#troubleshooting">Troubleshooting</a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="#macro-recorder">Macro Recorder</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="#id4">Opening the panel</a></li>
+<li class="toctree-l4"><a class="reference internal" href="#recommended-workflow">Recommended workflow</a></li>
+<li class="toctree-l4"><a class="reference internal" href="#what-gets-recorded">What gets recorded</a></li>
+<li class="toctree-l4"><a class="reference internal" href="#what-is-not-recorded">What is not recorded</a></li>
+<li class="toctree-l4"><a class="reference internal" href="#where-the-output-goes">Where the output goes</a></li>
+<li class="toctree-l4"><a class="reference internal" href="#when-something-goes-wrong">When something goes wrong</a></li>
+<li class="toctree-l4"><a class="reference internal" href="#editing-a-macro-by-hand">Editing a macro by hand</a></li>
+<li class="toctree-l4"><a class="reference internal" href="#id5">Troubleshooting</a></li>
+</ul>
+</li>
+</ul>
+</li>
 </ul>
 </li>
 </ul>
@@ -122,7 +146,7 @@
           <div role="navigation" aria-label="Page navigation">
   <ul class="wy-breadcrumbs">
       <li><a href="index.html" class="icon icon-home" aria-label="Home"></a></li>
-      <li class="breadcrumb-item active">NetTracer3D Plugin System</li>
+      <li class="breadcrumb-item active">NetTracer3D Plugin System and Instructions on Using Prebundled Plugins</li>
       <li class="wy-breadcrumbs-aside">
             <a href="_sources/extensions.rst.txt" rel="nofollow"> View page source</a>
       </li>
@@ -132,8 +156,8 @@
           <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
            <div itemprop="articleBody">
              
-  <section id="nettracer3d-plugin-system">
-<span id="extensions"></span><h1>NetTracer3D Plugin System<a class="headerlink" href="#nettracer3d-plugin-system" title="Link to this heading"></a></h1>
+  <section id="nettracer3d-plugin-system-and-instructions-on-using-prebundled-plugins">
+<span id="extensions"></span><h1>NetTracer3D Plugin System and Instructions on Using Prebundled Plugins<a class="headerlink" href="#nettracer3d-plugin-system-and-instructions-on-using-prebundled-plugins" title="Link to this heading"></a></h1>
 <p>NetTracer3D supports a plugin system that allows both developers and users
 to extend the application with new analysis tools, processing methods,
 visualisations, and integrations — without modifying the core codebase.</p>
@@ -142,33 +166,39 @@ visualisations, and integrations — without modifying the core codebase.</p>
 <nav class="contents local" id="on-this-page">
 <p class="topic-title">On this page</p>
 <ul class="simple">
-<li><p><a class="reference internal" href="#user-guide" id="id1">User Guide</a></p>
+<li><p><a class="reference internal" href="#user-guide" id="id6">User Guide</a></p>
 <ul>
-<li><p><a class="reference internal" href="#what-are-plugins" id="id2">What Are Plugins?</a></p></li>
-<li><p><a class="reference internal" href="#where-do-plugins-live" id="id3">Where Do Plugins Live?</a></p></li>
-<li><p><a class="reference internal" href="#the-extensions-panel" id="id4">The Extensions Panel</a></p></li>
-<li><p><a class="reference internal" href="#installing-plugin-dependencies" id="id5">Installing Plugin Dependencies</a></p></li>
-<li><p><a class="reference internal" href="#built-in-plugins" id="id6">Built-In Plugins</a></p></li>
+<li><p><a class="reference internal" href="#what-are-plugins" id="id7">What Are Plugins?</a></p></li>
+<li><p><a class="reference internal" href="#where-do-plugins-live" id="id8">Where Do Plugins Live?</a></p></li>
+<li><p><a class="reference internal" href="#the-extensions-panel" id="id9">The Extensions Panel</a></p></li>
+<li><p><a class="reference internal" href="#installing-plugin-dependencies" id="id10">Installing Plugin Dependencies</a></p></li>
+<li><p><a class="reference internal" href="#built-in-plugins" id="id11">Built-In Plugins</a></p></li>
 </ul>
 </li>
-<li><p><a class="reference internal" href="#developer-guide" id="id7">Developer Guide</a></p>
+<li><p><a class="reference internal" href="#developer-guide" id="id12">Developer Guide</a></p>
 <ul>
-<li><p><a class="reference internal" href="#plugin-structure" id="id8">Plugin Structure</a></p></li>
-<li><p><a class="reference internal" href="#plugin-info" id="id9">PLUGIN_INFO</a></p></li>
-<li><p><a class="reference internal" href="#register-and-unregister" id="id10">register() and unregister()</a></p></li>
-<li><p><a class="reference internal" href="#plugin-api-reference" id="id11">Plugin API Reference</a></p></li>
-<li><p><a class="reference internal" href="#dependency-management" id="id12">Dependency Management</a></p></li>
-<li><p><a class="reference internal" href="#packaging-for-pypi" id="id13">Packaging for PyPI</a></p></li>
-<li><p><a class="reference internal" href="#minimal-example-plugin" id="id14">Minimal Example Plugin</a></p></li>
-<li><p><a class="reference internal" href="#complete-plugin-checklist" id="id15">Complete Plugin Checklist</a></p></li>
+<li><p><a class="reference internal" href="#plugin-structure" id="id13">Plugin Structure</a></p></li>
+<li><p><a class="reference internal" href="#plugin-info" id="id14">PLUGIN_INFO</a></p></li>
+<li><p><a class="reference internal" href="#register-and-unregister" id="id15">register() and unregister()</a></p></li>
+<li><p><a class="reference internal" href="#plugin-api-reference" id="id16">Plugin API Reference</a></p></li>
+<li><p><a class="reference internal" href="#dependency-management" id="id17">Dependency Management</a></p></li>
+<li><p><a class="reference internal" href="#packaging-for-pypi" id="id18">Packaging for PyPI</a></p></li>
+<li><p><a class="reference internal" href="#minimal-example-plugin" id="id19">Minimal Example Plugin</a></p></li>
+<li><p><a class="reference internal" href="#complete-plugin-checklist" id="id20">Complete Plugin Checklist</a></p></li>
+</ul>
+</li>
+<li><p><a class="reference internal" href="#bundled-extensions" id="id21">Bundled Extensions</a></p>
+<ul>
+<li><p><a class="reference internal" href="#cellpose-extension" id="id22">Cellpose Segmentation</a></p></li>
+<li><p><a class="reference internal" href="#macro-recorder" id="id23">Macro Recorder</a></p></li>
 </ul>
 </li>
 </ul>
 </nav>
 <section id="user-guide">
-<h2><a class="toc-backref" href="#id1" role="doc-backlink">User Guide</a><a class="headerlink" href="#user-guide" title="Link to this heading"></a></h2>
+<h2><a class="toc-backref" href="#id6" role="doc-backlink">User Guide</a><a class="headerlink" href="#user-guide" title="Link to this heading"></a></h2>
 <section id="what-are-plugins">
-<h3><a class="toc-backref" href="#id2" role="doc-backlink">What Are Plugins?</a><a class="headerlink" href="#what-are-plugins" title="Link to this heading"></a></h3>
+<h3><a class="toc-backref" href="#id7" role="doc-backlink">What Are Plugins?</a><a class="headerlink" href="#what-are-plugins" title="Link to this heading"></a></h3>
 <p>Plugins are small Python modules that add functionality to NetTracer3D.
 They can add new menu items, new right-click options, new analysis tabs,
 custom overlays, or entirely new dialog windows.  Several plugins ship
@@ -177,7 +207,7 @@ with NetTracer3D by default (e.g. <strong>Cellpose Segmentation</strong>,
 additional ones or write your own.</p>
 </section>
 <section id="where-do-plugins-live">
-<h3><a class="toc-backref" href="#id3" role="doc-backlink">Where Do Plugins Live?</a><a class="headerlink" href="#where-do-plugins-live" title="Link to this heading"></a></h3>
+<h3><a class="toc-backref" href="#id8" role="doc-backlink">Where Do Plugins Live?</a><a class="headerlink" href="#where-do-plugins-live" title="Link to this heading"></a></h3>
 <p>NetTracer3D searches for plugins in several locations, in order:</p>
 <ol class="arabic">
 <li><p><strong>User plugin directory</strong></p>
@@ -211,7 +241,7 @@ after <code class="docutils literal notranslate"><span class="pre">pip</span> <s
 </ol>
 </section>
 <section id="the-extensions-panel">
-<h3><a class="toc-backref" href="#id4" role="doc-backlink">The Extensions Panel</a><a class="headerlink" href="#the-extensions-panel" title="Link to this heading"></a></h3>
+<h3><a class="toc-backref" href="#id9" role="doc-backlink">The Extensions Panel</a><a class="headerlink" href="#the-extensions-panel" title="Link to this heading"></a></h3>
 <p>Open the Extensions panel from the menu bar:</p>
 <blockquote>
 <div><p><strong>Extensions → Manage Extensions…</strong></p>
@@ -266,7 +296,7 @@ to load any newly discovered plugins.</p></li>
 </ul>
 </section>
 <section id="installing-plugin-dependencies">
-<h3><a class="toc-backref" href="#id5" role="doc-backlink">Installing Plugin Dependencies</a><a class="headerlink" href="#installing-plugin-dependencies" title="Link to this heading"></a></h3>
+<h3><a class="toc-backref" href="#id10" role="doc-backlink">Installing Plugin Dependencies</a><a class="headerlink" href="#installing-plugin-dependencies" title="Link to this heading"></a></h3>
 <p>When a plugin is marked <strong>Needs Deps</strong> (blue):</p>
 <ol class="arabic simple">
 <li><p>Select it in the list.</p></li>
@@ -289,7 +319,7 @@ pre-compiled dependencies.  See the Developer Guide below for details.</p>
 </div>
 </section>
 <section id="built-in-plugins">
-<h3><a class="toc-backref" href="#id6" role="doc-backlink">Built-In Plugins</a><a class="headerlink" href="#built-in-plugins" title="Link to this heading"></a></h3>
+<h3><a class="toc-backref" href="#id11" role="doc-backlink">Built-In Plugins</a><a class="headerlink" href="#built-in-plugins" title="Link to this heading"></a></h3>
 <section id="cellpose-segmentation">
 <h4>Cellpose Segmentation<a class="headerlink" href="#cellpose-segmentation" title="Link to this heading"></a></h4>
 <p>Integrates the <a class="reference external" href="https://cellpose.readthedocs.io/">Cellpose</a> instance
@@ -307,15 +337,17 @@ fit in GPU memory.</p></li>
 <li><p>The segmented mask is written to the channel of your choice.</p></li>
 <li><p><strong>Requires</strong>: <code class="docutils literal notranslate"><span class="pre">cellpose&gt;=3.0</span></code> (installed via the Extensions panel).</p></li>
 </ul>
+<p>See <a class="reference internal" href="#cellpose-extension"><span class="std std-ref">Cellpose Segmentation</span></a> for a full walkthrough of the panel,
+including chunk padding and seam handling.</p>
 </section>
 </section>
 </section>
 <section id="developer-guide">
-<h2><a class="toc-backref" href="#id7" role="doc-backlink">Developer Guide</a><a class="headerlink" href="#developer-guide" title="Link to this heading"></a></h2>
+<h2><a class="toc-backref" href="#id12" role="doc-backlink">Developer Guide</a><a class="headerlink" href="#developer-guide" title="Link to this heading"></a></h2>
 <p>This section explains how to write, package, and distribute your own
 NetTracer3D plugins.</p>
 <section id="plugin-structure">
-<h3><a class="toc-backref" href="#id8" role="doc-backlink">Plugin Structure</a><a class="headerlink" href="#plugin-structure" title="Link to this heading"></a></h3>
+<h3><a class="toc-backref" href="#id13" role="doc-backlink">Plugin Structure</a><a class="headerlink" href="#plugin-structure" title="Link to this heading"></a></h3>
 <p>Please reference the built in Cellpose plugin _init_.py and requirements.txt files for a clear example of how to integrate a plugin</p>
 <p>A plugin is either a single <code class="docutils literal notranslate"><span class="pre">.py</span></code> file or a folder (Python package).</p>
 <p><strong>Single file</strong> (no dependencies beyond NetTracer3D base):</p>
@@ -341,7 +373,7 @@ closes.</p></li>
 </ol>
 </section>
 <section id="plugin-info">
-<h3><a class="toc-backref" href="#id9" role="doc-backlink">PLUGIN_INFO</a><a class="headerlink" href="#plugin-info" title="Link to this heading"></a></h3>
+<h3><a class="toc-backref" href="#id14" role="doc-backlink">PLUGIN_INFO</a><a class="headerlink" href="#plugin-info" title="Link to this heading"></a></h3>
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">PLUGIN_INFO</span> <span class="o">=</span> <span class="p">{</span>
     <span class="s1">&#39;name&#39;</span><span class="p">:</span> <span class="s1">&#39;My Plugin&#39;</span><span class="p">,</span>              <span class="c1"># display name</span>
     <span class="s1">&#39;version&#39;</span><span class="p">:</span> <span class="s1">&#39;1.0.0&#39;</span><span class="p">,</span>               <span class="c1"># semver string</span>
@@ -355,7 +387,7 @@ closes.</p></li>
 </div>
 </section>
 <section id="register-and-unregister">
-<h3><a class="toc-backref" href="#id10" role="doc-backlink">register() and unregister()</a><a class="headerlink" href="#register-and-unregister" title="Link to this heading"></a></h3>
+<h3><a class="toc-backref" href="#id15" role="doc-backlink">register() and unregister()</a><a class="headerlink" href="#register-and-unregister" title="Link to this heading"></a></h3>
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">_api</span> <span class="o">=</span> <span class="kc">None</span>
 
 <span class="k">def</span><span class="w"> </span><span class="nf">register</span><span class="p">(</span><span class="n">api</span><span class="p">):</span>
@@ -378,7 +410,7 @@ closes.</p></li>
 </div>
 </section>
 <section id="plugin-api-reference">
-<h3><a class="toc-backref" href="#id11" role="doc-backlink">Plugin API Reference</a><a class="headerlink" href="#plugin-api-reference" title="Link to this heading"></a></h3>
+<h3><a class="toc-backref" href="#id16" role="doc-backlink">Plugin API Reference</a><a class="headerlink" href="#plugin-api-reference" title="Link to this heading"></a></h3>
 <p>The <code class="docutils literal notranslate"><span class="pre">api</span></code> object passed to <code class="docutils literal notranslate"><span class="pre">register()</span></code> is an instance of
 <code class="docutils literal notranslate"><span class="pre">PluginAPI</span></code>.  All methods listed below are part of the <strong>stable public
 API</strong> and will not change without a major version bump.</p>
@@ -701,7 +733,7 @@ plugins that depend on internals obtained this way.</strong></p>
 </section>
 </section>
 <section id="dependency-management">
-<h3><a class="toc-backref" href="#id12" role="doc-backlink">Dependency Management</a><a class="headerlink" href="#dependency-management" title="Link to this heading"></a></h3>
+<h3><a class="toc-backref" href="#id17" role="doc-backlink">Dependency Management</a><a class="headerlink" href="#dependency-management" title="Link to this heading"></a></h3>
 <p>Plugins declare their Python dependencies in a <code class="docutils literal notranslate"><span class="pre">requirements.txt</span></code> file
 placed alongside the plugin code.</p>
 <section id="pip-environments-pip-install-nettracer3d">
@@ -757,7 +789,7 @@ Consider distributing CPU-only and GPU versions separately.</p>
 </section>
 </section>
 <section id="packaging-for-pypi">
-<h3><a class="toc-backref" href="#id13" role="doc-backlink">Packaging for PyPI</a><a class="headerlink" href="#packaging-for-pypi" title="Link to this heading"></a></h3>
+<h3><a class="toc-backref" href="#id18" role="doc-backlink">Packaging for PyPI</a><a class="headerlink" href="#packaging-for-pypi" title="Link to this heading"></a></h3>
 <p>If you want your plugin to be installable via pip and auto-discovered:</p>
 <ol class="arabic">
 <li><p>Create a Python package with an entry point:</p>
@@ -787,7 +819,7 @@ in <code class="docutils literal notranslate"><span class="pre">nettracer3d/plug
 are included in the wheel alongside the Python code.</p>
 </section>
 <section id="minimal-example-plugin">
-<h3><a class="toc-backref" href="#id14" role="doc-backlink">Minimal Example Plugin</a><a class="headerlink" href="#minimal-example-plugin" title="Link to this heading"></a></h3>
+<h3><a class="toc-backref" href="#id19" role="doc-backlink">Minimal Example Plugin</a><a class="headerlink" href="#minimal-example-plugin" title="Link to this heading"></a></h3>
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="sd">&quot;&quot;&quot;</span>
 <span class="sd">Example plugin that adds a menu item to count objects in the</span>
 <span class="sd">active channel.</span>
@@ -832,7 +864,7 @@ are included in the wheel alongside the Python code.</p>
 </div>
 </section>
 <section id="complete-plugin-checklist">
-<h3><a class="toc-backref" href="#id15" role="doc-backlink">Complete Plugin Checklist</a><a class="headerlink" href="#complete-plugin-checklist" title="Link to this heading"></a></h3>
+<h3><a class="toc-backref" href="#id20" role="doc-backlink">Complete Plugin Checklist</a><a class="headerlink" href="#complete-plugin-checklist" title="Link to this heading"></a></h3>
 <div class="highlight-text notranslate"><div class="highlight"><pre><span></span>✓  PLUGIN_INFO dict with name, version, api_version, category
 ✓  register(api) function
 ✓  unregister(api) function (optional but recommended)
@@ -845,6 +877,428 @@ are included in the wheel alongside the Python code.</p>
    only as a last resort with the understanding it may break)
 </pre></div>
 </div>
+</section>
+</section>
+<section id="bundled-extensions">
+<span id="id1"></span><h2><a class="toc-backref" href="#id21" role="doc-backlink">Bundled Extensions</a><a class="headerlink" href="#bundled-extensions" title="Link to this heading"></a></h2>
+<p>This section documents the extensions that ship with NetTracer3D in
+detail — what each control does and how to get sensible results out of
+it.  For the one-line summary of what is bundled, see
+<a class="reference internal" href="#built-in-plugins">Built-In Plugins</a> in the User Guide above.</p>
+<p>Extensions documented here are installed automatically with
+NetTracer3D, but they are ordinary plugins: they appear in the
+Extensions panel like any other, can be disabled, and may need their
+dependencies installed on first use.</p>
+<section id="cellpose-extension">
+<span id="id2"></span><h3><a class="toc-backref" href="#id22" role="doc-backlink">Cellpose Segmentation</a><a class="headerlink" href="#cellpose-extension" title="Link to this heading"></a></h3>
+<p>Runs <a class="reference external" href="https://cellpose.readthedocs.io/">Cellpose</a> instance
+segmentation on a NetTracer3D channel and writes the resulting label
+mask back into a channel of your choice.</p>
+<p><strong>Requires</strong>: <code class="docutils literal notranslate"><span class="pre">cellpose&gt;=3.0</span></code>.  On first use the extension will be
+marked <strong>Needs Deps</strong> — select it in the Extensions panel and click
+<strong>Install Deps</strong>.  Accept the CUDA prompt if you want GPU support.</p>
+<section id="opening-the-panel">
+<h4>Opening the panel<a class="headerlink" href="#opening-the-panel" title="Link to this heading"></a></h4>
+<blockquote>
+<div><p><strong>Extensions → Cellpose → Open Cellpose Panel…</strong></p>
+</div></blockquote>
+<p>There is also <strong>Extensions → Cellpose → Quick Launch Cellpose GUI</strong>,
+which launches the standalone Cellpose Qt application in a separate
+process.  That GUI is independent of NetTracer3D — it does not see your
+loaded channels and does not write back to them.  Use it for exploring
+models interactively; use the panel for everything else.</p>
+</section>
+<section id="choosing-channels">
+<h4>Choosing channels<a class="headerlink" href="#choosing-channels" title="Link to this heading"></a></h4>
+<table class="docutils align-default">
+<colgroup>
+<col style="width: 30.0%" />
+<col style="width: 70.0%" />
+</colgroup>
+<thead>
+<tr class="row-odd"><th class="head"><p>Control</p></th>
+<th class="head"><p>Meaning</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>Image to segment</p></td>
+<td><p>The channel Cellpose runs on.  Must contain data.</p></td>
+</tr>
+<tr class="row-odd"><td><p>Secondary context image</p></td>
+<td><p>Optional second channel stacked as an extra input channel — for
+example a nuclear stain alongside a cytoplasmic one.  Must have
+the same Z/Y/X dimensions as the primary image.</p></td>
+</tr>
+<tr class="row-even"><td><p>Send output to</p></td>
+<td><p>Where the label mask is written.  <strong>This overwrites whatever is
+in that channel</strong>, so point it at an empty channel unless you
+mean to replace something.</p></td>
+</tr>
+</tbody>
+</table>
+<p>The output dtype is chosen automatically from the number of objects
+found (<code class="docutils literal notranslate"><span class="pre">uint8</span></code>, <code class="docutils literal notranslate"><span class="pre">uint16</span></code>, or <code class="docutils literal notranslate"><span class="pre">uint32</span></code>).</p>
+</section>
+<section id="model-selection">
+<h4>Model selection<a class="headerlink" href="#model-selection" title="Link to this heading"></a></h4>
+<p>The dropdown lists the built-in Cellpose models (<code class="docutils literal notranslate"><span class="pre">cyto3</span></code>, <code class="docutils literal notranslate"><span class="pre">nuclei</span></code>,
+<code class="docutils literal notranslate"><span class="pre">tissuenet_cp3</span></code> and so on).  <strong>Load Custom Model…</strong> adds a trained
+<code class="docutils literal notranslate"><span class="pre">.pth</span></code> file to the list, marked with a ✦.  Custom models are
+remembered for the lifetime of the panel.</p>
+</section>
+<section id="segmentation-parameters">
+<h4>Segmentation parameters<a class="headerlink" href="#segmentation-parameters" title="Link to this heading"></a></h4>
+<table class="docutils align-default">
+<colgroup>
+<col style="width: 30.0%" />
+<col style="width: 70.0%" />
+</colgroup>
+<thead>
+<tr class="row-odd"><th class="head"><p>Parameter</p></th>
+<th class="head"><p>Meaning</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>Diameter</p></td>
+<td><p>Expected object diameter in pixels.  <code class="docutils literal notranslate"><span class="pre">0</span></code> lets Cellpose
+estimate it.  This is the single most important parameter — if
+results are poor, fix this before touching anything else.</p></td>
+</tr>
+<tr class="row-odd"><td><p>Flow threshold</p></td>
+<td><p>Maximum allowed error of the flow field.  Raise it to accept
+more objects, lower it for stricter segmentation.</p></td>
+</tr>
+<tr class="row-even"><td><p>Cell probability threshold</p></td>
+<td><p>Pixels above this probability are considered part of an object.
+Lower it to pick up dimmer objects.</p></td>
+</tr>
+<tr class="row-odd"><td><p>Minimum object size</p></td>
+<td><p>Objects smaller than this many pixels are discarded by Cellpose.</p></td>
+</tr>
+<tr class="row-even"><td><p>Stitch threshold</p></td>
+<td><p>IoU threshold for stitching 2-D masks across Z.  Only used for
+3-D images when <strong>Native 3D</strong> is off.  <code class="docutils literal notranslate"><span class="pre">0</span></code> disables stitching
+and leaves every slice independent.</p></td>
+</tr>
+<tr class="row-odd"><td><p>Use GPU</p></td>
+<td><p>Uses CUDA if available and falls back to CPU otherwise.</p></td>
+</tr>
+<tr class="row-even"><td><p>Native 3D</p></td>
+<td><p>Uses true volumetric convolutions instead of the default
+slice-by-slice-then-stitch approach.  Much slower and far more
+memory-hungry, but can do better on roughly spherical objects.</p></td>
+</tr>
+</tbody>
+</table>
+<p>Dimensionality is detected automatically.  NetTracer3D stores images as
+<code class="docutils literal notranslate"><span class="pre">(Z,</span> <span class="pre">Y,</span> <span class="pre">X)</span></code> even when there is only one slice, so a single-slice
+channel is treated as 2-D and the 3-D-only options are ignored.</p>
+</section>
+<section id="chunked-processing">
+<h4>Chunked processing<a class="headerlink" href="#chunked-processing" title="Link to this heading"></a></h4>
+<p>Large volumes often will not fit in GPU memory.  <strong>Enable</strong> under
+Chunked Processing splits the image into sub-volumes, segments each
+one, and reassembles the result.  The number of chunks is a target —
+the plugin picks a Z×Y×X grid whose chunks are as close to cubic as it
+can manage, so the actual count may be slightly higher (asking for 8
+on a flat stack typically gives a 1×3×3 grid, i.e. 9 chunks).</p>
+<section id="padding">
+<h5>Padding<a class="headerlink" href="#padding" title="Link to this heading"></a></h5>
+<p>Chunking naively means objects sitting on a chunk boundary get cut in
+half by an artificial image edge, and Cellpose’s flow field near that
+edge is wrong.  <strong>Use padding</strong> (on by default) gives each chunk an
+overlapping border of surrounding voxels when it is sent to Cellpose,
+then discards that border when the volume is put back together.  Each
+chunk therefore contributes only its central region, but that region
+was segmented with its real surroundings visible.</p>
+<p><strong>XY padding</strong> and <strong>Z padding</strong> are set separately because data is
+often anisotropic — with thick slices you usually want much less
+padding in Z.  Both are auto-filled from the image size and the chunk
+count, and re-estimated whenever you change either.  Typing your own
+value switches that field to manual; <strong>Auto</strong> hands it back to the
+estimator.</p>
+<p>A good manual value is roughly one object diameter.  Note that padding
+enlarges the block actually handed to Cellpose, so it raises peak VRAM
+per chunk — if you run out of memory, reduce the padding or increase
+the chunk count.</p>
+</section>
+<section id="seam-handling">
+<h5>Seam handling<a class="headerlink" href="#seam-handling" title="Link to this heading"></a></h5>
+<p><strong>Keep objects crossing chunk seams whole</strong> (on by default) lets the
+first chunk that owns an object’s centre also claim the parts spilling
+past its boundary, so an object straddling a seam stays one label
+instead of being split into two.  Turn it off for a strict crop, where
+each chunk contributes only what falls inside its own core region.</p>
+<p><strong>Filter seam artifacts</strong> (on by default) removes labels far smaller
+than a typical object after reassembly.  These are usually thin slivers
+along a seam, left where two chunks segmented the same object and
+disagreed about its boundary by a voxel or two.  The threshold is a
+percentage of the <em>median</em> object volume — the median rather than the
+mean, because fragments are numerous and tiny enough to drag a mean
+down toward themselves, and because object sizes are right-skewed so
+plenty of legitimate objects sit below the mean.  10% is conservative;
+raise it if fragments survive, lower it if real objects vanish.</p>
+<div class="admonition note">
+<p class="admonition-title">Note</p>
+<p>If you disable the artifact filter, expect to clean up small
+fragments along the chunk borders yourself downstream.</p>
+</div>
+</section>
+</section>
+<section id="reading-the-console">
+<h4>Reading the console<a class="headerlink" href="#reading-the-console" title="Link to this heading"></a></h4>
+<p>The extension logs to the console with a <code class="docutils literal notranslate"><span class="pre">[Cellpose]</span></code> prefix, which
+is the quickest way to see what it actually did:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="p">[</span><span class="n">Cellpose</span><span class="p">]</span> <span class="n">Detected</span> <span class="mi">3</span><span class="n">D</span> <span class="n">image</span><span class="p">:</span> <span class="p">(</span><span class="mi">48</span><span class="p">,</span> <span class="mi">512</span><span class="p">,</span> <span class="mi">512</span><span class="p">)</span> <span class="p">(</span><span class="n">Z</span><span class="p">,</span> <span class="n">Y</span><span class="p">,</span> <span class="n">X</span><span class="p">)</span>
+<span class="p">[</span><span class="n">Cellpose</span><span class="p">]</span> <span class="n">Mode</span><span class="p">:</span> <span class="nb">slice</span><span class="o">-</span><span class="n">by</span><span class="o">-</span><span class="nb">slice</span> <span class="o">+</span> <span class="n">stitch</span> <span class="p">(</span><span class="n">stitch_threshold</span><span class="o">=</span><span class="mf">0.5</span><span class="p">)</span>
+<span class="p">[</span><span class="n">Cellpose</span><span class="p">]</span> <span class="n">Loading</span> <span class="n">model</span><span class="p">:</span> <span class="n">cyto3</span><span class="p">,</span> <span class="n">GPU</span><span class="o">=</span><span class="kc">True</span>
+<span class="p">[</span><span class="n">Cellpose</span><span class="p">]</span> <span class="n">Chunked</span> <span class="n">into</span> <span class="mi">8</span> <span class="n">pieces</span> <span class="p">(</span><span class="mi">2</span><span class="n">x2x2</span><span class="p">),</span> <span class="n">padding</span> <span class="n">XY</span><span class="o">=</span><span class="mi">26</span><span class="p">,</span> <span class="n">Z</span><span class="o">=</span><span class="mi">26</span>
+<span class="p">[</span><span class="n">Cellpose</span><span class="p">]</span> <span class="n">Segmenting</span> <span class="n">chunk</span> <span class="mi">1</span><span class="o">/</span><span class="mi">8</span><span class="p">,</span> <span class="n">shape</span><span class="o">=</span><span class="p">(</span><span class="mi">50</span><span class="p">,</span> <span class="mi">282</span><span class="p">,</span> <span class="mi">282</span><span class="p">)</span><span class="o">...</span>
+<span class="p">[</span><span class="n">Cellpose</span><span class="p">]</span> <span class="n">Removed</span> <span class="mi">3</span> <span class="n">fragment</span><span class="p">(</span><span class="n">s</span><span class="p">)</span> <span class="n">smaller</span> <span class="n">than</span> <span class="mi">38</span> <span class="n">voxels</span>
+<span class="p">[</span><span class="n">Cellpose</span><span class="p">]</span> <span class="n">Segmentation</span> <span class="n">complete</span><span class="p">:</span> <span class="mi">214</span> <span class="n">objects</span>
+</pre></div>
+</div>
+<p>Worth checking on the first run of a new dataset: that the
+dimensionality is what you expected, and that the artifact filter is
+not removing more than a handful of objects.</p>
+</section>
+<section id="troubleshooting">
+<h4>Troubleshooting<a class="headerlink" href="#troubleshooting" title="Link to this heading"></a></h4>
+<table class="docutils align-default">
+<colgroup>
+<col style="width: 35.0%" />
+<col style="width: 65.0%" />
+</colgroup>
+<thead>
+<tr class="row-odd"><th class="head"><p>Symptom</p></th>
+<th class="head"><p>Try</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>Out of GPU memory</p></td>
+<td><p>Enable chunking, raise the chunk count, or reduce the padding.
+Turn off <strong>Native 3D</strong>, which is by far the most memory-hungry
+mode.</p></td>
+</tr>
+<tr class="row-odd"><td><p>Chunking seems to do nothing</p></td>
+<td><p>Check the console for the chunk grid line.  A chunk count of 1
+is ignored.</p></td>
+</tr>
+<tr class="row-even"><td><p>Objects split along chunk borders</p></td>
+<td><p>Increase the padding and confirm seam recovery is enabled.</p></td>
+</tr>
+<tr class="row-odd"><td><p>Small fragments along chunk borders</p></td>
+<td><p>Enable the artifact filter, or raise its percentage.</p></td>
+</tr>
+<tr class="row-even"><td><p>Real objects disappearing</p></td>
+<td><p>Lower the artifact filter percentage or disable it, and check
+<strong>Minimum object size</strong>.</p></td>
+</tr>
+<tr class="row-odd"><td><p>Too few / too many objects</p></td>
+<td><p>Fix <strong>Diameter</strong> first, then adjust flow and cell probability
+thresholds.</p></td>
+</tr>
+<tr class="row-even"><td><p>3-D objects fragmented across Z</p></td>
+<td><p>Raise <strong>Stitch threshold</strong> toward 1.0 for stricter matching, or
+lower it to merge more readily.  Consider <strong>Native 3D</strong>.</p></td>
+</tr>
+</tbody>
+</table>
+</section>
+</section>
+<section id="macro-recorder">
+<span id="macro-recorder-extension"></span><h3><a class="toc-backref" href="#id23" role="doc-backlink">Macro Recorder</a><a class="headerlink" href="#macro-recorder" title="Link to this heading"></a></h3>
+<p>Records what you do in the GUI and replays it across many saved
+sessions, so a workflow you have worked out on one dataset can be run
+unattended over a whole folder of them.</p>
+<p><strong>Requires</strong>: nothing beyond NetTracer3D itself.</p>
+<section id="id4">
+<h4>Opening the panel<a class="headerlink" href="#id4" title="Link to this heading"></a></h4>
+<blockquote>
+<div><p><strong>Extensions → Macro Recorder → Open Macro Recorder…</strong></p>
+</div></blockquote>
+<p>The panel has four buttons — <strong>Start Recording</strong>, <strong>Stop Recording</strong>,
+<strong>Load Macro</strong> and <strong>Run Macro</strong> — plus a progress bar and a log that
+reports every step as it happens.</p>
+</section>
+<section id="recommended-workflow">
+<h4>Recommended workflow<a class="headerlink" href="#recommended-workflow" title="Link to this heading"></a></h4>
+<ol class="arabic simple">
+<li><p>Load one representative session and get it into the state you want
+to start from.</p></li>
+<li><p>Click <strong>Start Recording</strong>.</p></li>
+<li><p>Carry out your analysis exactly as you normally would.</p></li>
+<li><p>Click <strong>Stop Recording</strong>.  You will be prompted to save the macro as
+a <code class="docutils literal notranslate"><span class="pre">.py</span></code> file.</p></li>
+<li><p>Click <strong>Run Macro</strong> and choose the <em>parent</em> folder that contains
+your session folders.</p></li>
+</ol>
+<p>The macro is replayed on each session folder in turn.  Recording a
+macro against a session that is representative of the batch matters —
+a dialog field or right-click entry that only exists for some datasets
+will simply be skipped on the sessions that lack it.</p>
+<div class="admonition note">
+<p class="admonition-title">Note</p>
+<p>Only the <em>first</em> session needs to be loaded by hand.  <strong>Run Macro</strong>
+loads each session itself, so do not include a session load in the
+recording.</p>
+</div>
+</section>
+<section id="what-gets-recorded">
+<h4>What gets recorded<a class="headerlink" href="#what-gets-recorded" title="Link to this heading"></a></h4>
+<table class="docutils align-default">
+<colgroup>
+<col style="width: 35.0%" />
+<col style="width: 65.0%" />
+</colgroup>
+<thead>
+<tr class="row-odd"><th class="head"><p>Interaction</p></th>
+<th class="head"><p>Notes</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>Menu bar actions</p></td>
+<td><p>Recorded by menu path and re-triggered on replay.</p></td>
+</tr>
+<tr class="row-odd"><td><p>Dialog fields and buttons</p></td>
+<td><p>Only fields you actually changed are stored, followed by the
+button you clicked.  Works for both modal and modeless dialogs.</p></td>
+</tr>
+<tr class="row-even"><td><p>Right-click actions</p></td>
+<td><p>On the image display and on the data tables.  Stored by menu
+label path, e.g. <code class="docutils literal notranslate"><span class="pre">Show</span> <span class="pre">Identity</span> <span class="pre">&gt;</span> <span class="pre">ID:</span> <span class="pre">neuron</span></code>.</p></td>
+</tr>
+<tr class="row-odd"><td><p>On-screen controls</p></td>
+<td><p>Channel visibility toggles, scalebar, home/reset, the
+<strong>Active Image</strong> selector, the highlight overlay toggle, and the
+camera (screenshot) button.</p></td>
+</tr>
+<tr class="row-even"><td><p>File loads</p></td>
+<td><p>A file chosen through a load dialog is re-loaded from the same
+path on every session.</p></td>
+</tr>
+<tr class="row-odd"><td><p>Saves</p></td>
+<td><p>Tables, image channels, Network3D dumps, quickload pickles and
+screenshots.</p></td>
+</tr>
+<tr class="row-even"><td><p>Message box answers</p></td>
+<td><p>Replayed so the run never stops waiting for a click.</p></td>
+</tr>
+</tbody>
+</table>
+<p>Checkable controls are replayed to the <em>state</em> that was recorded rather
+than blindly re-clicked.  If you recorded “scalebar on” and a session
+happens to load with the scalebar already on, it is left alone — every
+session ends in the same state regardless of where it started.</p>
+</section>
+<section id="what-is-not-recorded">
+<h4>What is not recorded<a class="headerlink" href="#what-is-not-recorded" title="Link to this heading"></a></h4>
+<p>The zoom, pan, 3D, popout and pen buttons are deliberately ignored:
+they are view and interaction modes that carry no meaning from one
+session to the next.  Left-click selection on the image canvas, and
+direct canvas manipulation such as panning, zooming and painting, are
+likewise not recorded.</p>
+<p>Anything that depends on <em>where</em> you clicked is the general limitation
+here.  Right-click entries whose meaning follows from the current
+selection — <strong>Show Neighbors</strong>, the <strong>Selection</strong> submenu, measurement
+points — are recorded, but on replay they act on whatever happens to be
+selected at that moment, which may differ per session.  For batch work
+prefer the selection-independent entries: identities, communities,
+Select All, Sort and Save As.</p>
+</section>
+<section id="where-the-output-goes">
+<h4>Where the output goes<a class="headerlink" href="#where-the-output-goes" title="Link to this heading"></a></h4>
+<p>Each run creates a new timestamped folder inside the parent folder you
+selected, containing one sub-folder per session:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span>YourParentFolder/
+├── Mouse_01/                          &lt;- your sessions, untouched
+├── Mouse_02/
+└── MacroBatch_2026-08-11_01-10-12/
+    ├── Mouse_01_Output/
+    │   ├── Proximity_Mouse_01.csv
+    │   └── screenshot_Mouse_01.png
+    └── Mouse_02_Output/
+        ├── Proximity_Mouse_02.csv
+        └── screenshot_Mouse_02.png
+</pre></div>
+</div>
+<p>Because the folder is timestamped, running the same macro again never
+overwrites an earlier batch.  Session folders themselves are never
+written to.</p>
+<p>Every output file also carries its session name at the end of the
+filename.  This is what makes the results poolable: you can copy the
+contents of every <code class="docutils literal notranslate"><span class="pre">*_Output</span></code> folder into a single directory for
+downstream analysis without anything colliding.</p>
+<p>Folders whose name starts with <code class="docutils literal notranslate"><span class="pre">MacroBatch_</span></code> are skipped when
+scanning for sessions, so previous results are never mistaken for
+input.</p>
+</section>
+<section id="when-something-goes-wrong">
+<h4>When something goes wrong<a class="headerlink" href="#when-something-goes-wrong" title="Link to this heading"></a></h4>
+<p>Errors are contained to the session that caused them.  A folder that is
+corrupt, is not a NetTracer3D session, or is simply incompatible with
+the macro is logged and skipped, and the run carries on with the next
+one.  The summary at the end reports how many sessions succeeded, and
+the log lists what failed for each one that did not.</p>
+<p>Steps that cannot be applied to a particular session — a dialog field
+that is not present, a right-click entry that dataset does not produce,
+a channel toggle that is disabled, a load file that has been moved — are
+logged as skipped and the rest of the macro continues.</p>
+</section>
+<section id="editing-a-macro-by-hand">
+<h4>Editing a macro by hand<a class="headerlink" href="#editing-a-macro-by-hand" title="Link to this heading"></a></h4>
+<p>Saved macros are plain, readable Python.  Each recorded step is one
+entry in an <code class="docutils literal notranslate"><span class="pre">EVENTS</span></code> list with a comment describing it:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">MACRO_FORMAT</span> <span class="o">=</span> <span class="mi">1</span>
+
+<span class="n">EVENTS</span> <span class="o">=</span> <span class="p">[</span>
+    <span class="p">{</span><span class="s1">&#39;op&#39;</span><span class="p">:</span> <span class="s1">&#39;menu&#39;</span><span class="p">,</span> <span class="s1">&#39;path&#39;</span><span class="p">:</span> <span class="p">[</span><span class="s1">&#39;Analyze&#39;</span><span class="p">,</span> <span class="s1">&#39;Proximity Analysis...&#39;</span><span class="p">]},</span>   <span class="c1"># menu: Analyze &gt; Proximity Analysis...</span>
+    <span class="p">{</span><span class="s1">&#39;op&#39;</span><span class="p">:</span> <span class="s1">&#39;set&#39;</span><span class="p">,</span> <span class="s1">&#39;w_class&#39;</span><span class="p">:</span> <span class="s1">&#39;QDoubleSpinBox&#39;</span><span class="p">,</span> <span class="s1">&#39;w_index&#39;</span><span class="p">:</span> <span class="mi">0</span><span class="p">,</span> <span class="o">...</span><span class="p">},</span>  <span class="c1"># set search distance</span>
+    <span class="p">{</span><span class="s1">&#39;op&#39;</span><span class="p">:</span> <span class="s1">&#39;ui&#39;</span><span class="p">,</span> <span class="s1">&#39;target&#39;</span><span class="p">:</span> <span class="s1">&#39;scalebar&#39;</span><span class="p">,</span> <span class="s1">&#39;checked&#39;</span><span class="p">:</span> <span class="kc">True</span><span class="p">},</span>            <span class="c1"># scalebar on</span>
+    <span class="p">{</span><span class="s1">&#39;op&#39;</span><span class="p">:</span> <span class="s1">&#39;save&#39;</span><span class="p">,</span> <span class="s1">&#39;method&#39;</span><span class="p">:</span> <span class="s1">&#39;save_table_as&#39;</span><span class="p">,</span> <span class="s1">&#39;fmt&#39;</span><span class="p">:</span> <span class="s1">&#39;csv&#39;</span><span class="p">,</span> <span class="o">...</span><span class="p">},</span>   <span class="c1"># save table &#39;Proximity&#39; (csv)</span>
+<span class="p">]</span>
+</pre></div>
+</div>
+<p>You can delete steps, reorder them, or tweak a recorded value in a text
+editor rather than re-recording the whole run.  Keep the <code class="docutils literal notranslate"><span class="pre">EVENTS</span></code>
+name and the dictionary structure intact.</p>
+</section>
+<section id="id5">
+<h4>Troubleshooting<a class="headerlink" href="#id5" title="Link to this heading"></a></h4>
+<table class="docutils align-default">
+<colgroup>
+<col style="width: 35.0%" />
+<col style="width: 65.0%" />
+</colgroup>
+<thead>
+<tr class="row-odd"><th class="head"><p>Symptom</p></th>
+<th class="head"><p>Try</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>Every session reports LOAD FAILED</p></td>
+<td><p>Check you selected the <em>parent</em> folder containing the session
+folders, not a session folder itself.</p></td>
+</tr>
+<tr class="row-odd"><td><p>A step is skipped on some sessions</p></td>
+<td><p>The dialog field or menu entry does not exist for that dataset.
+Record against a representative session, or split the macro.</p></td>
+</tr>
+<tr class="row-even"><td><p>Results differ between sessions</p></td>
+<td><p>Something in the macro depends on the current selection or on a
+clicked position.  Prefer selection-independent actions.</p></td>
+</tr>
+<tr class="row-odd"><td><p>A recorded file load is skipped</p></td>
+<td><p>The file has been moved or renamed.  Macros store the absolute
+path chosen at record time.</p></td>
+</tr>
+<tr class="row-even"><td><p>Nothing is saved</p></td>
+<td><p>The macro contains no save step.  Saves must be performed while
+recording for the run to produce output.</p></td>
+</tr>
+</tbody>
+</table>
+</section>
 </section>
 </section>
 </section>

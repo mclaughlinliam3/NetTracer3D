@@ -6,14 +6,14 @@
   <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
 
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Labeling Branches and Branch Networks &mdash; NetTracer3D 1.6.0 documentation</title>
+  <title>Labeling Branches and Branch Networks &mdash; NetTracer3D 2.0.0 documentation</title>
       <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=b86133f3" />
       <link rel="stylesheet" type="text/css" href="_static/css/theme.css?v=e59714d7" />
 
   
       <script src="_static/jquery.js?v=5d32c60e"></script>
       <script src="_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
-      <script src="_static/documentation_options.js?v=72d88caf"></script>
+      <script src="_static/documentation_options.js?v=51b770b3"></script>
       <script src="_static/doctools.js?v=9bcbadda"></script>
       <script src="_static/sphinx_highlight.js?v=dc90522c"></script>
     <script src="_static/js/theme.js"></script>
@@ -21,7 +21,7 @@
     <link rel="index" title="Index" href="genindex.html" />
     <link rel="search" title="Search" href="search.html" />
     <link rel="next" title="Properties of a Network3D Object" href="properties.html" />
-    <link rel="prev" title="Proximity Networks - Ideal for Cellular Data" href="proximity.html" /> 
+    <link rel="prev" title="Proximity Networks — Ideal for Cellular Data" href="proximity.html" /> 
 </head>
 
 <body class="wy-body-for-nav"> 
@@ -46,20 +46,20 @@
               <p class="caption" role="heading"><span class="caption-text">User Guide:</span></p>
 <ul class="current">
 <li class="toctree-l1"><a class="reference internal" href="installation.html">Installation</a></li>
-<li class="toctree-l1"><a class="reference internal" href="quickstart.html">Quickstart - Segmenting Data and Generating Connectivity Networks</a></li>
-<li class="toctree-l1"><a class="reference internal" href="proximity.html">Proximity Networks - Ideal for Cellular Data</a></li>
+<li class="toctree-l1"><a class="reference internal" href="quickstart.html">Quickstart — Segmenting Data and Generating Connectivity Networks</a></li>
+<li class="toctree-l1"><a class="reference internal" href="proximity.html">Proximity Networks — Ideal for Cellular Data</a></li>
 <li class="toctree-l1 current"><a class="current reference internal" href="#">Labeling Branches and Branch Networks</a><ul>
 <li class="toctree-l2"><a class="reference internal" href="#labeling-branches">Labeling Branches</a><ul>
 <li class="toctree-l3"><a class="reference internal" href="#step-1-segmenting">Step 1: Segmenting</a></li>
-<li class="toctree-l3"><a class="reference internal" href="#step-2-cleaning-my-segmentation">Step 2: Cleaning my Segmentation</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#step-2-cleaning-the-segmentation">Step 2: Cleaning the Segmentation</a></li>
 <li class="toctree-l3"><a class="reference internal" href="#step-3-labeling-branches">Step 3: Labeling Branches</a></li>
 </ul>
 </li>
-<li class="toctree-l2"><a class="reference internal" href="#examples-of-tweaking-branch-labels-optional">Examples of Tweaking Branch Labels (Optional)</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="#tweaking-branch-labels-optional">Tweaking Branch Labels (Optional)</a><ul>
 <li class="toctree-l3"><a class="reference internal" href="#handling-spine-artifacts">Handling spine artifacts</a></li>
-<li class="toctree-l3"><a class="reference internal" href="#with-corrections">With Corrections</a></li>
-<li class="toctree-l3"><a class="reference internal" href="#branch-merging-corrections">Branch Merging Corrections</a></li>
-<li class="toctree-l3"><a class="reference internal" href="#morphological-analysis">Morphological Analysis</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#with-corrections">With corrections</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#branch-merging-corrections">Branch merging corrections</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#morphological-analysis">Morphological analysis</a></li>
 </ul>
 </li>
 <li class="toctree-l2"><a class="reference internal" href="#branch-adjacency-network">Branch Adjacency Network</a></li>
@@ -74,12 +74,12 @@
 </ul>
 <p class="caption" role="heading"><span class="caption-text">Detailed Function Guide:</span></p>
 <ul>
-<li class="toctree-l1"><a class="reference internal" href="right_clicking.html">Right Clicking - All Options Available by Right Clicking in the GUI</a></li>
+<li class="toctree-l1"><a class="reference internal" href="right_clicking.html">Right Clicking — All Options Available by Right Clicking in the GUI</a></li>
 <li class="toctree-l1"><a class="reference internal" href="file_menu.html">All File Menu Options</a></li>
 <li class="toctree-l1"><a class="reference internal" href="analyze_menu.html">All Analyze Menu Options</a></li>
 <li class="toctree-l1"><a class="reference internal" href="process_menu.html">All Process Menu Options</a></li>
 <li class="toctree-l1"><a class="reference internal" href="image_menu.html">All Image Menu Options</a></li>
-<li class="toctree-l1"><a class="reference internal" href="extensions.html">NetTracer3D Plugin System</a></li>
+<li class="toctree-l1"><a class="reference internal" href="extensions.html">NetTracer3D Plugin System and Instructions on Using Prebundled Plugins</a></li>
 </ul>
 <p class="caption" role="heading"><span class="caption-text">Development:</span></p>
 <ul>
@@ -115,176 +115,241 @@
              
   <section id="labeling-branches-and-branch-networks">
 <span id="branches"></span><h1>Labeling Branches and Branch Networks<a class="headerlink" href="#labeling-branches-and-branch-networks" title="Link to this heading"></a></h1>
+<nav class="contents local" id="on-this-page">
+<p class="topic-title">On this page</p>
+<ul class="simple">
+<li><p><a class="reference internal" href="#labeling-branches" id="id1">Labeling Branches</a></p>
+<ul>
+<li><p><a class="reference internal" href="#step-1-segmenting" id="id2">Step 1: Segmenting</a></p></li>
+<li><p><a class="reference internal" href="#step-2-cleaning-the-segmentation" id="id3">Step 2: Cleaning the Segmentation</a></p></li>
+<li><p><a class="reference internal" href="#step-3-labeling-branches" id="id4">Step 3: Labeling Branches</a></p></li>
+</ul>
+</li>
+<li><p><a class="reference internal" href="#tweaking-branch-labels-optional" id="id5">Tweaking Branch Labels (Optional)</a></p>
+<ul>
+<li><p><a class="reference internal" href="#handling-spine-artifacts" id="id6">Handling spine artifacts</a></p></li>
+<li><p><a class="reference internal" href="#with-corrections" id="id7">With corrections</a></p></li>
+<li><p><a class="reference internal" href="#branch-merging-corrections" id="id8">Branch merging corrections</a></p></li>
+<li><p><a class="reference internal" href="#morphological-analysis" id="id9">Morphological analysis</a></p></li>
+</ul>
+</li>
+<li><p><a class="reference internal" href="#branch-adjacency-network" id="id10">Branch Adjacency Network</a></p></li>
+<li><p><a class="reference internal" href="#using-branch-labels-as-nodes" id="id11">Using Branch Labels as Nodes</a></p></li>
+<li><p><a class="reference internal" href="#branchpoint-networks" id="id12">Branchpoint Networks</a></p></li>
+<li><p><a class="reference internal" href="#next-steps" id="id13">Next Steps</a></p></li>
+</ul>
+</nav>
 <section id="labeling-branches">
-<h2>Labeling Branches<a class="headerlink" href="#labeling-branches" title="Link to this heading"></a></h2>
+<h2><a class="toc-backref" href="#id1" role="doc-backlink">Labeling Branches</a><a class="headerlink" href="#labeling-branches" title="Link to this heading"></a></h2>
 <section id="step-1-segmenting">
-<h3>Step 1: Segmenting<a class="headerlink" href="#step-1-segmenting" title="Link to this heading"></a></h3>
-<p>To demonstrate branch labeling, I will use a cartoon depiction of a neuron.</p>
+<h3><a class="toc-backref" href="#id2" role="doc-backlink">Step 1: Segmenting</a><a class="headerlink" href="#step-1-segmenting" title="Link to this heading"></a></h3>
+<p>Branch labeling is demonstrated here on a cartoon depiction of a neuron.</p>
 <a class="reference internal image-reference" href="_images/branch0.png"><img alt="Neuron" src="_images/branch0.png" style="width: 500px;" />
 </a>
-<ul class="simple">
-<li><p>First, I load my image into the nodes channel and segment the image into a binary mask with the ML-segmenter.</p></li>
-</ul>
+<p>Load the image into the nodes channel and segment it into a binary mask with the
+ML segmenter.</p>
 <a class="reference internal image-reference" href="_images/segmented_neuron.png"><img alt="Segmented Neuron" src="_images/segmented_neuron.png" style="width: 500px;" />
 </a>
-<p><em>This is a binary mask for this neuron thing that I made</em></p>
+<p><em>The resulting binary mask.</em></p>
 </section>
-<section id="step-2-cleaning-my-segmentation">
-<h3>Step 2: Cleaning my Segmentation<a class="headerlink" href="#step-2-cleaning-my-segmentation" title="Link to this heading"></a></h3>
-<ul class="simple">
-<li><p>Next, it is important that I clean up my segmentation. This can be very relevant as the branch labeler is quite sensitive to even little branches that might exist, so you want to make sure you get rid of any noise and address any gap-like artifacts.</p></li>
-<li><p>You can use ‘Process -&gt; Image -&gt; Clean Segmentation’ to get to some useful options for this. Here is the menu it shows:</p></li>
-</ul>
+<section id="step-2-cleaning-the-segmentation">
+<h3><a class="toc-backref" href="#id3" role="doc-backlink">Step 2: Cleaning the Segmentation</a><a class="headerlink" href="#step-2-cleaning-the-segmentation" title="Link to this heading"></a></h3>
+<p>Cleaning the segmentation is important, as the branch labeler is sensitive even
+to very small branches. Remove any noise and address gap-like artifacts before
+proceeding. <strong>Process → Image → Clean Segmentation</strong> provides the relevant
+options:</p>
 <a class="reference internal image-reference" href="_images/clean_segmentation.png"><img alt="clean menu" src="_images/clean_segmentation.png" style="width: 400px;" />
 </a>
-<ul class="simple">
-<li><p>Some useful options are ‘fill holes’ to automatically fill any holes in the segmentation, or ‘Threshold Noise’ to remove small objects.</p></li>
-<li><p>The one that will probably be most relevant to branched images though is ‘Trace Filaments’ This will filter out noise while also joining branches that look like they should be the same branch but have an artifactual gap in their segmentation.</p></li>
-<li><p>I call trace filaments and get the following menu:</p></li>
-</ul>
+<p><strong>Fill Holes</strong> automatically fills holes in the segmentation and <strong>Threshold
+Noise</strong> removes small objects. For branched images, the most relevant option is
+<strong>Trace Filaments</strong>, which filters out noise while joining branches that should
+be continuous but are separated by an artifactual gap in the segmentation.
+Calling it opens the following menu:</p>
 <a class="reference internal image-reference" href="_images/filament_menu.png"><img alt="filament menu" src="_images/filament_menu.png" style="width: 600px;" />
 </a>
-<ul class="simple">
-<li><p>This menu has a lot of parameters that you can read about in the ‘Process -&gt; Generate -&gt; Trace Filaments’ section. However, it is usually fine to run on default settings. I didn’t do it for this neuron, but here is what it looks like for a segmentation from a real nervous dataset:</p></li>
-</ul>
+<p>The parameters are described under <strong>Process → Generate → Trace Filaments</strong>, but
+the defaults are usually adequate. It was not applied to this neuron; the example
+below shows its effect on a segmentation from a real nervous dataset:</p>
 <a class="reference internal image-reference" href="_images/nerveseg1.png"><img alt="nerve before" src="_images/nerveseg1.png" style="width: 800px;" />
 </a>
-<p><em>Above: My raw segmentation of these nerves</em></p>
+<p><em>Above: the raw segmentation of these nerves.</em></p>
 <a class="reference internal image-reference" href="_images/nerveseg2.png"><img alt="nerve after" src="_images/nerveseg2.png" style="width: 800px;" />
 </a>
-<p><em>Above: My segmentation after running trace filaments</em></p>
-<ul class="simple">
-<li><p>As you can see, trace filaments is usually a decent way to just clean up these filament segmentations without having to get into any nitty-gritty. If you want to vary the parameters, you can alter them and recompute with cached-computation to rapidly alter the output based on the input parameters.</p></li>
-</ul>
+<p><em>Above: the same segmentation after running trace filaments.</em></p>
+<p>Trace filaments is generally an effective way to clean up filament segmentations
+without detailed adjustment. To vary the parameters, alter them and recompute
+using cached computation, which rapidly updates the output for a given set of
+inputs.</p>
 </section>
 <section id="step-3-labeling-branches">
-<h3>Step 3: Labeling Branches<a class="headerlink" href="#step-3-labeling-branches" title="Link to this heading"></a></h3>
-<ul class="simple">
-<li><p>Next, I save the binary mask and reload it into the edges channel. The edges channel is the staging channel for all branch labeling.</p></li>
-<li><p>I run ‘Process -&gt; Generate -&gt; Label Branches’</p></li>
-<li><p>I am prompted by a window and select ‘Run Branch Label’ to use the default settings.</p></li>
-</ul>
+<h3><a class="toc-backref" href="#id4" role="doc-backlink">Step 3: Labeling Branches</a><a class="headerlink" href="#step-3-labeling-branches" title="Link to this heading"></a></h3>
+<p>Save the binary mask and reload it into the edges channel, which is the staging
+channel for all branch labeling. Run <strong>Process → Generate → Label Branches</strong> and
+select <strong>Run Branch Label</strong> to use the default settings.</p>
 <a class="reference internal image-reference" href="_images/process6.png"><img alt="Default Menu Settings" src="_images/process6.png" style="width: 500px;" />
 </a>
-<ul class="simple">
-<li><p>I am prompted by a second window and select ‘Run Node Generation’ to use its default settings (this is a sub-algorithm that the former uses).</p></li>
-</ul>
-<p>With these default settings, my labeled branches look like this:</p>
+<p>A second window then prompts for <strong>Run Node Generation</strong>, a sub-algorithm used by
+the labeler; its defaults are also used here.</p>
+<p>With these settings, the labeled branches appear as follows:</p>
 <a class="reference internal image-reference" href="_images/branch1.png"><img alt="Neuron default" src="_images/branch1.png" style="width: 500px;" />
 </a>
-<p><em>Note branch labeling will put a grayscale value into your edges channel. I generated this colorful one for visualization using ‘Image -&gt; Overlays -&gt; Color Nodes (or Edges)’</em></p>
-<p>We can see this image has succesfully identified the majority of the branches here. In many cases, a labeling schematic like this will be sufficient and we can proceed.</p>
+<p><em>Branch labeling writes a grayscale value into the edges channel. The colorful
+rendition here was generated for visualization using ‘Image → Overlays → Color
+Nodes (or Edges)’.</em></p>
+<p>The majority of branches have been identified successfully. In many cases a
+labeling scheme like this is sufficient to proceed.</p>
 </section>
 </section>
-<section id="examples-of-tweaking-branch-labels-optional">
-<h2>Examples of Tweaking Branch Labels (Optional)<a class="headerlink" href="#examples-of-tweaking-branch-labels-optional" title="Link to this heading"></a></h2>
-<p>However, in this instance, there are few areas that may be worth addressing for a more accurate labeling.</p>
-<ul class="simple">
-<li><p>Mainly, that there are little branches at the end of some of the dendrites that do not belong there. (In this case, this is due to segmentation artifacts making the edges appear to have really small branches).</p></li>
-</ul>
-<p>Luckily NetTracer3D’s branch labelling algorithm has a good variety of auto-correcting tools when labeling branches. Here are a few that are enabled by default that I generally recommend:</p>
+<section id="tweaking-branch-labels-optional">
+<h2><a class="toc-backref" href="#id5" role="doc-backlink">Tweaking Branch Labels (Optional)</a><a class="headerlink" href="#tweaking-branch-labels-optional" title="Link to this heading"></a></h2>
+<p>In this instance, a few areas are worth addressing for more accurate labeling —
+chiefly the small branches at the ends of some dendrites that do not belong
+there, caused by segmentation artifacts making the edges appear to have very
+small branches.</p>
+<p>NetTracer3D’s branch labeling algorithm offers a variety of auto-correcting
+tools. Two are recommended and enabled by default:</p>
 <ol class="arabic simple">
-<li><p>By default, two auto-correct options are enabled in the branch labeler. The first option collapses any internal labels and forces them to merge with neighbors bordering the background. Otherwise, the middle of the neuron here (the soma) would likely have obtained a mosaic-looking set of labels. The second auto-attempts to correct any branch labels that may not be contiguous in space. It is recommended to keep these settings enabled, although they can be disabled for increased speed in exchange form some minor inaccuracies.</p></li>
-<li><p>For 3D images, ‘Attempt to Auto-Correct Skeleton Looping’ is auto-enabled. This option attempts to convert any polyp-looking artifacts that show up in the internal skeletonization step back to single filaments (generally recommend).</p></li>
+<li><p>Two auto-correct options in the branch labeler. The first collapses internal
+labels and forces them to merge with neighbors bordering the background;
+without it, the soma at the center of this neuron would likely acquire a
+mosaic-looking set of labels. The second attempts to correct branch labels
+that are not contiguous in space. Keeping both enabled is recommended, though
+disabling them increases speed at the cost of minor inaccuracies.</p></li>
+<li><p>For 3D images, <strong>Attempt to Auto-Correct Skeleton Looping</strong> is enabled
+automatically. This converts polyp-like artifacts arising in the internal
+skeletonization step back into single filaments, and is generally recommended.
+It is not enabled for 2D, because in 2D the algorithm cannot distinguish an
+artifactual loop from a real one. Since this neuron contains no real loops, it
+is enabled here.</p></li>
 </ol>
-<blockquote>
-<div><ul class="simple">
-<li><p>However, this is not enabled for 2D, so my neuron did not use it. Mainly this is because in 2D, it cannot tell the difference between an artifactual and a real loop, but in this case we don’t have any real loops so we’ll use it.</p></li>
-</ul>
-</div></blockquote>
 <section id="handling-spine-artifacts">
-<h3>Handling spine artifacts<a class="headerlink" href="#handling-spine-artifacts" title="Link to this heading"></a></h3>
-<p>Reloading my binary image of a neuron into edges, I once more run the branch labeler. I would like to avoid those small, wrongly labeled terminal branches from slipping through.
-To do this, I want to decide what length of spine to remove from the image skeleton (which is used to label branches). This choice can be informed by skeletonizing my image with ‘Process -&gt; Image -&gt; Skeletonize’, then measuring the length of these terminal branches by right-clicking in the Image Viewer Window and placing measurement points:</p>
+<h3><a class="toc-backref" href="#id6" role="doc-backlink">Handling spine artifacts</a><a class="headerlink" href="#handling-spine-artifacts" title="Link to this heading"></a></h3>
+<p>Reload the binary neuron image into edges and run the branch labeler again, this
+time avoiding the small, wrongly labeled terminal branches. This requires
+deciding what length of spine to remove from the image skeleton used to label
+branches. Inform that choice by skeletonizing the image with <strong>Process → Image →
+Skeletonize</strong>, then measuring the terminal branches by right-clicking in the
+image viewer window and placing measurement points:</p>
 <a class="reference internal image-reference" href="_images/branch2.png"><img alt="Measuring Spines" src="_images/branch2.png" style="width: 500px;" />
 </a>
-<p><em>Here we are at the end of a dendrite. We can see that the skeleton has incorrectly split - this is the source of those little branches. Use direct measurement for an accurate estimate of what spine lengths to remove</em></p>
-<p>when prompted with the second menu, I enable a new optional setting:</p>
+<p><em>At the end of a dendrite, the skeleton has incorrectly split — the source of
+those small branches. Direct measurement gives an accurate estimate of the spine
+lengths to remove.</em></p>
+<p>At the second menu, enable the corresponding optional setting:</p>
 <a class="reference internal image-reference" href="_images/branch4.png"><img alt="Branch Grouped" src="_images/branch4.png" style="width: 500px;" />
 </a>
-<p><em>Here, I set ‘Skeleton Branch Length to Remove’ to ‘8’</em></p>
-<p>There are some other correction options you can read about in ‘Process -&gt; Generate -&gt; Label Branches’, but this spine one is all we will use here.
-Now when I run my labeler, it ignores all <em>terminal</em> branches below that length. Note this algorithm will only remove branches starting from an endpoint, until reaching a parent branch. Therefore, more internal branches that do not have endpoints themselves are always safe from removal, allowing us to use larger numbers without risk of major changes to the image.</p>
+<p><em>Here, ‘Skeleton Branch Length to Remove’ is set to 8.</em></p>
+<p>Further correction options are described under <strong>Process → Generate → Label
+Branches</strong>; only the spine option is used here. The labeler now ignores all
+<em>terminal</em> branches below that length. Because the algorithm only removes
+branches starting from an endpoint and stops on reaching a parent branch, more
+internal branches without endpoints are always safe from removal — larger values
+can therefore be used without risking major changes to the image.</p>
 </section>
 <section id="with-corrections">
-<h3>With Corrections<a class="headerlink" href="#with-corrections" title="Link to this heading"></a></h3>
-<p>Our final branch labeled neuron looks like this:</p>
+<h3><a class="toc-backref" href="#id7" role="doc-backlink">With corrections</a><a class="headerlink" href="#with-corrections" title="Link to this heading"></a></h3>
+<p>The final branch-labeled neuron:</p>
 <a class="reference internal image-reference" href="_images/branch6.png"><img alt="Branch Final" src="_images/branch6.png" style="width: 500px;" />
 </a>
-<p><em>Branches smaller than 8 voxels long have joined their neighbors</em></p>
+<p><em>Branches shorter than 8 voxels have joined their neighbors.</em></p>
 </section>
 <section id="branch-merging-corrections">
-<h3>Branch Merging Corrections<a class="headerlink" href="#branch-merging-corrections" title="Link to this heading"></a></h3>
-<ul class="simple">
-<li><p>Although I did not use it for this specific case, another potentially useful correction option to enable is ‘Reunify Main Branches’, available from the branch labeling menu shown above.</p></li>
-<li><p>By default, branches are labeled as segments existing between branch points. But selecting this will have the program do some additional processing to evaluate if any branches traveling in a similar direction, with a similar radius, ought to be re-joined back into a single long branch.</p></li>
-<li><p>For my neuron, this feature does not handle the ‘Soma’ very well since it’s technically not a branch, but just to show what it can do for some of the other branches, here is the labeling with this option enabled:</p></li>
-</ul>
+<h3><a class="toc-backref" href="#id8" role="doc-backlink">Branch merging corrections</a><a class="headerlink" href="#branch-merging-corrections" title="Link to this heading"></a></h3>
+<p><strong>Reunify Main Branches</strong>, available from the branch labeling menu shown above,
+is another useful correction, though it was not used in this case. By default
+branches are labeled as the segments between branch points; this option adds
+processing to evaluate whether branches travelling in a similar direction with a
+similar radius should be rejoined into a single long branch.</p>
+<p>For this neuron the feature does not handle the soma well, since the soma is not
+technically a branch, but the effect on the other branches is shown below:</p>
 <a class="reference internal image-reference" href="_images/union.png"><img alt="Union" src="_images/union.png" style="width: 500px;" />
 </a>
-<p><em>Note how branches such as the big orange one at the bottom now get labeled over longer ranges. In this case, I changed the ‘Auto Correct Internal Labels’ option to ‘Merge Internal Labels with Non-Branch-Like External Neighbors’, which tends to handle these branch mergers better so that multiple new long branches don’t merge with the central soma structure, although it has caused the soma to become more mosaic-looking. This correction is quite strong for branches themselves, if you are interested in longer branches.</em></p>
+<p><em>Branches such as the large orange one at the bottom are now labeled over longer
+ranges. The ‘Auto Correct Internal Labels’ option was changed to ‘Merge Internal
+Labels with Non-Branch-Like External Neighbors’, which handles these mergers
+better so that multiple new long branches do not merge with the central soma
+structure — although it has made the soma more mosaic-looking. This correction is
+quite strong for branches themselves if longer branches are of interest.</em></p>
 </section>
 <section id="morphological-analysis">
-<h3>Morphological Analysis<a class="headerlink" href="#morphological-analysis" title="Link to this heading"></a></h3>
-<ul class="simple">
-<li><p>Beyond just networks, NetTracer3D offers a suite of options for morphological and/or spatial analysis that doesn’t even pertain to the network itself.</p></li>
-<li><p>For example here, I use ‘Analyze -&gt; Stats -&gt; Calculate Radii’, then use the radii table to threshold my branches by radius, shown below.</p></li>
-<li><p>Any calculation done on the nodes can be used to threshold the nodes from the table, generally speaking, which makes NetTracer3D very useful at tying analytics back into spatial analysis.</p></li>
-</ul>
+<h3><a class="toc-backref" href="#id9" role="doc-backlink">Morphological analysis</a><a class="headerlink" href="#morphological-analysis" title="Link to this heading"></a></h3>
+<p>Beyond networks, NetTracer3D offers a suite of options for morphological and
+spatial analysis independent of the network itself. In the example below,
+<strong>Analyze → Stats → Calculate Radii</strong> produces a radii table, which is then used
+to threshold branches by radius. Any calculation performed on the nodes can
+generally be used to threshold them from the table, which makes NetTracer3D
+effective at tying analytics back into spatial analysis.</p>
 <a class="reference internal image-reference" href="_images/radii_thresh.png"><img alt="radii_thresh" src="_images/radii_thresh.png" style="width: 800px;" />
 </a>
-<p><a href="#id1"><span class="problematic" id="id2">*</span></a>Note that thresholding with the tables always applies on the nodes, but labelling branches puts them in the edges channel by default sometimes. You can use ‘Image -&gt; Overlays -&gt; Shuffle’ to move images around to where you want them.</p>
+<p><em>Thresholding from tables always applies to the nodes, but branch labeling
+sometimes places results in the edges channel by default. Use ‘Image → Overlays →
+Shuffle’ to move images between channels as needed.</em></p>
 </section>
 </section>
 <section id="branch-adjacency-network">
-<h2>Branch Adjacency Network<a class="headerlink" href="#branch-adjacency-network" title="Link to this heading"></a></h2>
-<ul class="simple">
-<li><p>The simplest way to create a branch adjacency network is to run ‘Process -&gt; Calculate Network -&gt; Calculate Branch Adjacency Network (of edges)’</p></li>
-<li><p>This can be run on a binary image in the ‘edges’ channel.</p></li>
-<li><p>It simply labels the branches with the same options as above, then calls the proximity network to find neighbors a distance of 1 voxel away.</p></li>
-<li><p>Of course, it could also be accomplished by labeling the branches, moving them to the nodes channel, and manually running a proximity network.</p></li>
-</ul>
+<h2><a class="toc-backref" href="#id10" role="doc-backlink">Branch Adjacency Network</a><a class="headerlink" href="#branch-adjacency-network" title="Link to this heading"></a></h2>
+<p>The simplest way to create a branch adjacency network is <strong>Process → Calculate
+Network → Calculate Branch Adjacency Network (of edges)</strong>, run on a binary image
+in the edges channel. It labels the branches with the same options described
+above, then calls the proximity network to find neighbors one voxel away. The
+same result can be obtained by labeling the branches, moving them to the nodes
+channel, and running a proximity network manually.</p>
 <a class="reference internal image-reference" href="_images/branch7.png"><img alt="Branch Network" src="_images/branch7.png" style="width: 500px;" />
 </a>
-<p><em>Using networks, we have abstracted down the image of this neuron into a very simple data structure</em></p>
+<p><em>The image of this neuron has been abstracted into a very simple data structure.</em></p>
 </section>
 <section id="using-branch-labels-as-nodes">
-<h2>Using Branch Labels as Nodes<a class="headerlink" href="#using-branch-labels-as-nodes" title="Link to this heading"></a></h2>
-<p>One interesting use of branch labeling is its ability to ‘node-ify’ structures that are otherwise not seperable into discrete regions. Once we label an image’s branches, we can use those as nodes to generate a connectivity network.
-For example, in the below image, I label the bronchi on this 3D image of a mouse lung to see how they are innervated by a set of nearby nerves:</p>
+<h2><a class="toc-backref" href="#id11" role="doc-backlink">Using Branch Labels as Nodes</a><a class="headerlink" href="#using-branch-labels-as-nodes" title="Link to this heading"></a></h2>
+<p>Branch labeling can node-ify structures that are otherwise not separable into
+discrete regions. Once an image’s branches are labeled, they can serve as nodes
+for a connectivity network. In the example below, the bronchi in a 3D image of a
+mouse lung are labeled to examine how they are innervated by a set of nearby
+nerves:</p>
 <a class="reference internal image-reference" href="_images/branch8.png"><img alt="Bronchi Image" src="_images/branch8.png" style="width: 500px;" />
 </a>
-<p><em>This dataset was shared by Rebecca Salamon from UC San Diego. Please use ‘Image -&gt; Show 3D’ to call a Napari window that will automatically load active NetTracer3D datasets for 3D visualization.</em></p>
+<p><em>This dataset was shared by Rebecca Salamon from UC San Diego. Use ‘Image → Show
+3D’ to open a Napari window that automatically loads active NetTracer3D datasets
+for 3D visualization.</em></p>
 <a class="reference internal image-reference" href="_images/branch9.png"><img alt="Bronchi Render" src="_images/branch9.png" style="width: 500px;" />
 </a>
-<p><em>Same image but with the alogrithmically-derived branches displayed. Using branch labeling, we can split up biological objects into meaningful domains</em></p>
+<p><em>The same image with the algorithmically derived branches displayed. Branch
+labeling splits biological objects into meaningful domains.</em></p>
 <a class="reference internal image-reference" href="_images/branch10.png"><img alt="Bronchi Network" src="_images/branch10.png" style="width: 500px;" />
 </a>
-<p><em>And of course, the network itself</em></p>
+<p><em>The network itself.</em></p>
 </section>
 <section id="branchpoint-networks">
-<span id="branchpoint"></span><h2>Branchpoint Networks<a class="headerlink" href="#branchpoint-networks" title="Link to this heading"></a></h2>
-<ul class="simple">
-<li><p>Another option for creating networks from branched objects is connecting the branchpoints rather than the branches themselves. To accomplish this, the easiest way is to run ‘Process -&gt; Calculate Network -&gt; Calculate Branchpoint Network’</p></li>
-<li><p>This can be run on a binary image in the ‘edges’ channel.</p></li>
-<li><p>It simply assign nodes to branchpoints using the ‘Process -&gt; Generate -&gt; Generate4 Nodes From Edge Vertices’ option, then assigns neighbors based on which edges interact with which node.</p></li>
-<li><p>Although not <em>exactly</em> the same, this can be accomplished by running the aforementioned methods to generate the nodes, then manually linking them with a connectivity network. (But note that if done this way, some level of node-search is required, which would probably be slower).</p></li>
-</ul>
-<p>In the below example, I segment, then create a branchpoint network from a 3D image of lymph nodes.</p>
+<span id="branchpoint"></span><h2><a class="toc-backref" href="#id12" role="doc-backlink">Branchpoint Networks</a><a class="headerlink" href="#branchpoint-networks" title="Link to this heading"></a></h2>
+<p>Networks can also be built from branched objects by connecting the branchpoints
+rather than the branches. The simplest route is <strong>Process → Calculate Network →
+Calculate Branchpoint Network</strong>, run on a binary image in the edges channel. It
+assigns nodes to branchpoints using <strong>Process → Generate → Generate4 Nodes From
+Edge Vertices</strong>, then assigns neighbors based on which edges interact with which
+node.</p>
+<p>Although not <em>exactly</em> equivalent, this can also be accomplished by generating
+the nodes with the methods above and linking them manually with a connectivity
+network — though that route requires some level of node search and is likely
+slower.</p>
+<p>The example below segments a 3D image of lymph nodes and creates a branchpoint
+network from it.</p>
 <a class="reference internal image-reference" href="_images/lymph1.png"><img alt="Lymph" src="_images/lymph1.png" style="width: 500px;" />
 </a>
-<p><em>The raw image (background masked). This original image was downloaded from the HuBMAP portal from an image captured by the University of Florida TMC</em></p>
+<p><em>The raw image with background masked. The original was downloaded from the
+HuBMAP portal, captured by the University of Florida TMC.</em></p>
 <a class="reference internal image-reference" href="_images/lymph2.png"><img alt="Lymph Network" src="_images/lymph2.png" style="width: 500px;" />
 </a>
-<p><em>Same image with its network overlay superimposed</em></p>
+<p><em>The same image with its network overlay superimposed.</em></p>
 <a class="reference internal image-reference" href="_images/lymph3.png"><img alt="Lymph Render" src="_images/lymph3.png" style="width: 500px;" />
 </a>
-<p><em>Not related to the network, but here are its labeled branches</em></p>
-<p>Labeling branchpoint networks is an additional way to explore networks of branched objects. Branchpoint networks, for example, show the discrete connections between branches better than branch adjacency networks. However they come with the downside of not being able to access some of the higher level branch-editing options, such as the auto-correction based on grouping.</p>
+<p><em>Unrelated to the network, but here are its labeled branches.</em></p>
+<p>Branchpoint networks show the discrete connections between branches better than
+branch adjacency networks. The trade-off is that some higher-level branch-editing
+options, such as auto-correction based on grouping, are not available.</p>
 </section>
 <section id="next-steps">
-<h2>Next Steps<a class="headerlink" href="#next-steps" title="Link to this heading"></a></h2>
-<p>Next, you may want to read <a class="reference internal" href="properties.html"><span class="doc">Properties of a Network3D Object</span></a> to learn about what information is saved and loaded in Network3D Objects.</p>
+<h2><a class="toc-backref" href="#id13" role="doc-backlink">Next Steps</a><a class="headerlink" href="#next-steps" title="Link to this heading"></a></h2>
+<p>Next, read <a class="reference internal" href="properties.html"><span class="doc">Properties of a Network3D Object</span></a> to learn what information is saved and loaded in
+Network3D objects.</p>
 </section>
 </section>
 
@@ -292,7 +357,7 @@ For example, in the below image, I label the bronchi on this 3D image of a mouse
            </div>
           </div>
           <footer><div class="rst-footer-buttons" role="navigation" aria-label="Footer">
-        <a href="proximity.html" class="btn btn-neutral float-left" title="Proximity Networks - Ideal for Cellular Data" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left" aria-hidden="true"></span> Previous</a>
+        <a href="proximity.html" class="btn btn-neutral float-left" title="Proximity Networks — Ideal for Cellular Data" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left" aria-hidden="true"></span> Previous</a>
         <a href="properties.html" class="btn btn-neutral float-right" title="Properties of a Network3D Object" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right" aria-hidden="true"></span></a>
     </div>
 

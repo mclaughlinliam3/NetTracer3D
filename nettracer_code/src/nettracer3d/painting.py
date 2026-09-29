@@ -378,7 +378,7 @@ class PaintManager(QMainWindow):
             val = 0
         elif machine_window is None:
             try:
-                val = max(1, self.parent().min_max[channel][1])
+                val = max(1, self.parent().min_max[channel][1] + 1)
             except:
                 val = 255
         elif foreground:

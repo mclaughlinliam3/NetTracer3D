@@ -1,878 +1,1560 @@
 .. _analyze_menu:
 
-==========
+========================
 All Analyze Menu Options
-==========
+========================
 
-The Analyze Menu offers options for creating graphs and statistical tables.
+The analyze menu provides options for creating graphs and statistical tables. The
+first submenu, **Network**, contains functions for visualizing networks and
+analyzing network communities. The second, **Stats**, is used primarily to create
+tables and graphs describing the network or image morphology.
 
-* The first submenu is the network menu, which has functions for visualizing networks and analyzing network communities.
+.. contents:: On this page
+   :local:
+   :depth: 2
 
-'Analyze -> Network -> Show Network'
--------------------------------
 
-* Use this function to visualize the method in an interactable network graph for your current network. This graph view is also embedded in the lower right widget by default, although using this version will allow you to open it fullscreen or to use two different simultaneously layouts.
-* The graph this generates will be linked to both the image viewer window and the default network graph viewer in the bottom right. Selecting a node in this will also select it in the main viewer and the bottom right, and vice versa.
+Analyze → Network → Show Network
+--------------------------------
+
+Visualizes the current network as an interactive graph. This view is also
+embedded in the lower right widget by default, but this version can be opened
+fullscreen and supports two simultaneous layouts.
+
+The generated graph is linked to both the image viewer window and the default
+network graph viewer in the bottom right: selecting a node in one selects it in
+the others.
 
 .. image:: _static/network_layout.png
    :width: 800px
    :alt: Network layout example
 
-*All the graphs are linked so we can use this to easily locate nodes of significance*
+*All the graphs are linked, making it easy to locate nodes of significance.*
 
-
-* Depending on the view you use, it may be slow to render for very large networks, although it actually loads in a separate thread so it will not freeze the display while loading.
-* Selecting this displays the following menu:
+Depending on the chosen view, rendering may be slow for very large networks,
+though loading occurs on a separate thread and does not freeze the display.
+Selecting this option displays the following menu:
 
 .. image:: _static/analyze_1.png
    :width: 300px
    :alt: Network Vis Menu
 
-Parameter Explanations
-~~~~~~~~~~~~~~~
+Parameter explanations
+~~~~~~~~~~~~~~~~~~~~~~
 
-#. Render mode - Dropdown menu that determines where nodes should be located in the graph menu
-    * Spring layout - Tries to place clusters of interconnected nodes together. Useful for evaluating what's connected to what. Loses clarity with a huge number of nodes.
-    * Centroid layout - Places nodes to reflect where they are in the actual image. Requires the node centroids to be computed but loads almost instantly after that no matter the graph size. Useful for correlating nodes in the graph to nodes in the image. 
-    * Component layout spring - Like the first option, but separately lays out each connected component in the graph (for when your graph has many non-connected pieces). In large graphs with many disconnected components, the default spring layout may place them on top of each other which will make it hard to view what's connected to what, but this layout does not have that problem.
-    * Component layout shell - Also separately lays out each component, but using a shell layout. The shell layout places the most-central node for each component in the middle of its respective component graph. It then places its immediate neighbors in the next circular shell, then those nodes' neighbors, and so on. Useful for eyeballing things like shortest path length or how dependent your graph is on its central node. Becomes harder to interpret with a huge number of nodes in a component.
-#. Execution Mode (Menu Includes the following options):
-    1. Default:
-        * All nodes are blue circles.
-    2. Community Coded
-        * Colors nodes by their community, assuming they have already been community partitioned. Will prompt the user to partition if not.
-    3. Node-ID Coded
-        * Display nodes color-coded by their node ID (if it exists).
-#. Node/Edge Rendering - Can optionally alter the edge color to be gray or black, and also set the sizes of the nodes and the edges in the render.
-#. Select 'Show Node Numerical IDs' to have each node be labelled on the graph by their internal label value from their image. This is useful for finding specific nodes but may clutter visualization.
-#. Select 'Draw weighted edges' to make any edges that have a weight appear thicker. Nodes that find repeat, distinct connections in 'connectivity networks' will have weights, or if you manually add repeat node connections.
-#. Select 'For Centroid Layout...' to make it so that if you use the centroid layout in param 1, nodes that have lower z values appear larger (allowing you to visually appraise 3D location on the 2D graph). Deselect it to have all the nodes be the same size.
+#. **Render mode** — determines where nodes are located in the graph.
 
-* Press Show Network to open a new window displaying the interactive graph.
+   * **Spring layout** — places clusters of interconnected nodes together. Useful
+     for evaluating what is connected to what, but loses clarity with very large
+     numbers of nodes.
+   * **Centroid layout** — places nodes to reflect their position in the actual
+     image. Requires node centroids to have been computed, after which it loads
+     almost instantly regardless of graph size. Useful for correlating nodes in
+     the graph with nodes in the image.
+   * **Component layout spring** — as the spring layout, but lays out each
+     connected component separately. In large graphs with many disconnected
+     components, the default spring layout may place them on top of one another,
+     obscuring what is connected to what; this layout avoids that.
+   * **Component layout shell** — also lays out each component separately, using a
+     shell layout. The most central node of each component is placed in the
+     middle, its immediate neighbors in the next circular shell, their neighbors
+     in the next, and so on. Useful for eyeballing shortest path length or how
+     dependent a graph is on its central node, though harder to interpret when a
+     component contains very many nodes.
 
-'Analyze -> Network -> Generic Network Report'
--------------------------------
+#. **Execution Mode**
 
-* This option will have the program report some basic things about the current Network 3D Objects.
-* This includes the number of nodes, the number of edges, the number of nodes per 'node identity' property category, and the number of nodes per 'community' (if assigned).
-* The report will go in the upperright table.
+   1. **Default** — all nodes are blue circles.
+   2. **Community Coded** — colors nodes by community, assuming the network has
+      been community partitioned. You are prompted to partition if it has not.
+   3. **Node-ID Coded** — colors nodes by their node ID, where one exists.
 
-'Analyze -> Network -> Create Communities based on Network'
--------------------------------
-* Use this function to partition the nodes into communities based on your network structure. This type of community clustering is good for finding functional units in the network, or spatial aggregates in proximity networks. For cells, you'd might consider the neighborhood based clustering instead.
-* Node communities will be saved and loaded with any 'Save/Load Network3D object' options.
-* Selecting this displays the following menu:
+#. **Node/Edge Rendering** — optionally sets the edge color to gray or black, and
+   sets the sizes of nodes and edges in the render.
+#. **Show Node Numerical IDs** — labels each node on the graph with its internal
+   label value from the image. Useful for finding specific nodes, but may clutter
+   the visualization.
+#. **Draw weighted edges** — draws weighted edges more thickly. Nodes that find
+   repeat, distinct connections in connectivity networks acquire weights, as do
+   manually added repeat node connections.
+#. **For Centroid Layout...** — when using the centroid layout, renders nodes with
+   lower z values larger, allowing 3D location to be judged visually on a 2D
+   graph. Deselect to render all nodes at the same size.
+
+Press **Show Network** to open a new window displaying the interactive graph.
+
+
+Analyze → Network → Generic Network Report
+------------------------------------------
+
+Reports basic information about the current Network3D object: the number of
+nodes, the number of edges, the number of nodes per ``node_identities`` category,
+and the number of nodes per community where assigned, along with the proportions
+of each. Reports are placed in the upper right table.
+
+
+Analyze → Network → Create Communities Based on Network
+-------------------------------------------------------
+
+Partitions nodes into communities based on network structure. This form of
+community clustering is well suited to finding functional units in the network,
+or spatial aggregates in proximity networks; for cells, consider neighborhood-
+based clustering instead. Node communities are saved and loaded with the
+Save/Load Network3D object options.
 
 .. image:: _static/analyze2.png
    :width: 300px
    :alt: Com Menu
 
-Parameter Explanations
-~~~~~~~~~~~~~~~
+Parameter explanations
+~~~~~~~~~~~~~~~~~~~~~~
 
-1. Use Weighted Network
-    * Enabling this option has the community partition consider graph weights.
-    * By default, generated networks aquire weights when two or more discrete node objects join objects together.
-    * Objects joined by heavily weighted edges will be more likely to be grouped into the same community.
-2. Execution Mode (Menu Includes the following options):
-    1. Label Propogation
-        * Partition the network using NetworkX's label propogation algorithm.
-    2. Louvain
-        * Partition the network using NetworkX's louvain algorithm.
-    3. Leiden
-        * Partition using the Leiden algorithm, which is an enhanced Louvain algorithm. This will require you install the 'leidenalg' package (pip install leidenalg) - it is an optional dependency at the moment so you won't have it by default.
-    * Both of these options are quick, efficient ways to group networks. Label propogation is a bit faster but more variable.
-    * Note that network community detection in general (and in these cases) has some degree of randomness in how it decides to group objects (based on what nodes it starts from).
-3. Community Stats
-    * Whether or not to calculate community-based stats for the graph
-    * If yes, these are the stats that are returned, referring to the entire network:
-        * Modularity Entire Network
-        * Number of Communities
-        * Community Sizes
-        * Average Community Size 
-        * Number of Iterations (Louvain only - the number of iterations the algorithm ran)
-        * Global Clustering Coefficient (NetworkX)
-        * Assortativity (NetworkX)
-        * Inter-community Edges (How many edges exist between communities)
-        * Mixing Parameter (ratio of external to total edges for nodes)
-    * And for each discrete community, these stats are returned:
-        * Density (NetworkX)
-        * Conductance (NetworkX)
-        * Average Clustering (NetworkX)
-        * Degree Centrality (NetworkX)
-        * Average Shortest Path Length
-    * These stats come from the NetworkX. Please see the below documentation for more information:
-    * networkx documentation: https://networkx.org/
-4. Seed (int): Sets the random seed for the community partition to use (since the starting point effects the outcome). You should use the same seed each time for reproducibility, or vary the seed to see how it effects partitioning. Leaving the seed empty will just use the seed of the rand (and numpy random) modules, which is initialized at program start.
-* Press partition to seperate the nodes into communities based on the selected parameters. In addition to setting the node_communities property, tables showing the community for each node and the stats will be generated in the tabulated data widget.
+1. **Use Weighted Network** — has the community partition consider graph weights.
+   Generated networks acquire weights when two or more discrete node objects join
+   objects together, and objects joined by heavily weighted edges are more likely
+   to be grouped into the same community.
 
-'Analyze -> Network -> Create Communities based on Nodes Immediate Neighbors'
--------------------------------
-* This option for community assignment evaluates the distribution of node identities around each node, and clusters the ones that appear similar. When you have a lot of identities assigned from multichannel data, this option can detect meaningful regions in the image, and so is typically the goto for multiplexed cellular data.
-* This method uses a proximity network to evaluate the node neighbors, usually.
+2. **Execution Mode**
 
-Parameter Explanations
-~~~~~~~~~~~~~~~
-#. Num communities - The number of communities you'd like to create.
-#. Clustering Seed - Enter an integer to change the initial seed to get a slightly different output.
-#. Min Neighbor Count - The minimum number of neighbors a node must have to be considered for grouping. Setting a value here can avoid including isolated nodes in your output.
-#. N Nearest Neighbors - This is an optional parameter; normally you might generate a proximity network for your nodes first that tied together neighbors, then skip this. But if you did not, you can enter a number of nearest neighbors you'd like each node to find, creating a new proximity network for this function.
-#. Max Distance - Also optional, similar to the above. Entering a value here will make the new proximity network only connect nodes within a specified distance. You can use this to prevent different regions from connecting over gaps that they shouldn't be. The specified distance is scaled by the xy_scale and z_scale properties.
-#. Community UMAP - Returns a UMAP of how similar your node neighborhoods are. The UMAP is interactable - use a lasso to select groups of nodes. You can right click in the main window to assign them to their own communities. There are also some unique rendering options. These interactable UMAPs can be saved and later reloaded using the 'folder icon' that loads spreadsheets in the top right to skip embedding computation.
-#. Neighborhood Heatmaps - Returns a heatmap showing the compositions of the neighborhoods used to cluster the nodes. Note that this does not specify the composition of the resultant communities (use 'Analyze -> Network -> Calculate Composition of Network Communities (And UMAP)' for that), although the data will be similar. As such, it may not be that relevant although it's included for now.
-#. Treat Multi-Identity Nodes as Unique Identities - Across many channels, your nodes will probably aquire multiple identities. By default, this function just clusters based on the distribution of each unique identity. But if you enable this, any unique combination of identities will be treated as its own group. Note if you have a lot of combinations, this will massively increase the computational load, so I usually recommend skipping it.
+   1. **Label Propagation** — partitions using NetworkX's label propagation
+      algorithm.
+   2. **Louvain** — partitions using NetworkX's Louvain algorithm.
+   3. **Leiden** — partitions using the Leiden algorithm, an enhanced Louvain.
+      This requires the optional ``leidenalg`` package (``pip install
+      leidenalg``), which is not installed by default.
 
-* Press get communities to assign your nodes communities based on their neighborhoods. 
+   These are all quick, efficient ways to group networks; label propagation is
+   somewhat faster but more variable. Network community detection carries some
+   degree of randomness in how it groups objects, depending on which nodes it
+   starts from.
 
-Algorithm Explanations
-~~~~~~~~~~~~~~~
-* This method just evaluates the neighbors of each node in the network, arranges those as proportions out of 1 in a one-dimensional array, and then clusters said arrays with sklearn's K-means clusterer.
+3. **Community Stats** — whether to calculate community-based statistics for the
+   graph. For the entire network:
 
-'Analyze -> Network -> Create Communities Based on Hexagonal/Rhomboid Proximity Cells?'
--------------------------------
+   * Modularity Entire Network
+   * Number of Communities
+   * Community Sizes
+   * Average Community Size
+   * Number of Iterations (Louvain only — the number of iterations run)
+   * Global Clustering Coefficient (NetworkX)
+   * Assortativity (NetworkX)
+   * Inter-community Edges (how many edges exist between communities)
+   * Mixing Parameter (ratio of external to total edges for nodes)
 
-* This method splits the image into cells (of user-defined size) and assigns nodes to be in communities based on whether they share a cell.
-* It will ask you for parameters about the hexagon side length, and whether you would prefer hexagonal prisms or dodecahedrons in 3D (2D uses hexagons always).
-* It doesn't have anything to do with the network but is an alternate way to group the nodes into communities, without a network or nearest neighbor focus.
-* You can further group these resultant cells into supercommunities to find neighborhood motifs, although it won't be as strong as the node neighborhood community assigment if you have enough channels.
+   And for each discrete community:
+
+   * Density (NetworkX)
+   * Conductance (NetworkX)
+   * Average Clustering (NetworkX)
+   * Degree Centrality (NetworkX)
+   * Average Shortest Path Length
+
+   These statistics come from NetworkX; see https://networkx.org/ for details.
+
+4. **Seed (int)** — sets the random seed for the community partition, since the
+   starting point affects the outcome. Use the same seed each time for
+   reproducibility, or vary it to see how partitioning is affected. Leaving it
+   empty uses the seed of the ``rand`` and numpy random modules, initialized at
+   program start.
+
+Press **Partition** to separate the nodes into communities. In addition to
+setting the ``node_communities`` property, tables showing the community for each
+node and the associated statistics are generated in the tabulated data widget.
 
 
-Parameter Explanations
-~~~~~~~~~~~~~~~
+Analyze → Network → Create Communities Based on Node's Immediate Neighbors
+--------------------------------------------------------------------------
 
-#. Cell Size
-    * The volume of a cell (Can be 2D or 3D). The cells will always be cubes (or squares).
-#. xy scale
-    * The 2D plane scaling of the image.
-#. z scale
-    * The 3D voxel depth scaling of the image.
+Evaluates the distribution of node identities around each node and clusters those
+that appear similar. With many identities assigned from multichannel data, this
+option detects meaningful regions in the image, making it the usual choice for
+multiplexed cellular data. It generally uses a proximity network to evaluate node
+neighbors.
 
-* The latter two params will scale the cell to be cuboidal based on provided scaling (ie its side lengths will be the same in true units).
-* Press 'Get Communities' to assign the communities based on cells.
+Parameter explanations
+~~~~~~~~~~~~~~~~~~~~~~
 
-* The second submenu is 'Stats', and is primarily used to create tables and graphs about the network or image morphology.
+#. **Num communities** — the number of communities to create.
+#. **Clustering Algorithm** - Choose between KMeans (which is good for neighborhood vectors of binary classified identities) or Leiden clustering.
+#. **Clustering Seed** — an integer changing the initial seed, producing a
+   slightly different output.
+#. **Min Neighbor Count** — the minimum number of neighbors a node must have to
+   be considered for grouping. Setting a value here avoids including isolated
+   nodes in the output.
+#. **N Nearest Neighbors** — optional. Normally a proximity network tying
+   neighbors together is generated first, in which case this can be skipped.
+   Otherwise, enter a number of nearest neighbors for each node to find, creating
+   a new proximity network for this function.
+#. **Max Distance** — optional, and similar to the above. Restricts the new
+   proximity network to connecting nodes within a specified distance, which
+   prevents different regions from connecting across gaps they should not. The
+   distance is scaled by the ``xy_scale`` and ``z_scale`` properties.
+#. **Community UMAP** — returns a UMAP of how similar the node neighborhoods are.
+   The UMAP is interactive: use a lasso to select groups of nodes, then right
+   click in the main window to assign them to their own communities. Several
+   unique rendering options are available. These interactive UMAPs can be saved
+   and later reloaded using the folder icon that loads spreadsheets in the top
+   right, skipping the embedding computation.
+#. **Neighborhood Heatmaps** — returns a heatmap showing the compositions of the
+   neighborhoods used to cluster the nodes. This does not specify the composition
+   of the resulting communities — use **Analyze → Network → Calculate Composition
+   of Network Communities (And UMAP)** for that — although the data will be
+   similar.
+#. **Treat Multi-Identity Nodes as Unique Identities** — across many channels,
+   nodes will likely acquire multiple identities. By default this function
+   clusters on the distribution of each unique identity; enabling this treats any
+   unique combination of identities as its own group. With many combinations this
+   massively increases the computational load, so skipping it is generally
+   recommended.
 
-'Analyze -> Network -> Calculate Composition of Network Communities (And UMAP)'
--------------------------------
-* This method is designed to be run on groups of nodes that have been community partitioned and have associated 'node_identities' property, to evaluate their general compositions.
-* It can yield compositional proportions of node identities per community or a weighted average of the compositions of all communities.
-    * For the latter option, the communities are weighted by size, so larger communities contribute to this value more.
-* It can also generate a UMAP for the communities. Within the UMAP, communities that are in close proximity have more similar identity compositions.
-* This method can be a good way to characterize what communities in the network consist of. For example, if I have grouped neighborhoods of different cell types and am wondering what a generic community looks like.
+Press **Get Communities** to assign communities based on neighborhoods.
 
+Algorithm explanation
+~~~~~~~~~~~~~~~~~~~~~
 
-
-Parameter Explanations
-~~~~~~~~~~~~~~~
-
-#. Mode
-    * The dropdown menu has two options:
-        1. Average Identities per community - This option provides compositional info on all communities.
-        2. Weighted Average Identity of All Communities - This option provides compositional info of all communities, weighted by community size. (Does not support UMAP)
-#. Generate UMAP
-    * Select this option to generate a UMAP comparing the community compositions.
-#. Label UMAP Points How?
-    * 'No Label' - UMAP points are not labeled
-    * By Community - Assigns each point their numerical label.
-    * By Supercommunity - Colors communities in the UMAP by what supercommunity they belong to, presuming they have been assigned a Supercommunity via 'Analyze -> Network -> Convert Network Communities...'
-#. Min Community Size to be grouped...
-    * If empty, this param does nothing.
-    * If an int is entered, any communities with nodes fewer than this val will not be included in the UMAP — since we might not care about small, insignificant communities.
-#. Return Node Type Distribution Robust UMAP
-    * Normally, communities are grouped in the UMAP by their proportional compositions of node types.
-    * If this option is selected, they will instead be grouped based on how much they 'overrepresent' specific node types. Overrepresenting = the proportion of nodes of that type in the community (vs all nodes of that type) is greater than the proportion of all nodes within that community (vs all nodes in the image).
-
-* Press 'Get Community ID Info' to populate the data to the upper right tabulated data widget, and to show the UMAP if selected.
-
-Algorithm Explanation
-~~~~~~~~~~~~~~~~~~~~
-
-* If not using the weighted average of all communities:
-1. Simply finds the proportion of each identity per community.
-
-* If generating the UMAP (with the umap module):
-1. Extract community data by getting community IDs and stacking their community composition arrays (from above) into a matrix
-2. Initialize UMAP reducer and random seed (42) for reproducible dimensionality reduction
-3. Transform compositions using UMAP to reduce high-dimensional cluster vectors to 2D coordinates
-4. Create scatter plot with points colored by cluster ID.
-5. Print composition analysis showing the raw data and identifying the two most dominant classes per community
+The method evaluates the neighbors of each node in the network, arranges those as
+proportions out of 1 in a one-dimensional array, and clusters those arrays with
+sklearn's K-means clusterer or leidenalg's leiden methods.
 
 
-* If using the weighted average for all communities (does not support UMAP):
-1. Groups nodes by their community ID
-2. For each community, counts the number of nodes with each identity type
-3. Weights these counts by the size of the community
-4. Sums these weighted counts across all communities
-5. Normalizes the results twice: first by the total number of nodes, then to ensure all proportions sum to 1
-6. Returns a dictionary mapping each identity type to its weighted proportion in the network
+Analyze → Network → Create Communities Based on Hexagonal/Rhomboid Proximity Cells
+----------------------------------------------------------------------------------
 
-'Analyze -> Network -> Convert Network Communities Into Supercommunities (Also Returns Compositional Heatmaps)'
--------------------------------
+Splits the image into cells of user-defined size and assigns nodes to communities
+based on whether they share a cell. Parameters cover the hexagon side length and
+whether hexagonal prisms or dodecahedrons are preferred in 3D; 2D always uses
+hexagons.
 
-* This method finds the average of compositions of all communities (assuming 'node_identities' exist - then uses the above function), then groups similar communities into 'Supercommunities'.
-* The purpose of this is to let the user crunch communities into a smaller set of Supercommunities for analysis of similar domains across the image.
-* The number of Supercommunities assigned is up to the user.
-* Running this method will also show a heatmap graph of what 'node_identity' is prominant in what Supercommunity.
-* Supercommunities by default get assigned by size as well, with 1 being the largest group, and n (the highest Supercommunity ID) being the smallest, allowing their relative sizes to be easily compared.
-* Running this method will reassign the 'communities' property to these Supercommunities instead, so be sure to save the former first.
-    * This is so the user can use all community-associated functions on the new Supercommunities instead.
-    * However during an active session, this method will always run on the original communities and not the Supercommunities (it stores it in another temp property only for that purpose). This lets the user run this method with different params to evaluate different Supercommunities, but note that these temp communities are not used for anything else.
+This has nothing to do with the network, and is an alternative way to group nodes
+into communities without a network or nearest-neighbor focus. The resulting cells
+can be further grouped into supercommunities to find neighborhood motifs, though
+this is weaker than node neighborhood community assignment where sufficient
+channels are available.
 
-Parameter Explanations
-~~~~~~~~~~~~~~~
+Parameter explanations
+~~~~~~~~~~~~~~~~~~~~~~
 
-#. Num Supercommunities
-    * The number of Supercommunities the user wants to group communities into. Presumably, you would want the number of communities to be larger by a logical amount than the number of new Supercommunities.
-    * Arbitrary Supercommunity numbers can only be used for K-means clustering. DBSCAN clustering will always decide on its own how many to use. K-means will also try to guess a good Supercommunity count if nothing is entered.
-#. Clustering Seed
-    * The random seed (int) used for Supercommunity assignment. By default this is 42.
-#. Min Community Size to be grouped...
-    * If empty, this param does nothing.
-    * If an int is entered, any communities with nodes fewer than this val will be assigned to 'Supercommunity 0' — since we might not care about small, insignificant communities.
-#. Return Node Type Distribution Robust Heatmaps
-    * This method always returns a heatmap showing the proportional composition of each Supercommunity for each ID type.
-    * However, by pressing this option, two more heatmaps will be returned as well:
-    * The second heatmap shows in each cell the proportion of that node type in that Supercommunity as compared to the total available nodes of that type.
-    * The third heatmap (which I like to use) takes the results from the second and divides them by the proportion of total nodes (of any type) that comprise that Supercommunity. This gives us a result showing what node types are 'overrepresented' in this Supercommunity (since we would expect each node type within a Supercommunity to have the same proportional representation vs all nodes of that type as the total representation of all nodes of that Supercommunity itself)
-        * In short though, cells with values above 1 overrepresent that node type, while values below 1 underrepresent it. This is a pretty great way to eyeball compositional anomolies.
-#. Mode - A dropdown menu to select the clustering algorithm.
-    * KMeans - Uses K-means clustering. (Generally recommended)
-    * DBSCAN - Uses DBSCAN clustering. (Somewhat experimental). Note that DBSCAN likes to assign low-appearing groups as 'outliers', which in the current implementation get assigned to 'Supercommunity 0' (Along with any communities the user decided to threshold out by size).
+#. **Cell Size** — the volume of a cell, in 2D or 3D. Cells are always cubes or
+   squares.
+#. **xy scale** — the 2D plane scaling of the image.
+#. **z scale** — the 3D voxel depth scaling of the image.
 
-* Press 'Get Supercommunities' to group the nodes into Supercommunities and to get the heatmaps. This also returns a number of tables to the tabulated data widget (top right), including:
-    * Tabulated versions of all heatmaps.
-    * Proportion of total nodes in network for each Supercommunity.
-    * Nodes to Supercommunity ID table.
+The latter two parameters scale the cell to be cuboidal, so that its side lengths
+are equal in true units. Press **Get Communities** to assign communities based on
+cells.
 
-Algorithm Explanation
-~~~~~~~~~~~~~~~~~~~~
 
-* This method primarily uses the sklearn.cluster KMeans algorithm: https://scikit-learn.org/stable/modules/generated/sklearn.cluster.KMeans.html
-1. Finds the composition of all communities using 'Analyze -> Network -> Identity Makeup of Communities' logic.
-2. Converts compositions to numpy array to prepare data for scikit-learn clustering algorithm
-3. Applies K-means clustering with specified number of Supercommunities and random seed
+Analyze → Network → Calculate Composition of Network Communities (And UMAP)
+---------------------------------------------------------------------------
 
-* Alternatively, the sklearn DBSCAN algorithm can be used: https://scikit-learn.org/stable/modules/generated/sklearn.cluster.DBSCAN.html
-1. Calculate min_samples - minimum neighbors a point needs to be a 'core point': max(3, sqrt(n_samples) * 0.2)
-2. Estimate eps (Supercommunity radius): Use 80th percentile of 4th nearest neighbor distances. Non-core points within eps of core points become border points of that cluster.
-3. Run DBSCAN with calculated parameters
-4. Points that are neither core points nor within eps of core points become outliers
+Designed to run on groups of nodes that have been community partitioned and carry
+a ``node_identities`` property, this evaluates their general compositions. It
+yields either compositional proportions of node identities per community, or a
+weighted average of the compositions of all communities — in the latter case
+weighted by size, so that larger communities contribute more.
 
-* If using KMeans, and no Supercommunity count is provided:
-1. Supercommunity counts from sizes 1 to 20 will be temporarily generated.
-2. They will be graded on quality based on their calinksi harabasz score: https://scikit-learn.org/stable/modules/generated/sklearn.metrics.calinski_harabasz_score.html
-3. The Supercommunity count with the highest score will be used.
+It can also generate a UMAP for the communities, in which communities positioned
+close together have more similar identity compositions. This is a good way to
+characterize what communities consist of — for example, when neighborhoods of
+different cell types have been grouped and the question is what a generic
+community looks like.
 
-'Analyze -> Stats -> Network Related -> Calculate Generic Network Stats'
------------------------------------------
-* This function simply generates and displays (in the tabulated data widget) a number of generic stats about the network.
-* The following stats will be generated:
-    * num_nodes
-    * num_edges
-    * density
-    * is_directed (Note that networks currently will always be undirected)
-    * is_connected
-    * num_connected_components
-    * largest_component_size
-    * avg_degree
-    * max_degree
-    * min_degree
-    * avg_betweenness_centrality
-    * avg_closeness_centrality
-    * avg_eigenvector_centrality
-    * avg_clustering_coefficient
-    * transitivity
-    * diameter
-    * avg_shortest_path_length
-    * is_tree
-    * num_triangles
-    * degree_assortativity
-    * Unconnected nodes (left out from node image)
-* These stats are all more or less generated by networkx.
-* Please see networkx documentation for more information: https://networkx.org/
+Parameter explanations
+~~~~~~~~~~~~~~~~~~~~~~
 
-'Analyze -> Stats -> Network Related -> Network Statistics Histograms'
------------------------------------------
-* This function allows easy generation and displaying (as matplotlib histos and in the tabulated data widget) of a number of network histograms about distributions of node properties in the network.
-* The histograms displayed are all generated using networkx functions to find information about the graph, such as shown in this networkx documentation: https://networkx.org/nx-guides/content/exploratory_notebooks/facebook_notebook.html (Please use this reference for information about the histograms)
-* Assuming you have calculated a network, selecting this option will display the following menu:
+#. **Mode**
+
+   1. **Average Identities per community** — compositional information on all
+      communities.
+   2. **Weighted Average Identity of All Communities** — compositional
+      information on all communities weighted by community size. Does not support
+      UMAP.
+
+#. **Generate UMAP** — generates a UMAP comparing the community compositions.
+#. **Label UMAP Points How?**
+
+   * **No Label** — points are not labeled.
+   * **By Community** — assigns each point its numerical label.
+   * **By Supercommunity** — colors communities by the supercommunity they belong
+     to, assuming one has been assigned via **Analyze → Network → Convert Network
+     Communities...**
+
+#. **Min Community Size to be grouped...** — does nothing if empty. If an integer
+   is entered, communities with fewer nodes than this value are excluded from the
+   UMAP, which is useful for ignoring small, insignificant communities.
+#. **Return Node Type Distribution Robust UMAP** — normally communities are
+   grouped in the UMAP by their proportional compositions of node types. With
+   this selected, they are instead grouped by how much they *overrepresent*
+   specific node types, where overrepresentation means the proportion of nodes of
+   that type in the community, relative to all nodes of that type, exceeds the
+   proportion of all nodes within that community relative to all nodes in the
+   image.
+
+Press **Get Community ID Info** to populate the data to the upper right tabulated
+data widget and, if selected, show the UMAP.
+
+Algorithm explanation
+~~~~~~~~~~~~~~~~~~~~~
+
+Without the weighted average of all communities, the method simply finds the
+proportion of each identity per community.
+
+When generating the UMAP, using the umap module:
+
+1. Extract community data by collecting community IDs and stacking their
+   composition arrays into a matrix.
+2. Initialize the UMAP reducer and random seed (42) for reproducible
+   dimensionality reduction.
+3. Transform compositions with UMAP to reduce high-dimensional cluster vectors to
+   2D coordinates.
+4. Create a scatter plot with points colored by cluster ID.
+5. Print composition analysis showing the raw data and identifying the two most
+   dominant classes per community.
+
+When using the weighted average for all communities, which does not support UMAP:
+
+1. Group nodes by their community ID.
+2. For each community, count the number of nodes with each identity type.
+3. Weight these counts by the size of the community.
+4. Sum the weighted counts across all communities.
+5. Normalize twice: first by the total number of nodes, then so that all
+   proportions sum to 1.
+6. Return a dictionary mapping each identity type to its weighted proportion in
+   the network.
+
+
+Analyze → Network → Convert Network Communities Into Supercommunities
+----------------------------------------------------------------------
+
+*Also returns compositional heatmaps.*
+
+Finds the average composition of all communities, assuming ``node_identities``
+exist, using the logic of the function above, then groups similar communities
+into supercommunities. This allows communities to be crunched into a smaller set
+for analysis of similar domains across the image. The number of supercommunities
+is set by the user.
+
+Running this also displays a heatmap of which ``node_identity`` is prominent in
+which supercommunity. Supercommunities are assigned by size, with 1 the largest
+group and n the smallest, so relative sizes can be compared easily.
+
+.. warning::
+
+   Running this method reassigns the ``communities`` property to the
+   supercommunities, so save the original communities first. This is done so that
+   all community-associated functions can be used on the new supercommunities.
+   During an active session the method always runs on the original communities
+   rather than the supercommunities, storing them in a separate temporary
+   property, which allows the method to be re-run with different parameters.
+   These temporary communities are not used for anything else.
+
+Parameter explanations
+~~~~~~~~~~~~~~~~~~~~~~
+
+#. **Num Supercommunities** — the number of supercommunities to group communities
+   into; the number of communities should presumably be larger than this by some
+   logical margin. Arbitrary counts apply only to K-means clustering, as DBSCAN
+   always decides the count itself. K-means also guesses a suitable count if
+   nothing is entered.
+#. **Clustering Seed** — the random seed used for supercommunity assignment,
+   42 by default.
+#. **Min Community Size to be grouped...** — does nothing if empty. If an integer
+   is entered, communities with fewer nodes than this value are assigned to
+   Supercommunity 0, which is useful for ignoring small, insignificant
+   communities.
+#. **Return Node Type Distribution Robust Heatmaps** — the method always returns
+   a heatmap showing the proportional composition of each supercommunity for each
+   ID type. Enabling this returns two additional heatmaps:
+
+   * The second shows, in each cell, the proportion of that node type in that
+     supercommunity relative to the total available nodes of that type.
+   * The third divides the second by the proportion of total nodes, of any type,
+     comprising that supercommunity. This shows which node types are
+     overrepresented in a supercommunity, since each node type would be expected
+     to have the same proportional representation relative to all nodes of that
+     type as the supercommunity's overall representation. Cells above 1
+     overrepresent that node type and cells below 1 underrepresent it, which
+     makes compositional anomalies easy to spot.
+
+#. **Mode** — selects the clustering algorithm.
+
+   * **KMeans** — K-means clustering. Generally recommended.
+   * **DBSCAN** — DBSCAN clustering, somewhat experimental. DBSCAN tends to
+     assign low-appearing groups as outliers, which in the current implementation
+     are assigned to Supercommunity 0, alongside any communities thresholded out
+     by size.
+   * **Leiden** - Uses leiden clustering which may be slower but does not require a community count input.
+
+Press **Get Supercommunities** to group the nodes and generate the heatmaps. This
+also returns several tables to the tabulated data widget, including tabulated
+versions of all heatmaps, the proportion of total nodes in the network for each
+supercommunity, and a nodes-to-supercommunity ID table.
+
+Algorithm explanation
+~~~~~~~~~~~~~~~~~~~~~
+
+The method primarily uses the sklearn KMeans algorithm
+(https://scikit-learn.org/stable/modules/generated/sklearn.cluster.KMeans.html):
+
+1. Find the composition of all communities using **Analyze → Network → Identity
+   Makeup of Communities** logic.
+2. Convert compositions to a numpy array to prepare data for scikit-learn
+   clustering.
+3. Apply K-means clustering with the specified number of supercommunities and
+   random seed.
+
+Alternatively the sklearn DBSCAN algorithm can be used
+(https://scikit-learn.org/stable/modules/generated/sklearn.cluster.DBSCAN.html):
+
+1. Calculate ``min_samples``, the minimum neighbors a point needs to be a core
+   point: ``max(3, sqrt(n_samples) * 0.2)``.
+2. Estimate ``eps``, the supercommunity radius, using the 80th percentile of
+   4th-nearest-neighbor distances. Non-core points within ``eps`` of core points
+   become border points of that cluster.
+3. Run DBSCAN with the calculated parameters.
+4. Points that are neither core points nor within ``eps`` of core points become
+   outliers.
+
+The Leiden algorithm meanwhile will be based on the leidenalg and igraph python packages.
+
+If using KMeans with no supercommunity count provided:
+
+1. Supercommunity counts from 1 to 20 are temporarily generated.
+2. Each is graded on its Calinski-Harabasz score
+   (https://scikit-learn.org/stable/modules/generated/sklearn.metrics.calinski_harabasz_score.html).
+3. The count with the highest score is used.
+
+
+Analyze → Stats → Network Related → Calculate Generic Network Stats
+-------------------------------------------------------------------
+
+Generates and displays a number of generic statistics about the network in the
+tabulated data widget:
+
+* num_nodes
+* num_edges
+* density
+* is_directed (networks are currently always undirected)
+* is_connected
+* num_connected_components
+* largest_component_size
+* avg_degree
+* max_degree
+* min_degree
+* avg_betweenness_centrality
+* avg_closeness_centrality
+* avg_eigenvector_centrality
+* avg_clustering_coefficient
+* transitivity
+* diameter
+* avg_shortest_path_length
+* is_tree
+* num_triangles
+* degree_assortativity
+* Unconnected nodes (left out from node image)
+
+These statistics are generated largely by NetworkX; see https://networkx.org/ for
+more information.
+
+
+Analyze → Stats → Network Related → Network Statistics Histograms
+------------------------------------------------------------------
+
+Generates and displays histograms of the distributions of node properties in the
+network, as matplotlib figures and in the tabulated data widget. The histograms
+are generated using NetworkX functions; see
+https://networkx.org/nx-guides/content/exploratory_notebooks/facebook_notebook.html
+for information about them.
+
+With a network calculated, selecting this option displays the following menu:
 
 .. image:: _static/network_histos.png
    :width: 500px
    :alt: Network_histos
-*Once a network is generated, selecting any of the green button options will generate a graph of the corresponding distribution, and export the data to the tabulated data widget*
 
-Parameter Explanations
-~~~~~~~~~~~~~~~~~~~~
-#. Degree Distribution...
-    * Shows the count of connections per node across your network.
-    * Use to identify network architecture: power-law distributions indicate hub-based networks, normal distributions show egalitarian connectivity.
-#. Shortest Path Length Distribution...
-    * Displays the minimum number of steps between all node pairs.
-    * Use to assess network efficiency: narrow peaks at low values indicate efficient "small world" networks.
-#. Degree Centrality...
-    * Measures direct influence through immediate connections.
-    * Use to identify nodes with the most direct reach in your network.
-#. Betweenness Centrality...
-    * Identifies critical bridge nodes that connect different network regions.
-    * Use to find bottlenecks and assess network vulnerability to node removal.
-#. Closeness Centrality...
-    * Measures how quickly each node can reach all other nodes.
-    * Use to identify nodes optimally positioned for information spreading.
-#. Eigenvector Centrality...
-    * Measures prestige by weighting connections to highly-connected nodes.
-    * Use to identify nodes connected to important hubs (quality over quantity of connections).
-#. Harmonic Centrality...
-    * Robust version of closeness centrality that handles disconnected components.
-    * Use when your network may have isolated clusters or components.
-#. Load Centrality...
-    * Shows traffic burden each node would carry in network flow.
-    * Use to identify potential communication bottlenecks and workload distribution.
-#. Current Flow Betweenness...
-    * Models flow using electrical circuit principles (considers all paths, not just shortest).
-    * Use for more realistic assessment of node importance in flow networks.
-#. Communicability Betweenness...
-    * Measures bridging importance based on walks of all lengths.
-    * Use to identify nodes important for sustained, multi-step communication processes.
-#. Clustering Coefficient...
-    * Measures how interconnected each node's immediate neighbors are.
-    * Use to identify tight-knit communities versus sparse, tree-like regions.
-#. Triangle Count...
-    * Counts triangular connections (three mutually connected nodes) per node.
-    * Use to assess local group cohesion and community strength.
-#. K-Core Decomposition...
-    * Identifies nested dense subgroups where all nodes have minimum degree k.
-    * Use to reveal hierarchical community structure and dense network cores.
-#. Eccentricity...
-    * Shows the maximum distance from each node to any other reachable node.
-    * Use to identify peripheral versus central nodes and assess network compactness.
-#. Node Connectivity...
-    * Measures minimum nodes needed to disconnect each node's neighborhood.
-    * Use to assess local network robustness around individual nodes.
-#. Average Dispersion...
-    * Measures how scattered each node's neighbors are from each other.
-    * Use to distinguish bridge nodes (high dispersion) from community-centered nodes (low dispersion).
-#. Network Bridges...
-    * Identifies edges whose removal would disconnect network components.
-    * Use to find critical connections essential for network cohesion.
-#. Compute All Analyses and Export to CSV...
-    * This method batch computes all the above csvs and saves them to a directory you pick. It will also save pngs of the associated histograms. Use this for rapid comparison of all these fields if you are looking to compare datasets but unsure what stats may be significant.
-    * Its also useful if you want all the histos but your network is large so the computation is slow. You can open an instance of NetTracer3D, just load the network, and run the batch computation as a background task.
-    
+*Selecting any of the green button options generates a graph of the corresponding
+distribution and exports the data to the tabulated data widget.*
 
-'Analyze -> Stats -> Network Related -> Radial Distribution Analysis'
------------------------------------------
-* This method creates a graph showing the average number of neighboring nodes (of any given node) on the y axis and the distance from any given node in the x axis.
-* Use this method to evaluate how far apart your connected nodes tend to be in 3D space, and how those relationships are distributed.
-* For example, we would typically expect more efficient networks to mostly have an abundance of short connections and a minority of long connections.
+Parameter explanations
+~~~~~~~~~~~~~~~~~~~~~~
 
-Parameter Explanations
-~~~~~~~~~~~~~~~
+#. **Degree Distribution** — the count of connections per node across the
+   network. Identifies network architecture: power-law distributions indicate
+   hub-based networks, while normal distributions show egalitarian connectivity.
+#. **Shortest Path Length Distribution** — the minimum number of steps between
+   all node pairs. Assesses network efficiency: narrow peaks at low values
+   indicate efficient small-world networks.
+#. **Degree Centrality** — direct influence through immediate connections.
+   Identifies nodes with the most direct reach.
+#. **Betweenness Centrality** — critical bridge nodes connecting different
+   network regions. Finds bottlenecks and assesses vulnerability to node removal.
+#. **Closeness Centrality** — how quickly each node can reach all others.
+   Identifies nodes optimally positioned for information spreading.
+#. **Eigenvector Centrality** — prestige, weighting connections to
+   highly-connected nodes. Identifies nodes connected to important hubs, favoring
+   quality of connections over quantity.
+#. **Harmonic Centrality** — a robust version of closeness centrality that
+   handles disconnected components. Use where the network may have isolated
+   clusters.
+#. **Load Centrality** — the traffic burden each node would carry in network
+   flow. Identifies potential communication bottlenecks and workload
+   distribution.
+#. **Current Flow Betweenness** — models flow using electrical circuit
+   principles, considering all paths rather than only the shortest. Gives a more
+   realistic assessment of node importance in flow networks.
+#. **Communicability Betweenness** — bridging importance based on walks of all
+   lengths. Identifies nodes important for sustained, multi-step communication.
+#. **Clustering Coefficient** — how interconnected each node's immediate
+   neighbors are. Distinguishes tight-knit communities from sparse, tree-like
+   regions.
+#. **Triangle Count** — triangular connections, meaning three mutually connected
+   nodes, per node. Assesses local group cohesion and community strength.
+#. **K-Core Decomposition** — nested dense subgroups in which all nodes have a
+   minimum degree k. Reveals hierarchical community structure and dense network
+   cores.
+#. **Eccentricity** — the maximum distance from each node to any other reachable
+   node. Identifies peripheral versus central nodes and assesses network
+   compactness.
+#. **Node Connectivity** — the minimum number of nodes needed to disconnect each
+   node's neighborhood. Assesses local network robustness around individual
+   nodes.
+#. **Average Dispersion** — how scattered each node's neighbors are from one
+   another. Distinguishes bridge nodes, with high dispersion, from
+   community-centered nodes, with low dispersion.
+#. **Network Bridges** — edges whose removal would disconnect network components.
+   Finds critical connections essential for network cohesion.
+#. **Compute All Analyses and Export to CSV** — batch computes all of the above
+   and saves them, along with PNGs of the associated histograms, to a chosen
+   directory. Useful for rapid comparison across datasets when it is unclear
+   which statistics may be significant, and for large networks where computation
+   is slow — load only the network in a separate instance of NetTracer3D and run
+   the batch computation as a background task.
 
-1. Bucket Distance...
-    * This is the distance that will be used as a step size while searching outward from nodes in the graph to evaluate how close in 3D space their neighbors are.
 
-* Press 'Get Radial Distribution' to open a new matplotlib window showing the graph, and also place the obtained data in as a new table in the tabulated data widget.
+Analyze → Stats → Network Related → Radial Distribution Analysis
+-----------------------------------------------------------------
 
-'Analyze -> Stats -> Network Related -> Network Nearest Neighbors'
------------------------------------------
-* This method is designed for finding 1. statistics about the number of steps in the shortest paths between objects of interest in the network and 2. Rendering overlays of those shortest paths and/or heatmap overlays of which objects are closer in the network.
-* You can either run this to find nearest neighbors between selected elements in the network, between elements bearing some 'node_identity', or a combination of the two.
+Creates a graph showing the average number of neighboring nodes for any given
+node on the y axis against distance from that node on the x axis. This evaluates
+how far apart connected nodes tend to be in 3D space and how those relationships
+are distributed — more efficient networks would typically be expected to have an
+abundance of short connections and a minority of long ones.
 
-Parameter Explanations
-~~~~~~~~~~~~~~~
-#. Root Identity to Search for Neighbor IDs - Here you will have the option to choose what node types are searching for shortest paths (to the target type). This will be set to the highlighted nodes by default but you can also have it start from nodes of one of your node identity types.
-#. Neighbor Identities to Search For? - These are the node types that are being searched for by your root type. This will be set to the highlighted nodes by default but you can also have it search for nodes of one of your node identity types.
-#. Generate Heatmap - Renders a heatmap overlay in Overlay2 where closer nodes are red and further nodes are blue. The color schema is based on the average number of steps any node has to go to reach the target nodes with root nodes requiring more steps being bluer and those requiring less being redder.
-#. Subgraph Computation - A dropdown menu with a set of minimized subgraphs that can be rendered for Overlay1 to show direct connections between objects.
-    - By default, 'No Overlay1' makes this do nothing.
-    - 'Generate Shorest Path Overlay' — Renders a shortest path overlay in Overlay1 which shows the nodes and edges that yield the shortest path between your root and target nodes. If you've calculated a 'Connectivity Network' using 'Prelabeled Edges', this can be an interesting way to find the shortest path through a structure such as blood vessels or nerves.
-    - Compute Minimal Connecting Subgraph — All the selected objects, if they are connected somehow (even if there is unselected nodes between them), they will be forced to find and render all those shortest connections to each other, resulting in a fully-connected, small-world optimized subgraph. Unlike the shorest paths option, this one forces the graphs to make all the nodes connect that can connect. Selected nodes that have other selected nodes between them will have to go through those intermediary nodes, though. Essentially, you are evaluating all the best routes between your selected groups of nodes. Uniquely, this option also returns the subgraph to the 'Selection Table' which can then be visualized or swapped into the main table.
-    - Compute Steiner Subgraph - Computes the Steiner sugraph, which like the 'Minimal Connecting Subgraph' forces all the nodes to be connected if there exists a path, however it will not find and render all the shorest paths, rather one single, snaking short path between all the nodes in question.  
+Parameter explanations
+~~~~~~~~~~~~~~~~~~~~~~
 
-* Click 'Get Nearest Network Neighbors' to yield the nearest neighbor distrubution for your root nodes (returns a table), and also the overlays you've selected.
-* Click 'Get Average Nearest All ID Combinations' to yield the average nearest distance for all unique combos of node identities. Note that this will not provide distributions or overlays. You will get a matrix graph showing all the combos in a nice visualization though.
+1. **Bucket Distance** — the step size used when searching outward from nodes in
+   the graph to evaluate how close their neighbors are in 3D space.
 
-'Analyze -> Stats -> Network Related -> Community Cluster Heatmap'
------------------------------------------
+Press **Get Radial Distribution** to open a new matplotlib window showing the
+graph and to place the obtained data in a new table in the tabulated data widget.
 
-* This method plots the nodes into a 2D or 3D graph, with a color corresponding to community density.
-* Red nodes are higher density than expected in a community, blue ones are lower density than expected.
 
-Parameter Explanations
-~~~~~~~~~~~~~~~
+Analyze → Stats → Network Related → Network Nearest Neighbors
+--------------------------------------------------------------
 
-#. (Optional) - Total Number of Nodes
-    * The total number of nodes is used to decide how many nodes belong in a community on average.
-    * If unassigned, the program will just get the number of nodes that exist in the current properties.
-    * This is here in case the nodes in the active session are a subset (ie some number of nodes have been filtered out with the excel helper). In that case, the user can still enter the number of nodes that belong in the dataset if the filtering had not occurred.
-#. Use 3D Plot...
-    * By default, the program will graph the heatmap in 3D.
-    * Disable this if your data is 2D. Do not disable if it is 3D as the program will get confused.
-#. Overlay
-    * If enabled, the heatmapped will be returned as an RGB image overlay that goes into Overlay2, rather than a matplotlib graph.
+Finds statistics on the number of steps in the shortest paths between objects of
+interest in the network, and renders overlays of those shortest paths and
+heatmaps of which objects are closer within the network. It can find nearest
+neighbors between selected elements in the network, between elements bearing a
+given ``node_identity``, or a combination of the two.
 
-* Press 'Run' to show the heatmap graph, and yield a table showing community id vs density intensity.
-* It will require you to get 'node_centroids' and 'communities' properties if unassigned.
+Parameter explanations
+~~~~~~~~~~~~~~~~~~~~~~
 
-Algorithm Explanations:
-~~~~~~~~~~~~~~~
+#. **Root Identity to Search for Neighbor IDs** — the node types searching for
+   shortest paths to the target type. Set to the highlighted nodes by default,
+   but can start from nodes of one of your node identity types.
+#. **Neighbor Identities to Search For?** — the node types being searched for by
+   the root type. Set to the highlighted nodes by default, but can search for
+   nodes of one of your node identity types.
+#. **Generate Heatmap** — renders a heatmap overlay in Overlay2 where closer
+   nodes are red and further nodes blue. The color scheme is based on the average
+   number of steps a node must take to reach the target nodes, with root nodes
+   requiring more steps rendered bluer and those requiring fewer rendered redder.
+#. **Subgraph Computation** — a dropdown of minimized subgraphs that can be
+   rendered to Overlay1 to show direct connections between objects.
 
-1. Determine total nodes by trying multiple fallback sources: network nodes, centroids, identities, or unique node array values.
-2. Calculate baseline density as the expected nodes per community if randomly distributed (total nodes / num communities).
-3. Compute heat values using natural log ratio of actual community size to expected random size.
-4. Generate heatmap visualization with matplotlib.
+   * **No Overlay1** — the default; does nothing.
+   * **Generate Shortest Path Overlay** — renders an overlay in Overlay1 showing
+     the nodes and edges yielding the shortest path between your root and target
+     nodes. Where a connectivity network was calculated using prelabeled edges,
+     this is an interesting way to find the shortest path through a structure
+     such as blood vessels or nerves.
+   * **Compute Minimal Connecting Subgraph** — where the selected objects are
+     connected somehow, even with unselected nodes between them, this finds and
+     renders all those shortest connections, producing a fully connected,
+     small-world optimized subgraph. Unlike the shortest paths option, this
+     forces every node that can connect to do so, with selected nodes separated
+     by other selected nodes routed through those intermediaries. In effect it
+     evaluates all the best routes between groups of selected nodes. Uniquely,
+     this option also returns the subgraph to the selection table, which can then
+     be visualized or swapped into the main table.
+   * **Compute Steiner Subgraph** — computes the Steiner subgraph which, like the
+     minimal connecting subgraph, forces all nodes to be connected where a path
+     exists, but renders a single snaking short path between all the nodes in
+     question rather than every shortest path.
 
-'Analyze -> Stats -> Spatial -> Identity Distribution of Neighbors'
------------------------------------------
-* This method allows us to explore what kinds of nodes (as categorized by their node_identities) tend to be located nearby/connected to nodes of some desired ID.
-* Use this method when you want to characterize what interacts with what, for example, if I have cellular neighborhoods and want to know what's near what.
-* Selecting this displays the following menu:
+Click **Get Nearest Network Neighbors** to yield the nearest neighbor
+distribution for your root nodes, returned as a table, along with any selected
+overlays. Click **Get Average Nearest All ID Combinations** to yield the average
+nearest distance for all unique combinations of node identities; this provides no
+distributions or overlays, but returns a matrix graph visualizing all
+combinations.
+
+
+Analyze → Stats → Network Related → Community Cluster Heatmap
+--------------------------------------------------------------
+
+Plots the nodes into a 2D or 3D graph, colored by community density. Red nodes
+are higher density than expected in a community and blue nodes lower.
+
+Parameter explanations
+~~~~~~~~~~~~~~~~~~~~~~
+
+#. **(Optional) Total Number of Nodes** — used to decide how many nodes belong in
+   a community on average. If unassigned, the program uses the number of nodes
+   present in the current properties. This parameter exists for cases where the
+   nodes in the active session are a subset — where some have been filtered out
+   with the excel helper, for example — allowing the pre-filtering node count to
+   be entered instead.
+#. **Use 3D Plot...** — the heatmap is graphed in 3D by default. Disable this for
+   2D data; do not disable it for 3D data, as the program will get confused.
+#. **Overlay** — returns the heatmap as an RGB image overlay in Overlay2 rather
+   than a matplotlib graph.
+
+Press **Run** to show the heatmap graph and yield a table of community ID against
+density intensity. The ``node_centroids`` and ``communities`` properties are
+required, and you will be prompted for them if unassigned.
+
+Algorithm explanation
+~~~~~~~~~~~~~~~~~~~~~
+
+1. Determine total nodes by trying multiple fallback sources: network nodes,
+   centroids, identities, or unique node array values.
+2. Calculate baseline density as the expected nodes per community if randomly
+   distributed — total nodes divided by number of communities.
+3. Compute heat values using the natural log ratio of actual community size to
+   expected random size.
+4. Generate the heatmap visualization with matplotlib.
+
+
+Analyze → Stats → Spatial → Identity Distribution of Neighbors
+---------------------------------------------------------------
+
+Explores which kinds of nodes, as categorized by ``node_identities``, tend to be
+located near or connected to nodes of a given identity. Use this to characterize
+what interacts with what — for example, to determine what sits near what within
+cellular neighborhoods.
 
 .. image:: _static/analyze4.png
    :width: 200px
    :alt: NeighborID Menu
 
-Parameter Explanations
-~~~~~~~~~~~~~~~
+Parameter explanations
+~~~~~~~~~~~~~~~~~~~~~~
 
-1. Root Identity to Search...
-    * This is the identity of the sorts of nodes we will search outward from. The neighborhoods of these nodes will be characterized.
-2. Mode (Menu Includes the following options):
-    1. From Network - Quantifies Neighbors Based on Adjacent Network Connections
-        * Reveals information about neighors based on the connectivity of the network.
-    2. Use Labeled Nodes - Quantifies Neighbors Volume of Neighbor Within Search Region 
-        * Reveals information about neighors based on what sorts of nodes are physically in the vicinity.
-3. Search Radius (if using Mode 2)
-    * The distance that nodes will search to characterize their neighborhoods. Option one currently will always just search for immediate network neighbors.
-4. Use Fast Dilation... (Only applies if using mode 2 and have entered a value for param 3)
-    * If enabled, the program will attempt to use the edt module to solve the dilation in parallel. If edt is not present or this fails somehow, it will fall back to the scipy method.
-    * If disabled, the program will use the scipy distance_transform_edt method to solve the dilation, which may be slower.
-* Press 'Get Neighborhood Identity Distribution' to display a few matplotlib barcharts, with associated data tables being added to the tabulated data widget.
-* Press 'Batch: All Network Combinations...' to compute the neighbor information for all identity combinations available. This will return a matrix (both a graph and tables) telling you the number of times each identity is able to find at least one neighbor of another identity. There are three of these - the first just gives the raw sums, the second gives the natural logs of the first, and the last gives percentile-based data (Where if I had A, B, and C as identities - it would tell me the percentage of A's neighbor interactions that are A-B and the percentage that are A-C; this output excludes self pairing). This batch calculation is best combined with proximity networks to describe the border compositions between objects at some arbitrary distance.
+#. **Root Identity to Search...** — the identity of the nodes searched outward
+   from. The neighborhoods of these nodes are characterized.
+#. **Mode**
 
-* The following tables (and corresponding graphs) will appear:
-* If using mode 1:
-    1. Neighborhood Distribution of Nodes in Network from Nodes: 'X'
-        * Shows how many total neighbors of each ID that nodes of ID 'X' have (including other type 'X').
-    2. Neighborhood Distribution of Nodes in Network from Nodes 'X' as a proportion of total nodes of that ID.
-        * For each ID category, shows what proportion of that node type in the network are neighbors of nodes of ID 'X' (including other type 'X')
-* If using mode 2:
-    1. Volumetric Neighborhood Distribution of Nodes in image that are 'y' distance from nodes: 'X'
-        * Shows the total volumes of nodes of each ID within distance 'y' from nodes of ID 'X' (does not include other type 'X')
-    2. Density Distribution of Nodes in image that are 'y' from Nodes 'X' as a proportion of totaly node volume of that ID.
-        * For each ID category, shows what proportion of the volume of that node type are within distance 'y' from nodes of ID 'X' (does not include other type 'X')
-    3. Clustering Factor of Node Identities within 'y' from nodes 'X'
-        * For each ID category, shows the volumetric density of nodes of that ID type within distance 'y' from nodes of ID 'X', divided by the densities of nodes of that ID type in the entire image. (does not include other type 'X')
-        * This is also known as relative density. Essentially, a val greater than 1 means said node ID is unevenly distributed to be closer to nodes of ID 'X', while a val less than 1 means they are preferentially avoiding nodes of ID 'X'.
+   1. **From Network** — quantifies neighbors based on adjacent network
+      connections, revealing information based on the connectivity of the
+      network.
+   2. **Use Labeled Nodes** — quantifies the volume of neighbors within the
+      search region, revealing which sorts of nodes are physically in the
+      vicinity.
 
-Algorithm Explanation
-~~~~~~~~~~~~~~~~~~~~
+#. **Quantify Nodes or Edges?**
 
-1. Mode 1 just counts neighbors that are immediate neighbors in the network of the desired node ID.
-2. Mode 2 searches using either a distance transform or psuedo-3D binary dilation. It searches outward from nodes of the desired ID type, and hence does not actually include them. This is why this option never evaluates its own clustering.
+   1. **Quantify Node Counts** — counts the nodes of each identity available
+      within the search space from your chosen identity.
+   2. **Quantify Edge Counts** — counts edges instead. Two nodes sharing the same
+      five neighbors have ten edges between them, since unique connections are
+      being quantified, where the node count option would return five.
+
+#. **Search Radius** (mode 2 only) — the distance nodes search to characterize
+   their neighborhoods. Mode 1 always searches for immediate network neighbors.
+#. **Use Fast Dilation...** (mode 2 with a search radius) — attempts to solve the
+   dilation in parallel using the ``edt`` module. If ``edt`` is unavailable or
+   fails, the scipy method is used as a fallback. When disabled, the scipy
+   ``distance_transform_edt`` method is used, which may be slower.
+
+The following parameters apply to network mode only:
+
+#. **Run Comparative Random Simulation?** — scrambles the node centroids into
+   random locations and returns data about the random distribution for comparison
+   against the observed one.
+#. **Null Model** - Allows control if you prefer label permutation or centroid scramble. By default it is set to scramble
+   labels, which shuffles the set of node identities belonging to each node and reevaluates the data based on the
+   scrambled dataset, without altering the network whatsoever. This is the preferred setting to evaluate for randomness
+   in a space with inherently fixed locations, such as cells in a tissue. You can change this to instead scramble all
+   centroids and regenerate the network for each random simulation, which also involves the 'Centroid Scramble Only' parameters. 
+#. **Number of Random Iterations to Run?** — the number of random iterations
+   compared against the observed data, of which the average values are used.
+   Defaults to 1; increasing it improves accuracy at the cost of computation
+   time.
+#. **Arrange Random Nodes How?** — where a bounding mask defines the region nodes
+   can realistically occupy, such as the boundaries of a tissue, place it in a
+   channel other than the nodes channel and select that channel here. Random
+   networks are then scrambled only within that mask.
+#. **Number of Neighbors to Connect for Simulated Network** — must match the
+   value used to generate your original proximity network, so that the random
+   proximity networks behave the same way.
+#. **Network Connection Distance for Simulated Network (Scaled)** — likewise must
+   match any distance cap placed on your original proximity network. This
+   automatically uses the ``xy_scale`` and ``z_scale`` parameters where set.
+
+Press **Get Neighborhood Identity Distribution** to display several matplotlib
+bar charts, with the associated data tables added to the tabulated data widget.
+
+Press **Batch: All Network Combinations...** to compute neighbor information for
+all available identity combinations. This returns a matrix, as both a graph and
+tables, giving the number of times each identity finds at least one neighbor of
+another identity. Three are produced: raw sums, their natural logs, and
+percentile-based data — with identities A, B, and C, the last reports the
+percentage of A's neighbor interactions that are A-B and the percentage that are
+A-C, excluding self pairing. This batch calculation is best combined with
+proximity networks to describe the border compositions between objects at an
+arbitrary distance.
+
+Outputs
+~~~~~~~
+
+In mode 1:
+
+1. *Neighborhood Distribution of Nodes in Network from Nodes: 'X'* — how many
+   total neighbors of each ID that nodes of ID X have, including other type X.
+2. *Neighborhood Distribution of Nodes in Network from Nodes 'X' as a proportion
+   of total nodes of that ID* — for each ID category, the proportion of that node
+   type in the network that are neighbors of nodes of ID X, including other type
+   X.
+
+In mode 2:
+
+1. *Volumetric Neighborhood Distribution of Nodes in image that are 'y' distance
+   from nodes: 'X'* — the total volumes of nodes of each ID within distance y of
+   nodes of ID X, excluding other type X.
+2. *Density Distribution of Nodes in image that are 'y' from Nodes 'X' as a
+   proportion of total node volume of that ID* — for each ID category, the
+   proportion of the volume of that node type within distance y of nodes of ID X,
+   excluding other type X.
+3. *Clustering Factor of Node Identities within 'y' from nodes 'X'* — for each ID
+   category, the volumetric density of nodes of that ID within distance y of
+   nodes of ID X, divided by the density of nodes of that ID across the entire
+   image, excluding other type X. This is also known as relative density: a value
+   greater than 1 means that node ID is unevenly distributed closer to nodes of
+   ID X, while a value less than 1 means they preferentially avoid nodes of ID X.
+
+With the random simulation computed, a further graph and table give the observed
+values divided by the simulated values for the computed relationships, where
+values greater than 1 correspond to greater than random.
+
+Algorithm explanation
+~~~~~~~~~~~~~~~~~~~~~
+
+1. Mode 1 counts neighbors that are immediate network neighbors of the desired
+   node ID.
+2. Mode 2 searches using either a distance transform or pseudo-3D binary
+   dilation. It searches outward from nodes of the desired ID type and therefore
+   does not include them, which is why this option never evaluates its own
+   clustering.
 
 
-'Analyze -> Stats -> Spatial -> Ripley Clustering Analysis'
------------------------------------------
-* This method generates a Ripley's K curve, which is a function that compares relative object clustering to distance r from some random node.
-* It is a good way to identify if objects are clustering or dispersed, and how that varies through an image.
-* This method can evaluate if a node of some identity is clustered around a node of another identity type, or just if nodes of one type are clustered with themselves. 
-* This method can be run with labeled nodes, or just node centroids themselves. It will prompt for node centroids if they do not exist. Since it uses centroids, it says nothing about the actual shapes of nodes.
-* Selecting this option displays the following menu:
+Analyze → Stats → Spatial → Ripley Clustering Analysis
+--------------------------------------------------------
+
+Generates a Ripley's K curve, a function comparing relative object clustering to
+distance r from a random node. This identifies whether objects are clustered or
+dispersed and how that varies through an image. It can evaluate whether nodes of
+one identity cluster around nodes of another, or whether nodes of one type
+cluster with themselves.
+
+The method runs on labeled nodes or on node centroids alone, prompting for node
+centroids if they do not exist. Because it uses centroids, it says nothing about
+the actual shapes of nodes.
 
 .. image:: _static/ripley_menu.png
    :width: 400px
    :alt: Ripley Menu
 
-Parameter Explanations
-~~~~~~~~~~~~~~~
-#. Root Identity to Search for Neighbors
-    * This is the node identity type whose neighborhood you want to evaluate for clustered objects.
-#. Targ Identity to be Searched For
-    * This is the node identity who will be evaluated for cluster behavior around param 1.
-    * Note that param 1 and 2 only appear if identities are assigned. Otherwise, all nodes will just evaluate clustering against themselves.
-#. Bucket Distance for Searching For Clusters...
-    * This is the bucket distance for each iteration of r. It is auto-scaled for your image, so enter a true distance here if you have scaling properties set.
-    * Note that smaller buckets will slow down processing time (in exchange for higher fidelity).
-#. Proportion of image to search...
-    * A 0-1 float representing the proportion of the image to search from each node.
-    * A value of 1 will have each node try to evaluate the clustering of every other node in the image, while values closer to 0 will restrict the function calculation to just the immediate neighborhood.
-    * Note that higher values will increase border artifacts (Since the method can't 'see' nodes beyond the image borders so it presumes those regions to be empty, decreasing clustering appraisal).
-#. Exclude Root Nodes Near Borders?
-    * For border safety, the user can enable this to optionally have the nodes near the image boundaries not search for neighbors. The degree to which the border nodes are excluded is set with the following param.
-#. Proportion of most internal nodes to use...?
-    * If the above param is enabled, this value will tell it what degree of internal nodes to use.
-    * This should be a float between 0 and 1. It represents the proportion of most internal nodes, so higher vals exclude more of the border.
-    * As an example, setting this to 0.9 would have it include only the 10% most internal space of the array to find nodes to search from. If no nodes can be found within these bounds, the analysis will not be performed.
-#. Define boundaries how?
-    * If restricting analysis to be within borders, this dropdown menu can be used to tell the program what to consider as 'boundaries'. By default, it will use the boundaries of the entire array. However, if your image is, for example, a piece of tissue with background space, and you want the search to be restricted to stay within the actual tissue volume, you will need to first create a binary mask for your foreground. Then, place that mask in any of the other channels (besides nodes). Lastly, use the dropdown menu to select the channel containing the mask. The easiest way to yield a foreground mask is to first threshold via intensity, then to run 'Process -> Image -> Fill Holes' if desired. If the tissue is 2D, the user may also trace the foreground with the pen tool, then run Fill Holes.
-#. Keep search radii within border...?
-    * If restricting analysis to be within borders, and you want the nodes to also be forced to keep their search radii within those borders, this setting can be enabled. It will automatically calculate the minimum distance from the most external nodes being considered to the borders, and use that distance for the search radii. Generally speaking, this setting should be enabled if masking within tissue boundaries, or rather if not masking but also not using param 9. Note that this will override param 4.
-#. Use Border Correction...
-    * This param can be enabled if the user is not masking the root nodes, but also wants to use search radii that extend beyond the image borders. To compensate for edge artifacts, it will have the program clone centroids by reflecting them over the borders of the array, essentially forcing the space beyond the array to mimic the space within the array (an extrapolation). As mentioned, this does not really work if the user is forcing the analysis to stay within a tissue mask, as the reflection is designed for the boundaries of the rectanguloid image, not a weird mask shape.
+Parameter explanations
+~~~~~~~~~~~~~~~~~~~~~~
 
-* Press "Get Ripley's H" to have the program calculate both the Ripley's K function and Ripley's H function for your dataset. Tables for each will populate the tabulated data widget, while some form of the following graph will appear:
+#. **Root Identity to Search for Neighbors** — the node identity whose
+   neighborhood is evaluated for clustered objects.
+#. **Targ Identity to be Searched For** — the node identity evaluated for
+   clustering behaviour around parameter 1. Parameters 1 and 2 appear only when
+   identities are assigned; otherwise all nodes evaluate clustering against
+   themselves.
+#. **Bucket Distance for Searching For Clusters...** — the bucket distance for
+   each iteration of r, auto-scaled for your image, so enter a true distance
+   where scaling properties are set. Smaller buckets increase fidelity at the
+   cost of processing time.
+#. **Proportion of image to search...** — a float from 0 to 1 giving the
+   proportion of the image searched from each node. A value of 1 has each node
+   evaluate the clustering of every other node in the image, while values closer
+   to 0 restrict the calculation to the immediate neighborhood. Higher values
+   increase border artifacts, since the method cannot see nodes beyond the image
+   borders and presumes those regions empty, decreasing the clustering appraisal.
+#. **Exclude Root Nodes Near Borders?** — for border safety, prevents nodes near
+   the image boundaries from searching for neighbors. The degree of exclusion is
+   set by the following parameter.
+#. **Proportion of most internal nodes to use...?** — where the above is enabled,
+   a float between 0 and 1 giving the proportion of most internal nodes to use;
+   higher values exclude more of the border. Setting this to 0.9 includes only
+   the 10% most internal space of the array when finding nodes to search from. If
+   no nodes fall within these bounds, the analysis is not performed.
+#. **Define boundaries how?** — when restricting analysis within borders, this
+   sets what counts as a boundary. By default the boundaries of the entire array
+   are used. Where the image is, for example, a piece of tissue surrounded by
+   background and the search should stay within the tissue volume, first create a
+   binary mask of your foreground, place it in a channel other than nodes, and
+   select that channel here. The easiest way to obtain a foreground mask is to
+   threshold by intensity and then run **Process → Image → Fill Holes** if
+   desired; for 2D tissue, the foreground may also be traced with the pen tool
+   before filling holes.
+#. **Keep search radii within border...?** — forces nodes to keep their search
+   radii within those borders, automatically calculating the minimum distance
+   from the most external nodes under consideration to the borders and using that
+   as the search radius. This should generally be enabled when masking within
+   tissue boundaries, or when neither masking nor using parameter 9. It overrides
+   parameter 4.
+#. **Use Border Correction...** — for use when root nodes are not masked but
+   search radii extend beyond the image borders. To compensate for edge
+   artifacts, centroids are cloned by reflection over the array borders, forcing
+   the space beyond the array to mimic the space within it. This does not work
+   well when analysis is confined to a tissue mask, as the reflection is designed
+   for the boundaries of a rectanguloid image rather than an irregular mask
+   shape.
+
+Press **Get Ripley's H** to calculate both the Ripley's K and Ripley's H
+functions for your dataset. (You can also use the 'Batch' button below this to 
+compute it for all identity perumutations, although note this may be slow).
+Tables for each populate the tabulated data widget,
+and a graph of the following form appears:
 
 .. image:: _static/ripley_graph.png
    :width: 400px
    :alt: Ripley Graph
-*In this case, the x axis represents the distance from any random node, and the y, a factor representing the clustering intensity observed around nodes at that distance. The blue line is our observed line, while the red line represents expected behaviors from a Poisson distribution of nodes. Essentially, regions above the red dotted line are unexpectedly clustered, while those below are unexpectedly dispersed. The right graph is a normalized version of the left, to have a straight center line. Note that due the possibility of border artifacts in the datasets, it might be best to compare between multiple datasets or with a dataset of randomly-seeded nodes, rather than directly to the red line*
 
-Algorithm Explanations
-~~~~~~~~~~~~~~~
-* This algorithm is an implementation of the Ripley's K function. See 10.1016/j.bpj.2009.05.039
-#. We take two sets of points: root points and target points (these can be the same set)
-#. We build a KDTree from the root points for efficient nearest-neighbor searches
-#. We calculate the volume/area of the study region
-#. We compute the intensity (λ) as number of reference points divided by volume
-#. For each root point at each distance in our bucketed r_values, we find Neighbors using KDTree and record how many target points are within this radius
-#. If we're comparing a set to itself, remove self-counts to avoid counting points as their own neighbors.
-#. Sum all the weighted counts and normalize by:
-    * Number of subset points (n_subset)
-    * Point intensity (λ)
-#. Return the array of K values for each radius value
-#. K values can then be normalized to H values by 'h_values = np.sqrt(k_values / np.pi) - r_values' (in 2D), or 'h_values = np.cbrt(k_values / (4/3 * np.pi)) - r_values' (in 3D)
-#. These are plotted versus the theoretical functions 'theo_k = np.pi * r_values**2' (2D) or 'theo_k = (4/3) * np.pi * r_values**3' (3D), while theoretical H values are just 0.
-
-* For border correction:
-#. Restricting to internal nodes for the whole image is done by just checking if the nodes are beyond the requested distance to the border.
-#. If the user asks internal nodes to remain within a masked space, the distance transform to the background of the mask is obtained. This dt mask is thresholded to only contain the internal proportion the user desired. Finally, the root nodes within that volume are considered valid.
-#. If the user is using the node reflection option:
-    * For 2D: Creates 8 potential mirror regions (4 edges + 4 corners)
-    * For 3D: Creates 26 potential mirror regions (all adjacent cubes minus center)
-    * Each region defined by direction vectors (-1, 0, +1 for each dimension)
-    * For each mirror region, finds points within max_r distance of relevant boundaries
-    * A point needs mirroring if it's close enough to a boundary that analysis might miss neighbors
-    * For qualifying points, creates copies using reflection formula: new_coord = 2 × boundary - old_coord
-    * Applies this transformation only to dimensions where mirroring is needed
-    * Preserves other coordinates unchanged
-    * Returns original points plus all mirrored copies
+*The x axis represents the distance from any random node and the y axis a factor
+representing the clustering intensity observed around nodes at that distance. The
+blue line is the observed line; the red line represents expected behaviour from a
+Poisson distribution of nodes. Regions above the red dotted line are unexpectedly
+clustered and those below unexpectedly dispersed. The right graph is a normalized
+version of the left, giving a straight center line. Given the possibility of
+border artifacts, comparison between multiple datasets, or against a dataset of
+randomly seeded nodes, may be preferable to comparison against the red line
+directly.*
 
 
-'Analyze -> Stats -> Spatial -> Average Nearest Neighbors (With Clustering Heatmaps)'
------------------------------------------
+Algorithm explanation
+~~~~~~~~~~~~~~~~~~~~~
 
-* This method will provide information about the nearest neighbors of your nodes.
-* If node identities are assigned, the nearest neighbor information can be specific about the relationship between two identity types. Otherwise, it will just look at all the nodes together.
-* The output can be the distribution of nearest neighbor values (+ their average), or it can be the average of all identity combinations (for bulk processing).
-* This method can also yield heatmaps for nearest neighbor relationships as either graphs or image overlays.
+This is an implementation of the Ripley's K function; see
+10.1016/j.bpj.2009.05.039.
 
-Parameter Explanations
-~~~~~~~~~~~~~~~
+#. Take two sets of points, root and target, which may be the same set.
+#. Build a KDTree from the root points for efficient nearest-neighbor searches.
+#. Calculate the volume or area of the study region.
+#. Compute the intensity (λ) as the number of reference points divided by volume.
+#. For each root point at each distance in the bucketed r values, find neighbors
+   using the KDTree and record how many target points fall within that radius.
+#. When comparing a set to itself, remove self-counts to avoid counting points as
+   their own neighbors.
+#. Sum all weighted counts and normalize by the number of subset points
+   (``n_subset``) and the point intensity (λ).
+#. Return the array of K values for each radius value.
+#. K values are normalized to H values by ``h_values = np.sqrt(k_values / np.pi)
+   - r_values`` in 2D, or ``h_values = np.cbrt(k_values / (4/3 * np.pi)) -
+   r_values`` in 3D.
+#. These are plotted against the theoretical functions ``theo_k = np.pi *
+   r_values**2`` (2D) or ``theo_k = (4/3) * np.pi * r_values**3`` (3D);
+   theoretical H values are simply 0.
 
-#. Root Identity... (If node identities property exists) - Identities of this node type will be evaluated for nearest neighbors of some other node type.
-#. Neighbor identities... (If node identities property exists) - Identities of this node type will be searched for. Can be the same as param 1, or can include all nodes except param 1.
-#. Number of Nearest Neighbors... - Default set to 1. This is the number of nearest neighbors each node will find. If 1, it just looks for its closest neighbor distance. Increasing this value will have each node instead get the average distance to that many nearest neighbors. (This value will cause the program to return if it is greater than the number of possible neighbors).
-#. Use Centroids? - Whether to use centroids to find the neighbors, or to search from entire objects. Note that centroids is faster but only works well for spheroids. Entire objects, however, do not support averaging out multiple nearest neighbor, instead always setting the above param to 1 if selected.
-#. Heatmap - Enabling this will cause a heatmap to be generated. Red nodes will be closer on average to their nearest neighbor, while blue nodes will be further.
-#. 3D - If generating a matplotlib heatmap, enabling this will make the graph 3D. Disabling it will make it 2D.
-#. Overlay - If enabled, the heatmap will be created as an image overlay in Overlay2 channel instead of a graph.
-#. For heatmap, measure theoretical point distribution how? - When generating the heatmap, nodes are colored based on an approximate estimate of the distance between points, if they were evenly (note - not randomly) distributed throughout the array. By default, this dropdown menu is set to 'Anywhere', which tells the program to consider how the distances would be if the points were uniformly distributed throughout the entire image. However, if your image contains background, and you want it to consider only distribution throughout the foreground (i.e. an actual tissue), you will need to first create a binary mask for your foreground. Then, place that mask in any of the other channels (besides nodes). Lastly, use the dropdown menu to select the channel containing the mask. The easiest way to yield a foreground mask is to first threshold via intensity, then to run 'Process -> Image -> Fill Holes' if desired. If the tissue is 2D, the user may also trace the foreground with the pen tool, then run Fill Holes.
-#. Quantifiable Overlay - If enabled, will generate a grayscale image with each node being assigned a val equal to its calculated nearest neighbor distance, which will go in Overlay1.
+For border correction:
+
+#. Restricting to internal nodes across the whole image is done by checking
+   whether nodes lie beyond the requested distance from the border.
+#. Where internal nodes must remain within a masked space, the distance transform
+   to the background of the mask is obtained and thresholded to contain only the
+   requested internal proportion. Root nodes within that volume are considered
+   valid.
+#. Where the node reflection option is used:
+
+   * 2D creates 8 potential mirror regions: 4 edges and 4 corners.
+   * 3D creates 26 potential mirror regions: all adjacent cubes minus the center.
+   * Each region is defined by direction vectors (-1, 0, +1 for each dimension).
+   * For each mirror region, points within ``max_r`` of the relevant boundaries
+     are found. A point needs mirroring if it is close enough to a boundary that
+     analysis might miss neighbors.
+   * Qualifying points are copied using the reflection formula ``new_coord = 2 ×
+     boundary - old_coord``, applied only to the dimensions where mirroring is
+     needed and preserving other coordinates unchanged.
+   * The original points plus all mirrored copies are returned.
 
 
+Analyze → Stats → Spatial → Average Nearest Neighbors (With Clustering Heatmaps)
+---------------------------------------------------------------------------------
 
-* Pressing 'Get Average Nearest Neighbor...' will yield a table of every 'root' node paired to its average distance to the desired number of nearest neighbors. It will also create a heatmap or 'quantifiable overlay' if selected.
-* (If node identities property exists) - Pressing 'Get All Averages' will yield a table of the average nearest neighbor distance (for the desired number of nearest neighbor) across all nodes for every identity vs identity combination available. This can be a fast way to query the dataset, but it does not yield distributions and heatmaps, which need to be individually obtained. However, note that this should not be used if the number of identities would make this cumbersome. This option will also return a 2 dimensional matrix graph showing the distance for every combination created, useful for fast evaluation or visualization.
-* Note that this method automatically applies the xy_scale and z_scale set in the current properties. To ensure property distances, please make sure those are correct in Image -> Properties. By default, they are 1. 
+Provides information about the nearest neighbors of your nodes. Where node
+identities are assigned, this can be specific to the relationship between two
+identity types; otherwise all nodes are considered together. The output is either
+the distribution of nearest neighbor values and their average, or the average of
+all identity combinations for bulk processing. Heatmaps of nearest neighbor
+relationships can also be produced, as graphs or image overlays.
 
-Algorithm Explanations:
-~~~~~~~~~~~~~~~
+Parameter explanations
+~~~~~~~~~~~~~~~~~~~~~~
 
-1. Depending on the desired identities, the nodes are broken into a root set and a neighbor set.
-2. The centroids (or if not using centroids, assesses entire object borders obtained from skimage find_boundaries method) of the neighbor set are used to build a KDTree, which is a points-based data structure good for querying distance relationships. https://docs.scipy.org/doc/scipy/reference/generated/scipy.spatial.KDTree.html
-3. For each point in the root set, the desired number of nearest neighbors are obtained by querying the KDTree. These values are averaged per point and returned. The total average for the set is also returned.
-4. When generating the heatmap, color intensity is based on whether the object is closer than would be expected in a uniform distribution, with ln(approx expected dist in a uniform distribution / actual dist of point) being used to create the color scale.
-5. To measure the theoretical distance in a uniform distrubition, the image is cloned as a numpy array, and all the 'target points' are uniformly distrubted throughout it (or throughout the masked area, if that is set up). The most central of these points is selected and used with the same KDTree method to search for neighbors with the same parameters as the actual analysis. Because one of the target points is used to search, it will be skipped (since distance to itself is 0), and therefore if the number of nearest neighbors searched for is equal to the number of available target points, the program will approximate the most furthest distance by just assuming it to be equal to the second-furthest-distance.
+#. **Root Identity...** (where the node identities property exists) — nodes of
+   this identity are evaluated for nearest neighbors of another type.
+#. **Neighbor identities...** (where the node identities property exists) — nodes
+   of this identity are searched for. May be the same as parameter 1, or may
+   include all nodes except parameter 1.
+#. **Number of Nearest Neighbors...** — the number of nearest neighbors each node
+   finds, 1 by default, in which case only the closest neighbor distance is
+   found. Higher values give each node the average distance to that many nearest
+   neighbors. The program returns without result if this exceeds the number of
+   possible neighbors.
+#. **Use Centroids?** — whether to find neighbors from centroids or from entire
+   objects. Centroids are faster but work well only for spheroids. Entire objects
+   do not support averaging across multiple nearest neighbors, and always set the
+   parameter above to 1.
+#. **Heatmap** — generates a heatmap in which red nodes are closer on average to
+   their nearest neighbor and blue nodes further. May be set to an overlay or a
+   matplotlib graph.
+#. **Quantifiable Overlay** — generates a grayscale image in Overlay1 in which
+   each node is assigned a value equal to its calculated nearest neighbor
+   distance.
 
-'Analyze -> Stats -> Spatial -> Calculate Node < > Edge Interactions'
------------------------------------------
-* This method will provide information about the volume of positive 'edge' image surrounding each labeled object in your 'node' image.
-* You would essentially use it for a basic measurement of how much the edge channel image is surrounding each node.
-* This measurement is performed for every node in the image individually.
-* When you select this option, you will see this menu:
+The remaining parameters govern how the heatmap is colored and allow node
+distances to be compared against a random simulation. Click **Do Comparative
+Simulation** to obtain this data; it is always enabled when creating a heatmap,
+as it is required to color it correctly.
+
+#. **Bound Theoretical Point Distribution How?** — set to **Anywhere** by
+   default, which considers the distances that would arise if points were
+   uniformly distributed throughout the entire image. Where the image contains
+   background and only the foreground should be considered, create a binary mask
+   of the foreground, place it in a channel other than nodes, and select that
+   channel here. The easiest way to obtain a foreground mask is to threshold by
+   intensity and then run **Process → Image → Fill Holes** if desired; for 2D
+   tissue, the foreground may also be traced with the pen tool before filling
+   holes.
+#. **Arrange Theoretical Point Distribution How?** — **random** arranges nodes
+   randomly, which is more accurate but requires some number of replicates to
+   become fully accurate. **uniform** compares against a distribution in which
+   points are maximally separated in space, which measures against maximum
+   available separation rather than randomness, so anything beyond it is
+   especially isolated.
+#. **Number of seed points to query neighbors** — applies mainly when **random**
+   is selected, where a node may end up coincidentally very close to others by
+   chance. Increasing the number of nodes used to query neighbors reduces the
+   likelihood of such values. This may be left unset, in which case a reasonable
+   default is used.
+#. **Number of replicates?** — increases the number of random replicates when
+   **random** is selected, improving the accuracy of the simulated output.
+#. **Random Seed for Batch Simulation?** — changes the random seed.
+
+The final parameter allows for the nearest neighbor analysis to be restricted to individual components of a separate channel mask. If you create a mask around specific regions of the image and assign its components different labels
+(such as with the 'Label Objects' process function), you can run nearest neighbor analysis within each mask, without allowing for neighbor detection between masked regions,
+then yielding a combined output for the data.
+
+#. **Restrict neighbor search to each labeled region of:** — set to **No Mask** by
+   default, which utilizes the default behavior without attempting to restrict analysis to
+   masks. Change this to the channel with your masks if you desire to get a combined, iterated,
+   mask-restricted analysis. In the simulation, if you set the same mask here as for 'Bound theoretical point distribution...',
+   any resultant heatmap will also have its data specific to each individual mask (as opposed to a global average); use
+   different masks in both if this is not desired.
+
+Press **Get Average Nearest Neighbor...** to yield a table pairing every root
+node with its average distance to the requested number of nearest neighbors, plus
+a heatmap or quantifiable overlay if selected.
+
+Where the node identities property exists, **Get All Averages** yields a table of
+the average nearest neighbor distance across all nodes for every available
+identity-versus-identity combination. This is a fast way to query the dataset,
+but yields no distributions or heatmaps, which must be obtained individually, and
+should not be used where the number of identities would make it cumbersome. It
+also returns a two-dimensional matrix graph showing the distance for every
+combination, which is useful for rapid evaluation.
+
+.. note::
+
+   This method automatically applies the ``xy_scale`` and ``z_scale`` set in the
+   current properties, both of which default to 1. Ensure they are correct in
+   **Image → Properties** for accurate distances.
+
+If the random simulation was run, data about the simulated values is also
+returned, along with the ratio of simulated to observed distances, where higher
+numbers correspond to greater than randomly expected closeness of objects.
+
+Algorithm explanation
+~~~~~~~~~~~~~~~~~~~~~
+
+1. Depending on the desired identities, nodes are split into a root set and a
+   neighbor set.
+2. The centroids of the neighbor set — or, where centroids are not used, entire
+   object borders obtained from the skimage ``find_boundaries`` method — are used
+   to build a KDTree, a points-based data structure suited to querying distance
+   relationships
+   (https://docs.scipy.org/doc/scipy/reference/generated/scipy.spatial.KDTree.html).
+3. For each point in the root set, the requested number of nearest neighbors is
+   obtained by querying the KDTree. These values are averaged per point and
+   returned, along with the total average for the set.
+4. When generating the heatmap, color intensity is based on whether the object is
+   closer than would be expected in a uniform distribution, using ``ln(approx
+   expected dist in a uniform distribution / actual dist of point)`` to create the
+   color scale.
+5. To measure the theoretical distance in a uniform distribution, the image is
+   cloned as a numpy array and all target points are uniformly distributed
+   throughout it, or throughout the masked area where one is set. The most
+   central of these points is selected and used with the same KDTree method under
+   the same parameters as the actual analysis. Because one of the target points
+   is used to search, it is skipped, as its distance to itself is 0; if the number
+   of nearest neighbors searched for equals the number of available target
+   points, the furthest distance is approximated as the second-furthest distance.
+
+
+Analyze → Stats → Spatial → Calculate Node ↔ Edge Interactions
+---------------------------------------------------------------
+
+Provides information about the volume of positive edge image surrounding each
+labeled object in the nodes image, giving a basic measurement of how much the
+edge channel surrounds each node. The measurement is performed individually for
+every node in the image.
 
 .. image:: _static/analyze5.png
    :width: 800px
    :alt: edgenode Menu
 
-Parameter Explanation
-~~~~~~~~~~~~~~~~~~~~
+Parameter explanations
+~~~~~~~~~~~~~~~~~~~~~~
 
-#. Node Search
-    * The distance nodes should search outward for to consider for quantifying nearby edge amounts.
-#. Execution Mode
-    * Dropdown menu has 2 options:
-        1. Include Regions Inside Node - Edgesd that pass directly through the node will be quantified together with those in the search space.
-        2. Exclude Regions Inside Node - Only edges in the search space will be considered.
-#. Return lengths
-    * By default, nodes will return the 'volume' of adjacent edge.
-    * If this is enabled, they will return the lengths of nearby edges instead. Volume and Length calculations are scaled based on the 'xy_scale' and 'z_scale' properties, as set in 'Image -> Properties'.
-#. (If Above): Attempt to correct skeleton looping.
-    * This is enabled by default and is essentially an extra algorithmic step to improve skeletonization of thick objects in 3D. See the section on skeletonization for more information.
+#. **Node Search** — the distance nodes search outward when quantifying nearby
+   edge amounts.
+#. **Execution Mode**
 
-Algorithm Explanation
-~~~~~~~~~~~~~~~~~~~~
-1. The scipy.ndimage.find_objects() method is used to get bounding boxes around all the labeled nodes.
-2. For each object, a subarray is cut out around it using its bounding box, with padding on all sides proportional to the desired search region.
-3. The search region is then calculated for each node in parallel using dilation (see the section on dilation for more information).
-4. The edges in the desired search regions are obtained via boolean indexing for each node.
-5. Edge and Search region volumes are obtained by counting pixels and scaling them by the scaling parameters.
-6. If lengths are used instead, the edges are skeletonized as specified, then coordinates of the skeletons are obtained, followed by usage of the distance formula between each adjacent coordinate (scaled by the scaling parameters).
+   1. **Include Regions Inside Node** — edges passing directly through the node
+      are quantified together with those in the search space.
+   2. **Exclude Regions Inside Node** — only edges in the search space are
+      considered.
 
+#. **Return lengths** — nodes return the volume of adjacent edge by default;
+   enabling this returns the lengths of nearby edges instead. Volume and length
+   calculations are scaled by the ``xy_scale`` and ``z_scale`` properties set in
+   **Image → Properties**.
+#. **Attempt to correct skeleton looping** (where the above is enabled) — an
+   extra algorithmic step to improve skeletonization of thick objects in 3D,
+   enabled by default. See the section on skeletonization for details.
 
-'Analyze -> Stats -> Morphological -> Calculate Volumes'
------------------------------------------
-* This method finds the volumes of all objects in the 'Active Image'.
-* The volumes are scaled by the axis scalings and returned as a table in the tabulated data widget.
-* Algorithm explanation: This method uses the np.bincount() method to count each label and then just multiplies the outputs by the scalings.
+Algorithm explanation
+~~~~~~~~~~~~~~~~~~~~~
 
-'Analyze -> Stats -> Morphological -> Calculate Radii'
------------------------------------------
-* This method finds the largest radii of all objects in the 'Active Image'.
-* It may be good to use, for example, on labeled branches to evaluate how thick the branches are.
-
-
-Algorithm Explanation
-~~~~~~~~~~~~~~~~~~~~
-
-1. The scipy.ndimage.find_objects() method is used to get bounding boxes around all the labeled objects.
-2. For each object, a subarray is cut out around it using its bounding box, with padding on all sides.
-3. The object in question is boolen indexed within its subarray.
-4. The scipy.ndimage.distance_transform_edt() method is used to get a distance transform for the object, with the maximum value (ie, furthest from the background) representing the largest radii.
-5. This process is paralellized across all available CPU cores. It *will* hog your entire machine if given a big task.
-
-'Analyze -> Stats -> Morphological -> Calculate Surface Area'
------------------------------------------
-* This method finds the surface area of all objects in the 'Active Image'.
-* It finds the surface areas of the actual voxel surfaces, which means it sees all images as being made of cubes. This results in appraisal of all faces as jagged and as a result will over-appraise objects that should otherwise represent smooth surfaces.
-* The decision to do this was mostly just to streamline this calculation to something fast.
-* The calculation utilizes the xy_scale and z_scale properties in its calculation.
-* Algorithm explanation: Uses a voxel-based boundary detection method, specifically an adjacency count method. The numpy functions roll and bincount are used to count external voxel faces across a 3D grid.
-
-'Analyze -> Stats -> Morphological -> Calculate Sphericities'
------------------------------------------
-* This method finds the sphericities of all objects in the 'Active Image', which is a 0-1 value describing how 'spherical' each object is. An ideal sphere would get a value of 1, while less-spherical things get closer to 0.
-* The calculation utilizes the xy_scale and z_scale properties in its calculation.
-* This algorithm simply finds the volumes and surface areas of objects, as described above, then applies the sphericity formula: pi^(1/3) * (6 * volume)^(2/3)) / surface area
-
-'Analyze -> Stats -> Morphological -> Calculate Branch Stats'
------------------------------------------
-* This method finds the tortuosities and lengths of all labeled branches in the active image. Note this presumes they were already labeled with 'Process -> Generate -> Label Branches'. 
-* These stats are generally better calculated in-tandem with labeling branches (it is an option there), but this gives a chance to re-calculate them if branches were changed.
-* The calculation utilizes the xy_scale and z_scale properties in its calculation.
-
-Parameter Explanation
-~~~~~~~~~~~~~~~~~~~~
-* Note these params should be the same skeletonization used to initial label the branches, if the branch-stats are going to correspond correctly:
-#. Remove Branches Pixel Length...
-    * The length (in pixels/voxels, not scaled) of terminal branches (or spines) to remove from the skeleton output.
-    * This method only removes terminal branches. Internal branches will never be effected regardless of how large this param is.
-    * Branches that are completely removed will not result in a branchpoint. Therefore, this parameter is an effective way to handle artifacts due to spiny skeletons.
-#. Spine removal mode:
-    * If set to 'external spines only' - Will remove all spines below the designated length as long as they are not deep to other skeleton structures.
-    * If set to 'Can remove deeper spines' - Will remove spines beyond external ones as long as the involved vertices can be reached from any external segment. Essentially just chews down further, so if you have some kind of meshed up skeleton sticking out at points along a main filament, you can use this mode to get rid of those but keep the main filament.
-#. Attempt to Auto-Correct Skeleton Looping...
-    * The skeletonize algo used here has a tendency to leave fat loop artifacts in thick regions of skeletonization.
-    * Enabling this method will have NetTracer3D attempt to remove those artifacts and replace them with simple medial skeletons.
-    * I generally like to leave this enabled.
-
-Algorithm Explanation
-~~~~~~~~~~~~~~~~~~~~
-* Branch lengths are calculated by applying the distance formula between adjacent voxels along the skeleton for each labeled branch. These distances are scaled by the xy_scale and z_scale properties.
-* Tortuosities are calculated from the above distances divided by the distance between the endpoint of each branch. A perfectly straight branch has a tortuosity of 1, which increases as a branch becomes more convoluted.
-
-'Analyze -> Stats -> Significance Testing'
------------------------------------------
-* Opens a new gui to help the user do significance testing, for example from any data obtained in NetTracer3D.
-* To use the gui, first arrange desired data into an excel file in a columnar basis.
-* Drag the excel file into the 'Data Staging Area'. Python will show the file's contents in the 'Data Display'.
-* Drag the headers of desired columns to the 'Data Selection Area'. In short, each column dragged over here should individually represent some kind of distribution. The contents of each column is what will be compared via significance test.
-* Under 'Statistical Test Selection', use the dropdown menu to select the desired test to run on the above data. Options include paired/unpaired Student's t tests, paired/unpaired Welch's t tests, one-way ANOVA, Mann-Whittney U (ranksums) test, Pearson test, Shapiro-Wilk normality test, and a Chi-squared test.
-* Press 'execute statistical test' to run the desired test on the datasets. The 'Test Results' window will display a variety of output info, including p-values and test statistic values.
-* All of these tests are simply obtained by running their respective scipy.stats function on the inputted data. See https://docs.scipy.org/doc/scipy/reference/stats.html for more info.
+1. ``scipy.ndimage.find_objects()`` obtains bounding boxes around all labeled
+   nodes.
+2. For each object, a subarray is cut out using its bounding box, padded on all
+   sides in proportion to the desired search region.
+3. The search region is calculated for each node in parallel using dilation; see
+   the section on dilation for details.
+4. The edges in the desired search regions are obtained by boolean indexing for
+   each node.
+5. Edge and search region volumes are obtained by counting pixels and scaling
+   them by the scaling parameters.
+6. Where lengths are used instead, the edges are skeletonized as specified,
+   skeleton coordinates are obtained, and the distance formula is applied between
+   each adjacent coordinate, scaled by the scaling parameters.
 
 
-'Analyze -> Stats -> Cellular-Esque Analysis'
------------------------------------------
-* This method can be used to visualize normalized violin plots and UMAPs for nodes that were assigned identities via multiple channel markers (via 'File -> Images -> Node Identities -> Assign Node Identities from Overlap with Other Images')
-* The aforementioned identity assignment funtion produces a table that shows the average intensity of each node for each marker. Please save this table from the upper-right data tables for use in this function. This data is the only one natively compatible with this function.
-* Upon running, the user will be prompted to retrieve this data table as a .csv or .xlsx file. Note that this table would ideally be the one created during the aforementioned node assignment, with the node identities themselves also derived from that function.
-* This method can also be used to group nodes into communities based on their shared intensity expression profiles across their channels. This is a good way to evaluate what unique phenotypes or flavors of nodes exist in the image.
+Analyze → Stats → Morphological → Calculate Volumes
+----------------------------------------------------
 
-Parameter Explanation
-~~~~~~~~~~~~~~~~~~~~
+Finds the volumes of all objects in the active image. Volumes are scaled by the
+axis scalings and returned as a table in the tabulated data widget.
 
-* Violin plot menu:
-    1. 'Identity Violin Plots?' - 'None' by default, but the dropdown menu can be used to select one of the current node_identities in the session, which informs the program to yield a violin plot displaying the normalized intensity expression for each channel of all nodes belonging to the aforementioned identity. This is useful for seeing what other channels a particular identity is generally positive in.
-    2. 'Neighborhood/Community Violin Plots?' - 'None' by default, but the dropdown menu can be used to select one of the current communities (or rather Supercommunities, if communities have been grouped into Supercommunities) in the session, which informs the program to yield a violin plot displaying the normalized intensity expression for each channel of all nodes belonging to the aforementioned community/neighborhood. This is useful for seeing what channels constitute a particular community/neighborhood.
-    3. 'Format' - Default setting ('Z-score Like') sets the 0 value for the violin plots to the lowest minimum expression of each identity/channel, as defined by the user during the thresholding segment. Change this to 'Z-Score' to have it return true Z-scores. The former is easier to visually compare shared expression between channels in graph form while the latter may be more applicable to different analysis applications.
-
-* UMAP Menu
-    * The UMAP is interactable - use a lasso to select groups of nodes. You can right click in the main window to assign them to their own communities. There are also some unique rendering options. These interactable UMAPs can be saved and later reloaded using the 'folder icon' that loads spreadsheets in the top right to skip embedding computation.
-    * 'Label Mode...' - Dictates how the UMAP comparing intensities of nodes will label said nodes.
-        1. 'Label UMAP By Identity' - Each node will be labeled by their identity value, or randomly by one of them if they have multiple.
-        2. 'Label UMAP by Community' - Each node will bear the label of their assigned community/neighborhood. Useful if they were assigned Supercommunities based on overlapped intensity values.
-        3. 'Label with Identity Plan Heatmap' - Uses the information from the selected identities (see params below) to make nodes more 'red' or more 'blue'. Redness denotes the presence of more characteristics fitting the combinations of pos/neg identity gates. The centerpoint for the redness will be based on your minimum assigned threshold for each identity, or just the median if that was not assigned.
-
-* Identity Planning Menu
-    1. 'Plan Identities...' - Use this to limit the number of node identities that are shown in the UMAPs and/or violin plots. Affects the below thresholding option.
-    2. Threshold type menu - By default, will threshold nodes with a simple histogram that scores nodes that resemble your identity combination as higher. You will also be able to assign the identities weights to make certain ones affect the score more. If you have two identities selected, you can change this box to 'Flow Cyto-Like Graph' to instead show both identities on an axis and use the lasso to select nodes in the desired score range yourself.
-
-* Kmeans Clustering Menu
-    * Performs KMean's Clustering using Z-Score values
-    1. Method - Use 'Cluster by Expression Profle' to cluster each node into groups based on the Z-scores of its intensity for each channel/identity. Use 'Cluster by Neighbor Expression Profile' to instead cluster the nodes based on the average expression profile of their neighbors in their network. You will have wanted to assign a proximity network first.
-    2. Num Communities - enter how many communities you want the nodes to be partitioned into, based on their similarity in intensity across the channels. If you leave it empty, the program will try to predict an ideal number of communities, but only up to 20. Note this is biased for lower values and you should probably just apply an arbitrary number at first.
-    3. 'Generate Intensity Heatmap' - After the KMeans clustering, selecting this will return an informative heatmap showing you the differing relative expression in marker intensity between your channels for each community.
-    4. 'Reassign Identities Based on Clustering Results?' - Check this box, and while assigning communities with the above parameter, you will get the opportunity to also rename each community, in case you think they represent something more significant than their default names of 1, 2, 3, etc. For each communitiy, the program will show you the violin plot for the intensity profile of each communities to assist you in deciding what to rename it.
-
-* To view any designated violin plots, press 'Show-Z-score-like Violin'. The plot will be shown, and the corresponding data will populate the upper right data tables.
-* "Show Z-score UMAP" may be pressed to show a UMAP of the intensity Z-score for each node relative to the identity of each channel. (This is the same UMAP that can be displayed at the end of 'File -> Images -> Node Identities -> Assign Node Identities from Overlap with Other Images')
-* 'Run Identity Plan Phenotyping' may be pressed to create the identity combination thresholder/flow cyto-like graph.
-* 'Run Neighborhoods Via Kmeans Clustering' may be pressed to enact the community assignment.
-
-Algorithm Explanation
-~~~~~~~~~~~~~~~~~~~~
-
-1. For both violin-plot producing methods, the aforementioned data table is first normalized in a Z-score-like fashion. Essentially, for all nodes belonging to each unique identity, the minimum of those nodes is obtained. The data table values are then normalized using a Z-score, but centered around the minimum valid intensity for each identity (as it corresponds to each channel, i.e. a CD31 channel will be centered about the min of nodes with the CD31 identity).
-    * This purpose of this normalization is so that the values in the data table reflect how far the nodes in that channel deviate from what the user designated as a true example of a node bearing that identity.
-    * Pretty much, if evaluating channel identity overlap, any other channels that have violin values greater than 0 represent some amount of 'valid' overlap. If evaluating communities/neighborhoods, violins with values greater than 0 mean that neighborhood has nodes expressing the corresponding 'valid' amount of that marker.
-    * If a column cannot be matched to an identity, the program will just take the median of the entire column to be the normalizing point, rather than the minimum value of the 'valid' points.
-2. The normalized data table is then masked to contain only the nodes of the specified identity/neighborhood/community.
-3. These resultant data are used to yield violin plots, with the channels corresponding to a violin, and the normalized node intensities within the masked data for that channel creating the violin.
-4. UMAP generation instead utilizes standard Z-scores. In this specific case, each node's intensity in each channel is normalized based on the Z-scores of the entirety of available nodes, rather than around a user-defined base line. This is done with sklearn's StandardScaler. The UMAP itself is created with the Python umap module.
-5. Neighborhood assignment is done via K-Means clustering. Normalization is done the same way as the UMAP. Sklearn's KMeans is used to do the actual cluster assignment. Despite this differing normalization strategy to the violin plots, the aforementioned user-defined baseline is still used when viewing the violin plots of these neighborhoods, mainly for ease of evaluation.
+**Algorithm explanation:** the ``np.bincount()`` method counts each label, and
+the outputs are multiplied by the scalings.
 
 
-* The third submenu, 'Data/Overlays', has hybrid functions that both produce data while generating Overlays for the Image Viewer Window
+Analyze → Stats → Morphological → Calculate Radii
+---------------------------------------------------
 
-'Analyze -> Data/Overlays -> Get Degree Information'
---------------------------------------
-* This method can be used to extract information about the degrees of nodes in the image, while generating Overlays representing the same.
+Finds the largest radii of all objects in the active image. This is useful, for
+example, on labeled branches, to evaluate branch thickness. You can set the radius algorithm to 
+either use the 'Most Internal Point' which is fast and provides a decent approximation but can be
+inconsistent for oddly shaped tubes that taper/expand at points. This can be changed to 'Using Medial Axis',
+which instead finds the medial axis of each label using its skeleton and then finds the radius of that cross section
+(Note this will only appear if you have the 'xs3d' package).
 
-* When you select this option, you will see this menu:
+Algorithm explanation
+~~~~~~~~~~~~~~~~~~~~~
+
+**By default**:
+1. ``scipy.ndimage.find_objects()`` obtains bounding boxes around all labeled
+   objects.
+2. For each object, a subarray is cut out using its bounding box, padded on all
+   sides.
+3. The object is boolean indexed within its subarray.
+4. ``scipy.ndimage.distance_transform_edt()`` obtains a distance transform for
+   the object, whose maximum value — furthest from the background — represents
+   the largest radius.
+
+**Alternate Option**:
+1. Uses the xs3d package to detect the medial axis of the skeleton, find its cross section, and return that area.
+
+
+Analyze → Stats → Morphological → Calculate Surface Area
+----------------------------------------------------------
+
+Finds the surface area of all objects in the active image by applying the Crofton formula from integral geometry. 
+Instead of treating images as collections of jagged voxel cubes—which over-appraises the area—this approach uses a system 
+of multi-directional linear probes to estimate the true, smooth surface boundary of the objects. The calculation automatically 
+scales the results using the image's xy_scale and z_scale properties.
+
+
+Analyze → Stats → Morphological → Calculate Sphericities
+----------------------------------------------------------
+
+Finds the sphericities of all objects in the active image — a value from 0 to 1
+describing how spherical each object is, where an ideal sphere scores 1 and less
+spherical objects approach 0. The calculation uses the ``xy_scale`` and
+``z_scale`` properties.
+
+**Algorithm explanation:** finds the volumes and surface areas of objects as
+described above, then applies the sphericity formula ``pi^(1/3) * (6 *
+volume)^(2/3)) / surface area``.
+
+
+Analyze → Stats → Morphological → Calculate Branch Stats
+----------------------------------------------------------
+
+Finds the tortuosities and lengths of all labeled branches in the active image,
+presuming they were labeled with **Process → Generate → Label Branches**. These
+statistics are generally better calculated in tandem with branch labeling, where
+they are offered as an option, but this allows recalculation if branches have
+changed. The calculation uses the ``xy_scale`` and ``z_scale`` properties.
+
+Parameter explanations
+~~~~~~~~~~~~~~~~~~~~~~
+
+For the branch statistics to correspond correctly, these parameters should match
+the skeletonization used to label the branches initially.
+
+#. **Remove Branches Pixel Length...** — the length, in unscaled pixels or
+   voxels, of terminal branches or spines to remove from the skeleton output.
+   Only terminal branches are removed; internal branches are never affected
+   regardless of how large this value is. Branches removed entirely do not produce
+   a branchpoint, making this an effective way to handle artifacts caused by spiny
+   skeletons.
+#. **Spine removal mode**
+
+   * **External spines only** — removes all spines below the designated length,
+     provided they are not deep to other skeleton structures.
+   * **Can remove deeper spines** — removes spines beyond external ones, provided
+     the involved vertices can be reached from any external segment. This chews
+     further down, so a meshed skeleton protruding at points along a main filament
+     can be cleaned away while retaining the main filament.
+
+#. **Attempt to Auto-Correct Skeleton Looping...** — the skeletonize algorithm
+   used here tends to leave fat loop artifacts in thick regions. Enabling this has
+   NetTracer3D attempt to remove those artifacts and replace them with simple
+   medial skeletons. Leaving it enabled is generally recommended.
+
+Algorithm explanation
+~~~~~~~~~~~~~~~~~~~~~
+
+Branch lengths are calculated by applying the distance formula between adjacent
+voxels along the skeleton for each labeled branch, scaled by the ``xy_scale`` and
+``z_scale`` properties.
+
+Tortuosities are calculated from those distances divided by the distance between
+the endpoints of each branch. A perfectly straight branch has a tortuosity of 1,
+which increases as the branch becomes more convoluted.
+
+
+Analyze → Stats → Identity Coexpression Matrix
+------------------------------------------------
+
+Computes a table showing which identities are co-expressed with which others on
+your nodes, assuming nodes carry multiple identities each. This is useful when
+analysing cellular data in which cells express multiple things, such as RNA
+transcripts or markers.
+
+
+Analyze → Stats → Significance Testing
+----------------------------------------
+
+Opens a GUI for significance testing, for example on data obtained within
+NetTracer3D.
+
+1. Arrange the desired data into an excel file on a columnar basis.
+2. Drag the file into the **Data Staging Area**. Its contents appear in the
+   **Data Display**.
+3. Drag the headers of the desired columns into the **Data Selection Area**. Each
+   column dragged here should represent a distribution; the contents of each are
+   what the significance test compares.
+4. Under **Statistical Test Selection**, choose the test to run. Options include
+   paired and unpaired Student's t tests, paired and unpaired Welch's t tests,
+   one-way ANOVA, the Mann-Whitney U (ranksums) test, the Pearson test, the
+   Shapiro-Wilk normality test, and a chi-squared test.
+5. Press **Execute Statistical Test**. The **Test Results** window displays
+   output including p-values and test statistic values.
+
+Each test runs the respective ``scipy.stats`` function on the input data; see
+https://docs.scipy.org/doc/scipy/reference/stats.html for details.
+
+
+Analyze → Stats → Cellular-Esque Analysis
+-------------------------------------------
+
+Visualizes normalized violin plots and UMAPs for nodes assigned identities via
+multiple channel markers through **File → Images → Node Identities → Assign Node
+Identities from Overlap with Other Images**.
+
+That identity assignment function produces a table showing the average intensity
+of each node for each marker. Save this table from the upper right data tables, as
+it is the only data natively compatible with this function. On running, you are
+prompted to retrieve it as a ``.csv`` or ``.xlsx`` file; ideally it should be the
+table created during node assignment, with the node identities themselves also
+derived from that function.
+
+This method also groups nodes into communities based on their shared intensity
+expression profiles across channels, which is a good way to evaluate what unique
+phenotypes or flavors of nodes exist in the image.
+
+Parameter explanations
+~~~~~~~~~~~~~~~~~~~~~~
+
+**Violin plot menu**
+
+1. **Identity Violin Plots?** — **None** by default. Selecting one of the current
+   node identities yields a violin plot displaying the normalized intensity
+   expression for each channel across all nodes of that identity, which shows
+   which other channels a particular identity is generally positive in.
+2. **Neighborhood/Community Violin Plots?** — **None** by default. Selecting one
+   of the current communities — or supercommunities, where communities have been
+   grouped into them — yields a violin plot displaying the normalized intensity
+   expression for each channel across all nodes in that community, showing which
+   channels constitute it.
+3. **Format** — the default, **Z-score Like**, sets the 0 value of the violin
+   plots to the lowest minimum expression of each identity and channel as defined
+   during thresholding. **Z-Score** returns true Z-scores instead. The former
+   makes shared expression easier to compare visually between channels, while the
+   latter may suit other analysis applications.
+
+**UMAP menu**
+
+The UMAP is interactive: use a lasso to select groups of nodes, then right click
+in the main window to assign them to their own communities. Several unique
+rendering options are available. These interactive UMAPs can be saved and later
+reloaded using the folder icon that loads spreadsheets in the top right, skipping
+the embedding computation.
+
+**Label Mode...** dictates how the UMAP labels nodes:
+
+1. **Label UMAP By Identity** — each node is labeled by its identity value, or
+   randomly by one of them where it carries several.
+2. **Label UMAP by Community** — each node bears the label of its assigned
+   community or neighborhood. Useful where supercommunities were assigned based
+   on overlapped intensity values.
+3. **Label with Identity Plan Heatmap** — uses the information from the selected
+   identities, per the parameters below, to make nodes more red or more blue.
+   Redness denotes more characteristics fitting the combinations of positive and
+   negative identity gates. The center point for redness is based on your minimum
+   assigned threshold for each identity, or the median where none was assigned.
+
+**Identity planning menu**
+
+1. **Plan Identities...** — limits the number of node identities shown in the
+   UMAPs and violin plots. This affects the thresholding option below.
+2. **Threshold type** — by default, thresholds nodes with a simple histogram that
+   scores nodes resembling your identity combination more highly; identities can
+   also be given weights so that certain ones affect the score more. With two
+   identities selected, this can be changed to **Flow Cyto-Like Graph** to show
+   both identities on an axis and select nodes in the desired score range with
+   the lasso.
+
+**Clustering menu**
+
+Performs clustering using Z-score values, for example to find cell phenotypes based on marker expression.
+
+1. **Method** — **Cluster by Expression Profile** clusters each node into groups
+   based on the Z-scores of its intensity for each channel or identity.
+   **Cluster by Neighbor Expression Profile** instead clusters nodes by the
+   average expression profile of their network neighbors, which requires a
+   proximity network to have been assigned first.
+2. **Num Communities** — how many communities to partition the nodes into, based
+   on their similarity in intensity across channels. If left empty, the program
+   predicts a number; for leiden clustering, leaving this empty is often a good idea. For kmeans,
+   this prediction will test 2-20 communities, which may be computationally slow and biased towards lower values, so it is better to 
+   instead give kmeans an arbitrary number.
+3. **Clustering Algorithm** - By default, this is set to 'Leiden', which is the preferred algorithm for grouping cells by marker intensities. This can be changed to 'kmeans', which is faster but will return less finely partitioned communities.
+4. **Generate Intensity Heatmap** — returns a heatmap showing the differing
+   relative expression in marker intensity between channels for each community.
+5. **Reassign Identities Based on Clustering Results?** — offers the opportunity
+   to rename each community while assigning them, in case they represent
+   something more significant than the default names of 1, 2, 3, and so on. For
+   each community, the violin plot of its intensity profile is shown to assist
+   the decision.
+
+**Running the function**
+
+* **Show Z-score-like Violin** displays any designated violin plots and populates
+  the corresponding data to the upper right data tables.
+* **Show Z-score UMAP** displays a UMAP of the intensity Z-score for each node
+  relative to the identity of each channel. This is the same UMAP available at
+  the end of **File → Images → Node Identities → Assign Node Identities from
+  Overlap with Other Images**.
+* **Run Identity Plan Phenotyping** creates the identity combination thresholder
+  or flow cyto-like graph.
+* **Run Neighborhoods Via Kmeans Clustering** enacts the community assignment.
+
+Algorithm explanation
+~~~~~~~~~~~~~~~~~~~~~
+
+1. For both violin-plot producing methods, the data table is first normalized in
+   a Z-score-like fashion: for all nodes belonging to each unique identity, the
+   minimum of those nodes is obtained, and the table values are normalized using
+   a Z-score centered around the minimum valid intensity for that identity as it
+   corresponds to each channel — a CD31 channel, for instance, is centered about
+   the minimum of nodes with the CD31 identity.
+
+   The purpose is for values in the table to reflect how far the nodes in that
+   channel deviate from what the user designated as a true example of a node
+   bearing that identity. When evaluating channel identity overlap, any other
+   channels with violin values greater than 0 represent some amount of valid
+   overlap; when evaluating communities or neighborhoods, violins above 0 mean
+   that neighborhood has nodes expressing the corresponding valid amount of that
+   marker. Where a column cannot be matched to an identity, the median of the
+   entire column is used as the normalizing point rather than the minimum of the
+   valid points.
+2. The normalized data table is masked to contain only the nodes of the specified
+   identity, neighborhood, or community.
+3. These data yield the violin plots, with each channel corresponding to a violin
+   and the normalized node intensities within the masked data forming it.
+4. UMAP generation instead uses standard Z-scores, normalizing each node's
+   intensity in each channel against the Z-scores of all available nodes rather
+   than a user-defined baseline. This uses sklearn's StandardScaler, and the UMAP
+   itself is created with the Python umap module.
+5. Neighborhood assignment uses leiden clustering (via the leidenalg and igraph packages) or K-means clustering, normalized as for the UMAP,
+   with sklearn's KMeans performing the cluster assignment. Despite this differing
+   normalization strategy, the user-defined baseline is still used when viewing
+   the violin plots of these neighborhoods, for ease of evaluation.
+
+
+Analyze → Data/Overlays → Get Degree Information
+--------------------------------------------------
+
+The third submenu, **Data/Overlays**, contains hybrid functions that produce data
+while generating overlays for the image viewer window.
+
+This method extracts information about the degrees of nodes in the image while
+generating overlays representing the same.
 
 .. image:: _static/analyze6.png
    :width: 800px
    :alt: edgenode Menu
 
-Parameter Explanations
-~~~~~~~~~~~~~~~
+Parameter explanations
+~~~~~~~~~~~~~~~~~~~~~~
 
-1. Execution Mode
-    * This dropdown menu has three options:
-        1. 'Just make table' - places a table with the ID of each node and its degree in the tabulated data widget, without generating any overlays.
-        2. 'Draw Degree of Node as Overlay...' - This method creates an overlay where the degree value of each node is literally drawn onto its centroid as an overlay (ie, a node of degree 5 has a 5 drawn at its centroid). This can be used to quickly eyeball node connectivity. Note that entering a downsample into the corresponding param will actually enlarge the rendered numbers.
-        3. 'Label Nodes by Degree...' - This method takes each node label and reassigns its label to its degree. The idea would be to export the image and do downstream analysis elsewhere while thresholding for specific degree values.
-            * Note this thresholding can be done in NetTracer3D by using the intensity thresholder.
-        4. Create Heatmap of Degrees - Places in Overlay 2 an RGB heatmap of degrees. Degrees higher than average are more red while those lower than average are more blue.
-2. Proportion of high degree nodes to keep...
-    * By default this is set to 1 (meaning all nodes). Set this to a smaller float val between 0-1 to return that sub-proportion of nodes, prioritizing, high-degree ones. For example, a value of 0.1 would return the top 10% highest degree nodes in the output overlay only.
-3. down_factor... 
-    * Temporarily downsamples the image to speed up overlay creation. Downsampling is done in all three dimensions by the inputed factor.
+1. **Execution Mode**
 
-* Press 'Get Degrees' to run the method with the desired parameters. The output data will be used to create a new table in the tabulated data widget. The overlay will go into the Overlay 2 channel.
+   1. **Just make table** — places a table of each node ID and its degree in the
+      tabulated data widget, without generating overlays.
+   2. **Draw Degree of Node as Overlay...** — draws the degree value of each node
+      onto its centroid, so that a node of degree 5 has a 5 drawn at its
+      centroid. This allows node connectivity to be judged quickly. Entering a
+      downsample into the corresponding parameter enlarges the rendered numbers.
+   3. **Label Nodes by Degree...** — reassigns each node's label to its degree,
+      intended for exporting the image and thresholding for specific degree
+      values in downstream analysis. This thresholding can also be done within
+      NetTracer3D using the intensity thresholder.
+   4. **Create Heatmap of Degrees** — places an RGB heatmap of degrees in
+      Overlay2, with degrees higher than average rendered redder and those lower
+      than average bluer.
 
-'Analyze -> Data/Overlays -> Get Hub Information'
---------------------------------------
-* This method can be used to extract information about hub nodes, which are the nodes that are the fewest degrees of seperation from any other node. 
+2. **Proportion of high degree nodes to keep...** — 1 by default, meaning all
+   nodes. A smaller float between 0 and 1 returns that sub-proportion,
+   prioritising high-degree nodes; 0.1 returns only the top 10% highest degree
+   nodes in the output overlay.
+3. **down_factor** — temporarily downsamples the image in all three dimensions by
+   the entered factor to speed up overlay creation.
 
-Parameter Explanations
-~~~~~~~~~~~~~~~
-* This method only has two parameters.
+Press **Get Degrees** to run the method. The output data creates a new table in
+the tabulated data widget, and the overlay is placed in Overlay2.
 
-1. Make Overlay.
-    * If enabled, this method will create an overlay isolating the hub nodes.
-2. 'Proportion of most connected hubs to keep...'
-    * A 0-1 float val that tells the program how many 'nodes' you want back in the output. For example, 0.10 would return the top 10% nodes with the fewest degrees of separation. 1 would just return all the nodes.
 
-* Press 'Get hubs' to run the method with the desired parameters. The output data will be used to create a new table in the tabulated data widget. The overlay will go into the Overlay 2 channel.
-* Note that the hubs are considered independently for each seperate, distinct network component. Additionally, components that have too few nodes will not return any hubs if the upper proportion threshold is particularly small.
+Analyze → Data/Overlays → Get Hub Information
+-----------------------------------------------
 
-'Analyze -> Data/Overlays -> Get Transcommunity Nodes'
---------------------------------------
-* This method can be used to extract information about 'transcommunity nodes', which are we define as those nodes that contain connections between one community and another.
-* This method would be used to identify what nodes enable interaction between seperate communities.
+Extracts information about hub nodes — those the fewest degrees of separation
+from any other node.
 
-Parameter Explanations
-~~~~~~~~~~~~~~~
-* This method only has one parameter.
+Parameter explanations
+~~~~~~~~~~~~~~~~~~~~~~
 
-1. Make Overlay.
-    * If enabled, this method will create an overlay isolating the transcommunity nodes.
+1. **Make Overlay** — creates an overlay isolating the hub nodes.
+2. **Proportion of most connected hubs to keep...** — a float between 0 and 1
+   setting how many nodes are returned; 0.10 returns the top 10% of nodes with
+   the fewest degrees of separation, while 1 returns all nodes.
 
-* Press 'Get Transcommunity Nodes' to run the method with the desired parameters. The output data will be used to create a new table in the tabulated data widget. The overlay will go into the Overlay 1 channel.
+Press **Get Hubs** to run the method. The output data creates a new table in the
+tabulated data widget, and the overlay is placed in Overlay2.
 
-'Analyze -> Data/Overlays -> Code Communities'
---------------------------------------
-* This method can be used to generate an overlay that shows what nodes belong to which community.
+Hubs are considered independently for each separate, distinct network component.
+Components with too few nodes return no hubs where the upper proportion threshold
+is particularly small.
 
-Parameter Explanations
-~~~~~~~~~~~~~~~
-* This method only has two parameters.
 
-1. down_factor
-    * Temporarily downsamples the image to speed up overlay creation. Downsampling is done in all three dimensions by the inputed factor. This is particularly useful for the color overlay.
-2. Execution Mode:
-    * This dropdown menu has two options:
-        1. 'Color Coded' - Create an RGB color overlay where each node is colored according to its community. This overlay is great for easily visualizing communities.
-        2. 'Grayscale Coded' - Create a grayscale overlay where each node is labeled by the community number it was assigned in the node_communities parameter. The purpose of this overlay is to create an image where nodes can then be thresholded by their community, for more specific analysis.
+Analyze → Data/Overlays → Get Transcommunity Nodes
+----------------------------------------------------
 
-* Press 'Community Code' to run the method with the desired parameters. The overlay will go into the Overlay 2 channel. Additionally, a legend displaying what label belongs to which community will be placed into the tabulated data widget.
+Extracts information about transcommunity nodes, defined as nodes containing
+connections between one community and another. Use this to identify which nodes
+enable interaction between separate communities.
 
-'Analyze -> Data/Overlays -> Code Identities'
---------------------------------------
-* This method can be used to generate an overlay that shows what nodes belong to which identity.
+Parameter explanations
+~~~~~~~~~~~~~~~~~~~~~~
 
-Parameter Explanations
-~~~~~~~~~~~~~~~
-* This method only has two parameters.
+1. **Make Overlay** — creates an overlay isolating the transcommunity nodes.
 
-1. down_factor
-    * Temporarily downsamples the image to speed up overlay creation. Downsampling is done in all three dimensions by the inputed factor. This is particularly useful for the color overlay.
-2. Execution Mode:
-    * This dropdown menu has two options:
-        1. 'Color Coded' - Create an RGB color overlay where each node is colored according to its identity. This overlay is great for easily visualizing identities.
-        2. 'Grayscale Coded' - Create a grayscale overlay where each node is labeled by numerical identities (with the number corresponding each to one of the identity subtypes). The purpose of this overlay is to create an image where nodes can then be thresholded by their identity, for more specific analysis.
+Press **Get Transcommunity Nodes** to run the method. The output data creates a
+new table in the tabulated data widget, and the overlay is placed in Overlay1.
 
-* Press 'Identity Code' to run the method with the desired parameters. The overlay will go into the Overlay 2 channel. Additionally, a legend displaying what label belongs to which identity will be placed into the tabulated data widget.
 
-* The last submenu is 'Randomize', and is used to generate random variants of data.
+Analyze → Data/Overlays → Code Communities
+--------------------------------------------
 
-'Analyze -> Data/Overlays -> Centroid UMAP'
---------------------------------------
-* This method will create a UMAP, clustering nodes based on the similarity of their centroids. In short, it lets you easily eyeball what sort of things are next to each other. Its uses are more for 3D data, as 2D data can give a similar impression just by looking at the image.
-* If node_identities exist, the nodes will all be colored based on their identity. Unassigned nodes will get called 'Unknown' in such a case.
-* This method does not have any parameters. Simply run it to show the UMAP.
+Generates an overlay showing which nodes belong to which community.
 
-'Analyze -> Randomize -> Generate Equivalent Random Network'
+Parameter explanations
+~~~~~~~~~~~~~~~~~~~~~~
+
+1. **down_factor** — temporarily downsamples the image in all three dimensions by
+   the entered factor to speed up overlay creation, which is particularly useful
+   for the color overlay.
+2. **Execution Mode**
+
+   1. **Color Coded** — creates an RGB overlay coloring each node according to
+      its community, which is excellent for visualizing communities.
+   2. **Grayscale Coded** — creates a grayscale overlay labeling each node by the
+      community number assigned in the ``node_communities`` parameter, producing
+      an image in which nodes can be thresholded by community for more specific
+      analysis.
+   3. **Use Alternative Color Scheme** — uses a different color scheme from
+      option one, making node colors more distinct from one another though less
+      striking.
+   4. **Color Blind Schema** - Uses another color scheme option that avoids nearby reds/greens for color blind users.
+   5. **Custom Color Scheme** - Opens a menu where you can manually configure what identity is what color.
+   6. **Match Previous Color Scheme** - Attempts to match the colors to whatever color scheme was most recently used (either here or in the widgets that also show colored identities, such as the network graph). 
+
+
+Press **Community Code** to run the method. The overlay is placed in the Overlay2
+channel, and a legend showing which label belongs to which community is placed in
+the tabulated data widget.
+
+
+Analyze → Data/Overlays → Code Identities
+-------------------------------------------
+
+Generates an overlay showing which nodes belong to which identity.
+
+Parameter explanations
+~~~~~~~~~~~~~~~~~~~~~~
+
+1. **down_factor** — temporarily downsamples the image in all three dimensions by
+   the entered factor to speed up overlay creation, which is particularly useful
+   for the color overlay.
+2. **Execution Mode**
+
+   1. **Color Coded** — creates an RGB overlay coloring each node according to
+      its identity, which is excellent for visualizing identities.
+   2. **Grayscale Coded** — creates a grayscale overlay labeling each node by
+      numerical identity, each number corresponding to one of the identity
+      subtypes, producing an image in which nodes can be thresholded by identity
+      for more specific analysis.
+   3. **Use Alternative Color Scheme** — uses a different color scheme from
+      option one, making node colors more distinct from one another though less
+      striking.
+   4. **Color Blind Schema** - Uses another color scheme option that avoids nearby reds/greens for color blind users.
+   5. **Custom Color Scheme** - Opens a menu where you can manually configure what identity is what color.
+   6. **Match Previous Color Scheme** - Attempts to match the colors to whatever color scheme was most recently used (either here or in the widgets that also show colored identities, such as the network graph). 
+
+Press **Identity Code** to run the method. The overlay is placed in the Overlay2
+channel, and a legend showing which label belongs to which identity is placed in
+the tabulated data widget.
+
+
+Analyze → Data/Overlays → Centroid UMAP
 -----------------------------------------
-* This method allows us to generate a random network with an equivalent number of edges and nodes as the current network.
-* The purpose of this method is a quick way to compare our network to a similar random one, which can be used to demonstrate presence of non-randomness, for example.   
-* The only parameter is 'weighted'. If selected, edges in the random network will be allowed to stack into weighted edges.
-    * Note if my network is weighted, weights are included in total edge counts for the purpose of this method, so three nodes with one edge of weight one and one edge of weight two will allow three connections to be made in the corresponding random network.
-    * The weighted param just tells the random network whether its allowed to use these total edges to make weighted edges (a weighted edge of 2 would *cost* the random network 2 of its available edges, so to speak).
-    * The weighted param does not tell the random network to ignore weights in the original network. To do that, first de-weight the network with 'Process -> Modify Network'.
-* Press 'Generate Random Network' to place the random network in the 'Selection' network table. From here, it can be right clicked to either save it or to swap it into the active network.
-    * Note that swapping the random network to active runs the risk of overriding the old active network if a new selection is made, so be sure to save it first.
 
-'Analyze -> Randomize -> Scramble Nodes (Centroids)'
--------------------------------------------------------------
-* This method allows us to randomize our node locations, for the purposes of comparing our dataset to a random one.
-* This method uses our node centroids and randomizes the centroids themselves - 3D node objects are not included for this purpose.
-* Selecting this option will display a window with a single parameter, 'Mode'. Its dropdown menu includes the following option.
-    1. Anywhere - The nodes can go anywhere in the image bounds.
-    2. Within Dimensional Bounds of Nodes - The nodes can go anywhere within the min/max boundaries of the current nodes (In the bounding box).
-    3. Within Masked Bounds of Edges - The nodes can go anywhere the edge channel is non-zero.
-    4. Within Masked Bounds of Overlay1 - The nodes can go anywhere the Overlay1 channel is non-zero.
-    5. Within Masked Bounds of Overlay2 - The nodes can go anywhere the Overlay2 channel is non-zero.
+Creates a UMAP clustering nodes by the similarity of their centroids, making it
+easy to judge what sits next to what. It is most useful for 3D data, since a
+similar impression can be gained from 2D data simply by looking at the image.
 
-* If a nodes channel image exists, it will be overrided by a equivalently-sized image.
-* If a nodes channel image does not exist, no new image will be loaded and only the centroids will be randomized.
-    * These centroids will be randomized within the bounds of any other available image channel. If there are none, they will use the min/max bounds of the current centroids.
-* The purpose of params 3-5 is to allow creation of arbitrary boundary regions, for example by dilating data of interest, to allow the nodes to populate.
+Where ``node_identities`` exist, nodes are colored by identity, and unassigned
+nodes are labeled *Unknown*. This method has no parameters — simply run it to
+show the UMAP.
+
+
+Analyze → Randomize → Generate Equivalent Random Network
+----------------------------------------------------------
+
+The final submenu, **Randomize**, generates random variants of data.
+
+This method generates a random network with an equivalent number of edges and
+nodes to the current network, providing a quick comparison against a similar
+random network — useful for demonstrating the presence of non-randomness.
+
+The only parameter is **weighted**, which allows edges in the random network to
+stack into weighted edges. Where the original network is weighted, weights are
+included in total edge counts for this purpose, so three nodes with one edge of
+weight one and one edge of weight two allow three connections in the
+corresponding random network. The parameter governs only whether the random
+network may use these total edges to make weighted edges, where a weighted edge
+of 2 costs the random network 2 of its available edges. It does not tell the
+random network to ignore weights in the original network — to do that, first
+de-weight the network with **Process → Modify Network**.
+
+Press **Generate Random Network** to place the random network in the selection
+network table, from where it can be right clicked to save it or swap it into the
+active network. Swapping it in risks overriding the old active network if a new
+selection is made, so save first.
+
+
+Analyze → Randomize → Scramble Nodes (Centroids)
+--------------------------------------------------
+
+Randomizes node locations for comparison against a random dataset. This uses node
+centroids and randomizes the centroids themselves; 3D node objects are not
+included.
+
+The single parameter, **Mode**, offers:
+
+1. **Anywhere** — nodes may go anywhere within the image bounds.
+2. **Within Dimensional Bounds of Nodes** — nodes may go anywhere within the
+   minimum and maximum boundaries of the current nodes, in the bounding box.
+3. **Within Masked Bounds of Edges** — nodes may go anywhere the edge channel is
+   non-zero.
+4. **Within Masked Bounds of Overlay1** — nodes may go anywhere the Overlay1
+   channel is non-zero.
+5. **Within Masked Bounds of Overlay2** — nodes may go anywhere the Overlay2
+   channel is non-zero.
+
+Options 3–5 allow arbitrary boundary regions to be created for the nodes to
+populate, for example by dilating data of interest.
+
+Where a nodes channel image exists, it is overridden by an equivalently sized
+image. Where none exists, no new image is loaded and only the centroids are
+randomized, within the bounds of any other available image channel; if there are
+none, the minimum and maximum bounds of the current centroids are used.
+
 
 Next Steps
----------
-This concludes the explanations of the analyze functions. Next, proceed to :doc:`process_menu` for information on the process menu functions.
+----------
+
+This concludes the analyze menu. Next, proceed to :doc:`process_menu` for
+information on the process menu functions.

@@ -4,79 +4,120 @@
 Installation
 ============
 
+NetTracer3D can be installed either as a Python package via pip (recommended)
+or, on Windows, as a standalone installer.
+
+.. contents:: On this page
+   :local:
+   :depth: 2
+
+
 System Requirements
-------------------
+-------------------
 
-Before installing NetTracer3D, ensure your system meets the following requirements:
-
-* Operating System: Windows 10/11, macOS 10.15+, or Linux (Ubuntu 20.04+ recommended)
-* CPU: Multi-core processor (4+ cores recommended)
-* RAM: Minimum 8GB (16GB+ recommended for larger images. For very large images such as lightsheet data, you would even want a workstation with 128+, for example, or downsample the data accordingly)
-* GPU: NVIDIA dedicated GPU (Optional)
-* Python: 3.12
-
-
-**Using the Windows Installer** 
-~~~~~~~~~~~~~~~~~~~~~~~~
-
-If you are on Windows, the easiest option is to just download and run the windows installer available at the github repo: https://github.com/mclaughlinliam3/NetTracer3D/releases
-
-Note that the installation version will be missing a few features compared to the Python package, namely GPU support for segmentation. It will also not be updated as often.
+* **Operating System**: Windows 10/11, macOS 10.15+, or Linux (Ubuntu 20.04+ recommended)
+* **CPU**: Multi-core processor (4+ cores recommended)
+* **RAM**: 8 GB minimum; 16 GB or more recommended for larger images. Very large
+  datasets such as lightsheet data may require a workstation with 128 GB or more,
+  or downsampling of the data beforehand.
+* **GPU**: NVIDIA dedicated GPU (optional)
+* **Python**: 3.12
 
 
-Installing NetTracer3D
-----------------------
+Windows Installer
+-----------------
 
-Using pip
-~~~~~~~~~
+On Windows, the simplest option is to download and run the installer from the
+GitHub releases page:
+https://github.com/mclaughlinliam3/NetTracer3D/releases
 
-1. **Get Python and Pip on your path**: The easiest way to install NetTracer3D is using pip. First, you will want to go to the Python website (https://www.python.org/). Download the Python installer for the latest version of Python. When you run it, make sure to include the option to also install Pip, and to add both Pip and Python to your path.
+.. note::
 
-After installing Python and pip, you can verify (on windows at least) the installation by pressing the windows key + R. In the window that pops up, type 'cmd' to open the command terminal. In the command terminal, type 'where pip' or 'where python'.
-If your installation of them worked properly, the window will tell you what folder your pip/python .exe resides in. If it cannot find them, it means they either did not get installed, or that they were not added to your PATH. 
-You can try reinstalling them, if perhaps the wrong setting was selected, or you can manually add them to the environment variables (the PATH) from the windows control panel. (I am not a mac user so I cannot provide advice there).
+   The installer version lacks a few features compared to the Python package —
+   most notably GPU support for segmentation — and is updated less frequently.
 
-2. **Installing Base Package**: Once you have Python and pip set up, open the command terminal once more (Windows + R, followed by typing 'cmd' in the window that appears). Type the following command.
 
-.. code-block:: bash
+Installing with pip
+-------------------
 
-    pip install nettracer3d
+1. **Install Python and pip**
 
-3. **Optional — Performance Boost for Large Data**: If you are trying to process large images, you may also want to include the 'edt' module in your package. This will allow parallelized CPU calculations for several of the search functions which can increase their speed by an order of magnitude or more depending on how many cores your CPU has. This can be a major benefit if you have a strong CPU and sufficient RAM. It requires an extra pre-installation step, thus is not included by default. You will also have to install the C++ build tools from windows. Please head to this link, then download and run the installer: https://visualstudio.microsoft.com/visual-cpp-build-tools/. In the menu of the installer, select the 'Desktop Development with C++' option, then proceed to download/install it using the installation menu. You will likely want to be using the Python distributed from the actual Python website and not the windows store (or elsewhere) or the edt module may not work properly. To bundle with edt use:
+   Download the latest Python installer from https://www.python.org/. During
+   installation, enable the options to install pip and to add both Python and
+   pip to your ``PATH``.
 
-.. code-block:: bash
+   To verify the installation on Windows, press :kbd:`Win` + :kbd:`R`, type
+   ``cmd`` to open a command terminal, and run ``where pip`` or ``where python``.
+   If the installation succeeded, the terminal reports the folder containing the
+   corresponding executable. If neither is found, they were either not installed
+   or not added to your ``PATH``. Reinstall with the correct options selected, or
+   add them manually to the environment variables through the Windows Control
+   Panel.
 
-    pip install nettracer3d[edt]
+2. **Install the base package**
 
-4. **Optional — Recommended full package**: Or if you want to just get both edt with the leiden partition dependencies:
-	
-.. code-block:: bash
+   Open a command terminal and run:
 
-    pip install nettracer3d[rec]
+   .. code-block:: bash
 
-6. Likewise, if you already installed the default version, you can add the leiden elements and/or edt with just:
+       pip install nettracer3d
 
-.. code-block:: bash
+3. **Optional — performance boost for large data**
 
-    pip install edt
-    pip install leidenalg
-    pip install igraph
+   The ``edt`` module enables parallelised CPU calculations for several of the
+   search functions, which can improve their speed by an order of magnitude or
+   more depending on your core count. This is a substantial benefit on systems
+   with a strong CPU and sufficient RAM.
 
-This will install NetTracer3D and all its core dependencies. Then, if you want to run nettracer3d, open the command terminal like before and enter the following command:
+   Because ``edt`` requires an extra pre-installation step, it is not included by
+   default. First install the Microsoft C++ build tools from
+   https://visualstudio.microsoft.com/visual-cpp-build-tools/, selecting the
+   **Desktop Development with C++** option in the installer. Use the Python
+   distribution from python.org rather than the Windows Store version, as ``edt``
+   may not work correctly otherwise. Then run:
+
+   .. code-block:: bash
+
+       pip install nettracer3d[edt]
+
+4. **Optional — recommended full package**
+
+   To install ``edt`` together with the Leiden partition dependencies:
+
+   .. code-block:: bash
+
+       pip install nettracer3d[rec]
+
+5. **Adding optional components later**
+
+   If the default version is already installed, the Leiden and ``edt``
+   components can be added individually:
+
+   .. code-block:: bash
+
+       pip install edt
+       pip install leidenalg
+       pip install igraph
+
+Once NetTracer3D and its core dependencies are installed, launch the program
+from a command terminal with:
 
 .. code-block:: bash
 
     nettracer3d
 
 
-Using Anaconda
-~~~~~~~~~~~~~~~~~~~~~~
+Installing with Anaconda
+------------------------
 
-Anaconda is a useful program that manages Python packages for you and can help work out problems regarding conflicting package versions during installation. Installing NetTracer3D with Anaconda is similar to the above method, except it will be housed in a dedicated NetTracer3D anaconda environment rather than in your computer's Python packages.
-You would first want to download the version of anaconda that is compatible with your operating system here: https://www.anaconda.com/download.
+Anaconda manages Python packages for you and can resolve conflicting package
+versions during installation. The process mirrors the pip installation above,
+except that NetTracer3D is housed in a dedicated Anaconda environment rather
+than among your system Python packages.
 
-Run the installer they provide. Once it's finished, search 'anaconda prompt' in your taskbar and open the corresponding program. You will be taken to a command line window.
-Next, you can run these commands:
+Download the version of Anaconda matching your operating system from
+https://www.anaconda.com/download and run the installer. When it finishes,
+search for **Anaconda Prompt** in your taskbar, open it, and run:
 
 .. code-block:: bash
 
@@ -86,7 +127,8 @@ Next, you can run these commands:
 
     pip install nettracer3d[rec]
 
-This should install the program in the 'nettracer3d' environment in conda. Then, whenever you wanted to run nettracer3d, you would first open the 'anaconda prompt', followed by entering these commands:
+This installs the program into the ``nettracer3d`` environment. To run
+NetTracer3D thereafter, open the Anaconda Prompt and enter:
 
 .. code-block:: bash
 
@@ -94,11 +136,16 @@ This should install the program in the 'nettracer3d' environment in conda. Then,
 
     nettracer3d
 
-GPU
-~~~~~~~~~~~~~~~~~~
-NetTracer3D is mostly CPU-bound, but a few functions can optionally use the GPU. To install optional GPU functionalities, first set up a CUDA toolkit that runs with the GPU on your machine. This requires an NVIDIA GPU. Then, find your GPUs compatible CUDA toolkit and install it with the auto-installer from the NVIDIA website: https://developer.nvidia.com/cuda-toolkit
 
-With a CUDA toolkit installed, use:
+GPU Support
+-----------
+
+NetTracer3D is mostly CPU-bound, but a few functions can optionally use the GPU.
+GPU support requires an NVIDIA GPU with a CUDA toolkit installed. Find the CUDA
+toolkit compatible with your GPU and install it using the auto-installer from
+https://developer.nvidia.com/cuda-toolkit.
+
+With a CUDA toolkit in place, use:
 
 .. code-block:: bash
 
@@ -106,7 +153,8 @@ With a CUDA toolkit installed, use:
     pip install nettracer3d[CUDA12] #If your CUDA toolkit is version 12
     pip install nettracer3d[cupy] #For the generic cupy library (The above two are usually the ones you want)
 
-Or if you've already installed the NetTracer3D base package and want to get just the GPU associated packages:
+If the base package is already installed and you want only the GPU-associated
+packages:
 
 .. code-block:: bash
 
@@ -114,28 +162,31 @@ Or if you've already installed the NetTracer3D base package and want to get just
     pip install cupy-cuda12x #If your CUDA toolkit is version 12
     pip install cupy #For the generic cupy library (The above two are usually the ones you want)
 
-If you want to use Cellpose plugin (for which GPU-usage is somewhat obligatory) to help segment cells for any networks, you will also want to install pytorch here: https://pytorch.org/. Use the pytorch build menu on this webpage to find a pip install command that is compatible with Python and your CUDA version.
+The Cellpose plugin, for which GPU usage is effectively obligatory, additionally
+requires PyTorch. Use the build menu at https://pytorch.org/ to obtain a pip
+command compatible with your Python and CUDA versions.
 
-Verifying Installation
----------------------
 
-To verify that NetTracer3D has been installed correctly, run:
+Verifying the Installation
+--------------------------
+
+To confirm that NetTracer3D installed correctly, run:
 
 .. code-block:: bash
 
     pip show nettracer3d
 
-You should see the current version number displayed. If windows does not recognize 'nettracer3d' as the command to start the program, it may be because it is using the windows store version of Python. Please uninstall the windows store version of Python, then make sure to download and install Python from the Python website and not the windows store to allow it to run packages directly from the command line.
+The current version number should be displayed.
+
 
 Troubleshooting
---------------
+---------------
 
-Common Issues
-~~~~~~~~~~~~
+Conflicting dependencies
+~~~~~~~~~~~~~~~~~~~~~~~~
 
-**Conflicting Dependencies**
-
-If you encounter errors about conflicting dependencies, download anaconda and try installing them in a new anaconda env:
+If you encounter dependency conflicts, install NetTracer3D into a clean Anaconda
+environment:
 
 .. code-block:: bash
 
@@ -145,34 +196,45 @@ If you encounter errors about conflicting dependencies, download anaconda and tr
 
     pip install nettracer3d
 
-The highest probability is that a version of a package you are running is not compatible with numpy version 2 and above. Please try upgrading/downgrading the incompatible packages as needed. I would generally not downgrade numpy below version 2.0, as it is the main workhorse when it comes to image processing in Python, and the 2.0 release made a lot of nice optimizations.
-This is generally done along the lines of:
+The most likely cause is a package that is incompatible with NumPy 2.0 or above.
+Upgrade or downgrade the offending package as needed. Avoid downgrading NumPy
+below 2.0 — it is the main workhorse for image processing in Python, and the 2.0
+release introduced significant optimisations. A version pin generally takes the
+form:
 
 .. code-block:: bash
-    
+
     pip install 'numpy<=2.2' # If a version of numpy beyond 2.2 was causing a conflict, for example.
 
+Python version problems
+~~~~~~~~~~~~~~~~~~~~~~~
 
-**Python Version Problems**
+Some packages that NetTracer3D depends on lack proper build protocols for newer
+Python releases. If installation begins but crashes part-way through, try
+downgrading Python. Installation should work reliably on Python 3.12; as of
+writing (12/13/2025), later versions may cause issues, specifically with the
+``sklearn`` package.
 
-Another problem might be due to some of the packages that NetTracer3D depends on not having proper build protocols set up for newer Python releases. If you are attempting to install the package and find that it starts the installation but crashes part-way through, it might be a good idea to try downgrading your version of Python.
-Generally speaking, the installation should work fine with Python version 3.12. However, issues may arise with later versions as of writing this (12/13/2025) specifically with the sklearn package.
-To downgrade Python you can either uninstall it from your computer (on windows, from the add/remove programs menu), followed by reinstalling version 3.12. 
-On anaconda, you can just make a new environment and specify what Python version you want.
+To downgrade on Windows, uninstall Python from the Add/Remove Programs menu and
+reinstall version 3.12. Under Anaconda, simply create a new environment
+specifying the desired Python version.
 
-**Installed but not starting**
+Installed but not starting
+~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-If windows does not recognize 'nettracer3d' as the command to start the program, it may be because it is using the windows store version of Python. Please uninstall the windows store version of Python, then make sure to download and install Python from the Python website and not the windows store to allow it to run packages directly from the command line.
+If Windows does not recognise ``nettracer3d`` as a command, it is likely using
+the Windows Store version of Python. Uninstall it and install Python from
+python.org instead, which allows packages to be run directly from the command
+line.
 
+Getting help
+~~~~~~~~~~~~
 
-Getting Help
-~~~~~~~~~~~
+If installation issues persist, email liamm@wustl.edu.
 
-If you continue to experience installation issues:
-
-    * Email me at liamm@wustl.edu
 
 Next Steps
----------
+----------
 
-After installation, proceed to the :doc:`quickstart` guide to begin using NetTracer3D.
+After installation, proceed to the :doc:`quickstart` guide to begin using
+NetTracer3D.

@@ -6,21 +6,21 @@
   <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
 
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Installation &mdash; NetTracer3D 1.6.0 documentation</title>
+  <title>Installation &mdash; NetTracer3D 2.0.0 documentation</title>
       <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=b86133f3" />
       <link rel="stylesheet" type="text/css" href="_static/css/theme.css?v=e59714d7" />
 
   
       <script src="_static/jquery.js?v=5d32c60e"></script>
       <script src="_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
-      <script src="_static/documentation_options.js?v=72d88caf"></script>
+      <script src="_static/documentation_options.js?v=51b770b3"></script>
       <script src="_static/doctools.js?v=9bcbadda"></script>
       <script src="_static/sphinx_highlight.js?v=dc90522c"></script>
     <script src="_static/js/theme.js"></script>
     <link rel="author" title="About these documents" href="about.html" />
     <link rel="index" title="Index" href="genindex.html" />
     <link rel="search" title="Search" href="search.html" />
-    <link rel="next" title="Quickstart - Segmenting Data and Generating Connectivity Networks" href="quickstart.html" />
+    <link rel="next" title="Quickstart — Segmenting Data and Generating Connectivity Networks" href="quickstart.html" />
     <link rel="prev" title="NetTracer3D documentation" href="index.html" /> 
 </head>
 
@@ -46,27 +46,24 @@
               <p class="caption" role="heading"><span class="caption-text">User Guide:</span></p>
 <ul class="current">
 <li class="toctree-l1 current"><a class="current reference internal" href="#">Installation</a><ul>
-<li class="toctree-l2"><a class="reference internal" href="#system-requirements">System Requirements</a><ul>
-<li class="toctree-l3"><a class="reference internal" href="#using-the-windows-installer"><strong>Using the Windows Installer</strong></a></li>
-</ul>
-</li>
-<li class="toctree-l2"><a class="reference internal" href="#installing-nettracer3d">Installing NetTracer3D</a><ul>
-<li class="toctree-l3"><a class="reference internal" href="#using-pip">Using pip</a></li>
-<li class="toctree-l3"><a class="reference internal" href="#using-anaconda">Using Anaconda</a></li>
-<li class="toctree-l3"><a class="reference internal" href="#gpu">GPU</a></li>
-</ul>
-</li>
-<li class="toctree-l2"><a class="reference internal" href="#verifying-installation">Verifying Installation</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#system-requirements">System Requirements</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#windows-installer">Windows Installer</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#installing-with-pip">Installing with pip</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#installing-with-anaconda">Installing with Anaconda</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#gpu-support">GPU Support</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#verifying-the-installation">Verifying the Installation</a></li>
 <li class="toctree-l2"><a class="reference internal" href="#troubleshooting">Troubleshooting</a><ul>
-<li class="toctree-l3"><a class="reference internal" href="#common-issues">Common Issues</a></li>
-<li class="toctree-l3"><a class="reference internal" href="#getting-help">Getting Help</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#conflicting-dependencies">Conflicting dependencies</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#python-version-problems">Python version problems</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#installed-but-not-starting">Installed but not starting</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#getting-help">Getting help</a></li>
 </ul>
 </li>
 <li class="toctree-l2"><a class="reference internal" href="#next-steps">Next Steps</a></li>
 </ul>
 </li>
-<li class="toctree-l1"><a class="reference internal" href="quickstart.html">Quickstart - Segmenting Data and Generating Connectivity Networks</a></li>
-<li class="toctree-l1"><a class="reference internal" href="proximity.html">Proximity Networks - Ideal for Cellular Data</a></li>
+<li class="toctree-l1"><a class="reference internal" href="quickstart.html">Quickstart — Segmenting Data and Generating Connectivity Networks</a></li>
+<li class="toctree-l1"><a class="reference internal" href="proximity.html">Proximity Networks — Ideal for Cellular Data</a></li>
 <li class="toctree-l1"><a class="reference internal" href="branches.html">Labeling Branches and Branch Networks</a></li>
 <li class="toctree-l1"><a class="reference internal" href="properties.html">Properties of a Network3D Object</a></li>
 <li class="toctree-l1"><a class="reference internal" href="excel_helper.html">Using the Spreadsheet Loader</a></li>
@@ -74,12 +71,12 @@
 </ul>
 <p class="caption" role="heading"><span class="caption-text">Detailed Function Guide:</span></p>
 <ul>
-<li class="toctree-l1"><a class="reference internal" href="right_clicking.html">Right Clicking - All Options Available by Right Clicking in the GUI</a></li>
+<li class="toctree-l1"><a class="reference internal" href="right_clicking.html">Right Clicking — All Options Available by Right Clicking in the GUI</a></li>
 <li class="toctree-l1"><a class="reference internal" href="file_menu.html">All File Menu Options</a></li>
 <li class="toctree-l1"><a class="reference internal" href="analyze_menu.html">All Analyze Menu Options</a></li>
 <li class="toctree-l1"><a class="reference internal" href="process_menu.html">All Process Menu Options</a></li>
 <li class="toctree-l1"><a class="reference internal" href="image_menu.html">All Image Menu Options</a></li>
-<li class="toctree-l1"><a class="reference internal" href="extensions.html">NetTracer3D Plugin System</a></li>
+<li class="toctree-l1"><a class="reference internal" href="extensions.html">NetTracer3D Plugin System and Instructions on Using Prebundled Plugins</a></li>
 </ul>
 <p class="caption" role="heading"><span class="caption-text">Development:</span></p>
 <ul>
@@ -115,69 +112,118 @@
              
   <section id="installation">
 <span id="id1"></span><h1>Installation<a class="headerlink" href="#installation" title="Link to this heading"></a></h1>
-<section id="system-requirements">
-<h2>System Requirements<a class="headerlink" href="#system-requirements" title="Link to this heading"></a></h2>
-<p>Before installing NetTracer3D, ensure your system meets the following requirements:</p>
+<p>NetTracer3D can be installed either as a Python package via pip (recommended)
+or, on Windows, as a standalone installer.</p>
+<nav class="contents local" id="on-this-page">
+<p class="topic-title">On this page</p>
 <ul class="simple">
-<li><p>Operating System: Windows 10/11, macOS 10.15+, or Linux (Ubuntu 20.04+ recommended)</p></li>
-<li><p>CPU: Multi-core processor (4+ cores recommended)</p></li>
-<li><p>RAM: Minimum 8GB (16GB+ recommended for larger images. For very large images such as lightsheet data, you would even want a workstation with 128+, for example, or downsample the data accordingly)</p></li>
-<li><p>GPU: NVIDIA dedicated GPU (Optional)</p></li>
-<li><p>Python: 3.12</p></li>
+<li><p><a class="reference internal" href="#system-requirements" id="id2">System Requirements</a></p></li>
+<li><p><a class="reference internal" href="#windows-installer" id="id3">Windows Installer</a></p></li>
+<li><p><a class="reference internal" href="#installing-with-pip" id="id4">Installing with pip</a></p></li>
+<li><p><a class="reference internal" href="#installing-with-anaconda" id="id5">Installing with Anaconda</a></p></li>
+<li><p><a class="reference internal" href="#gpu-support" id="id6">GPU Support</a></p></li>
+<li><p><a class="reference internal" href="#verifying-the-installation" id="id7">Verifying the Installation</a></p></li>
+<li><p><a class="reference internal" href="#troubleshooting" id="id8">Troubleshooting</a></p>
+<ul>
+<li><p><a class="reference internal" href="#conflicting-dependencies" id="id9">Conflicting dependencies</a></p></li>
+<li><p><a class="reference internal" href="#python-version-problems" id="id10">Python version problems</a></p></li>
+<li><p><a class="reference internal" href="#installed-but-not-starting" id="id11">Installed but not starting</a></p></li>
+<li><p><a class="reference internal" href="#getting-help" id="id12">Getting help</a></p></li>
 </ul>
-<section id="using-the-windows-installer">
-<h3><strong>Using the Windows Installer</strong><a class="headerlink" href="#using-the-windows-installer" title="Link to this heading"></a></h3>
-<p>If you are on Windows, the easiest option is to just download and run the windows installer available at the github repo: <a class="reference external" href="https://github.com/mclaughlinliam3/NetTracer3D/releases">https://github.com/mclaughlinliam3/NetTracer3D/releases</a></p>
-<p>Note that the installation version will be missing a few features compared to the Python package, namely GPU support for segmentation. It will also not be updated as often.</p>
+</li>
+<li><p><a class="reference internal" href="#next-steps" id="id13">Next Steps</a></p></li>
+</ul>
+</nav>
+<section id="system-requirements">
+<h2><a class="toc-backref" href="#id2" role="doc-backlink">System Requirements</a><a class="headerlink" href="#system-requirements" title="Link to this heading"></a></h2>
+<ul class="simple">
+<li><p><strong>Operating System</strong>: Windows 10/11, macOS 10.15+, or Linux (Ubuntu 20.04+ recommended)</p></li>
+<li><p><strong>CPU</strong>: Multi-core processor (4+ cores recommended)</p></li>
+<li><p><strong>RAM</strong>: 8 GB minimum; 16 GB or more recommended for larger images. Very large
+datasets such as lightsheet data may require a workstation with 128 GB or more,
+or downsampling of the data beforehand.</p></li>
+<li><p><strong>GPU</strong>: NVIDIA dedicated GPU (optional)</p></li>
+<li><p><strong>Python</strong>: 3.12</p></li>
+</ul>
 </section>
+<section id="windows-installer">
+<h2><a class="toc-backref" href="#id3" role="doc-backlink">Windows Installer</a><a class="headerlink" href="#windows-installer" title="Link to this heading"></a></h2>
+<p>On Windows, the simplest option is to download and run the installer from the
+GitHub releases page:
+<a class="reference external" href="https://github.com/mclaughlinliam3/NetTracer3D/releases">https://github.com/mclaughlinliam3/NetTracer3D/releases</a></p>
+<div class="admonition note">
+<p class="admonition-title">Note</p>
+<p>The installer version lacks a few features compared to the Python package —
+most notably GPU support for segmentation — and is updated less frequently.</p>
+</div>
 </section>
-<section id="installing-nettracer3d">
-<h2>Installing NetTracer3D<a class="headerlink" href="#installing-nettracer3d" title="Link to this heading"></a></h2>
-<section id="using-pip">
-<h3>Using pip<a class="headerlink" href="#using-pip" title="Link to this heading"></a></h3>
-<ol class="arabic simple">
-<li><p><strong>Get Python and Pip on your path</strong>: The easiest way to install NetTracer3D is using pip. First, you will want to go to the Python website (<a class="reference external" href="https://www.python.org/">https://www.python.org/</a>). Download the Python installer for the latest version of Python. When you run it, make sure to include the option to also install Pip, and to add both Pip and Python to your path.</p></li>
-</ol>
-<p>After installing Python and pip, you can verify (on windows at least) the installation by pressing the windows key + R. In the window that pops up, type ‘cmd’ to open the command terminal. In the command terminal, type ‘where pip’ or ‘where python’.
-If your installation of them worked properly, the window will tell you what folder your pip/python .exe resides in. If it cannot find them, it means they either did not get installed, or that they were not added to your PATH.
-You can try reinstalling them, if perhaps the wrong setting was selected, or you can manually add them to the environment variables (the PATH) from the windows control panel. (I am not a mac user so I cannot provide advice there).</p>
-<ol class="arabic simple" start="2">
-<li><p><strong>Installing Base Package</strong>: Once you have Python and pip set up, open the command terminal once more (Windows + R, followed by typing ‘cmd’ in the window that appears). Type the following command.</p></li>
-</ol>
+<section id="installing-with-pip">
+<h2><a class="toc-backref" href="#id4" role="doc-backlink">Installing with pip</a><a class="headerlink" href="#installing-with-pip" title="Link to this heading"></a></h2>
+<ol class="arabic">
+<li><p><strong>Install Python and pip</strong></p>
+<p>Download the latest Python installer from <a class="reference external" href="https://www.python.org/">https://www.python.org/</a>. During
+installation, enable the options to install pip and to add both Python and
+pip to your <code class="docutils literal notranslate"><span class="pre">PATH</span></code>.</p>
+<p>To verify the installation on Windows, press <kbd class="kbd docutils literal notranslate">Win</kbd> + <kbd class="kbd docutils literal notranslate">R</kbd>, type
+<code class="docutils literal notranslate"><span class="pre">cmd</span></code> to open a command terminal, and run <code class="docutils literal notranslate"><span class="pre">where</span> <span class="pre">pip</span></code> or <code class="docutils literal notranslate"><span class="pre">where</span> <span class="pre">python</span></code>.
+If the installation succeeded, the terminal reports the folder containing the
+corresponding executable. If neither is found, they were either not installed
+or not added to your <code class="docutils literal notranslate"><span class="pre">PATH</span></code>. Reinstall with the correct options selected, or
+add them manually to the environment variables through the Windows Control
+Panel.</p>
+</li>
+<li><p><strong>Install the base package</strong></p>
+<p>Open a command terminal and run:</p>
 <div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>pip<span class="w"> </span>install<span class="w"> </span>nettracer3d
 </pre></div>
 </div>
-<ol class="arabic simple" start="3">
-<li><p><strong>Optional — Performance Boost for Large Data</strong>: If you are trying to process large images, you may also want to include the ‘edt’ module in your package. This will allow parallelized CPU calculations for several of the search functions which can increase their speed by an order of magnitude or more depending on how many cores your CPU has. This can be a major benefit if you have a strong CPU and sufficient RAM. It requires an extra pre-installation step, thus is not included by default. You will also have to install the C++ build tools from windows. Please head to this link, then download and run the installer: <a class="reference external" href="https://visualstudio.microsoft.com/visual-cpp-build-tools/">https://visualstudio.microsoft.com/visual-cpp-build-tools/</a>. In the menu of the installer, select the ‘Desktop Development with C++’ option, then proceed to download/install it using the installation menu. You will likely want to be using the Python distributed from the actual Python website and not the windows store (or elsewhere) or the edt module may not work properly. To bundle with edt use:</p></li>
-</ol>
+</li>
+<li><p><strong>Optional — performance boost for large data</strong></p>
+<p>The <code class="docutils literal notranslate"><span class="pre">edt</span></code> module enables parallelised CPU calculations for several of the
+search functions, which can improve their speed by an order of magnitude or
+more depending on your core count. This is a substantial benefit on systems
+with a strong CPU and sufficient RAM.</p>
+<p>Because <code class="docutils literal notranslate"><span class="pre">edt</span></code> requires an extra pre-installation step, it is not included by
+default. First install the Microsoft C++ build tools from
+<a class="reference external" href="https://visualstudio.microsoft.com/visual-cpp-build-tools/">https://visualstudio.microsoft.com/visual-cpp-build-tools/</a>, selecting the
+<strong>Desktop Development with C++</strong> option in the installer. Use the Python
+distribution from python.org rather than the Windows Store version, as <code class="docutils literal notranslate"><span class="pre">edt</span></code>
+may not work correctly otherwise. Then run:</p>
 <div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>pip<span class="w"> </span>install<span class="w"> </span>nettracer3d<span class="o">[</span>edt<span class="o">]</span>
 </pre></div>
 </div>
-<ol class="arabic simple" start="4">
-<li><p><strong>Optional — Recommended full package</strong>: Or if you want to just get both edt with the leiden partition dependencies:</p></li>
-</ol>
+</li>
+<li><p><strong>Optional — recommended full package</strong></p>
+<p>To install <code class="docutils literal notranslate"><span class="pre">edt</span></code> together with the Leiden partition dependencies:</p>
 <div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>pip<span class="w"> </span>install<span class="w"> </span>nettracer3d<span class="o">[</span>rec<span class="o">]</span>
 </pre></div>
 </div>
-<ol class="arabic simple" start="6">
-<li><p>Likewise, if you already installed the default version, you can add the leiden elements and/or edt with just:</p></li>
-</ol>
+</li>
+<li><p><strong>Adding optional components later</strong></p>
+<p>If the default version is already installed, the Leiden and <code class="docutils literal notranslate"><span class="pre">edt</span></code>
+components can be added individually:</p>
 <div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>pip<span class="w"> </span>install<span class="w"> </span>edt
 pip<span class="w"> </span>install<span class="w"> </span>leidenalg
 pip<span class="w"> </span>install<span class="w"> </span>igraph
 </pre></div>
 </div>
-<p>This will install NetTracer3D and all its core dependencies. Then, if you want to run nettracer3d, open the command terminal like before and enter the following command:</p>
+</li>
+</ol>
+<p>Once NetTracer3D and its core dependencies are installed, launch the program
+from a command terminal with:</p>
 <div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>nettracer3d
 </pre></div>
 </div>
 </section>
-<section id="using-anaconda">
-<h3>Using Anaconda<a class="headerlink" href="#using-anaconda" title="Link to this heading"></a></h3>
-<p>Anaconda is a useful program that manages Python packages for you and can help work out problems regarding conflicting package versions during installation. Installing NetTracer3D with Anaconda is similar to the above method, except it will be housed in a dedicated NetTracer3D anaconda environment rather than in your computer’s Python packages.
-You would first want to download the version of anaconda that is compatible with your operating system here: <a class="reference external" href="https://www.anaconda.com/download">https://www.anaconda.com/download</a>.</p>
-<p>Run the installer they provide. Once it’s finished, search ‘anaconda prompt’ in your taskbar and open the corresponding program. You will be taken to a command line window.
-Next, you can run these commands:</p>
+<section id="installing-with-anaconda">
+<h2><a class="toc-backref" href="#id5" role="doc-backlink">Installing with Anaconda</a><a class="headerlink" href="#installing-with-anaconda" title="Link to this heading"></a></h2>
+<p>Anaconda manages Python packages for you and can resolve conflicting package
+versions during installation. The process mirrors the pip installation above,
+except that NetTracer3D is housed in a dedicated Anaconda environment rather
+than among your system Python packages.</p>
+<p>Download the version of Anaconda matching your operating system from
+<a class="reference external" href="https://www.anaconda.com/download">https://www.anaconda.com/download</a> and run the installer. When it finishes,
+search for <strong>Anaconda Prompt</strong> in your taskbar, open it, and run:</p>
 <div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>conda<span class="w"> </span>create<span class="w"> </span>--name<span class="w"> </span>nettracer3d<span class="w"> </span><span class="nv">python</span><span class="o">=</span><span class="m">3</span>.12
 
 conda<span class="w"> </span>activate<span class="w"> </span>nettracer3d
@@ -185,45 +231,51 @@ conda<span class="w"> </span>activate<span class="w"> </span>nettracer3d
 pip<span class="w"> </span>install<span class="w"> </span>nettracer3d<span class="o">[</span>rec<span class="o">]</span>
 </pre></div>
 </div>
-<p>This should install the program in the ‘nettracer3d’ environment in conda. Then, whenever you wanted to run nettracer3d, you would first open the ‘anaconda prompt’, followed by entering these commands:</p>
+<p>This installs the program into the <code class="docutils literal notranslate"><span class="pre">nettracer3d</span></code> environment. To run
+NetTracer3D thereafter, open the Anaconda Prompt and enter:</p>
 <div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>conda<span class="w"> </span>activate<span class="w"> </span>nettracer3d
 
 nettracer3d
 </pre></div>
 </div>
 </section>
-<section id="gpu">
-<h3>GPU<a class="headerlink" href="#gpu" title="Link to this heading"></a></h3>
-<p>NetTracer3D is mostly CPU-bound, but a few functions can optionally use the GPU. To install optional GPU functionalities, first set up a CUDA toolkit that runs with the GPU on your machine. This requires an NVIDIA GPU. Then, find your GPUs compatible CUDA toolkit and install it with the auto-installer from the NVIDIA website: <a class="reference external" href="https://developer.nvidia.com/cuda-toolkit">https://developer.nvidia.com/cuda-toolkit</a></p>
-<p>With a CUDA toolkit installed, use:</p>
+<section id="gpu-support">
+<h2><a class="toc-backref" href="#id6" role="doc-backlink">GPU Support</a><a class="headerlink" href="#gpu-support" title="Link to this heading"></a></h2>
+<p>NetTracer3D is mostly CPU-bound, but a few functions can optionally use the GPU.
+GPU support requires an NVIDIA GPU with a CUDA toolkit installed. Find the CUDA
+toolkit compatible with your GPU and install it using the auto-installer from
+<a class="reference external" href="https://developer.nvidia.com/cuda-toolkit">https://developer.nvidia.com/cuda-toolkit</a>.</p>
+<p>With a CUDA toolkit in place, use:</p>
 <div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>pip<span class="w"> </span>install<span class="w"> </span>nettracer3d<span class="o">[</span>CUDA11<span class="o">]</span><span class="w"> </span><span class="c1">#If your CUDA toolkit is version 11</span>
 pip<span class="w"> </span>install<span class="w"> </span>nettracer3d<span class="o">[</span>CUDA12<span class="o">]</span><span class="w"> </span><span class="c1">#If your CUDA toolkit is version 12</span>
 pip<span class="w"> </span>install<span class="w"> </span>nettracer3d<span class="o">[</span>cupy<span class="o">]</span><span class="w"> </span><span class="c1">#For the generic cupy library (The above two are usually the ones you want)</span>
 </pre></div>
 </div>
-<p>Or if you’ve already installed the NetTracer3D base package and want to get just the GPU associated packages:</p>
+<p>If the base package is already installed and you want only the GPU-associated
+packages:</p>
 <div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>pip<span class="w"> </span>install<span class="w"> </span>cupy-cuda11x<span class="w"> </span><span class="c1">#If your CUDA toolkit is version 11</span>
 pip<span class="w"> </span>install<span class="w"> </span>cupy-cuda12x<span class="w"> </span><span class="c1">#If your CUDA toolkit is version 12</span>
 pip<span class="w"> </span>install<span class="w"> </span>cupy<span class="w"> </span><span class="c1">#For the generic cupy library (The above two are usually the ones you want)</span>
 </pre></div>
 </div>
-<p>If you want to use Cellpose plugin (for which GPU-usage is somewhat obligatory) to help segment cells for any networks, you will also want to install pytorch here: <a class="reference external" href="https://pytorch.org/">https://pytorch.org/</a>. Use the pytorch build menu on this webpage to find a pip install command that is compatible with Python and your CUDA version.</p>
+<p>The Cellpose plugin, for which GPU usage is effectively obligatory, additionally
+requires PyTorch. Use the build menu at <a class="reference external" href="https://pytorch.org/">https://pytorch.org/</a> to obtain a pip
+command compatible with your Python and CUDA versions.</p>
 </section>
-</section>
-<section id="verifying-installation">
-<h2>Verifying Installation<a class="headerlink" href="#verifying-installation" title="Link to this heading"></a></h2>
-<p>To verify that NetTracer3D has been installed correctly, run:</p>
+<section id="verifying-the-installation">
+<h2><a class="toc-backref" href="#id7" role="doc-backlink">Verifying the Installation</a><a class="headerlink" href="#verifying-the-installation" title="Link to this heading"></a></h2>
+<p>To confirm that NetTracer3D installed correctly, run:</p>
 <div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>pip<span class="w"> </span>show<span class="w"> </span>nettracer3d
 </pre></div>
 </div>
-<p>You should see the current version number displayed. If windows does not recognize ‘nettracer3d’ as the command to start the program, it may be because it is using the windows store version of Python. Please uninstall the windows store version of Python, then make sure to download and install Python from the Python website and not the windows store to allow it to run packages directly from the command line.</p>
+<p>The current version number should be displayed.</p>
 </section>
 <section id="troubleshooting">
-<h2>Troubleshooting<a class="headerlink" href="#troubleshooting" title="Link to this heading"></a></h2>
-<section id="common-issues">
-<h3>Common Issues<a class="headerlink" href="#common-issues" title="Link to this heading"></a></h3>
-<p><strong>Conflicting Dependencies</strong></p>
-<p>If you encounter errors about conflicting dependencies, download anaconda and try installing them in a new anaconda env:</p>
+<h2><a class="toc-backref" href="#id8" role="doc-backlink">Troubleshooting</a><a class="headerlink" href="#troubleshooting" title="Link to this heading"></a></h2>
+<section id="conflicting-dependencies">
+<h3><a class="toc-backref" href="#id9" role="doc-backlink">Conflicting dependencies</a><a class="headerlink" href="#conflicting-dependencies" title="Link to this heading"></a></h3>
+<p>If you encounter dependency conflicts, install NetTracer3D into a clean Anaconda
+environment:</p>
 <div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>conda<span class="w"> </span>create<span class="w"> </span>--name<span class="w"> </span>nettracer3d<span class="w"> </span><span class="nv">python</span><span class="o">=</span><span class="m">3</span>.12
 
 conda<span class="w"> </span>activate<span class="w"> </span>nettracer3d
@@ -231,32 +283,42 @@ conda<span class="w"> </span>activate<span class="w"> </span>nettracer3d
 pip<span class="w"> </span>install<span class="w"> </span>nettracer3d
 </pre></div>
 </div>
-<p>The highest probability is that a version of a package you are running is not compatible with numpy version 2 and above. Please try upgrading/downgrading the incompatible packages as needed. I would generally not downgrade numpy below version 2.0, as it is the main workhorse when it comes to image processing in Python, and the 2.0 release made a lot of nice optimizations.
-This is generally done along the lines of:</p>
+<p>The most likely cause is a package that is incompatible with NumPy 2.0 or above.
+Upgrade or downgrade the offending package as needed. Avoid downgrading NumPy
+below 2.0 — it is the main workhorse for image processing in Python, and the 2.0
+release introduced significant optimisations. A version pin generally takes the
+form:</p>
 <div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>pip<span class="w"> </span>install<span class="w"> </span><span class="s1">&#39;numpy&lt;=2.2&#39;</span><span class="w"> </span><span class="c1"># If a version of numpy beyond 2.2 was causing a conflict, for example.</span>
 </pre></div>
 </div>
-<p><strong>Python Version Problems</strong></p>
-<p>Another problem might be due to some of the packages that NetTracer3D depends on not having proper build protocols set up for newer Python releases. If you are attempting to install the package and find that it starts the installation but crashes part-way through, it might be a good idea to try downgrading your version of Python.
-Generally speaking, the installation should work fine with Python version 3.12. However, issues may arise with later versions as of writing this (12/13/2025) specifically with the sklearn package.
-To downgrade Python you can either uninstall it from your computer (on windows, from the add/remove programs menu), followed by reinstalling version 3.12.
-On anaconda, you can just make a new environment and specify what Python version you want.</p>
-<p><strong>Installed but not starting</strong></p>
-<p>If windows does not recognize ‘nettracer3d’ as the command to start the program, it may be because it is using the windows store version of Python. Please uninstall the windows store version of Python, then make sure to download and install Python from the Python website and not the windows store to allow it to run packages directly from the command line.</p>
+</section>
+<section id="python-version-problems">
+<h3><a class="toc-backref" href="#id10" role="doc-backlink">Python version problems</a><a class="headerlink" href="#python-version-problems" title="Link to this heading"></a></h3>
+<p>Some packages that NetTracer3D depends on lack proper build protocols for newer
+Python releases. If installation begins but crashes part-way through, try
+downgrading Python. Installation should work reliably on Python 3.12; as of
+writing (12/13/2025), later versions may cause issues, specifically with the
+<code class="docutils literal notranslate"><span class="pre">sklearn</span></code> package.</p>
+<p>To downgrade on Windows, uninstall Python from the Add/Remove Programs menu and
+reinstall version 3.12. Under Anaconda, simply create a new environment
+specifying the desired Python version.</p>
+</section>
+<section id="installed-but-not-starting">
+<h3><a class="toc-backref" href="#id11" role="doc-backlink">Installed but not starting</a><a class="headerlink" href="#installed-but-not-starting" title="Link to this heading"></a></h3>
+<p>If Windows does not recognise <code class="docutils literal notranslate"><span class="pre">nettracer3d</span></code> as a command, it is likely using
+the Windows Store version of Python. Uninstall it and install Python from
+python.org instead, which allows packages to be run directly from the command
+line.</p>
 </section>
 <section id="getting-help">
-<h3>Getting Help<a class="headerlink" href="#getting-help" title="Link to this heading"></a></h3>
-<p>If you continue to experience installation issues:</p>
-<blockquote>
-<div><ul class="simple">
-<li><p>Email me at <a class="reference external" href="mailto:liamm&#37;&#52;&#48;wustl&#46;edu">liamm<span>&#64;</span>wustl<span>&#46;</span>edu</a></p></li>
-</ul>
-</div></blockquote>
+<h3><a class="toc-backref" href="#id12" role="doc-backlink">Getting help</a><a class="headerlink" href="#getting-help" title="Link to this heading"></a></h3>
+<p>If installation issues persist, email <a class="reference external" href="mailto:liamm&#37;&#52;&#48;wustl&#46;edu">liamm<span>&#64;</span>wustl<span>&#46;</span>edu</a>.</p>
 </section>
 </section>
 <section id="next-steps">
-<h2>Next Steps<a class="headerlink" href="#next-steps" title="Link to this heading"></a></h2>
-<p>After installation, proceed to the <a class="reference internal" href="quickstart.html"><span class="doc">Quickstart - Segmenting Data and Generating Connectivity Networks</span></a> guide to begin using NetTracer3D.</p>
+<h2><a class="toc-backref" href="#id13" role="doc-backlink">Next Steps</a><a class="headerlink" href="#next-steps" title="Link to this heading"></a></h2>
+<p>After installation, proceed to the <a class="reference internal" href="quickstart.html"><span class="doc">Quickstart — Segmenting Data and Generating Connectivity Networks</span></a> guide to begin using
+NetTracer3D.</p>
 </section>
 </section>
 
@@ -265,7 +327,7 @@ On anaconda, you can just make a new environment and specify what Python version
           </div>
           <footer><div class="rst-footer-buttons" role="navigation" aria-label="Footer">
         <a href="index.html" class="btn btn-neutral float-left" title="NetTracer3D documentation" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left" aria-hidden="true"></span> Previous</a>
-        <a href="quickstart.html" class="btn btn-neutral float-right" title="Quickstart - Segmenting Data and Generating Connectivity Networks" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right" aria-hidden="true"></span></a>
+        <a href="quickstart.html" class="btn btn-neutral float-right" title="Quickstart — Segmenting Data and Generating Connectivity Networks" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right" aria-hidden="true"></span></a>
     </div>
 
   <hr/>

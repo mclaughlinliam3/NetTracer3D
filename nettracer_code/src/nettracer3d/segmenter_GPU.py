@@ -10,8 +10,10 @@ Architecture:
   - Chunk padding: features are computed on a padded region from the full source
     image and then cropped to the requested window 
   - _ChunkCache: LRU cache of computed feature chunks for interactive reuse.
-  - 3D eigenvalue computation uses cp.linalg.eigvalsh (batch-reshaped) because
-    CuPy's element-wise Cardano is unreliable on some GPU drivers.
+  - 3D eigenvalue computation uses an element-wise analytical Cardano
+    formula (matching the CPU path); this avoids cuSOLVER's batched syevj,
+    which fails (CUSOLVER_STATUS_INVALID_VALUE) on the large batch counts
+    produced by 3-D chunks.
   - 2D eigenvalue computation uses the fast analytical trace/det formula on GPU.
   - Speed mode: sigmas [1,2,4,8]. Deep mode: sigmas [1,2,4,8,16].
 """
@@ -67,23 +69,62 @@ def _eigen2x2_gpu(hxx, hyy, hxy):
 def _eigen3x3_gpu(h11, h22, h33, h12, h13, h23):
     """Eigenvalues of 3×3 symmetric matrices on GPU → (e0, e1, e2) ascending.
 
-    Uses cp.linalg.eigvalsh with a batch reshape.  This is the safest
-    path on CUDA — some drivers choke on element-wise Cardano, but
-    batch eigvalsh is rock-solid across GPU generations.
+    Analytical Cardano / Smith trigonometric method, computed fully
+    element-wise in CuPy.  This mirrors the CPU ``_eigen3x3_numba`` path
+    exactly and deliberately avoids ``cp.linalg.eigvalsh``: that routes a
+    batched solve to cuSOLVER's ``syevjBatched``, whose buffer-size call
+    raises CUSOLVER_STATUS_INVALID_VALUE for the very large batch counts
+    (millions of 3×3 matrices) produced by 3-D chunks.  The element-wise
+    formula has no batch-size limit and is faster.
     """
-    shape = h11.shape
-    n = int(cp.prod(cp.array(shape)))
-    mat = cp.zeros((n, 3, 3), dtype=cp.float64)
-    mat[:, 0, 0] = h11.ravel().astype(cp.float64)
-    mat[:, 1, 1] = h22.ravel().astype(cp.float64)
-    mat[:, 2, 2] = h33.ravel().astype(cp.float64)
-    mat[:, 0, 1] = mat[:, 1, 0] = h12.ravel().astype(cp.float64)
-    mat[:, 0, 2] = mat[:, 2, 0] = h13.ravel().astype(cp.float64)
-    mat[:, 1, 2] = mat[:, 2, 1] = h23.ravel().astype(cp.float64)
-    eigs = cp.linalg.eigvalsh(mat)  # (n, 3)  already sorted ascending
-    return (eigs[:, 0].reshape(shape).astype(cp.float32),
-            eigs[:, 1].reshape(shape).astype(cp.float32),
-            eigs[:, 2].reshape(shape).astype(cp.float32))
+    a = h11.astype(cp.float64)
+    b = h22.astype(cp.float64)
+    c = h33.astype(cp.float64)
+    d = h12.astype(cp.float64)
+    f = h13.astype(cp.float64)
+    e = h23.astype(cp.float64)
+
+    TWO_PI_3 = 2.0 * math.pi / 3.0
+
+    p1 = d * d + f * f + e * e
+    q = (a + b + c) / 3.0
+    p2 = (a - q) ** 2 + (b - q) ** 2 + (c - q) ** 2 + 2.0 * p1
+    p = cp.sqrt(p2 / 6.0)
+
+    # Nearly-diagonal matrices: eigenvalues are just the diagonal entries.
+    # Guard the divisor so the off-diagonal branch never produces NaN/Inf;
+    # those elements get overwritten by the diagonal branch below.
+    diag = p1 < 1e-30
+    p_safe = cp.where(p <= 0, 1.0, p)
+
+    b11 = (a - q) / p_safe
+    b22 = (b - q) / p_safe
+    b33 = (c - q) / p_safe
+    b12 = d / p_safe
+    b13 = f / p_safe
+    b23 = e / p_safe
+    det_b = (b11 * (b22 * b33 - b23 * b23)
+             - b12 * (b12 * b33 - b23 * b13)
+             + b13 * (b12 * b23 - b22 * b13))
+    r = cp.clip(det_b * 0.5, -1.0, 1.0)
+    phi = cp.arccos(r) / 3.0
+
+    e1 = q + 2.0 * p * cp.cos(phi)
+    e3 = q + 2.0 * p * cp.cos(phi + TWO_PI_3)
+    e2 = 3.0 * q - e1 - e3
+
+    e1 = cp.where(diag, a, e1)
+    e2 = cp.where(diag, b, e2)
+    e3 = cp.where(diag, c, e3)
+
+    # Sort ascending element-wise → (smallest, middle, largest).
+    lo = cp.minimum(cp.minimum(e1, e2), e3)
+    hi = cp.maximum(cp.maximum(e1, e2), e3)
+    mid = (e1 + e2 + e3) - lo - hi
+
+    return (lo.astype(cp.float32),
+            mid.astype(cp.float32),
+            hi.astype(cp.float32))
 
 
 # ============================================================
@@ -163,7 +204,7 @@ def _assemble_3d_gpu(G, sigmas, st_scales, deep):
     """Build the full feature stack for a 3-D volume on GPU.
 
     Mirrors CPU ``_assemble_3d`` exactly.  3-D eigenvalue paths use
-    the batch-eigvalsh approach for driver compatibility.
+    the element-wise analytical Cardano method (see ``_eigen3x3_gpu``).
     """
     N = len(sigmas)
     feats = []

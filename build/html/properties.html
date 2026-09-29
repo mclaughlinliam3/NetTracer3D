@@ -6,14 +6,14 @@
   <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
 
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Properties of a Network3D Object &mdash; NetTracer3D 1.6.0 documentation</title>
+  <title>Properties of a Network3D Object &mdash; NetTracer3D 2.0.0 documentation</title>
       <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=b86133f3" />
       <link rel="stylesheet" type="text/css" href="_static/css/theme.css?v=e59714d7" />
 
   
       <script src="_static/jquery.js?v=5d32c60e"></script>
       <script src="_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
-      <script src="_static/documentation_options.js?v=72d88caf"></script>
+      <script src="_static/documentation_options.js?v=51b770b3"></script>
       <script src="_static/doctools.js?v=9bcbadda"></script>
       <script src="_static/sphinx_highlight.js?v=dc90522c"></script>
     <script src="_static/js/theme.js"></script>
@@ -46,13 +46,20 @@
               <p class="caption" role="heading"><span class="caption-text">User Guide:</span></p>
 <ul class="current">
 <li class="toctree-l1"><a class="reference internal" href="installation.html">Installation</a></li>
-<li class="toctree-l1"><a class="reference internal" href="quickstart.html">Quickstart - Segmenting Data and Generating Connectivity Networks</a></li>
-<li class="toctree-l1"><a class="reference internal" href="proximity.html">Proximity Networks - Ideal for Cellular Data</a></li>
+<li class="toctree-l1"><a class="reference internal" href="quickstart.html">Quickstart — Segmenting Data and Generating Connectivity Networks</a></li>
+<li class="toctree-l1"><a class="reference internal" href="proximity.html">Proximity Networks — Ideal for Cellular Data</a></li>
 <li class="toctree-l1"><a class="reference internal" href="branches.html">Labeling Branches and Branch Networks</a></li>
 <li class="toctree-l1 current"><a class="current reference internal" href="#">Properties of a Network3D Object</a><ul>
 <li class="toctree-l2"><a class="reference internal" href="#main-properties">Main Properties</a></li>
-<li class="toctree-l2"><a class="reference internal" href="#necessary-structures-to-properties-stored-in-csvs">Necessary Structures to Properties stored in CSVs</a></li>
-<li class="toctree-l2"><a class="reference internal" href="#temp-properties">Temp Properties</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#structures-required-for-properties-stored-in-csvs">Structures Required for Properties Stored in CSVs</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#network">1. network</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#node-identities">2. node_identities</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#node-communities">3. node_communities</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#node-centroids">4. node_centroids</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#edge-centroids">5. edge_centroids</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="#temporary-properties">Temporary Properties</a></li>
 <li class="toctree-l2"><a class="reference internal" href="#next-steps">Next Steps</a></li>
 </ul>
 </li>
@@ -61,12 +68,12 @@
 </ul>
 <p class="caption" role="heading"><span class="caption-text">Detailed Function Guide:</span></p>
 <ul>
-<li class="toctree-l1"><a class="reference internal" href="right_clicking.html">Right Clicking - All Options Available by Right Clicking in the GUI</a></li>
+<li class="toctree-l1"><a class="reference internal" href="right_clicking.html">Right Clicking — All Options Available by Right Clicking in the GUI</a></li>
 <li class="toctree-l1"><a class="reference internal" href="file_menu.html">All File Menu Options</a></li>
 <li class="toctree-l1"><a class="reference internal" href="analyze_menu.html">All Analyze Menu Options</a></li>
 <li class="toctree-l1"><a class="reference internal" href="process_menu.html">All Process Menu Options</a></li>
 <li class="toctree-l1"><a class="reference internal" href="image_menu.html">All Image Menu Options</a></li>
-<li class="toctree-l1"><a class="reference internal" href="extensions.html">NetTracer3D Plugin System</a></li>
+<li class="toctree-l1"><a class="reference internal" href="extensions.html">NetTracer3D Plugin System and Instructions on Using Prebundled Plugins</a></li>
 </ul>
 <p class="caption" role="heading"><span class="caption-text">Development:</span></p>
 <ul>
@@ -102,54 +109,85 @@
              
   <section id="properties-of-a-network3d-object">
 <span id="properties"></span><h1>Properties of a Network3D Object<a class="headerlink" href="#properties-of-a-network3d-object" title="Link to this heading"></a></h1>
+<p>The Network3D object is how NetTracer3D groups together the data of an ongoing
+session. Its properties are saved and loaded with <strong>File → Save (As) Network 3D
+Object</strong> and the equivalent load option, and many of NetTracer3D’s methods
+reference one or more of them to function correctly.</p>
+<nav class="contents local" id="on-this-page">
+<p class="topic-title">On this page</p>
+<ul class="simple">
+<li><p><a class="reference internal" href="#main-properties" id="id1">Main Properties</a></p></li>
+<li><p><a class="reference internal" href="#structures-required-for-properties-stored-in-csvs" id="id2">Structures Required for Properties Stored in CSVs</a></p>
+<ul>
+<li><p><a class="reference internal" href="#network" id="id3">1. network</a></p></li>
+<li><p><a class="reference internal" href="#node-identities" id="id4">2. node_identities</a></p></li>
+<li><p><a class="reference internal" href="#node-communities" id="id5">3. node_communities</a></p></li>
+<li><p><a class="reference internal" href="#node-centroids" id="id6">4. node_centroids</a></p></li>
+<li><p><a class="reference internal" href="#edge-centroids" id="id7">5. edge_centroids</a></p></li>
+</ul>
+</li>
+<li><p><a class="reference internal" href="#temporary-properties" id="id8">Temporary Properties</a></p></li>
+<li><p><a class="reference internal" href="#next-steps" id="id9">Next Steps</a></p></li>
+</ul>
+</nav>
 <section id="main-properties">
-<h2>Main Properties<a class="headerlink" href="#main-properties" title="Link to this heading"></a></h2>
-<p>The Network3D Object is how NetTracer3D groups together the data in an ongoing session. These properties will be saved/loaded when using ‘File -&gt; Save (As) Network 3D Object’, or the equivalent load.
-Many of NetTracer3D’s methods may need to reference one or more of these properties to function correctly.</p>
-<ul class="simple">
-<li><dl class="simple">
-<dt>These properties are as follows:</dt><dd><ol class="arabic simple">
-<li><p>Nodes - the image in the nodes channel that represents objects to be grouped in a network.</p></li>
-<li><p>Edges - the image in the edges channel that represents objects to use to connect nodes together.</p></li>
-<li><p>Overlay 1 - the image in the overlay1 channel</p></li>
-<li><p>Overlay 2 - the image in the overlay2 channel</p></li>
-<li><p>Network - The network itself.</p></li>
-<li><p>Node Centroids - The [Z,Y,X] centroid of each node.</p></li>
-<li><p>Edge Centroids - The [Z, Y, X] centroid of each edge.</p></li>
-<li><p>Node Communities - The communities that nodes in the network belong to.</p></li>
-<li><p>Node identities - The assigned identities of nodes in the network.</p></li>
-<li><p>xy_scale - The real-dimension per pixel of the 2D x/y plane (ie, 5 microns per pixel). This value will always be the same for both x and y. NetTracer3D does not currently support differentially scaled x and y dimensions.</p></li>
-<li><p>z_scale - The real dimension per voxel-depth of the 3D z plane.</p></li>
-</ol>
-</dd>
-</dl>
-</li>
-<li><dl class="simple">
-<dt>Whenever ‘Process -&gt; Calculate Connectivity Network’ is run, NetTracer3D will aquire an additional hidden property.</dt><dd><p>12. Search Region - An image of the nodes after they have been expanded by the desired parameter to search for edge connections.
-* Note this property does occupy RAM. It will be saved alongside the ‘Network 3D Object’ if it exists, but it will not be loaded in when loading ‘Network 3D Object’.
-* The main reason this exists is to allow it to be saved, after which the user can simply load the Search Region itself into the nodes channel, so that they may compute Connectivity Networks under new parameters, while being able to skip the node_search step completely (which is the slow step).</p>
-</dd>
-</dl>
-</li>
-<li><p>Note that the majority of the properties can be purged from RAM by using ‘Image -&gt; Properties’. <strong>The xy_scale and z_scale values should also be assigned here.</strong></p></li>
-</ul>
-</section>
-<section id="necessary-structures-to-properties-stored-in-csvs">
-<h2>Necessary Structures to Properties stored in CSVs<a class="headerlink" href="#necessary-structures-to-properties-stored-in-csvs" title="Link to this heading"></a></h2>
-<ul class="simple">
-<li><p>When NetTracer3D saves its properties, it organizes several into csv spreadsheets, containing specific data organization that it expects to find when loading the same properties back in.</p></li>
-<li><p>Some users may wish to load these properties in from elsewhere (.csv or .xlsx can be used to load). For example, if they want to manually assign nodes to certain centroids or identities by editing microsoft excel, or batch organizing datasets for import this way using something like the pandas module in python.</p></li>
-<li><p>Note that node identities specifically will also save into a .json that will be take priority over the .csv when loading. If you want to load the .csv instead, please delete the .json.</p></li>
-<li><p>Note that .xlsx files have a row limit, so I generally recommend saving as .CSV if possible, especially for large property lists.</p></li>
-<li><p>These structures are as follows (make sure to use correct headers):</p></li>
-</ul>
+<h2><a class="toc-backref" href="#id1" role="doc-backlink">Main Properties</a><a class="headerlink" href="#main-properties" title="Link to this heading"></a></h2>
 <ol class="arabic simple">
-<li><p>network property:</p></li>
+<li><p><strong>Nodes</strong> — the image in the nodes channel, representing objects to be grouped
+in a network.</p></li>
+<li><p><strong>Edges</strong> — the image in the edges channel, representing objects used to
+connect nodes together.</p></li>
+<li><p><strong>Overlay 1</strong> — the image in the overlay1 channel.</p></li>
+<li><p><strong>Overlay 2</strong> — the image in the overlay2 channel.</p></li>
+<li><p><strong>Network</strong> — the network itself.</p></li>
+<li><p><strong>Node Centroids</strong> — the [Z, Y, X] centroid of each node.</p></li>
+<li><p><strong>Edge Centroids</strong> — the [Z, Y, X] centroid of each edge.</p></li>
+<li><p><strong>Node Communities</strong> — the communities that nodes in the network belong to.</p></li>
+<li><p><strong>Node Identities</strong> — the assigned identities of nodes in the network.</p></li>
+<li><p><strong>xy_scale</strong> — the real dimension per pixel of the 2D x/y plane (for example,
+5 microns per pixel). This value is always the same for both x and y;
+differentially scaled x and y dimensions are not currently supported.</p></li>
+<li><p><strong>z_scale</strong> — the real dimension per voxel-depth of the 3D z plane.</p></li>
 </ol>
-<ul class="simple">
-<li><p>Network tables are organized with this structure. Adjacent nodes in the same row are connected. The edge to the right of a node-pair in the same row is the edge that was found to connect them. If labeled edges were not used, this value is simply 0.</p></li>
-<li><p>For example, this table specifically is saying node 18 is paired to node 20, connected via edge 175, etc.</p></li>
-</ul>
+<p>Running <strong>Process → Calculate Connectivity Network</strong> acquires an additional
+hidden property:</p>
+<ol class="arabic simple" start="12">
+<li><p><strong>Search Region</strong> — an image of the nodes after expansion by the desired
+parameter to search for edge connections.</p></li>
+</ol>
+<p>This property occupies RAM. It is saved alongside the Network3D object if it
+exists, but is not loaded back in with one. Its purpose is to allow the search
+region to be saved and then loaded directly into the nodes channel, so that
+connectivity networks can be computed under new parameters while skipping the
+node search step entirely — the slow step of the process.</p>
+<p>Most properties can be purged from RAM using <strong>Image → Properties</strong>. <strong>The
+xy_scale and z_scale values should also be assigned there.</strong></p>
+</section>
+<section id="structures-required-for-properties-stored-in-csvs">
+<h2><a class="toc-backref" href="#id2" role="doc-backlink">Structures Required for Properties Stored in CSVs</a><a class="headerlink" href="#structures-required-for-properties-stored-in-csvs" title="Link to this heading"></a></h2>
+<p>NetTracer3D organises several properties into CSV spreadsheets with a specific
+data layout, which it expects to find when loading those properties back in.
+Users may wish to supply these properties from elsewhere — both <code class="docutils literal notranslate"><span class="pre">.csv</span></code> and
+<code class="docutils literal notranslate"><span class="pre">.xlsx</span></code> can be loaded — for example to assign nodes to particular centroids or
+identities by hand in Microsoft Excel, or to batch-organise datasets for import
+using a library such as pandas.</p>
+<div class="admonition note">
+<p class="admonition-title">Note</p>
+<p>Node identities are also saved to a <code class="docutils literal notranslate"><span class="pre">.json</span></code>, which takes priority over the
+<code class="docutils literal notranslate"><span class="pre">.csv</span></code> when loading. To load the <code class="docutils literal notranslate"><span class="pre">.csv</span></code> instead, delete the <code class="docutils literal notranslate"><span class="pre">.json</span></code>.</p>
+</div>
+<div class="admonition note">
+<p class="admonition-title">Note</p>
+<p><code class="docutils literal notranslate"><span class="pre">.xlsx</span></code> files have a row limit, so saving as <code class="docutils literal notranslate"><span class="pre">.csv</span></code> is generally
+recommended, especially for large property lists.</p>
+</div>
+<p>The required structures are given below. Be sure to use the correct headers.</p>
+<section id="network">
+<h3><a class="toc-backref" href="#id3" role="doc-backlink">1. network</a><a class="headerlink" href="#network" title="Link to this heading"></a></h3>
+<p>Adjacent nodes in the same row are connected, and the edge to the right of a
+node-pair in that row is the edge found to connect them. If labeled edges were
+not used, this value is simply 0. The table below states that node 18 is paired
+with node 20 via edge 175, and node 16 with node 20 via edge 176.</p>
 <table class="docutils align-default">
 <thead>
 <tr class="row-odd"><th class="head"><p>Node A</p></th>
@@ -168,15 +206,12 @@ Many of NetTracer3D’s methods may need to reference one or more of these prope
 </tr>
 </tbody>
 </table>
-<ul class="simple">
-<li><p>These new columns should be thought of their own rows, as in node 21 is paired to node 22, connected by edge 177.</p></li>
-</ul>
-<ol class="arabic simple" start="2">
-<li><p>node_identities:</p></li>
-</ol>
-<ul class="simple">
-<li><p>Node identities are organized with a simple Node:Identity structure.</p></li>
-</ul>
+<p>Additional column sets should be read as their own rows — node 21 paired to node
+22, connected by edge 177.</p>
+</section>
+<section id="node-identities">
+<h3><a class="toc-backref" href="#id4" role="doc-backlink">2. node_identities</a><a class="headerlink" href="#node-identities" title="Link to this heading"></a></h3>
+<p>Node identities use a simple Node:Identity structure.</p>
 <table class="docutils align-default">
 <thead>
 <tr class="row-odd"><th class="head"><p>NodeID</p></th>
@@ -195,15 +230,15 @@ Many of NetTracer3D’s methods may need to reference one or more of these prope
 </tr>
 </tbody>
 </table>
-<ul class="simple">
-<li><p>Note that node identities typically pair a node to a single identity value, however nodes can also be assigned multiple identities. In such a case, the identity value is assigned as a list of all corresponding identities. This list is stored as a string in memory, for compatibility with other methods, however it is returned to a list in relevant functions using ast.literal_eval().</p></li>
-</ul>
-<ol class="arabic simple" start="3">
-<li><p>node_communities:</p></li>
-</ol>
-<ul class="simple">
-<li><p>This property has the same structure as node_identities.</p></li>
-</ul>
+<p>Node identities typically pair a node to a single identity value, but nodes may
+also be assigned multiple identities. In that case the identity value is a list
+of all corresponding identities, stored as a string in memory for compatibility
+with other methods and converted back to a list in relevant functions using
+<code class="docutils literal notranslate"><span class="pre">ast.literal_eval()</span></code>.</p>
+</section>
+<section id="node-communities">
+<h3><a class="toc-backref" href="#id5" role="doc-backlink">3. node_communities</a><a class="headerlink" href="#node-communities" title="Link to this heading"></a></h3>
+<p>This property shares the structure of node_identities.</p>
 <table class="docutils align-default">
 <thead>
 <tr class="row-odd"><th class="head"><p>NodeID</p></th>
@@ -222,14 +257,12 @@ Many of NetTracer3D’s methods may need to reference one or more of these prope
 </tr>
 </tbody>
 </table>
-<ol class="arabic simple" start="4">
-<li><p>node_centroids:</p></li>
-</ol>
-<ul class="simple">
-<li><p>Node centroids organize using Node:Zval:Yval:Xval.</p></li>
-<li><p>Make sure to use Z, Y, X. This is because of the way numpy organizes dimensions.</p></li>
-<li><p>Coordinates should generally be ints greater than 0.</p></li>
-</ul>
+</section>
+<section id="node-centroids">
+<h3><a class="toc-backref" href="#id6" role="doc-backlink">4. node_centroids</a><a class="headerlink" href="#node-centroids" title="Link to this heading"></a></h3>
+<p>Node centroids are organised as Node:Zval:Yval:Xval. The Z, Y, X order reflects
+the way numpy organises dimensions. Coordinates should generally be integers
+greater than 0.</p>
 <table class="docutils align-default">
 <thead>
 <tr class="row-odd"><th class="head"><p>Node ID</p></th>
@@ -256,12 +289,10 @@ Many of NetTracer3D’s methods may need to reference one or more of these prope
 </tr>
 </tbody>
 </table>
-<ol class="arabic simple" start="4">
-<li><p>edge_centroids:</p></li>
-</ol>
-<ul class="simple">
-<li><p>Edge centroids are ostensibly the same as node centroids, albeit with a different header.</p></li>
-</ul>
+</section>
+<section id="edge-centroids">
+<h3><a class="toc-backref" href="#id7" role="doc-backlink">5. edge_centroids</a><a class="headerlink" href="#edge-centroids" title="Link to this heading"></a></h3>
+<p>Edge centroids are identical to node centroids apart from the header.</p>
 <table class="docutils align-default">
 <thead>
 <tr class="row-odd"><th class="head"><p>Edge ID</p></th>
@@ -289,25 +320,22 @@ Many of NetTracer3D’s methods may need to reference one or more of these prope
 </tbody>
 </table>
 </section>
-<section id="temp-properties">
-<h2>Temp Properties<a class="headerlink" href="#temp-properties" title="Link to this heading"></a></h2>
-<ul>
-<li><dl>
-<dt>The following properties will be maintained for the duration of an active session but are neither saved nor loaded with ‘Network 3D Objects’:</dt><dd><ol class="arabic simple">
-<li><p>Object volumes.</p></li>
-<li><p>Object Radii.</p></li>
+</section>
+<section id="temporary-properties">
+<h2><a class="toc-backref" href="#id8" role="doc-backlink">Temporary Properties</a><a class="headerlink" href="#temporary-properties" title="Link to this heading"></a></h2>
+<p>The following properties are maintained for the duration of an active session but
+are neither saved nor loaded with Network3D objects:</p>
+<ol class="arabic simple">
+<li><p>Object volumes</p></li>
+<li><p>Object radii</p></li>
 </ol>
-<ul class="simple">
-<li><p>While both of these properties exist in the active session, they will be displayed when their corresponding objects are clicked in the ‘Info on Object’ table.</p></li>
-</ul>
-</dd>
-</dl>
-</li>
-</ul>
+<p>While these properties exist in the active session, they are displayed in the
+<strong>Info on Object</strong> table when their corresponding objects are clicked.</p>
 </section>
 <section id="next-steps">
-<h2>Next Steps<a class="headerlink" href="#next-steps" title="Link to this heading"></a></h2>
-<p>Next, you can read the doc <a class="reference internal" href="excel_helper.html"><span class="doc">Using the Spreadsheet Loader</span></a> for help using the excel loader GUI (this is a tool to help load data from excel files).</p>
+<h2><a class="toc-backref" href="#id9" role="doc-backlink">Next Steps</a><a class="headerlink" href="#next-steps" title="Link to this heading"></a></h2>
+<p>Next, read <a class="reference internal" href="excel_helper.html"><span class="doc">Using the Spreadsheet Loader</span></a> for guidance on the excel loader GUI, a tool for
+loading data from excel files.</p>
 </section>
 </section>
 

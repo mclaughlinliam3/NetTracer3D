@@ -81,10 +81,8 @@ While not related to NetTracer3D, if you want to use Cellpose (for which GPU-usa
 This gui is built from the PyQt6 package and therefore may not function on dockers or virtual envs that are unable to support PyQt6 displays.
 
 
-NetTracer3D is freely available for academic and nonprofit use and can obtained from pip (pip install nettracer3d), provided that citation is included in any abstract, paper, or presentation utilizing NetTracer3D.
+NetTracer3D is freely available for academic and nonprofit use and can obtained from pip (pip install nettracer3d), provided that citation is included in any abstract, paper, or presentation utilizing NetTracer3D. Please see 'usage' in the documentation for the license, or download the code from the GitHub/python package page which also includes the license.
 
-If you use NetTracer3D for your research, we just ask you please cite this paper: https://doi.org/10.64898/2026.03.25.714104
+If you use NetTracer3D for your research, we ask you please cite this paper: https://doi.org/10.64898/2026.03.25.714104
 
 NetTracer3D was developed by Liam McLaughlin while working under Dr. Sanjay Jain at Washington University School of Medicine.
-
-

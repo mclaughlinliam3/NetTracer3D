@@ -6,21 +6,21 @@
   <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
 
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Quickstart - Segmenting Data and Generating Connectivity Networks &mdash; NetTracer3D 1.6.0 documentation</title>
+  <title>Quickstart — Segmenting Data and Generating Connectivity Networks &mdash; NetTracer3D 2.0.0 documentation</title>
       <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=b86133f3" />
       <link rel="stylesheet" type="text/css" href="_static/css/theme.css?v=e59714d7" />
 
   
       <script src="_static/jquery.js?v=5d32c60e"></script>
       <script src="_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
-      <script src="_static/documentation_options.js?v=72d88caf"></script>
+      <script src="_static/documentation_options.js?v=51b770b3"></script>
       <script src="_static/doctools.js?v=9bcbadda"></script>
       <script src="_static/sphinx_highlight.js?v=dc90522c"></script>
     <script src="_static/js/theme.js"></script>
     <link rel="author" title="About these documents" href="about.html" />
     <link rel="index" title="Index" href="genindex.html" />
     <link rel="search" title="Search" href="search.html" />
-    <link rel="next" title="Proximity Networks - Ideal for Cellular Data" href="proximity.html" />
+    <link rel="next" title="Proximity Networks — Ideal for Cellular Data" href="proximity.html" />
     <link rel="prev" title="Installation" href="installation.html" /> 
 </head>
 
@@ -46,31 +46,31 @@
               <p class="caption" role="heading"><span class="caption-text">User Guide:</span></p>
 <ul class="current">
 <li class="toctree-l1"><a class="reference internal" href="installation.html">Installation</a></li>
-<li class="toctree-l1 current"><a class="current reference internal" href="#">Quickstart - Segmenting Data and Generating Connectivity Networks</a><ul>
-<li class="toctree-l2"><a class="reference internal" href="#launch-nettracer3d">Launch NetTracer3D</a></li>
+<li class="toctree-l1 current"><a class="current reference internal" href="#">Quickstart — Segmenting Data and Generating Connectivity Networks</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="#launching-nettracer3d">Launching NetTracer3D</a></li>
 <li class="toctree-l2"><a class="reference internal" href="#interface-overview">Interface Overview</a></li>
 <li class="toctree-l2"><a class="reference internal" href="#the-control-panel">The Control Panel</a></li>
 <li class="toctree-l2"><a class="reference internal" href="#loading-an-image">Loading an Image</a></li>
-<li class="toctree-l2"><a class="reference internal" href="#basic-navigation-of-the-image-viewer-window">Basic Navigation of the Image Viewer Window</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#navigating-the-image-viewer-window">Navigating the Image Viewer Window</a></li>
 <li class="toctree-l2"><a class="reference internal" href="#segmenting-data">Segmenting Data</a><ul>
 <li class="toctree-l3"><a class="reference internal" href="#using-the-machine-learning-segmenter">Using the Machine Learning Segmenter</a></li>
 <li class="toctree-l3"><a class="reference internal" href="#denoising-the-segmentation">Denoising the Segmentation</a></li>
 </ul>
 </li>
-<li class="toctree-l2"><a class="reference internal" href="#introduction-to-types-of-networks">Introduction to Types of Networks</a></li>
-<li class="toctree-l2"><a class="reference internal" href="#the-connectivity-network-generating-a-network-using-an-edge-image">The Connectivity Network - Generating a Network Using An Edge Image</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="#types-of-networks">Types of Networks</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#the-connectivity-network">The Connectivity Network</a><ul>
 <li class="toctree-l3"><a class="reference internal" href="#dealing-with-trunks">Dealing With Trunks</a></li>
 </ul>
 </li>
 <li class="toctree-l2"><a class="reference internal" href="#analysis">Analysis</a></li>
 <li class="toctree-l2"><a class="reference internal" href="#exporting-data">Exporting Data</a><ul>
-<li class="toctree-l3"><a class="reference internal" href="#using-network-and-or-image-data-in-python">Using Network (And/Or Image) data in python</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#using-network-and-image-data-in-python">Using Network and Image Data in Python</a></li>
 </ul>
 </li>
 <li class="toctree-l2"><a class="reference internal" href="#next-steps">Next Steps</a></li>
 </ul>
 </li>
-<li class="toctree-l1"><a class="reference internal" href="proximity.html">Proximity Networks - Ideal for Cellular Data</a></li>
+<li class="toctree-l1"><a class="reference internal" href="proximity.html">Proximity Networks — Ideal for Cellular Data</a></li>
 <li class="toctree-l1"><a class="reference internal" href="branches.html">Labeling Branches and Branch Networks</a></li>
 <li class="toctree-l1"><a class="reference internal" href="properties.html">Properties of a Network3D Object</a></li>
 <li class="toctree-l1"><a class="reference internal" href="excel_helper.html">Using the Spreadsheet Loader</a></li>
@@ -78,12 +78,12 @@
 </ul>
 <p class="caption" role="heading"><span class="caption-text">Detailed Function Guide:</span></p>
 <ul>
-<li class="toctree-l1"><a class="reference internal" href="right_clicking.html">Right Clicking - All Options Available by Right Clicking in the GUI</a></li>
+<li class="toctree-l1"><a class="reference internal" href="right_clicking.html">Right Clicking — All Options Available by Right Clicking in the GUI</a></li>
 <li class="toctree-l1"><a class="reference internal" href="file_menu.html">All File Menu Options</a></li>
 <li class="toctree-l1"><a class="reference internal" href="analyze_menu.html">All Analyze Menu Options</a></li>
 <li class="toctree-l1"><a class="reference internal" href="process_menu.html">All Process Menu Options</a></li>
 <li class="toctree-l1"><a class="reference internal" href="image_menu.html">All Image Menu Options</a></li>
-<li class="toctree-l1"><a class="reference internal" href="extensions.html">NetTracer3D Plugin System</a></li>
+<li class="toctree-l1"><a class="reference internal" href="extensions.html">NetTracer3D Plugin System and Instructions on Using Prebundled Plugins</a></li>
 </ul>
 <p class="caption" role="heading"><span class="caption-text">Development:</span></p>
 <ul>
@@ -107,7 +107,7 @@
           <div role="navigation" aria-label="Page navigation">
   <ul class="wy-breadcrumbs">
       <li><a href="index.html" class="icon icon-home" aria-label="Home"></a></li>
-      <li class="breadcrumb-item active">Quickstart - Segmenting Data and Generating Connectivity Networks</li>
+      <li class="breadcrumb-item active">Quickstart — Segmenting Data and Generating Connectivity Networks</li>
       <li class="wy-breadcrumbs-aside">
             <a href="_sources/quickstart.rst.txt" rel="nofollow"> View page source</a>
       </li>
@@ -118,127 +118,157 @@
            <div itemprop="articleBody">
              
   <section id="quickstart-segmenting-data-and-generating-connectivity-networks">
-<span id="quickstart"></span><h1>Quickstart - Segmenting Data and Generating Connectivity Networks<a class="headerlink" href="#quickstart-segmenting-data-and-generating-connectivity-networks" title="Link to this heading"></a></h1>
-<p>This guide will help you get started with NetTracer3D by walking through a simple example.</p>
-<section id="launch-nettracer3d">
-<h2>Launch NetTracer3D<a class="headerlink" href="#launch-nettracer3d" title="Link to this heading"></a></h2>
-<p>After <a class="reference internal" href="installation.html"><span class="doc">Installation</span></a>, you can launch NetTracer3D from the command line:</p>
+<span id="quickstart"></span><h1>Quickstart — Segmenting Data and Generating Connectivity Networks<a class="headerlink" href="#quickstart-segmenting-data-and-generating-connectivity-networks" title="Link to this heading"></a></h1>
+<p>This guide introduces NetTracer3D by walking through a complete worked example,
+from loading an image through segmentation to generating and analysing a
+connectivity network.</p>
+<nav class="contents local" id="on-this-page">
+<p class="topic-title">On this page</p>
+<ul class="simple">
+<li><p><a class="reference internal" href="#launching-nettracer3d" id="id1">Launching NetTracer3D</a></p></li>
+<li><p><a class="reference internal" href="#interface-overview" id="id2">Interface Overview</a></p></li>
+<li><p><a class="reference internal" href="#the-control-panel" id="id3">The Control Panel</a></p></li>
+<li><p><a class="reference internal" href="#loading-an-image" id="id4">Loading an Image</a></p></li>
+<li><p><a class="reference internal" href="#navigating-the-image-viewer-window" id="id5">Navigating the Image Viewer Window</a></p></li>
+<li><p><a class="reference internal" href="#segmenting-data" id="id6">Segmenting Data</a></p>
+<ul>
+<li><p><a class="reference internal" href="#using-the-machine-learning-segmenter" id="id7">Using the Machine Learning Segmenter</a></p></li>
+<li><p><a class="reference internal" href="#denoising-the-segmentation" id="id8">Denoising the Segmentation</a></p></li>
+</ul>
+</li>
+<li><p><a class="reference internal" href="#types-of-networks" id="id9">Types of Networks</a></p></li>
+<li><p><a class="reference internal" href="#the-connectivity-network" id="id10">The Connectivity Network</a></p>
+<ul>
+<li><p><a class="reference internal" href="#dealing-with-trunks" id="id11">Dealing With Trunks</a></p></li>
+</ul>
+</li>
+<li><p><a class="reference internal" href="#analysis" id="id12">Analysis</a></p></li>
+<li><p><a class="reference internal" href="#exporting-data" id="id13">Exporting Data</a></p>
+<ul>
+<li><p><a class="reference internal" href="#using-network-and-image-data-in-python" id="id14">Using Network and Image Data in Python</a></p></li>
+</ul>
+</li>
+<li><p><a class="reference internal" href="#next-steps" id="id15">Next Steps</a></p></li>
+</ul>
+</nav>
+<section id="launching-nettracer3d">
+<h2><a class="toc-backref" href="#id1" role="doc-backlink">Launching NetTracer3D</a><a class="headerlink" href="#launching-nettracer3d" title="Link to this heading"></a></h2>
+<p>After <a class="reference internal" href="installation.html"><span class="doc">Installation</span></a>, launch NetTracer3D from the command line:</p>
 <div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>nettracer3d
 </pre></div>
 </div>
-<p>This will open the main application window.</p>
+<p>This opens the main application window.</p>
 </section>
 <section id="interface-overview">
-<h2>Interface Overview<a class="headerlink" href="#interface-overview" title="Link to this heading"></a></h2>
+<h2><a class="toc-backref" href="#id2" role="doc-backlink">Interface Overview</a><a class="headerlink" href="#interface-overview" title="Link to this heading"></a></h2>
 <a class="reference internal image-reference" href="_images/interface_overview.png"><img alt="NetTracer3D Interface Overview" src="_images/interface_overview.png" style="width: 800px;" />
 </a>
-<p>The NetTracer3D interface consists of:</p>
-<ul>
-<li><p>(Left) Canvas/Main Visualization Area: The image viewer window where the 3D stack is displayed as 2D slices.</p></li>
-<li><p>(Bottom) Control Panel: Widgets for quick interaction with the image viewer window.</p></li>
-<li><p>(Top Right) Tabulated Data: Where data tables from analysis will be placed.</p></li>
-<li><p>(Bottom Right) Network Data: The visualization of your network graph, any subselections, and tables for both.</p></li>
-<li><dl>
-<dt>(Top) Menu Bar: Options to load/export data and run analysis.</dt><dd><ul class="simple">
-<li><p>There are a few buttons in the top right to note:</p></li>
+<p>The interface is divided into five regions:</p>
+<ul class="simple">
+<li><p><strong>Canvas / Main Visualization Area</strong> (left): the image viewer window, where the
+3D stack is displayed as 2D slices.</p></li>
+<li><p><strong>Control Panel</strong> (bottom): widgets for interacting with the image viewer.</p></li>
+<li><p><strong>Tabulated Data</strong> (top right): where data tables from analysis are placed.</p></li>
+<li><p><strong>Network Data</strong> (bottom right): the network graph visualization, any
+subselections, and tables for both.</p></li>
+<li><p><strong>Menu Bar</strong> (top): options to load/export data and run analysis.</p></li>
 </ul>
+<p>Four elements of the top right of the menu bar are worth noting:</p>
 <ol class="arabic simple">
-<li><p>The button that says ‘⤴’ will eject the main canvas window, and the control panel, into a seperate window, in case the user wants them to be larger without the tables getting in the way.</p></li>
-<li><p>The button with the camera will save a 2D tiff of whatever is being displayed in the canvas.</p></li>
-<li><p>The button with the file will prompt the user to open a .xlsx/.CSV spreadsheet, to be loaded into the top right data tables. Some tables can be used to interact with the nodes, so being able to reload them may be desirable.</p></li>
-<li><p>The menu bar also displays some dynamic information. Namely, your active session on the left if you are working out of a specific directory. On the right you can find information about the xy and z resolutions, the current slice, and if the scalebar is toggled on, the current mouse coordinates.</p></li>
+<li><p>The <strong>⤴</strong> button ejects the main canvas and control panel into a separate
+window, allowing them to be enlarged without the tables getting in the way.</p></li>
+<li><p>The <strong>camera</strong> button saves a 2D TIFF of whatever is currently displayed in
+the canvas.</p></li>
+<li><p>The <strong>file</strong> button prompts for a <code class="docutils literal notranslate"><span class="pre">.xlsx</span></code>/<code class="docutils literal notranslate"><span class="pre">.csv</span></code> spreadsheet to load into
+the top right data tables. Since some tables can be used to interact with the
+nodes, reloading them is often useful.</p></li>
+<li><p>The menu bar also displays dynamic information: your active session on the
+left if you are working out of a specific directory, and on the right the xy
+and z resolutions, the current slice, and — when the scalebar is toggled on —
+the current mouse coordinates.</p></li>
 </ol>
-</dd>
-</dl>
-</li>
-</ul>
-<p>In addition, since it will be usually run out of the command window, be sure to check your command window for printed updates about what NetTracer3D is actually doing. This does not apply to the compiled version.</p>
+<div class="admonition note">
+<p class="admonition-title">Note</p>
+<p>When running from the command line, check the command window for printed
+updates on what NetTracer3D is doing. This does not apply to the compiled
+version.</p>
+</div>
 </section>
 <section id="the-control-panel">
-<h2>The Control Panel<a class="headerlink" href="#the-control-panel" title="Link to this heading"></a></h2>
+<h2><a class="toc-backref" href="#id3" role="doc-backlink">The Control Panel</a><a class="headerlink" href="#the-control-panel" title="Link to this heading"></a></h2>
 <a class="reference internal image-reference" href="_images/control_panel.png"><img alt="Control Panel Overview" src="_images/control_panel.png" style="width: 800px;" />
 </a>
-<p>Before we start with an example, we’ll go over the control panel on the bottom. It includes the following widgets:</p>
+<p>The control panel along the bottom contains the following widgets:</p>
+<ol class="arabic">
+<li><p><strong>Active Image</strong></p>
+<p>Click the carat to select which image is <em>active</em>. Most processing and
+analysis functions run on the active image by default, and clicking or drawing
+in the image viewer window references the active image.</p>
+</li>
+<li><p><strong>Scale bar</strong></p>
+<p>Click to add a scale bar to the canvas, scaled by your xy resolution to
+represent true distance. Click again to add an unscaled tiled grid
+representing voxel positions; again to remove the scalebar while retaining the
+grid; and once more to remove the grid and return to the default view.</p>
+</li>
+<li><p><strong>Home</strong></p>
+<p>Resets the view to default, useful if you become stuck in an unusual zoom
+state. Shortcut: <kbd class="kbd docutils literal notranslate">Shift</kbd> + right click while in zoom mode.</p>
+</li>
+<li><p><strong>Zoom</strong> (magnifying glass — shortcut <kbd class="kbd docutils literal notranslate">Z</kbd>)</p>
+<p>The mouse wheel zooms in any mode, but a dedicated widget is provided
+primarily for laptops. Press <kbd class="kbd docutils literal notranslate">Z</kbd> or click the magnifying glass to enter
+zoom mode: left click zooms in, right click zooms out, and dragging zooms to a
+specific area.</p>
+</li>
+<li><p><strong>Pan</strong> (hand — shortcut middle mouse)</p>
+<p>Press the middle mouse button or click the hand widget to enter pan mode, then
+drag along the image viewer window to move around the image.</p>
+</li>
+<li><p><strong>Highlight overlay display</strong> (eye — shortcut <kbd class="kbd docutils literal notranslate">X</kbd>)</p>
+<p>Press <kbd class="kbd docutils literal notranslate">X</kbd> or click the eye widget to toggle visibility of the highlight
+overlay. Clicking objects in the nodes or edges channels (and certain other
+functions) generates a yellow highlight denoting the current selection.</p>
+</li>
+<li><p><strong>Image markup</strong> (pen)</p>
+<p>Click the pen widget to enter markup mode. Clicking the active image writes
+values of 255 directly into the image data at the clicked location. Additional
+functionality in pen mode:</p>
 <ol class="arabic simple">
-<li><dl class="simple">
-<dt>The Active Image widget</dt><dd><ul class="simple">
-<li><p>Clicking on the carrot will allow you to select which image is ‘Active’. Many processing/analysis functions will by default run on the image that is ‘Active’. Furthermore, when clicking or drawing in the Image Viewer Window, the ‘Active’ image is the one that will be referenced.</p></li>
-</ul>
-</dd>
-</dl>
-</li>
-<li><p>The scale bar widget: Click this to add a scale bar to the canvas display. This is scaled based on your xy resolution to represent true distance. Click again to add a tiled grid that is not scaled so it represents voxel positions. Click again to remove the scalebar but retain the grid. Click once more to remove the grid and go back to default.</p></li>
-<li><p>The home widget: simply resets the view to default, in case you get stuck in a weird zoom state. (Shortcut - ‘Shift + Right Click’ while in zoom mode.)</p></li>
-<li><dl class="simple">
-<dt>The zoom widget (magnifying glass - Shortcut Z)</dt><dd><ul class="simple">
-<li><p>In any of the modes you can zoom with the mouse wheel, but there’s also a dedicated zoom widget for laptops mainly.</p></li>
-<li><p>Press z or click the magnifying glass widget to enter the zoom mode. Clicking the Image Viewer Window in zoom mode will cause you to zoom in. Right clicking will cause you to zoom out. Dragging in zoom mode will zoom in on a specific area.</p></li>
-</ul>
-</dd>
-</dl>
-</li>
-<li><dl class="simple">
-<dt>The pan widget (hand - Shortcut middle mouse)</dt><dd><ul class="simple">
-<li><p>Press middle mouse button or click the hand widget to enter pan mode. Use the mouse to drag along the Image Viewer Window while in pan mode to move around the image.</p></li>
-</ul>
-</dd>
-</dl>
-</li>
-<li><dl class="simple">
-<dt>The highlight overlay display widget (eye - Shortcut X)</dt><dd><ul class="simple">
-<li><p>Press x or click the eye widget to toggle whether the highlight overlay is visible. Clicking on objects in the node/edges channels (and certain other functions) will generate a yellow highlight atop the image viewer window that denotes what is selected.</p></li>
-</ul>
-</dd>
-</dl>
-</li>
-<li><dl class="simple">
-<dt>The image markup widget (pen)</dt><dd><ul class="simple">
-<li><dl class="simple">
-<dt>Click the pen widget to enter the image markup mode. While in this mode, clicking on the active image will write values of 255 directly into the image data where you are clicking.</dt><dd><ul>
-<li><dl class="simple">
-<dt>While in pen mode, the following additional functionalities are offered:</dt><dd><ol class="arabic simple">
-<li><p>Left click will erase any positive data and write 0 directly into the image.</p></li>
-<li><p>Ctrl + Mouse Wheel will enlarge the draw/erase area.</p></li>
-<li><p>Press F to swap to a fill can. Clicking with the fill can will write the val 255 into the entirety of any background (0 value) areas in your image that are connected to the clicked point. While in fill can mode only, ctrl+z will undo the most recent action.</p></li>
-<li><p>Press D in either pen or fill can mode to enable the 3D version of these tools. The 3D pen will draw along several image stacks at once. The number of stacks above you are drawing on is indicated by the number above the 3D pen (i.e. a value of 5 will write into the current stack, 2 above, and 2 below). Use the mousewheel to enlarge or decrease this number. The 3D fill can will fill the entirety of a 3D void (essentially fills any continous holes in 3D). Like the 2D fill can, use ctrl+z while still in the fill can mode to undo the last fill-can action.</p></li>
+<li><p>Left click erases positive data, writing 0 directly into the image.</p></li>
+<li><p><kbd class="kbd docutils literal notranslate">Ctrl</kbd> + mouse wheel enlarges the draw/erase area.</p></li>
+<li><p>Press <kbd class="kbd docutils literal notranslate">F</kbd> to swap to the fill can. Clicking with the fill can writes
+255 into the entirety of any background (0-value) region connected to the
+clicked point. In fill can mode only, <kbd class="kbd docutils literal notranslate">Ctrl</kbd> + <kbd class="kbd docutils literal notranslate">Z</kbd> undoes the
+most recent action.</p></li>
+<li><p>Press <kbd class="kbd docutils literal notranslate">D</kbd> in either pen or fill can mode to enable the 3D version of
+these tools. The 3D pen draws across several slices at once; the number
+displayed above the 3D pen indicates the span (a value of 5 writes into the
+current slice, two above, and two below), adjustable with the mouse wheel.
+The 3D fill can fills the entirety of a 3D void — essentially any
+continuous hole in 3D. As with the 2D fill can, <kbd class="kbd docutils literal notranslate">Ctrl</kbd> + <kbd class="kbd docutils literal notranslate">Z</kbd>
+undoes the last action while still in fill can mode.</p></li>
 </ol>
-</dd>
-</dl>
 </li>
-</ul>
-</dd>
-</dl>
+<li><p><strong>Threshold / segment</strong> (pencil)</p>
+<p>Opens the menu for intensity thresholding or machine-learning segmentation.
+See the Threshold/Segment guide for details.</p>
 </li>
-</ul>
-</dd>
-</dl>
+<li><p><strong>Channel widgets</strong> (Nodes, Edges, Overlay1, Overlay2)</p>
+<p>Toggle channel visibility. The <strong>x</strong> widget beside each channel button prompts
+to delete that channel.</p>
 </li>
-<li><dl class="simple">
-<dt>The threshold/segment widget (pencil)</dt><dd><ul class="simple">
-<li><p>Click the pencil widget to open the menu to either Threshold or use Machine-Learning segmentation. Please see the Threshold/Segment guide for more information.</p></li>
-</ul>
-</dd>
-</dl>
-</li>
-<li><dl class="simple">
-<dt>The channel widgets (Nodes, Edges, Overlay1, Overlay2)</dt><dd><ul class="simple">
-<li><p>Click the channel widgets to toggle whether the channel is visible. The ‘x’ widget located next to the channel buttons will prompt if you want to delete that channel or not.</p></li>
-</ul>
-</dd>
-</dl>
-</li>
-<li><dl class="simple">
-<dt>The scrollbar.</dt><dd><ul class="simple">
-<li><p>The knob at the center of the scroll bar can be moved with the mouse to scroll through the 3D image stack. Use the left or right arrows on either side to scroll one frame at a time. Shift + mouse wheel can also be used to scroll through the stack. Ctrl + Shift + Mouse Wheel will result in a faster scroll.</p></li>
-</ul>
-</dd>
-</dl>
+<li><p><strong>Scrollbar</strong></p>
+<p>Drag the central knob to scroll through the 3D image stack, or use the arrows
+on either side to advance one frame at a time. <kbd class="kbd docutils literal notranslate">Shift</kbd> + mouse wheel also
+scrolls the stack; <kbd class="kbd docutils literal notranslate">Ctrl</kbd> + <kbd class="kbd docutils literal notranslate">Shift</kbd> + mouse wheel scrolls faster.</p>
 </li>
 </ol>
 </section>
 <section id="loading-an-image">
-<h2>Loading an Image<a class="headerlink" href="#loading-an-image" title="Link to this heading"></a></h2>
-<p>To load an image, select File -&gt; Load. (Note you can also drag images into the active image to load from the file explorer). You will see the following options from the load menu:</p>
+<h2><a class="toc-backref" href="#id4" role="doc-backlink">Loading an Image</a><a class="headerlink" href="#loading-an-image" title="Link to this heading"></a></h2>
+<p>Select <strong>File → Load</strong>, or drag images into the active image directly from the
+file explorer. The load menu offers:</p>
 <ol class="arabic simple">
 <li><p>Load Network3D Object</p></li>
 <li><p>Load Nodes</p></li>
@@ -249,261 +279,378 @@
 <li><p>Load from excel helper</p></li>
 <li><p>Load Misc Properties</p></li>
 </ol>
-<p>Options 2-5 correspond the the four image viewing channels that are supported in NetTracer3D.
-Whenever you are beginning with a new image that you would like to segment, load it into the nodes channel with ‘Load Nodes’.
-This will prompt you to browse for an image in the .tif/.tiff (for microscopic data), .nii (if nibabel is installed in your package), or .jpg/.jpeg/.png file formats.</p>
-<p><strong>Note that if your image has real value scaling (ie microns per pixel), those will not automatically populate and should be assigned in ‘Image -&gt; Properties’ before any processing occurs.</strong></p>
-<p>We will begin by loading this cartoon-rendition of a slime mold as an example:</p>
+<p>Options 2–5 correspond to the four image viewing channels supported by
+NetTracer3D. When beginning with a new image to segment, load it into the nodes
+channel with <strong>Load Nodes</strong>. This prompts you to browse for an image in <code class="docutils literal notranslate"><span class="pre">.tif</span></code>
+/ <code class="docutils literal notranslate"><span class="pre">.tiff</span></code> (for microscopic data), <code class="docutils literal notranslate"><span class="pre">.nii</span></code> (if nibabel is installed), or
+<code class="docutils literal notranslate"><span class="pre">.jpg</span></code> / <code class="docutils literal notranslate"><span class="pre">.jpeg</span></code> / <code class="docutils literal notranslate"><span class="pre">.png</span></code> format.</p>
+<div class="admonition important">
+<p class="admonition-title">Important</p>
+<p>If your image has real value scaling (i.e. microns per pixel), those values
+will not populate automatically and should be assigned in
+<strong>Image → Properties</strong> before any processing occurs.</p>
+</div>
+<p>We begin by loading a cartoon rendition of a slime mold as our example:</p>
 <a class="reference internal image-reference" href="_images/slime.png"><img alt="Slime Mold Render" src="_images/slime.png" style="width: 500px;" />
 </a>
-<p>We will use File -&gt; load nodes. Since we are loading an RBG image in this case, we say ‘yes’ to the prompt asking if this is a color image so it can be converted to grayscale.</p>
+<p>Use <strong>File → Load Nodes</strong>. Because this is an RGB image, answer <em>yes</em> to the
+prompt asking whether it is a color image, so that it is converted to grayscale.</p>
 <a class="reference internal image-reference" href="_images/slime_gui.png"><img alt="Slime Mold in GUI" src="_images/slime_gui.png" style="width: 800px;" />
 </a>
-<p>Note the Image Viewer Window shows nodes-images through a red filter by default, although this can be changed.</p>
+<p>Note that the image viewer window displays nodes images through a red filter by
+default, although this can be changed.</p>
 </section>
-<section id="basic-navigation-of-the-image-viewer-window">
-<h2>Basic Navigation of the Image Viewer Window<a class="headerlink" href="#basic-navigation-of-the-image-viewer-window" title="Link to this heading"></a></h2>
-<p>The Image Viewer Window is able to display the four channels in addition to a highlight overlay:
-These channels include:</p>
+<section id="navigating-the-image-viewer-window">
+<h2><a class="toc-backref" href="#id5" role="doc-backlink">Navigating the Image Viewer Window</a><a class="headerlink" href="#navigating-the-image-viewer-window" title="Link to this heading"></a></h2>
+<p>The image viewer window displays four channels plus a highlight overlay:</p>
 <ul class="simple">
-<li><p>Nodes: Contain the image that represents the objects you would like to group together in a network. Loads images in grayscale.</p></li>
-<li><p>Edges: Contain the image that may be used as a reference when grouping the objects in the node image together. Furthermore, the branch-labeling algorithms will be executed on the edge image. Loads images in grayscale.</p></li>
-<li><p>Overlay1: Displays an optional overlay. (Supports color images)</p></li>
-<li><p>Overlay2: Displays a second optional overlay. (Supports color images)</p></li>
+<li><p><strong>Nodes</strong>: the image representing the objects to be grouped into a network.
+Loads images in grayscale.</p></li>
+<li><p><strong>Edges</strong>: the image used as a reference when grouping node objects together.
+The branch-labeling algorithms are also executed on the edge image. Loads
+images in grayscale.</p></li>
+<li><p><strong>Overlay1</strong>: an optional overlay (supports color images).</p></li>
+<li><p><strong>Overlay2</strong>: a second optional overlay (supports color images).</p></li>
 </ul>
-<p>The highlight overlay is a special image that is used to convey selected objects to the user.</p>
-<p>If you are having trouble seeing your image data, use ‘Image -&gt; Adjust Brightness/Contrast’ to modify the brightness of each channel.</p>
-<p>Only the images in the Nodes and Edges channels may be interacted with in the Image Viewer Window.
-This will additionally only occur for Nodes when ‘Nodes’ is selected as the active image, or similarly for Edges when ‘Edges’ is selective.
-In such cases, clicking on an object in the window will select all elements in the corresponding image that contain that numerical value (for example, clicking on a pixel/voxel of grayscale val 1 will select all pixel/voxels containing the value 1).</p>
+<p>The highlight overlay is a special image used to convey selected objects to the
+user.</p>
+<p>If you have trouble seeing your image data, use <strong>Image → Adjust
+Brightness/Contrast</strong> to modify the brightness of each channel.</p>
+<p>Only the Nodes and Edges channels may be interacted with in the image viewer
+window, and only while that channel is set as the active image. Clicking an
+object selects all elements in the corresponding image sharing that numerical
+value — for example, clicking a voxel of grayscale value 1 selects every voxel
+containing the value 1.</p>
 <ul class="simple">
-<li><p>This selection will be denoted in the highlight overlay, and information about it will be presented in the tabulated data widget in the top right.</p></li>
-<li><p>Selected nodes/edges will also be bolded and highlighted in the network table widget on the bottom right.</p></li>
-<li><p>Selected objects may furthermore have specific functions run on them specifically. Many of these options can be seen by right clicking in the Image Viewer Window. For more information, see right click options.</p></li>
-<li><p>Clicking the background (val 0) will deselect all objects.</p></li>
-<li><p>To select additional objects, hold ctrl + click to select a new object while maintaining the previous selection.</p></li>
-<li><p>To select multiple objects at once, click and drag in the image viewer window to create a selection (also supports ctrl + click).</p></li>
-<li><p>To zoom in, select the magnifying glass (or press z) and left click. Right clicking will zoom back out. Click and drag with the magnifying glass to zoom in on a specific region.</p></li>
-<li><p>To pan, select the hand (or middle mouse) and drag around in the image viewer window.</p></li>
+<li><p>The selection is shown in the highlight overlay, with information presented in
+the tabulated data widget in the top right.</p></li>
+<li><p>Selected nodes and edges are bolded and highlighted in the network table widget
+in the bottom right.</p></li>
+<li><p>Specific functions may be run on selected objects; many are available by right
+clicking in the image viewer window. See <a class="reference internal" href="right_clicking.html"><span class="doc">Right Clicking — All Options Available by Right Clicking in the GUI</span></a> for details.</p></li>
+<li><p>Clicking the background (value 0) deselects all objects.</p></li>
+<li><p><kbd class="kbd docutils literal notranslate">Ctrl</kbd> + click selects an additional object while maintaining the previous
+selection.</p></li>
+<li><p>Click and drag to select multiple objects at once (also supports <kbd class="kbd docutils literal notranslate">Ctrl</kbd> +
+click).</p></li>
+<li><p>To zoom, select the magnifying glass (or press <kbd class="kbd docutils literal notranslate">Z</kbd>) and left click; right
+click zooms back out, and click-drag zooms to a specific region.</p></li>
+<li><p>To pan, select the hand (or middle mouse) and drag within the window.</p></li>
 </ul>
 </section>
 <section id="segmenting-data">
-<span id="segmenting"></span><h2>Segmenting Data<a class="headerlink" href="#segmenting-data" title="Link to this heading"></a></h2>
-<p>Most of the algorithms in NetTracer3D expect either binary images (where all values are 0 or positive), or labeled images, which are grayscale images that have grouped objects into distinct labels (ie 1, 2, 3, etc).
-Presegmented data can be used directly, however our data is not yet segmented, so we will use NetTracer3D’s segmentation options to process it.</p>
-<p>To begin a segmentation, click on the pencil widget. You will be prompted with the following window:</p>
+<span id="segmenting"></span><h2><a class="toc-backref" href="#id6" role="doc-backlink">Segmenting Data</a><a class="headerlink" href="#segmenting-data" title="Link to this heading"></a></h2>
+<p>Most algorithms in NetTracer3D expect either binary images (all values 0 or
+positive) or labeled images — grayscale images in which objects have been grouped
+into distinct labels (1, 2, 3, and so on). Presegmented data can be used
+directly; our data is not yet segmented, so we will use NetTracer3D’s
+segmentation options to process it.</p>
+<p>Click the pencil widget to begin. The following window appears:</p>
 <a class="reference internal image-reference" href="_images/segthresh_menu.png"><img alt="Segmentation Menu" src="_images/segthresh_menu.png" style="width: 200px;" />
 </a>
-<p>Execution mode can be used to select to segment by either direct intensity thresholding (for when SNR is already good or to sort out specific labels), or volume based thresholding (for already segmented images - to sort out noise or select a specific range of objects).</p>
-<ul class="simple">
-<li><p>Press select to open a corresponding threshold window.</p></li>
-</ul>
-<p>Machine Learning can be used to segment by feature morphology in the image. This is a more general use case that can be used on most types of images to create a segmentation. In this case, we will select this option.</p>
+<p><strong>Execution mode</strong> selects between direct intensity thresholding (for images with
+good SNR, or to sort out specific labels) and volume-based thresholding (for
+already segmented images, to remove noise or select a specific size range of
+objects). Press <strong>Select</strong> to open the corresponding threshold window.</p>
+<p><strong>Machine Learning</strong> segments by feature morphology and is the more general
+option, applicable to most image types. We will use it here.</p>
 <section id="using-the-machine-learning-segmenter">
-<h3>Using the Machine Learning Segmenter<a class="headerlink" href="#using-the-machine-learning-segmenter" title="Link to this heading"></a></h3>
-<p>Machine Learning segmentation can be executed on any image in the nodes channel. It will require use of Overlay1, Overlay2, and the highlight overlay. Because of this, it is recommended to segment images in seperate sessions as processing binary data.</p>
+<h3><a class="toc-backref" href="#id7" role="doc-backlink">Using the Machine Learning Segmenter</a><a class="headerlink" href="#using-the-machine-learning-segmenter" title="Link to this heading"></a></h3>
+<p>Machine learning segmentation can be executed on any image in the nodes channel.
+It requires the use of Overlay1, Overlay2, and the highlight overlay, so
+segmenting images in a session separate from binary data processing is
+recommended.</p>
 <a class="reference internal image-reference" href="_images/ml_seg.png"><img alt="Machine Learning Menu" src="_images/ml_seg.png" style="width: 800px;" />
 </a>
-<p>Referencing the above image, the ML segmentation uses the following options:</p>
+<p>Referencing the image above, the segmenter uses the following channels and
+options:</p>
 <ul class="simple">
-<li><p>Nodes: Contains the data of the image we are segmenting.</p></li>
-<li><p>Overlay1: Contains the training data.</p></li>
-<li><p>Overlay2: Will contain the final segmentation once it’s been generated.</p></li>
-<li><p>Highlight Overlay: Will display segmentation previews.</p></li>
-<li><p>Brush Widget (Drawing Tools): Click to enter the brush mode. This works similar to the pen mode described above, but without 3D/Fill Can features. Click with the brush in the Image Viewer Window to mark what objects we want to keep (Foreground) and what objects we want to exclude (Background). This training data will be written directly into Overlay1 (with vals of 1 representing the foreground and 2 the background). Right click can be used to erase these markings. Use ctrl + mouse wheel to enlarge/shrink the brush.</p></li>
-<li><p>Foreground (Drawing Tool): Select to have the brush mark foreground (denoted by green markings). Press a to toggle with background.</p></li>
-<li><p>Background (Drawing Tools): Select to have the brush mark background (denoted by red markings). Press a to toggle with foreground.</p></li>
-<li><p>GPU: If you have a working CUDA toolkit and have installed NetTracer3D with the cupy package option, the system will use the GPU to segment instead. (This will speed up ‘Segment All’ by quite a bit although the model training and preview segment will be slightly slower due to numpy to cupy bottlenecking. Regardless, segment all is definitely the slow point here so I would highly recommend using this if you have a CUDA toolkit working. For ref it was taking me around 10 mins to segment a 6.5 GB image with this on my 5070Ti).</p></li>
-<li><p>Train by 2D Slice Patterns (Processing Options): When selected, the model will be trained using 2D feature maps.</p></li>
-<li><p>Train by 3D Patterns (Processing Options): When selected, the model will be trained using 3D feature maps.</p></li>
-<li><p>Train Quick Model (Training): Click to train the model to segment your image based on the regions selected in your training data.</p></li>
-<li><p>Train More Detailed Model (Training): Does the same as above but has additional feature training.</p></li>
-<li><p>Preview Segment (Segmentation): When clicked, the model will begin segmenting your image as a preview, without interrupting the current training session. Use this to assess the current state of the model to decide if it needs additional training. This preview will be displayed in the highlight overlay, with foreground denoted by yellow and background denoted by blue.</p></li>
-<li><p>Pause/Resume (Segmentation): Pauses/Resumes the preview segmenter.</p></li>
-<li><p>Segment All (Segmentation): When clicked (after a warning), the training session will pause to segment the entire image with the current model. It is recommended that you save your images before doing this (File -&gt; Save Network 3D Object As), in case the segmentation needs to be interrupted (It can only be paused by terminating the program). When finished, the binary segmentation will be placed in Overlay 2.</p></li>
-<li><p>Save Model (Saving/Loading): Saves purely the extracted training data from the current model as a .npz file.</p></li>
-<li><p>Load Model (Saving/Loading): Loads the saved training data in the .npz file into a new model. This new model can receive additional trainings from seperate images while maintaining its previous data. Note that loaded quick models can only be layered onto new quick models, while loaded detailed models can only be layered onto new detailed models. Attempting to combine seperate model types will ignore the previous model data.</p></li>
-<li><p>Load Image… (Saving/Loading): Loads a new image into the ‘nodes’ channel for segmentation. Note this load option supports RGB images (For example, H&amp;E stain), which normally is not allowed in the ‘nodes’ channel.</p></li>
+<li><p><strong>Nodes</strong>: contains the data of the image being segmented.</p></li>
+<li><p><strong>Overlay1</strong>: contains the training data.</p></li>
+<li><p><strong>Overlay2</strong>: receives the final segmentation once generated.</p></li>
+<li><p><strong>Highlight Overlay</strong>: displays segmentation previews.</p></li>
+<li><p><strong>Brush</strong> (Drawing Tools): enters brush mode, which works like the pen mode
+described above but without the 3D and fill can features. Click in the image
+viewer window to mark objects to keep (foreground) and objects to exclude
+(background). This training data is written directly into Overlay1, with values
+of 1 representing foreground and 2 background. Right click erases markings, and
+<kbd class="kbd docutils literal notranslate">Ctrl</kbd> + mouse wheel changes the brush size.</p></li>
+<li><p><strong>Foreground</strong> (Drawing Tools): sets the brush to mark foreground, denoted by
+green markings. Press <kbd class="kbd docutils literal notranslate">A</kbd> to toggle with background.</p></li>
+<li><p><strong>Background</strong> (Drawing Tools): sets the brush to mark background, denoted by
+red markings. Press <kbd class="kbd docutils literal notranslate">A</kbd> to toggle with foreground.</p></li>
+<li><p><strong>GPU</strong>: with a working CUDA toolkit and NetTracer3D installed with the cupy
+option, segmentation runs on the GPU. This speeds up <strong>Segment All</strong>
+considerably, though model training and preview segmentation are slightly
+slower due to numpy-to-cupy bottlenecking. Since <strong>Segment All</strong> is the
+limiting step, GPU use is strongly recommended where available — for
+reference, a 6.5 GB image took roughly 10 minutes on a 5070 Ti.</p></li>
+<li><p><strong>Train by 2D Slice Patterns</strong> (Processing Options): trains the model using 2D
+feature maps.</p></li>
+<li><p><strong>Train by 3D Patterns</strong> (Processing Options): trains the model using 3D
+feature maps.</p></li>
+<li><p><strong>Train Quick Model</strong> (Training): trains the model to segment your image based
+on the regions marked in your training data.</p></li>
+<li><p><strong>Train More Detailed Model</strong> (Training): as above, with additional feature
+training.</p></li>
+<li><p><strong>Preview Segment</strong> (Segmentation): segments the image as a preview without
+interrupting the current training session, allowing you to assess whether the
+model needs further training. The preview appears in the highlight overlay,
+with foreground in yellow and background in blue.</p></li>
+<li><p><strong>Pause/Resume</strong> (Segmentation): pauses or resumes the preview segmenter.</p></li>
+<li><p><strong>Segment All</strong> (Segmentation): after a warning, pauses the training session
+and segments the entire image with the current model, placing the binary result
+in Overlay2. Save your images first (<strong>File → Save Network 3D Object As</strong>), as
+the process can only be interrupted by terminating the program.</p></li>
+<li><p><strong>Save Model</strong> (Saving/Loading): saves only the extracted training data from
+the current model, as an <code class="docutils literal notranslate"><span class="pre">.npz</span></code> file.</p></li>
+<li><p><strong>Load Model</strong> (Saving/Loading): loads saved training data into a new model,
+which can then receive additional training from separate images while retaining
+its previous data. Loaded quick models can only be layered onto new quick
+models, and loaded detailed models onto new detailed models; combining model
+types causes the previous model data to be ignored.</p></li>
+<li><p><strong>Load Image…</strong> (Saving/Loading): loads a new image into the nodes channel
+for segmentation. This load option supports RGB images (H&amp;E stains, for
+example), which are not normally permitted in the nodes channel.</p></li>
 </ul>
 <a class="reference internal image-reference" href="_images/seg_example.png"><img alt="Machine Learning Segmentation Example" src="_images/seg_example.png" style="width: 800px;" />
 </a>
-<p><em>Above: Example ML-Segmentation in process. I have marked foreground with green markings and background with red markings. The yellow regions have been selected by the current model as foreground, and the blue as background. Longer training sessions will produce more specific segmentation results.</em></p>
-<p>Saving results:</p>
-<ul class="simple">
-<li><p>To save the resulting segmentation, use ‘File -&gt; Save Overlay2 As’. To save the training data (to reuse or retrain the model later), use ‘File -&gt; Save Overlay1 As’.</p></li>
-<li><p>‘File -&gt; Save Network3D Object As’ can be used to save all images together.</p></li>
-</ul>
-<p>We will save the above segmentation to be used as nodes in our network.</p>
+<p><em>Above: an ML segmentation in progress. Foreground is marked in green and
+background in red. Yellow regions have been selected by the current model as
+foreground and blue as background. Longer training sessions produce more specific
+segmentation results.</em></p>
+<p>To save the resulting segmentation, use <strong>File → Save Overlay2 As</strong>. To save the
+training data for later reuse or retraining, use <strong>File → Save Overlay1 As</strong>.
+<strong>File → Save Network3D Object As</strong> saves all images together.</p>
+<p>We will save the segmentation above for use as the nodes in our network.</p>
 </section>
 <section id="denoising-the-segmentation">
-<h3>Denoising the Segmentation<a class="headerlink" href="#denoising-the-segmentation" title="Link to this heading"></a></h3>
-<p>Although we have succesfully segmented our image, there are examples of noise that have slipped through. Luckily, NetTracer3D offers several options to clean up binary segmentations.
-In this instance, we will be using volume thresholding to clean up noise.</p>
+<h3><a class="toc-backref" href="#id8" role="doc-backlink">Denoising the Segmentation</a><a class="headerlink" href="#denoising-the-segmentation" title="Link to this heading"></a></h3>
+<p>Some noise has slipped through the segmentation. NetTracer3D offers several
+options for cleaning up binary segmentations; here we use volume thresholding.</p>
 <ol class="arabic simple">
-<li><p>First, I load a new instance of NetTracer3D and load my new binary slime mold segmentation into the nodes channel.</p></li>
-<li><p>Next, I click the pencil widget, change the ‘Execution Mode’ to ‘Using Volumes’, and choose ‘Select’ to open the Volume Threshold Window.</p></li>
-<li><p>When prompted, I allow the system to ‘label’ my nodes (Assign each binary object a distinct numerical value).</p></li>
+<li><p>Open a new instance of NetTracer3D and load the binary slime mold segmentation
+into the nodes channel.</p></li>
+<li><p>Click the pencil widget, change <strong>Execution Mode</strong> to <strong>Using Volumes</strong>, and
+choose <strong>Select</strong> to open the volume threshold window.</p></li>
+<li><p>When prompted, allow the system to label the nodes, assigning each binary
+object a distinct numerical value.</p></li>
 </ol>
 <a class="reference internal image-reference" href="_images/volthresh.png"><img alt="Volume Segmentation Example" src="_images/volthresh.png" style="width: 800px;" />
 </a>
-<p><a href="#id1"><span class="problematic" id="id2">*</span></a>Above: De-noising with the Volume Thresholder. I use the red bar to exclude the small objects. On the left, the objects I stand to keep are shown in yellow.</p>
-<p>Segmenting with the Volume Thresholder is simple. The displayed histogram represents the distribution of volumes of objects in my image. The red bar can be dragged to exclude objects with low volumes while the blue bar can be dragged to exclude objects with high volumes.</p>
+<p><em>Above: de-noising with the volume thresholder. The red bar excludes the small
+objects; on the left, the objects to be kept are shown in yellow.</em></p>
+<p>The displayed histogram represents the distribution of object volumes in the
+image. Drag the red bar to exclude low-volume objects and the blue bar to exclude
+high-volume ones.</p>
 <ul class="simple">
-<li><p>Alternatively, I can manually enter the minimum/maximum values to retain.</p></li>
-<li><p>Pressing Preview will have the Highlight Overlay show which objects we are including in yellow.</p></li>
-<li><p>Pressing apply threshold will segment the image as shown in the preview.</p></li>
+<li><p>Minimum and maximum values to retain may also be entered manually.</p></li>
+<li><p><strong>Preview</strong> shows the included objects in yellow in the highlight overlay.</p></li>
+<li><p><strong>Apply Threshold</strong> segments the image as shown in the preview.</p></li>
 </ul>
-<p>I apply this threshold and finally use ‘Process -&gt; Image -&gt; Fill Holes’ to fill any holes in my binary image, resulting in the following finished segmentation:</p>
+<p>Applying this threshold and then using <strong>Process → Image → Fill Holes</strong> to close
+any remaining holes in the binary image yields the finished segmentation:</p>
 <a class="reference internal image-reference" href="_images/final_seg.png"><img alt="Slime Mold Segmentation" src="_images/final_seg.png" style="width: 800px;" />
 </a>
 </section>
 </section>
-<section id="introduction-to-types-of-networks">
-<h2>Introduction to Types of Networks<a class="headerlink" href="#introduction-to-types-of-networks" title="Link to this heading"></a></h2>
-<p>NetTracer3D broadly can be used to create the four following flavors of networks. All of these convert a static image to an undirected network graph in some way.</p>
+<section id="types-of-networks">
+<h2><a class="toc-backref" href="#id9" role="doc-backlink">Types of Networks</a><a class="headerlink" href="#types-of-networks" title="Link to this heading"></a></h2>
+<p>NetTracer3D can produce four flavors of network, each converting a static image
+into an undirected network graph.</p>
 <ol class="arabic simple">
-<li><dl class="simple">
-<dt>The Connectivity Network - Node objects are connected via a second image (The Edges Image).</dt><dd><ul class="simple">
-<li><p>Ideal for objects such as cells or functional tissue units (ie ganglions, glomerulus, liver lobule etc), that may be interconnected via a secondary structure (ie nerves, blood vessels, lymphatics).</p></li>
-<li><p>However it requires 2 images, each segmented.</p></li>
+<li><p><strong>The connectivity network</strong> — node objects are connected via a second image
+(the edges image).</p>
+<ul class="simple">
+<li><p>Ideal for objects such as cells or functional tissue units (ganglions,
+glomeruli, liver lobules) interconnected by a secondary structure such as
+nerves, blood vessels, or lymphatics.</p></li>
+<li><p>Requires two images, each segmented.</p></li>
 </ul>
-</dd>
-</dl>
 </li>
-<li><dl class="simple">
-<dt>The proximity network - Nodes are connected based on distance to each other.</dt><dd><ul class="simple">
-<li><p>Ideal for evaluating general spatial arrangement of things, such as cells in an H&amp;E stain or imaged with a microscope, ie CODEX.</p></li>
-<li><p>Less useful at grouping things laid out chaotically (ie every cell in a poorly differentiated neuroendocrine tumor), although you could help reduce the chaos by only creating a network from a certain type of cell.</p></li>
+<li><p><strong>The proximity network</strong> — nodes are connected based on distance to one
+another.</p>
+<ul class="simple">
+<li><p>Ideal for evaluating general spatial arrangement, such as cells in an H&amp;E
+stain or in microscopy data such as CODEX.</p></li>
+<li><p>Less useful for chaotically arranged objects (for example, every cell in a
+poorly differentiated neuroendocrine tumor), though restricting the network
+to a single cell type can reduce the chaos.</p></li>
 </ul>
-</dd>
-</dl>
 </li>
-<li><dl class="simple">
-<dt>The branchpoint network - Nodes are created at branch vertices and connected based on their adjacency in the branch.</dt><dd><ul class="simple">
-<li><p>Ideal for branched structures (ie nerves, vessels, lymphatics, roots). They should be segmented out in binary first - NetTracer3D will handle branch assignment.</p></li>
-<li><p>Quite good at describing how an object is branching, however loses morphological information.</p></li>
+<li><p><strong>The branchpoint network</strong> — nodes are created at branch vertices and
+connected based on adjacency within the branch.</p>
+<ul class="simple">
+<li><p>Ideal for branched structures such as nerves, vessels, lymphatics, or roots.
+These should be segmented into binary first; NetTracer3D handles branch
+assignment.</p></li>
+<li><p>Describes branching behaviour well, but loses morphological information.</p></li>
 </ul>
-</dd>
-</dl>
 </li>
-<li><dl class="simple">
-<dt>The branch adjacency network - Branches themselves become nodes.</dt><dd><ul class="simple">
-<li><p>Similar approach as above, however the connections are based on whether the entire branch is touching another branch.</p></li>
-<li><p>More useful than branchpoint network for interacting with branches directly, however the branchy structure is slightly obfuscated in the graph, as we don’t know what order the branches arise in as they branch off each other.</p></li>
+<li><p><strong>The branch adjacency network</strong> — branches themselves become nodes.</p>
+<ul class="simple">
+<li><p>Similar to the above, but connections are based on whether an entire branch
+touches another branch.</p></li>
+<li><p>More useful than the branchpoint network for interacting with branches
+directly, though the branching structure is partly obscured, since the order
+in which branches arise is not preserved.</p></li>
 </ul>
-</dd>
-</dl>
 </li>
 </ol>
 </section>
-<section id="the-connectivity-network-generating-a-network-using-an-edge-image">
-<h2>The Connectivity Network - Generating a Network Using An Edge Image<a class="headerlink" href="#the-connectivity-network-generating-a-network-using-an-edge-image" title="Link to this heading"></a></h2>
-<p>Similar to the nodes, we segment the edges from the image (I did not show this process but it would be the same steps as above, just selecting the connection regions rather than the nodes). This is the image through which the nodes will be connected. (In imaging this will often be on a different channel, such as an overlapping image of nerves or vessels. In this demo, we use the same image for both).
-We load these in with ‘File -&gt; Load Edges’ and select ‘Process -&gt; Calculate -&gt; Calculate Connectivity Network’.</p>
+<section id="the-connectivity-network">
+<h2><a class="toc-backref" href="#id10" role="doc-backlink">The Connectivity Network</a><a class="headerlink" href="#the-connectivity-network" title="Link to this heading"></a></h2>
+<p>As with the nodes, the edges are segmented from the image — the same steps as
+above, selecting the connection regions rather than the nodes. This is the image
+through which the nodes will be connected; in practice it is often a different
+channel, such as an overlapping image of nerves or vessels. In this demonstration
+the same image is used for both.</p>
+<p>Load the edges with <strong>File → Load Edges</strong>, then select <strong>Process → Calculate →
+Calculate Connectivity Network</strong>.</p>
 <a class="reference internal image-reference" href="_images/segment_prenetwork.png"><img alt="Slime Mold Prenetwork" src="_images/segment_prenetwork.png" style="width: 800px;" />
 </a>
-<p>We enter the following params and execute the network generation:</p>
+<p>Enter the following parameters and execute the network generation:</p>
 <a class="reference internal image-reference" href="_images/connectivity_network_menu.png"><img alt="Connectivity Network Menu" src="_images/connectivity_network_menu.png" style="width: 800px;" />
 </a>
-<p><em>In short, these params are currently telling the nodes to ‘search’ 30 pixels outwards (Node search param) for edges to connect to. Nodes that share an edge will be connected in the resultant network. For more information on using this algorithm, see</em> <a class="reference internal" href="process_menu.html#connectivity-network"><span class="std std-ref">‘Process -&gt; Calculate Network -&gt; Calculate Connectivity Network…’</span></a></p>
+<p><em>These parameters tell the nodes to search 30 pixels outwards (node search param)
+for edges to connect to. Nodes sharing an edge are connected in the resulting
+network. For more information on this algorithm, see</em> <a class="reference internal" href="process_menu.html#connectivity-network"><span class="std std-ref">Process → Calculate Network → Calculate Connectivity Network</span></a></p>
 <p>This yields the following network:</p>
 <a class="reference internal image-reference" href="_images/connectivity_network.png"><img alt="Connectivity Network" src="_images/connectivity_network.png" style="width: 800px;" />
 </a>
-<p>The nodes/edges images are tweaked based on how the network-search param used them (to ensure consistency with the output). In Overlay1, we have generated a binary overlay displaying the direct network connections (white lines). In the bottom right table, we can see the IDs of the linked nodes in the first two columns, and the ID of each pair’s associated edge in the third column.
-In this case, the majority of nodes are joined through a large hub-edge in the center, while nodes along the sides have less direct connections.</p>
+<p>The nodes and edges images are adjusted according to how the network search
+parameter used them, ensuring consistency with the output. Overlay1 receives a
+binary overlay displaying the direct network connections as white lines. In the
+bottom right table, the first two columns give the IDs of the linked nodes and
+the third gives the ID of each pair’s associated edge. In this case the majority
+of nodes are joined through a large hub edge in the center, while nodes along the
+sides have less direct connections.</p>
 <section id="dealing-with-trunks">
-<h3>Dealing With Trunks<a class="headerlink" href="#dealing-with-trunks" title="Link to this heading"></a></h3>
-<ul class="simple">
-<li><p>Often times with biological images, you might see nodes in connectivity networks merging in central trunks (since in biology all nerves and blood vessels eventually go back to a central structure).</p></li>
-<li><p>Trunks may vastly overrepresent connectivity in these sorts of networks - you will have to appraise whether this is true for your particular dataset.</p></li>
-<li><p>You may not actually encounter this issue but here I am bringing up a few ways to smartly handle the trunk.</p></li>
-</ul>
-<p><strong>Converting All Edges to Nodes</strong></p>
-<ul class="simple">
-<li><p>One of the easiest and most robust way to handle trunks is to just convert all the edges in your networks to nodes. This can be done when first computing these networks from the previously shown menu if you select the Edge -&gt; Node option. Or you can do it in post using ‘Process -&gt; Modify Network’ as shown:</p></li>
-</ul>
+<h3><a class="toc-backref" href="#id11" role="doc-backlink">Dealing With Trunks</a><a class="headerlink" href="#dealing-with-trunks" title="Link to this heading"></a></h3>
+<p>In biological images, nodes in connectivity networks often merge into central
+trunks, since nerves and blood vessels eventually return to a central structure.
+Trunks may vastly overrepresent connectivity in such networks; whether this is
+true of a given dataset requires appraisal. Several strategies are available.</p>
+<p><strong>Converting all edges to nodes</strong></p>
+<p>The most robust approach is to convert all edges in the network into nodes.
+Select the <strong>Edge → Node</strong> option when first computing the network, or apply it
+afterwards through <strong>Process → Modify Network</strong>:</p>
 <a class="reference internal image-reference" href="_images/modifying0.png"><img alt="Modifying Network 0" src="_images/modifying0.png" style="width: 800px;" />
 </a>
-<ul class="simple">
-<li><p>This will give a network that looks like this. All the edges have become nodes but the new ‘edge’ nodes retain an ‘edge’ identity in the node_identities property.</p></li>
-</ul>
+<p>The result is shown below. All edges have become nodes, and the new edge-derived
+nodes retain an edge identity in the <code class="docutils literal notranslate"><span class="pre">node_identities</span></code> property.</p>
 <a class="reference internal image-reference" href="_images/edge_connectivity_network.png"><img alt="Edge Network" src="_images/edge_connectivity_network.png" style="width: 800px;" />
 </a>
-<p><em>Using edges as nodes will alter the network dynamics somewhat. Namely, clustered regions will instead become oriented around hubs. Just something to keep in mind when computing stats</em></p>
-<ul class="simple">
-<li><p>Another option that can be considered is selecting the ‘Auto-Trunk’ button in the ‘Calculate Connectivity Network’ menu. This will auto-handle trunk elements by forcing them to prefer only connections among local nodes while still permitting connections between distant nodes through the trunks, provided no closer nodes are present.</p></li>
-<li><p>This option will be slower if enabled but its a way to logically handle trunk elements without having to convert edges to nodes or arbitrarily convert/remove trunks.</p></li>
-<li><p>Here is what this would look like in this case:</p></li>
-</ul>
+<p><em>Using edges as nodes alters the network dynamics somewhat: clustered regions
+become oriented around hubs instead. This is worth keeping in mind when computing
+statistics.</em></p>
+<p><strong>Auto-Trunk</strong></p>
+<p>The <strong>Auto-Trunk</strong> button in the <strong>Calculate Connectivity Network</strong> menu handles
+trunk elements automatically, forcing them to prefer connections among local
+nodes while still permitting connections between distant nodes through the trunks
+when no closer nodes are present. This option is slower, but handles trunk
+elements logically without converting edges to nodes or arbitrarily converting or
+removing trunks. The result in this case:</p>
 <a class="reference internal image-reference" href="_images/auto_connectivity_network.png"><img alt="Auto Network" src="_images/auto_connectivity_network.png" style="width: 800px;" />
 </a>
-<ul class="simple">
-<li><p>Another option is to convert this central edge trunk into a single node using ‘Process -&gt; Modify Network’ as shown:</p></li>
-</ul>
+<p><strong>Converting the trunk to a single node</strong></p>
+<p>The central edge trunk can also be converted into a single node using <strong>Process →
+Modify Network</strong>:</p>
 <a class="reference internal image-reference" href="_images/modifying.png"><img alt="Modifying Network" src="_images/modifying.png" style="width: 800px;" />
 </a>
-<ul class="simple">
-<li><p>This results in the trunk becoming a node. The resultant image with network overlay alongside a graph of the network is shown below:</p></li>
-</ul>
+<p>The trunk becomes a node. The resulting image with network overlay, alongside a
+graph of the network, is shown below:</p>
 <a class="reference internal image-reference" href="_images/final_connectivity_network.png"><img alt="Final Network" src="_images/final_connectivity_network.png" style="width: 800px;" />
 </a>
-<p><em>This network was displayed using the ‘Analyze -&gt; Show Network’ option while selecting louvain community detection</em></p>
-<ul class="simple">
-<li><p>You can also remove the trunks entirely in pre- or post-, if there presence seems really unecessary, although I generally prefer the aforementioned options when doing this.</p></li>
-</ul>
-<p>If we load back in the original image with the overlay, we can see how the image information has been compressed to a set of connected integers.</p>
+<p><em>This network was displayed using the ‘Analyze → Show Network’ option with
+louvain community detection.</em></p>
+<p>Trunks may also be removed entirely, before or after network generation, if their
+presence seems unnecessary — though the options above are generally preferable.</p>
+<p>Loading the original image back in with the overlay shows how the image
+information has been compressed into a set of connected integers:</p>
 <a class="reference internal image-reference" href="_images/final_demo.png"><img alt="Final Demo Connection Img" src="_images/final_demo.png" style="width: 800px;" />
 </a>
-<p>While an image like this would not be too hard to manually label, imagine doing this for thousands or tens of thousands of nodes throughout a 3D image.
-This is where NetTracer3D shines! For example, the image below is one such usage where I created neural networks between groups of glomeruli in the human kidney from 3D lightsheet images I captured:</p>
+<p>An image like this would not be difficult to label manually, but the same task
+across thousands or tens of thousands of nodes in a 3D image is another matter.
+This is where NetTracer3D excels. The image below shows one such application:
+neural networks between groups of glomeruli in the human kidney, generated from
+3D lightsheet images.</p>
 <a class="reference internal image-reference" href="_images/5x_mothergloms.png"><img alt="Example Network" src="_images/5x_mothergloms.png" style="width: 800px;" />
 </a>
-<p>There are lots of options for obtaining statistics on our network structure, but one of the simplest ways is to select ‘Analyze -&gt; Stats -&gt; Network Statistics Histograms’. Choosing this option will reveal the following menu.</p>
-<a class="reference internal image-reference" href="_images/histogram_example.png"><img alt="Example analysis" src="_images/histogram_example.png" style="width: 800px;" />
-</a>
-<p>Each of the green buttons will yield a different histogram for a nodal distribution of some network property, with each indicating some quality of the network. In this case, I generate the degree distribution for the nodes, which shows me how many connections each node is making. It generates a histogram for me, and places the underlying data in the top right table.
-NetTracer3D is designed to be highly interactable. Any upper right table that has the structure ‘{col 1 - integers : col 2 - numbers}’ can be used to threshold the nodes. This means I can use any of these network histograms, and more!</p>
-<a class="reference internal image-reference" href="_images/histogram_example2.png"><img alt="Example analysis2" src="_images/histogram_example2.png" style="width: 800px;" />
-</a>
-<p>I simply right click my table and choose ‘Use to Threshold Nodes’. In the interactive thresholder, I select the region of the histogram I want to keep. If I press ‘Apply Threshold’, I then reduce my nodes channel to just that set of nodes (make sure to back up your original nodes). Doing this will not alter the underlying network data. However, if I instead wanted to keep this selection without eliminating any nodes, just closing the threshold window will leave the selection in the highlight overlay, which can be exported or used to do anything else the highlight overlay can do.
-Furthermore, if the nodes channel is set as my active channel, the subgraph of connections between my selected objects will be sent to my ‘selection’ table in the lower right, in case I want to pull out a specific subregion of the network.
-While right clicking in the upper-right table, other options include saving the table as a spreadsheet. I can also use the folder button in the top right can be used to load spreadsheets in the expected format (same as saved), in case I want to re-use something to threshold the nodes, for example.</p>
 </section>
 </section>
 <section id="analysis">
-<h2>Analysis<a class="headerlink" href="#analysis" title="Link to this heading"></a></h2>
-<ul class="simple">
-<li><p>There are a few straightforward ways to analyze your connectivity network data. From the analyze menu, choose ‘Stats -&gt; Network Related -&gt; Network Statistics Histograms’. Here, you can generate a number of histograms that describe your network:</p></li>
-</ul>
+<h2><a class="toc-backref" href="#id12" role="doc-backlink">Analysis</a><a class="headerlink" href="#analysis" title="Link to this heading"></a></h2>
+<p>Several straightforward approaches are available for analysing connectivity
+network data. From the analyze menu, choose <strong>Stats → Network Related → Network
+Statistics Histograms</strong> to generate histograms describing the network:</p>
 <a class="reference internal image-reference" href="_images/network_histos.png"><img alt="histogram menu" src="_images/network_histos.png" style="width: 400px;" />
 </a>
-<ul class="simple">
-<li><p>Regarding these histograms - some of them may be slow to compute for large networks. Some of them may also be skewed if you have multiple disconnected components in your graph (any ones that this can happen to will mention they are using multiple components in their title). To remove small, isolated components from your graph, you can right click your largest component in the network graph view in the bottom right and choose ‘isolate component’.</p></li>
-<li><p>Each one of these histograms can be compared between datasets to find observable differences. They can also be used to threshold the nodes to find objects of interest. Right Click the table generated by the histogram in the top right and choose ‘Use to Threshold Nodes’. Here, I am looking for objects with a high betweenness centrality in my kidney-glomeruli neural network:</p></li>
-</ul>
+<p>Each green button yields a histogram of the nodal distribution of a network
+property. Some are slow to compute for large networks, and some may be skewed
+when the graph contains multiple disconnected components — any affected histogram
+notes this in its title. To remove small, isolated components, right click the
+largest component in the network graph view in the bottom right and choose
+<strong>Isolate Component</strong>.</p>
+<a class="reference internal image-reference" href="_images/histogram_example.png"><img alt="Example analysis" src="_images/histogram_example.png" style="width: 800px;" />
+</a>
+<p>Histograms can be compared between datasets to identify observable differences,
+and can also be used to threshold the nodes to find objects of interest. In the
+example below, the degree distribution shows how many connections each node
+makes; the underlying data is placed in the top right table.</p>
+<p>NetTracer3D is designed to be highly interactive. Any upper right table with the
+structure <code class="docutils literal notranslate"><span class="pre">{col</span> <span class="pre">1</span> <span class="pre">-</span> <span class="pre">integers</span> <span class="pre">:</span> <span class="pre">col</span> <span class="pre">2</span> <span class="pre">-</span> <span class="pre">numbers}</span></code> can be used to threshold the
+nodes, which includes all of these network histograms.</p>
+<a class="reference internal image-reference" href="_images/histogram_example2.png"><img alt="Example analysis2" src="_images/histogram_example2.png" style="width: 800px;" />
+</a>
+<p>Right click the table and choose <strong>Use to Threshold Nodes</strong>, then select the
+region of the histogram to keep in the interactive thresholder. Pressing <strong>Apply
+Threshold</strong> reduces the nodes channel to that set of nodes — back up your original
+nodes first. This does not alter the underlying network data. To keep the
+selection without eliminating any nodes, simply close the threshold window; the
+selection remains in the highlight overlay, where it can be exported or used for
+anything else the highlight overlay supports.</p>
+<p>If the nodes channel is the active channel, the subgraph of connections between
+the selected objects is sent to the selection table in the lower right, which is
+useful for pulling out a specific subregion of the network.</p>
+<p>Right clicking the upper right table also offers the option to save the table as
+a spreadsheet. The folder button in the top right loads spreadsheets in the same
+format, allowing a saved table to be reused for thresholding.</p>
 <a class="reference internal image-reference" href="_images/threshold_nodes.png"><img alt="threshold_nodes" src="_images/threshold_nodes.png" style="width: 800px;" />
 </a>
-<ul class="simple">
-<li><p>If you don’t know what histogram to create, you can use ‘compute all analysis and export to CSV’ to look at all the histograms together.</p></li>
-<li><p>Another way to do analysis is by grouping your nodes into communities. For a network, these might represent functional groups. use ‘Analyze -&gt; Create Communities Based on Network’ to assign communities.</p></li>
-</ul>
+<p><em>Above: thresholding for objects with high betweenness centrality in a
+kidney-glomeruli neural network.</em></p>
+<p>If you are unsure which histogram to create, use <strong>Compute all analysis and
+export to CSV</strong> to view them all together.</p>
+<p>Nodes may also be grouped into communities, which for a network may represent
+functional groups. Use <strong>Analyze → Create Communities Based on Network</strong> to
+assign them.</p>
 <a class="reference internal image-reference" href="_images/node_coms.png"><img alt="node_coms" src="_images/node_coms.png" style="width: 800px;" />
 </a>
-<p><a href="#id3"><span class="problematic" id="id4">*</span></a>Nodes with communities</p>
+<p><em>Nodes with communities</em></p>
 </section>
 <section id="exporting-data">
-<h2>Exporting Data<a class="headerlink" href="#exporting-data" title="Link to this heading"></a></h2>
-<p>Use ‘File -&gt; Save As’ to export any channels that have been generated/edited in NetTracer3D, in the .tif file format.
-To bul save, choosing ‘Save As Network3D Object’ will have NetTracer3D dump most of the active data into a new folder in a format it can later reload with ‘Load Network3D Object’.
-Regarding tables and networks, they all can be exported with right click as either .csv or .xlsx files for outside analysis. Furthermore, networks feature additional export options for use with other network analysis software, such as Gephi.</p>
-<p>NetTracer3D is designed for some amount of end-to-end functionality, however exporting allows support for downstream analysis in other software such as ImageJ or Microsoft Excel.</p>
-<section id="using-network-and-or-image-data-in-python">
-<h3>Using Network (And/Or Image) data in python<a class="headerlink" href="#using-network-and-or-image-data-in-python" title="Link to this heading"></a></h3>
-<ul class="simple">
-<li><p>NetTracer3D is mainly designed to be interacted via its GUI, but some users may want to extract its properties for direct use in a python script. This is most useful with the network property, which is saved as a networkx graph object, as a user would be able to leverage the entire networkx toolbox for their own analysis pipelines.</p></li>
-<li><p>NetTracer3D organizes many of its properties into the ‘Network_3D’ class. The easiest way to export NetTracer3D data into code is to just save the ‘Network_3D’ objects in the GUI, then in python, creating a new ‘Network_3D’ object, loading in its components from the saved data, and calling those properties. For example:</p></li>
-<li><p>See <a class="reference external" href="https://networkx.org/">https://networkx.org/</a> for information about using the networkx graph object.</p></li>
-</ul>
+<h2><a class="toc-backref" href="#id13" role="doc-backlink">Exporting Data</a><a class="headerlink" href="#exporting-data" title="Link to this heading"></a></h2>
+<p>Use <strong>File → Save As</strong> to export any channels generated or edited in NetTracer3D
+in <code class="docutils literal notranslate"><span class="pre">.tif</span></code> format. For a bulk save, <strong>Save As Network3D Object</strong> dumps most of
+the active data into a new folder in a format that can later be reloaded with
+<strong>Load Network3D Object</strong>.</p>
+<p>Tables and networks can be exported by right click as either <code class="docutils literal notranslate"><span class="pre">.csv</span></code> or
+<code class="docutils literal notranslate"><span class="pre">.xlsx</span></code> files for outside analysis. Networks additionally offer export options
+for use with other network analysis software such as Gephi.</p>
+<p>NetTracer3D is designed for a degree of end-to-end functionality, but exporting
+allows downstream analysis in other software such as ImageJ or Microsoft Excel.</p>
+<section id="using-network-and-image-data-in-python">
+<h3><a class="toc-backref" href="#id14" role="doc-backlink">Using Network and Image Data in Python</a><a class="headerlink" href="#using-network-and-image-data-in-python" title="Link to this heading"></a></h3>
+<p>NetTracer3D is primarily designed for GUI use, but its properties can be
+extracted for use in a Python script. This is most valuable for the network
+property, which is stored as a networkx graph object, giving access to the entire
+networkx toolbox for custom analysis pipelines. See <a class="reference external" href="https://networkx.org/">https://networkx.org/</a> for
+information on using the networkx graph object.</p>
+<p>Many properties are organised into the <code class="docutils literal notranslate"><span class="pre">Network_3D</span></code> class. The simplest export
+route is to save the <code class="docutils literal notranslate"><span class="pre">Network_3D</span></code> object from the GUI, then create a new
+<code class="docutils literal notranslate"><span class="pre">Network_3D</span></code> object in Python, load its components from the saved data, and
+access the properties directly:</p>
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span><span class="w"> </span><span class="nn">nettracer3d</span><span class="w"> </span><span class="kn">import</span> <span class="n">nettracer</span> <span class="k">as</span> <span class="n">n3d</span>
 
 <span class="n">my_network</span> <span class="o">=</span> <span class="n">n3d</span><span class="o">.</span><span class="n">Network_3D</span><span class="p">()</span> <span class="c1">#Declare a new Network_3D object</span>
@@ -530,8 +677,10 @@ Regarding tables and networks, they all can be exported with right click as eith
 </section>
 </section>
 <section id="next-steps">
-<h2>Next Steps<a class="headerlink" href="#next-steps" title="Link to this heading"></a></h2>
-<p>Once you have a hang on generating the ‘connectivity network’, proceed to <a class="reference internal" href="proximity.html"><span class="doc">Proximity Networks - Ideal for Cellular Data</span></a> to learn about using NetTracer3D to create networks based on proximity, which is useful for analyzing spatial arrangement of cells, for example.</p>
+<h2><a class="toc-backref" href="#id15" role="doc-backlink">Next Steps</a><a class="headerlink" href="#next-steps" title="Link to this heading"></a></h2>
+<p>Once you are comfortable generating connectivity networks, proceed to
+<a class="reference internal" href="proximity.html"><span class="doc">Proximity Networks — Ideal for Cellular Data</span></a> to learn about building networks based on proximity, which is
+useful for analysing the spatial arrangement of cells.</p>
 </section>
 </section>
 
@@ -540,7 +689,7 @@ Regarding tables and networks, they all can be exported with right click as eith
           </div>
           <footer><div class="rst-footer-buttons" role="navigation" aria-label="Footer">
         <a href="installation.html" class="btn btn-neutral float-left" title="Installation" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left" aria-hidden="true"></span> Previous</a>
-        <a href="proximity.html" class="btn btn-neutral float-right" title="Proximity Networks - Ideal for Cellular Data" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right" aria-hidden="true"></span></a>
+        <a href="proximity.html" class="btn btn-neutral float-right" title="Proximity Networks — Ideal for Cellular Data" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right" aria-hidden="true"></span></a>
     </div>
 
   <hr/>

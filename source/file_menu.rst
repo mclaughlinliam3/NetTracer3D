@@ -1,120 +1,244 @@
 .. _file_menu:
 
-==========
+=====================
 All File Menu Options
-==========
+=====================
 
-The file menu is purely used for Saving and Loading things. Note that saving networks should be done in the network table in the bottom right and not here.
+The file menu is used exclusively for saving and loading. Networks should be
+saved from the network table in the bottom right rather than from here.
+
+.. contents:: On this page
+   :local:
+   :depth: 2
+
+
+New Session
+-----------
+Selecting 'New Session' will give a confirmation prompt asking to make sure your current session is saved. If you proceed, the session will be reset.
 
 Save
----------
-The save menu saves everything to the active directory (as referenced by the command window running the program) using generic names. This can be used for quick saving.
+----
 
-1. 'Save Current Session'
-    * Saves all of the active core NetTracer3D properties (see :doc:`properties`) into the current session folder, or prompts you to create one if you haven't.
-2. 'Save Nodes'
-    * Saves the nodes channel into the current session folder as 'labelled_nodes.tif'
-3. 'Save Edges'
-    * Saves the edges channel into the current session folder as 'labelled_edges.tif'
-4. 'Save Overlay 1'
-    * Saves Overlay 1 into the current session folder as 'overlay_1.tif'
-5. 'Save Overlay 2'
-    * Saves Overlay 2 into the current session folder as 'overlay_2.tif'
-6. 'Save Highlight Overlay'
-    * Saves the Highlight Overlay into the current session folder as 'Highlighted_Element.tif'
+The save menu writes everything to the active directory — as referenced by the
+command window running the program — using generic names, making it suitable for
+quick saves.
+
+1. **Save Current Session** — saves all active core NetTracer3D properties (see
+   :doc:`properties`) into the current session folder, prompting you to create
+   one if none exists.
+2. **Save Nodes** — saves the nodes channel into the current session folder as
+   ``labelled_nodes.tif``.
+3. **Save Edges** — saves the edges channel into the current session folder as
+   ``labelled_edges.tif``.
+4. **Save Overlay 1** — saves Overlay 1 into the current session folder as
+   ``overlay_1.tif``.
+5. **Save Overlay 2** — saves Overlay 2 into the current session folder as
+   ``overlay_2.tif``.
+6. **Save Highlight Overlay** — saves the highlight overlay into the current
+   session folder as ``Highlighted_Element.tif``.
+
 
 Save As
----------
-The save as menu will prompt the user to name files and select a directory while saving.
+-------
 
-1. 'Save Current Session As'
-    * Prompt the create a new folder/directory to dump all the properties (see :doc:`properties`) of the current session. This folder can later be used to reload this session, provided you have not changed any of the filenames within.
-2. 'Save Nodes As'
-    * Prompts the user to save the nodes channel as a .tif.
-3. 'Save Edges As'
-    * Prompts the user to save the edges channel as a .tif.
-4. 'Save Overlay 1 As'
-    * Prompts the user to save the Overlay 1 as a .tif.
-5. 'Save Overlay 2 As'
-    * Prompts the user to save the Overlay 2 as a .tif.
-6. 'Save Highlight Overlay As'
-    * Saves the Highlight Overlay as a .tif.
+The save as menu prompts for a filename and directory.
 
-* Note that for saving any .tif, if you end the save name with 'compressed.tif', the system will save a compressed version of the tif for you which can be way smaller for labeled images specifically but still readable by most tif readers.
+1. **Save Current Session As** — prompts for a new folder in which to dump all
+   properties of the current session (see :doc:`properties`). This folder can
+   later reload the session, provided the filenames within are unchanged.
+2. **Save Nodes As** — saves the nodes channel as a ``.tif``.
+3. **Save Edges As** — saves the edges channel as a ``.tif``.
+4. **Save Overlay 1 As** — saves Overlay 1 as a ``.tif``.
+5. **Save Overlay 2 As** — saves Overlay 2 as a ``.tif``.
+6. **Save Highlight Overlay As** — saves the highlight overlay as a ``.tif``.
+7. **Save Misc Property** - Use to save the node_identities as both a ``.csv`` and ``.json``, the node_centroids as a ``.csv``, or the node communities as a ``.csv``.
+
+.. tip::
+
+   Ending any ``.tif`` save name with ``compressed.tif`` writes a compressed
+   version, which can be considerably smaller for labeled images while remaining
+   readable by most TIFF readers.
+
 
 Load
----------
-The save as menu will prompt the user to find files to load. Note that when it comes to loading images, NetTracer3D does not like loading channels of different dimensions. If the user tries to do this, they will be prompted to have the image be auto-resized to the same dimensions as previous ones that exist in the Image Viewer Window. The user is advised to accept this, but can ignore it at their own risk of crashing the program.
+----
 
-#. 'Load Previous Session'
-    * Prompts the user to find a folder containing the saved outputs from their previous session. These folders will typically be generated by the 'Save(As) Network3D Object' function. When the Network3D Object is assembling, the program will look for files that have the generic names that were assigned with the 'Save(As) Network3D Object' function (Or the generic Save (Not Save As) options in general). Files under different names will be ignored.
-#. 'Load Nodes'
-    * Prompts the user to find a .tif/.tiff/.nii/.jpg/.jpeg/.png image to load into the nodes channel. Only supports grayscale (Color images will be converted to grayscale).
-#. 'Load Edges'
-    * Prompts the user to find a .tif/.tiff/.nii/.jpg/.jpeg/.png image to load into the edges channel. Only supports grayscale (Color images will be converted to grayscale).
-#. 'Load Overlay 1'
-    * Prompts the user to find a .tif/.tiff/.nii/.jpg/.jpeg/.png image to load into the Overlay 1 channel. Supports color images.
-#. 'Load Overlay 2'
-    * Prompts the user to find a .tif/.tiff/.nii/.jpg/.jpeg/.png image to load into the Overlay 2 channel. Supports color images.
-#. 'Load Full Sized Highlight Overlay'
-    * Prompts the user to find a .tif/.tiff/.nii/.jpg/.jpeg/.png image to load into the Highlight Overlay.
-    * Note that this exists because for images that are sufficiently large, the highlight overlay is rendered only on the visible plane rather than making a 3D image. However, the full highlight overlay is rendered for any method that needs it (such as showing 3D visualization). If a highlight overlay is present in reference to the nodes (for example) in such a case of a large image, and the user loads something else into the nodes channel, the highlight overlay will be altered to instead reference the new nodes. Loading the desired overlay directly with this function bypasses the mini plane-based highlight overlay, for example for 3D visualization.
-#. 'Load Network'
-    * Prompts the user to find a .csv/.xlsx file containing network data in the structure NetTracer3D expects (that is, the same structure it saves .csv/.xlsx networks as).
-#. 'Load From Excel Helper'
-    * Opens the excel helper, which is a seperate GUI to open less-structured .csv or .xlsx spreadsheets that the user may have obtained elsewhere, and more easily convert them into NetTracer3D properties. (See :doc:`excel_helper`)
-    * As of now, this can be used to load in 'Node Centroids', 'Node Identities', or 'Node Communities'. 
-#. 'Load Misc Properties -> Load Node IDs'
-    * Prompts the user to find a .json/.csv/.xlsx file containing Node IDs in the structure NetTracer3D expects (that is, the same structure it saves node IDs as).
-    * The user will be further prompted if they want to update/merge or replace the existing node IDs. The update option will add any new, unique IDs for each node to its identity list. This is especially useful if you encode identities for the same nodes in different sessions and want to combine them. The replace will just overwrite what's present, which is the same behavior as when a new session is loaded.
-#. 'Load Misc Properties -> Load Node Centroids'
-    * Prompts the user to find a .csv/.xlsx file containing Node Centroids in the structure NetTracer3D expects (that is, the same structure it saves Node Centroids as).
-#. 'Load Misc Properties -> Load Edge Centroids'
-    * Prompts the user to find a .csv/.xlsx file containing Edge Centroids in the structure NetTracer3D expects (that is, the same structure it saves Edge Centroids as).
-#. 'Load Misc Properties -> Load Node Communities
-    * Prompts the user to find a .csv/.xlsx file containing network communities in the structure NetTracer3D expects (that is, the same structure it saves communities as).
+The load menu prompts for files to open.
+
+.. note::
+
+   NetTracer3D does not handle channels of differing dimensions well. Attempting
+   to load one prompts to auto-resize the image to match the dimensions of those
+   already in the image viewer window. Accepting is advised; declining risks
+   crashing the program.
+
+#. **Load Previous Session** — prompts for a folder containing saved outputs from
+   a previous session, typically generated by **Save (As) Network3D Object**. When
+   assembling the Network3D object, the program looks for the generic filenames
+   assigned by that function, or by the generic Save options; files under other
+   names are ignored.
+#. **Load Nodes** — loads a ``.tif``/``.tiff``/``.nii``/``.jpg``/``.jpeg``/
+   ``.png`` image into the nodes channel. Grayscale only; color images are
+   converted.
+#. **Load Edges** — loads a ``.tif``/``.tiff``/``.nii``/``.jpg``/``.jpeg``/
+   ``.png`` image into the edges channel. Grayscale only; color images are
+   converted.
+#. **Load Overlay 1** — loads a ``.tif``/``.tiff``/``.nii``/``.jpg``/``.jpeg``/
+   ``.png`` image into the Overlay 1 channel. Supports color images.
+#. **Load Overlay 2** — loads a ``.tif``/``.tiff``/``.nii``/``.jpg``/``.jpeg``/
+   ``.png`` image into the Overlay 2 channel. Supports color images.
+#. **Load Full Sized Highlight Overlay** — loads a ``.tif``/``.tiff``/``.nii``/
+   ``.jpg``/``.jpeg``/``.png`` image into the highlight overlay.
+
+   For sufficiently large images, the highlight overlay is rendered only on the
+   visible plane rather than as a full 3D image, though the full overlay is
+   rendered for any method requiring it, such as 3D visualization. In such cases,
+   if a highlight overlay referencing the nodes exists and something else is
+   loaded into the nodes channel, the overlay is altered to reference the new
+   nodes. Loading the desired overlay directly with this function bypasses the
+   plane-based overlay — useful for 3D visualization.
+#. **Load Network** — loads a ``.csv``/``.xlsx`` file containing network data in
+   the structure NetTracer3D expects, which is the same structure it saves to.
+#. **Load From Excel Helper** — opens the excel helper, a separate GUI for
+   converting less-structured ``.csv`` or ``.xlsx`` spreadsheets obtained
+   elsewhere into NetTracer3D properties (see :doc:`excel_helper`). Currently
+   supports **Node Centroids**, **Node Identities**, and **Node Communities**.
+#. **Load Misc Properties → Load Node IDs** — loads a ``.json``/``.csv``/
+   ``.xlsx`` file containing node IDs in the structure NetTracer3D expects. You
+   are then asked whether to update/merge or replace the existing node IDs.
+   Updating adds any new, unique IDs to each node's identity list, which is
+   useful for combining identities encoded for the same nodes across different
+   sessions. Replacing overwrites what is present, matching the behaviour when a
+   new session is loaded.
+#. **Load Misc Properties → Load Node Centroids** — loads a ``.csv``/``.xlsx``
+   file containing node centroids in the structure NetTracer3D expects.
+#. **Load Misc Properties → Load Edge Centroids** — loads a ``.csv``/``.xlsx``
+   file containing edge centroids in the structure NetTracer3D expects.
+#. **Load Misc Properties → Load Node Communities** — loads a ``.csv``/``.xlsx``
+   file containing network communities in the structure NetTracer3D expects.
+
 
 .. _merge_nodes:
 
-Images -> Node Identities
-----------------------------------
-1. 'Load Misc Properties -> Merge Nodes'
-    * Prompts the user to find a .tif/.tiff file corresponding to an additional labeled nodes image they would like to merge with the current nodes channel (Alternatively, the user can select a directory containing a set of .tif/.tiff images if they would like to merge many nodes images at once).
-    * The point of this function is to allow nodes from several types of images to be compared, for example, heterogenous structures or cell types.
-    * Note that at this point in time, these labels cannot overlap as they are being combined into one image.
-    * However, to address the above, the user is prompted to generate the centroids for each image prior to merging. Please select this if you want the image's true centroid to enter NetTracer3D, regardless of what the merged output looks like. An optional downsample factor may also be entered, which finds centroids on a downsampled image before transposing the result, however note that this risks losing nodes that are especially small.
-    * Generally one would segment the images and label them individually before trying to merge them.
-    * Merging nodes auto-assigns the nodes IDs based on the name of the .tif/.tiff that is being merged, while the original nodes aquire the name 'root_nodes'.
-    * These IDs cannot be changed in NetTracer3D. To change them, please save the Node IDs as described above, then reassign the names with the excel helper, or edit the names directly in a spreadsheet-editing software like Microsoft Excel, then reload the Node IDs with 'Load -> Load Misc Properties -> Load Node IDs'
-2. Assign Node Identities From Overlap With Other Images'
-    * This is going to be the main way to assign node identities for multichannel data. You can either segment your cells or create hexagon nodes from the generate menu, place all desired channels in a folder, and run this.
-    * Essentially, you will have a few options to iterate through the channels in your folder and assigning your cells as having that identity based on min/max thresholds of that cells' fluorescent intensity.
+Images → Node Identities
+------------------------
 
-    * Once you have your labeled nodes loaded into the nodes channel, running this will open this menu:
+Merge Nodes
+~~~~~~~~~~~
+
+Prompts for a ``.tif``/``.tiff`` file corresponding to an additional labeled
+nodes image to merge with the current nodes channel. A directory containing a set
+of ``.tif``/``.tiff`` images may be selected instead to merge many at once.
+
+This allows nodes from several types of images — heterogeneous structures or cell
+types, for example — to be compared. Images are generally segmented and labeled
+individually before merging.
+
+* Labels cannot currently overlap, as they are being combined into a single
+  image.
+* To mitigate this, you are prompted to generate centroids for each image prior
+  to merging. Select this to have each image's true centroid enter NetTracer3D
+  regardless of the appearance of the merged output. An optional downsample
+  factor finds centroids on a downsampled image before transposing the result,
+  at the risk of losing especially small nodes.
+* Merging auto-assigns node IDs based on the name of the ``.tif``/``.tiff`` being
+  merged, while the original nodes acquire the name ``root_nodes``. These IDs
+  cannot be changed within NetTracer3D — save the node IDs as described above,
+  reassign the names with the excel helper or directly in spreadsheet software,
+  then reload with **Load → Load Misc Properties → Load Node IDs**.
+
+Assign Node Identities From Overlap With Other Images
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+This is the main route for assigning node identities in multichannel data. Either
+segment your cells or create hexagon nodes from the generate menu, place all
+desired channels in a folder, and run this function. It iterates through the
+channels in the folder, assigning cells an identity based on minimum and maximum
+thresholds of that cell's fluorescent intensity.
+
+With labeled nodes loaded into the nodes channel, running this opens the
+following menu:
 
 .. image:: _static/iden_assign_menu.png
    :width: 500px
    :alt: iden_assign_menu
 
-Parameter Explanations
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-* The first set of options is to optionally expand your nodes' search regions:
-    1. Step-out distance - The node markers can search outwards for overlap (estimating a cell radius) based on a user defined distance (or this can be precomputed in 'Process -> Image -> Dilate').
-    2. xy_scale - The true scale of the xy plane of the image.
-    3. z_scale - The true scale of the z-step size of the image (note that for params 2 and 3, if entered correctly you will want to enter a true biological distance in param 1).
-* The second box (Binarization Strategy) allows you to control how the system will choose to decide to assign your nodes as having an identity. It has these options:
-    1. Auto-Binarize - If you already had binarized your channels or the SNR is particularly good, you can try this one. For pre-binarized, you'd essentially segmente every channel for what you feel is 'real' and arrange those segmented channels in the target folder. If it sees any non-binary data, it will predict the foreground with Otus algorithm, which won't necessarily give you ideal results.
-    2. Manual - This is the default setting and the main way to use this function. If you choose this, every channel will be loaded into the GUI one by one, allowing you to manipulate thresholds to choose which cells get assigned an identity. Please see the tutorial on proximity networks for more info.
-    3. Auto with ML Predictor - You will have to have trained a neural network model on some prior dataset. After that, you can load the ML model back to this window. If you choose this setting, the neural network will predict the threshold bounds based on its training data.
-    4. Using Previous Threshodls - If you've thresholded before for a set of channels, you can reapply these thresholds by loading the same spreadsheet back (That NetTracer3D generates at the end of the thresholding session).
-* The third box (Load Previous) allows you to load a table from a previous session containing the average intensity expression for every cell. Normally, this will have to be calculated for every channel of interest, and you will be prompt to save the resultant spreadsheet. If you are reapplying thresholds or want to add additional channels, you can load that same spreadsheet back here to skip pre-processing for channels that already have data. If you are adding additional channels to a previous session, I recommend loading the old spreadsheet like so. You will be prompted to save a new spreadsheet at the end with the old + new data in it.
-* The fourth box concerns training the ML model. Currently this model is a neural network trained to associate the shape of the curve of the histogram with the thresholds you like. This may be tweaked in the future.
-    1. The top button allows you to enable training an ML model for this session. After training on all your channels, you will be prompted to save the model. If you load a previous model and choose this, you will train atop the old one.
-    2. The bottom button loads a previous model, which will be saved as a .pkl file. Please be aware to not load .pkl files you don't trust (as in you don't know who made them) as they can execute arbitrary code on your system. Once you've loaded a previous model, you can either have the ML model predict every threshold as mentioned above, or you can continue with the manual threshold, and you'll have a new option for each to have the system make an initial guess.
-* The last box (Include Negative IDs) assigns nodes a 'negative' ID for each channel they don't have, in addition to the one's they do. This can bloat your data quite a bit and isn't necessary usually, but the option is available if you want that level of detail.
-* When you're ready, hit 'Select Directory and Start Processing'. You will be prompted to navigate to the directory where you've stored your channels (as either 2D or 3D tiffs). Stored channels should be serial, not all in one tiff. If you already have node identities, any new ones from your thresholding session will be added onto the existing ones, allowing you to add more channels to previous sessions. Any channels that exist in the identities currently that are also in the current session will be overridden by the new thresholds, which can be used to correct past mistakes.
+**Search region expansion**
+
+1. **Step-out distance** — the distance node markers search outwards for overlap,
+   estimating a cell radius. This can also be precomputed in **Process → Image →
+   Dilate**.
+2. **xy_scale** — the true scale of the xy plane of the image.
+3. **z_scale** — the true scale of the z-step size of the image. With parameters
+   2 and 3 entered correctly, parameter 1 should be given as a true biological
+   distance.
+
+**Binarization Strategy**
+
+Controls how the system decides to assign an identity to a node.
+
+1. **Auto-Binarize** — suitable for pre-binarized channels or particularly good
+   SNR. For pre-binarized data, segment every channel for what you consider real
+   and arrange the segmented channels in the target folder. Any non-binary data
+   encountered has its foreground predicted with Otsu's algorithm, which will not
+   necessarily give ideal results.
+2. **Manual** — the default setting and the primary way to use this function.
+   Each channel is loaded into the GUI in turn, allowing thresholds to be
+   manipulated to choose which cells receive an identity. See the proximity
+   networks tutorial for details.
+3. **Auto with ML Predictor** — requires a neural network model trained on a
+   prior dataset, loaded back into this window. The network then predicts the
+   threshold bounds from its training data.
+4. **Using Previous Thresholds** — reapplies thresholds from an earlier session
+   for a set of channels by loading back the spreadsheet NetTracer3D generates at
+   the end of a thresholding session.
+
+**Load Previous**
+
+Loads a table from a previous session containing the average intensity expression
+for every cell. This normally has to be calculated for every channel of interest,
+after which you are prompted to save the resulting spreadsheet. Reloading it here
+skips preprocessing for channels that already have data, which is worthwhile when
+reapplying thresholds or adding channels to a previous session. You are prompted
+to save a new spreadsheet at the end containing both old and new data.
+
+**ML model training**
+
+The model is currently a neural network trained to associate the shape of the
+histogram curve with your preferred thresholds; this may be adjusted in future.
+
+1. The top button enables training a model for this session. After training on
+   all channels, you are prompted to save the model. Combined with a previously
+   loaded model, training builds on top of the old one.
+2. The bottom button loads a previous model, saved as a ``.pkl`` file. Once
+   loaded, the model can predict every threshold as described above, or manual
+   thresholding can continue with a new option to have the system make an initial
+   guess for each.
+
+   .. warning::
+
+      Do not load ``.pkl`` files from untrusted sources — they can execute
+      arbitrary code on your system.
+
+**Include Negative IDs**
+
+Assigns nodes a negative ID for each channel they lack, in addition to those they
+have. This can bloat the data considerably and is not usually necessary, but is
+available where that level of detail is wanted.
+
+**Running the function**
+
+Click **Select Directory and Start Processing** and navigate to the directory
+containing your channels, stored as serial 2D or 3D TIFFs rather than a single
+combined TIFF. If node identities already exist, new ones from this thresholding
+session are added to them, allowing further channels to be added to previous
+sessions. Channels present in both the existing identities and the current
+session are overridden by the new thresholds, which allows past mistakes to be
+corrected.
 
 
 Next Steps
----------
-This concludes the explanations of the file menu. Next, proceed to :doc:`analyze_menu` for information on the analyze menu functions.
+----------
+
+This concludes the file menu. Next, proceed to :doc:`analyze_menu` for
+information on the analyze menu functions.

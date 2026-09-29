@@ -1,3 +1,4 @@
+from __future__ import annotations
 import numpy as np
 from sklearn.cluster import KMeans
 from sklearn.metrics import calinski_harabasz_score
@@ -13,13 +14,24 @@ from . import community_extractor
 import random
 import re
 import matplotlib.patches as mpatches
-
-
-
-
+from matplotlib.patches import Rectangle, Patch
 import os
-os.environ['LOKY_MAX_CPU_COUNT'] = '4'
+import warnings
+import scipy.sparse as sp
+from sklearn.decomposition import PCA
+from sklearn.neighbors import NearestNeighbors
+import igraph as ig
+import leidenalg as la
+try:
+    from pynndescent import NNDescent
+    HAVE_PYNND = True
+except ImportError:                                    # optional dependency
+    HAVE_PYNND = False
 
+os.environ['LOKY_MAX_CPU_COUNT'] = '4'
+APPROX_KNN_ABOVE = 50_000
+DROP_JACCARD_ABOVE = 1_000_000
+BISECT_WARN_ABOVE = 200_000
 
 def cluster_arrays_dbscan(data_input, seed=42):
     """
@@ -89,215 +101,586 @@ def cluster_arrays_dbscan(data_input, seed=42):
     
     return clusters
 
-def cluster_arrays(data_input, n_clusters=None, seed=42):
+# KMeans related:
+
+def _apply_weighting(data, weighting=None, weights=None, eps=1e-12, verbose=True):
     """
-    Simple clustering of 1D arrays with key tracking and automatic cluster count detection.
-    
-    Parameters:
-    -----------
-    data_input : dict or List[List[float]]
-        Dictionary {key: array} or list of arrays to cluster
-    n_clusters : int or None
-        How many groups you want. If None, will automatically determine optimal k
+    Transform columns before clustering so each contributes as intended to
+    Euclidean distance.
+ 
+    weighting :
+        None / "none"   - raw proportions. Distance dominated by abundant types.
+        "sqrt"          - variance-stabilising for proportion data. Partially
+                          lifts rare columns without fully equalising them.
+        "zscore"        - standardise each column to mean 0, SD 1. Every cell
+                          type contributes equally regardless of abundance.
+        "sqrt_zscore"   - sqrt then standardise. Equalises contribution while
+                          damping the spikiness of very rare columns.
+        "custom"        - use `weights` only, no transform.
+ 
+    weights : optional 1D array of per-column multipliers, applied AFTER the
+        transform. Works with any mode, so you can standardise and then
+        upweight specific columns.
+ 
+    Returns (transformed_data, kept_column_mask).
+    Zero-variance columns are zeroed rather than dropped, so column indices
+    still line up with your original label order.
+    """
+    X = np.asarray(data, dtype=float)
+    if X.ndim != 2:
+        raise ValueError(f"expected 2D data, got shape {X.shape}")
+ 
+    mode = (weighting or "none").lower()
+    valid = {"none", "sqrt", "zscore", "sqrt_zscore", "custom"}
+    if mode not in valid:
+        raise ValueError(f"weighting must be one of {sorted(valid)}, got {weighting!r}")
+ 
+    if np.any(X < -eps) and mode in ("sqrt", "sqrt_zscore"):
+        raise ValueError("sqrt weighting expects non-negative data (proportions)")
+ 
+    Xw = X.copy()
+    if mode in ("sqrt", "sqrt_zscore"):
+        Xw = np.sqrt(np.clip(Xw, 0.0, None))
+ 
+    keep = np.ones(X.shape[1], dtype=bool)
+    if mode in ("zscore", "sqrt_zscore"):
+        sd = Xw.std(axis=0)
+        keep = sd > eps
+        mu = Xw.mean(axis=0)
+        out = np.zeros_like(Xw)
+        out[:, keep] = (Xw[:, keep] - mu[keep]) / sd[keep]
+        Xw = out
+        n_dropped = int((~keep).sum())
+        if n_dropped and verbose:
+            print(f"  [weighting] {n_dropped} zero-variance column(s) zeroed: "
+                  f"{np.where(~keep)[0].tolist()}")
+ 
+    if weights is not None:
+        w = np.asarray(weights, dtype=float).ravel()
+        if w.size != X.shape[1]:
+            raise ValueError(f"weights has length {w.size}, expected {X.shape[1]}")
+        if np.any(w < 0):
+            raise ValueError("weights must be non-negative")
+        Xw = Xw * w
+        keep = keep & (w > eps)
+ 
+    if verbose:
+        v = Xw.var(axis=0)
+        nz = v[v > eps]
+        if nz.size:
+            print(f"  [weighting] mode={mode}  column variance "
+                  f"min={nz.min():.4g} max={nz.max():.4g} ratio={nz.max()/nz.min():.1f}x")
+    return Xw, keep
+ 
+ 
+def cluster_arrays(data_input, n_clusters=None, seed=42, max_k=None,
+                   weighting=None, weights=None, return_details=False,
+                   verbose=True):
+    """
+    Cluster 1D arrays with key tracking, automatic cluster count detection,
+    and optional column weighting.
+ 
+    Parameters
+    ----------
+    data_input : dict {key: array} or list of arrays
+    n_clusters : int or None. If None, chosen by Calinski-Harabasz.
     seed : int
-        Random seed for reproducibility
-    max_k : int
-        Maximum number of clusters to consider when auto-detecting (default: 10)
-        
-    Returns:
-    --------
-    list: [[key1, key2], [key3, key4, key5]] - List of clusters, each containing keys/indices
+    max_k : int or None. Cap for auto-detection. Defaults to len(keys)//3.
+    weighting : see _apply_weighting.
+    weights : optional per-column multipliers.
+    return_details : if True, also return a dict with labels, centroids in
+        both weighted and original space, inertia and the chosen k.
+ 
+    Returns
+    -------
+    list of lists of keys, or (clusters, details) if return_details.
     """
-    
-    # Handle both dict and list inputs
     if isinstance(data_input, dict):
         keys = list(data_input.keys())
         array_values = list(data_input.values())
     else:
         keys = list(range(len(data_input)))
         array_values = data_input
-    
-    # Convert to numpy
-    data = np.array(array_values)
-    
-    # Auto-detect optimal number of clusters if not specified
+ 
+    data = np.asarray(array_values, dtype=float)
+    if data.ndim == 1:
+        data = data.reshape(-1, 1)
+ 
+    # transform once, then use the SAME space for k selection and the final fit
+    data_w, keep = _apply_weighting(data, weighting, weights, verbose=verbose)
+ 
     if n_clusters is None:
-        n_clusters = _find_optimal_clusters(data, seed, max_k = (len(keys) // 3))
-        print(f"Auto-detected optimal number of clusters: {n_clusters}")
-    
-    # Perform clustering
+        if max_k is None:
+            max_k = max(2, len(keys) // 3)
+        n_clusters = _find_optimal_clusters(data_w, seed, max_k=max_k, verbose=verbose)
+        if verbose:
+            print(f"Auto-detected optimal number of clusters: {n_clusters}")
+ 
     kmeans = KMeans(n_clusters=n_clusters, random_state=seed, n_init=10)
-    labels = kmeans.fit_predict(data)
-    
-    # Organize results into clusters - simple list of lists with keys only
+    labels = kmeans.fit_predict(data_w)
+ 
     clusters = [[] for _ in range(n_clusters)]
     for i, label in enumerate(labels):
         clusters[label].append(keys[i])
-    
+ 
+    if not return_details:
+        return clusters
+ 
+    # centroids in the original (untransformed) space are what you profile on
+    centroids_orig = np.vstack([
+        data[labels == k].mean(axis=0) if np.any(labels == k) else np.full(data.shape[1], np.nan)
+        for k in range(n_clusters)
+    ])
+    details = {
+        "labels": labels,
+        "keys": keys,
+        "n_clusters": n_clusters,
+        "weighting": weighting,
+        "centroids_weighted": kmeans.cluster_centers_,
+        "centroids_original": centroids_orig,
+        "inertia": kmeans.inertia_,
+        "kept_columns": keep,
+        "sizes": np.bincount(labels, minlength=n_clusters),
+    }
     return clusters
-
-def _find_optimal_clusters(data, seed, max_k):
-    """
-    Find optimal number of clusters using Calinski-Harabasz index.
-    """
+ 
+ 
+def _find_optimal_clusters(data, seed, max_k, verbose=True):
+    """Find optimal k using the Calinski-Harabasz index, on already-weighted data."""
     n_samples = len(data)
-    
-    # Need at least 2 samples to cluster
     if n_samples < 2:
         return 1
-    
-    # Limit max_k to reasonable bounds
+ 
     max_k = min(max_k, n_samples - 1, 20)
-    print(f"Max_k: {max_k}, n_samples: {n_samples}")
-    
+    if verbose:
+        print(f"Max_k: {max_k}, n_samples: {n_samples}")
     if max_k < 2:
         return 1
-    
-    # Use Calinski-Harabasz index to find optimal k
+ 
     ch_scores = []
     k_range = range(2, max_k + 1)
-    
     for k in k_range:
         try:
-            print(f"Testing {k} clusters")
-            kmeans = KMeans(n_clusters=k, random_state=seed, n_init=10)
-            labels = kmeans.fit_predict(data)
-            
-            # Check if we got the expected number of clusters
+            if verbose:
+                print(f"Testing {k} clusters")
+            km = KMeans(n_clusters=k, random_state=seed, n_init=10)
+            labels = km.fit_predict(data)
             if len(np.unique(labels)) == k:
-                score = calinski_harabasz_score(data, labels)
-                ch_scores.append(score)
+                ch_scores.append(calinski_harabasz_score(data, labels))
             else:
-                ch_scores.append(0)  # Penalize solutions that didn't achieve k clusters
-                
+                ch_scores.append(0)
         except Exception:
             ch_scores.append(0)
-    
-    # Find k with highest Calinski-Harabasz score
+ 
     if ch_scores and max(ch_scores) > 0:
-        optimal_k = k_range[np.argmax(ch_scores)]
-        print(f"Using {optimal_k} neighborhoods")
+        optimal_k = k_range[int(np.argmax(ch_scores))]
+        if verbose:
+            print(f"Using {optimal_k} neighborhoods")
         return optimal_k
+    return 2
+ 
+ 
+def cluster_stability(data_input, n_clusters, seeds=(0, 1, 2, 3, 4),
+                      weighting=None, weights=None):
+    """
+    Rerun clustering across seeds and report how consistently pairs of samples
+    land together. Worth running whenever weighting='zscore', since rare
+    columns can produce clusters driven by single cells.
+ 
+    Returns mean pairwise co-assignment agreement across seed pairs (0-1).
+    """
+    from itertools import combinations
+ 
+    if isinstance(data_input, dict):
+        arrays = list(data_input.values())
+    else:
+        arrays = data_input
+    data = np.asarray(arrays, dtype=float)
+    data_w, _ = _apply_weighting(data, weighting, weights, verbose=False)
+ 
+    all_labels = []
+    for s in seeds:
+        km = KMeans(n_clusters=n_clusters, random_state=s, n_init=10)
+        all_labels.append(km.fit_predict(data_w))
+ 
+    agreements = []
+    for a, b in combinations(all_labels, 2):
+        same_a = a[:, None] == a[None, :]
+        same_b = b[:, None] == b[None, :]
+        iu = np.triu_indices(len(a), k=1)
+        agreements.append(float((same_a[iu] == same_b[iu]).mean()))
+    return float(np.mean(agreements))
+
+
+# Leiden array clustering:
+
+def _knn_indices(data, k, approx, metric, n_jobs, seed, log):
+    n = data.shape[0]
+    k = min(k, n - 1)
+ 
+    if approx == "auto":
+        approx = n > APPROX_KNN_ABOVE
+        if approx and not HAVE_PYNND:
+            log(f"n={n:,} would benefit from approximate kNN, but pynndescent "
+                f"is not installed. Falling back to exact search (slower). "
+                f"`pip install pynndescent` is recommended at this scale.")
+            approx = False
+        elif approx:
+            log(f"n={n:,} > {APPROX_KNN_ABOVE:,}: using approximate kNN "
+                f"(recall ~0.998). Pass approx=False to force exact.")
+ 
+    if approx:
+        if not HAVE_PYNND:
+            raise ImportError("approx=True requires pynndescent")
+        idx = NNDescent(data, n_neighbors=k + 1, metric=metric,
+                        random_state=seed, n_jobs=n_jobs).neighbor_graph[0]
+        return idx[:, 1:]
+ 
+    # 'brute' explicitly, never 'auto': sklearn's auto can select a kd_tree,
+    # which above ~20 dimensions is roughly 10x SLOWER than brute force because
+    # axis-aligned splits stop pruning. Brute force here is a BLAS matmul.
+    nn = NearestNeighbors(n_neighbors=k + 1, algorithm="brute",
+                          metric=metric, n_jobs=n_jobs).fit(data)
+    return nn.kneighbors(data, return_distance=False)[:, 1:]
+ 
+ 
+# ---------------------------------------------------------------------------
+# graph construction
+# ---------------------------------------------------------------------------
+ 
+def _jaccard_on_edges(A, chunk, log):
+    """Jaccard weights for the edges of A only. Values identical to the full
+    (A @ A.T) route; memory is O(chunk * k^2) instead of O(n * k^2)."""
+    n = A.shape[0]
+    deg = np.asarray(A.sum(axis=1)).ravel()
+    rs, cs, ws = [], [], []
+    for start in range(0, n, chunk):
+        stop = min(start + chunk, n)
+        block = A[start:stop]
+        shared = (block @ A.T).multiply(block).tocoo()
+        if shared.nnz:
+            r = (shared.row + start).astype(np.int32)
+            c = shared.col.astype(np.int32)
+            s = shared.data.astype(np.float32)
+            rs.append(r); cs.append(c)
+            ws.append(s / np.maximum(deg[r] + deg[c] - s, 1e-12))
+    if not rs:
+        return sp.csr_matrix(A.shape, dtype=np.float32)
+    return sp.csr_matrix((np.concatenate(ws),
+                          (np.concatenate(rs), np.concatenate(cs))),
+                         shape=A.shape, dtype=np.float32)
+ 
+ 
+def build_knn_graph(data, k=30, use_jaccard=True, metric="euclidean",
+                    prune=0.0, n_jobs=-1, approx="auto", seed=42,
+                    chunk=20_000, log=print):
+    """kNN graph in FEATURE space (not physical space), as an igraph.Graph."""
+    n = data.shape[0]
+    idx = _knn_indices(data, k, approx, metric, n_jobs, seed, log)
+    kk = idx.shape[1]
+ 
+    rows = np.repeat(np.arange(n, dtype=np.int32), kk)
+    A = sp.csr_matrix((np.ones(n * kk, dtype=np.float32),
+                       (rows, idx.ravel().astype(np.int32))), shape=(n, n))
+    del rows, idx
+    A = A.maximum(A.T)
+    A.setdiag(0)
+    A.eliminate_zeros()
+ 
+    if use_jaccard:
+        A = _jaccard_on_edges(A, chunk, log)
+        A = A.maximum(A.T)
+ 
+    if prune > 0:
+        before = A.nnz
+        A.data[A.data <= prune] = 0
+        A.eliminate_zeros()
+        log(f"pruned {(before - A.nnz) // 2:,} edges at weight<={prune}. "
+            f"Note: pruning isolates nodes, and every isolated node becomes a "
+            f"singleton community. Pair with min_cluster_size.")
+ 
+    A = sp.triu(A, k=1).tocsr()
+ 
+    # Hand igraph the sparse matrix directly. Never build a Python edge list.
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        return ig.Graph.Weighted_Adjacency(A, mode="undirected",
+                                           attr="weight", loops=False)
+ 
+ 
+# ---------------------------------------------------------------------------
+# entry point
+# ---------------------------------------------------------------------------
+ 
+def cluster_arrays_leiden(data_input, n_clusters=None, seed=42,
+                          k=30, resolution=1.0,
+                          use_jaccard="auto", approx="auto", n_pca=None,
+                          prune=0.0, min_cluster_size=1, n_iterations=2,
+                          metric="euclidean", n_jobs=-1, chunk=20_000,
+                          tol=0, max_bisect=25, verbose=True,
+                          return_info=False):
+    """
+    Cluster feature vectors by Leiden community detection on a kNN graph.
+ 
+    Same I/O contract as a k-means helper: dict {key: vector} or a sequence of
+    vectors in, list-of-lists of keys out, largest cluster first.
+ 
+    Parameters that affect RESULTS
+    ------------------------------
+    k : int
+        Neighbours per node. The primary granularity control -- small k (~15)
+        resolves fine subsets, large k (~50) merges into broad groups. Never
+        adjusted automatically.
+    resolution : float
+        Higher -> more, smaller communities. Ignored when n_clusters is set.
+    n_clusters : int or None
+        None (recommended) lets the graph determine the count. An int bisects
+        `resolution` to hit that target, which re-runs Leiden up to max_bisect
+        times -- expensive at scale, and the target may be unreachable if the
+        graph's structure does not support it.
+    n_pca : int or None
+        Reduce to this many components before the kNN search. OFF by default:
+        it changes the partition and would silently transform every user's
+        feature space. Worth enabling manually for high-dimensional data where
+        the kNN search dominates runtime.
+    prune : float
+        Leave at 0. Pruning isolates nodes into singleton communities.
+ 
+    Parameters that trade speed for a different (not worse) partition
+    ----------------------------------------------------------------
+    approx : "auto" | True | False
+        Approximate kNN. "auto" enables above 50,000 rows if pynndescent is
+        installed. Recall ~0.998.
+    use_jaccard : "auto" | True | False
+        Shared-neighbour edge reweighting. "auto" keeps it on except above
+        1,000,000 rows, where it roughly doubles runtime for no measured gain
+        in agreement with curated labels.
+ 
+    Returns
+    -------
+    list of lists of keys, or (clusters, info) when return_info=True.
+    """
+    def log(msg):
+        if verbose:
+            print(f"[leiden] {msg}")
+ 
+    if isinstance(data_input, dict):
+        keys = list(data_input.keys())
+        values = list(data_input.values())
+    else:
+        keys = list(range(len(data_input)))
+        values = data_input
+ 
+    data = np.asarray(values, dtype=np.float32)
+    if data.ndim == 1:
+        data = data.reshape(-1, 1)
+    if data.shape[0] < 3:
+        return ([[key] for key in keys], {}) if return_info else \
+               [[key] for key in keys]
+    if not np.isfinite(data).all():
+        raise ValueError("data contains NaN/inf; impute or drop those rows first")
+ 
+    n, d = data.shape
+    log(f"{n:,} vectors x {d} features, k={k}")
+ 
+    # ---- resolve the automatic decisions, and say what they were ----------
+    if use_jaccard == "auto":
+        use_jaccard = n <= DROP_JACCARD_ABOVE
+        if not use_jaccard:
+            log(f"n={n:,} > {DROP_JACCARD_ABOVE:,}: skipping the Jaccard "
+                f"reweight for speed. Pass use_jaccard=True to force it.")
+ 
+    if n_clusters is not None and n > BISECT_WARN_ABOVE:
+        warnings.warn(
+            f"n_clusters={n_clusters} at n={n:,} re-runs Leiden up to "
+            f"{max_bisect} times to bisect resolution. Prefer n_clusters=None "
+            f"and tune `resolution`.", RuntimeWarning)
+        max_bisect = min(max_bisect, 6)
+ 
+    if n_pca and n_pca < d:
+        log(f"PCA {d} -> {n_pca} components (user-requested)")
+        data = np.ascontiguousarray(
+            PCA(n_components=n_pca, random_state=seed,
+                svd_solver="randomized").fit_transform(data), dtype=np.float32)
+ 
+    # ---- graph ------------------------------------------------------------
+    g = build_knn_graph(data, k=k, use_jaccard=use_jaccard, metric=metric,
+                        prune=prune, n_jobs=n_jobs, approx=approx, seed=seed,
+                        chunk=chunk, log=log)
+    del data
+    log(f"graph: {g.vcount():,} nodes, {g.ecount():,} edges")
+ 
+    weights = g.es["weight"] if "weight" in g.es.attributes() else None
+ 
+    def partition_at(res):
+        return la.find_partition(g, la.RBConfigurationVertexPartition,
+                                 weights=weights, resolution_parameter=res,
+                                 n_iterations=n_iterations, seed=seed)
+ 
+    # ---- partition --------------------------------------------------------
+    used_res = resolution
+    if n_clusters is None:
+        part = partition_at(resolution)
+        log(f"resolution={resolution} -> {len(part)} communities")
+    else:
+        lo, hi = 1e-3, 10.0
+        part, best = None, None
+        for _ in range(max_bisect):
+            used_res = (lo + hi) / 2
+            p = partition_at(used_res)
+            c = len(p)
+            if best is None or abs(c - n_clusters) < abs(best - n_clusters):
+                part, best = p, c
+            if abs(c - n_clusters) <= tol:
+                break
+            lo, hi = (used_res, hi) if c < n_clusters else (lo, used_res)
+        log(f"targeted {n_clusters}, resolved {best} at resolution~{used_res:.4f}")
+        if best != n_clusters:
+            log("exact count not reachable; the graph's community structure "
+                "does not support it")
+ 
+    labels = np.asarray(part.membership)
+    del g
+ 
+    # group without a Python loop over every node
+    order = np.argsort(labels, kind="stable")
+    bounds = np.searchsorted(labels[order], np.arange(labels.max() + 2))
+    keys_arr = np.asarray(keys, dtype=object)
+    groups = [list(keys_arr[order[bounds[i]:bounds[i + 1]]])
+              for i in range(labels.max() + 1)]
+    groups.sort(key=len, reverse=True)
+ 
+    if min_cluster_size > 1:
+        big = [c for c in groups if len(c) >= min_cluster_size]
+        small = [key for c in groups if len(c) < min_cluster_size for key in c]
+        if small:
+            big.append(small)
+            log(f"{len(small):,} items in communities below "
+                f"min_cluster_size={min_cluster_size} -> trailing bucket")
+        groups = big
+ 
+    sizes = [len(c) for c in groups]
+    log(f"{len(groups)} clusters, sizes {sizes[:8]}"
+        f"{' ...' if len(sizes) > 8 else ''}")
+ 
+    if return_info:
+        return groups, dict(n=n, n_features=d, k=k, resolution=used_res,
+                            use_jaccard=use_jaccard, approx=approx,
+                            n_pca=n_pca, prune=prune, seed=seed,
+                            n_clusters_found=len(groups))
+    return groups
+
+
+
+# Graphing methods        
     
-def plot_dict_heatmap(unsorted_data_dict, id_set, figsize=(12, 8), title="Neighborhood Heatmap", 
-                     center_at_one=False, center_at_zero=False, sublabel = "Community"):
+def plot_dict_heatmap(unsorted_data_dict, id_set, figsize=(12, 8), title="Neighborhood Heatmap",
+                     center_at_one=False, center_at_zero=False, sublabel="Community",
+                     bar_label="Representation Ratio", x_label=None):
     """
     Create a heatmap from a dictionary of numpy arrays.
-    
-    Parameters:
-    -----------
-    data_dict : dict
-        Dictionary where keys are identifiers and values are 1D numpy arrays of floats (0-1)
-    id_set : list or set
-        List or set of strings describing what each index in the numpy arrays represents
-    figsize : tuple, optional
-        Figure size (width, height)
-    title : str, optional
-        Title for the heatmap
-    center_at_one : bool, optional
-        If True, uses a diverging colormap centered at 1 with nonlinear scaling:
-        - 0 to 1: blue to white (underrepresentation to normal)
-        - 1+: white to red (overrepresentation)
-        If False (default), uses standard white-to-red scaling from 0 to 1
-    center_at_zero : bool, optional
-        If True, uses a diverging colormap centered at 0 with symmetric scaling:
-        - Negative values: blue (below zero)
-        - 0: white (center)
-        - Positive values: red (above zero)
-        Takes priority over center_at_one if both are True
-    
-    Returns:
-    --------
-    fig, ax : matplotlib figure and axes objects
+    (docstring unchanged)
+ 
+    Non-finite handling:
+      +inf -> a modest tint above neutral, striped with gray ('/' hatch)
+      -inf -> a modest tint below neutral, striped with gray ('\' hatch)
+      nan  -> solid gray via cmap.set_bad
+    The tint is deliberately mild, so the hatch (not the color) is what marks a
+    cell as infinite; a legend explaining the stripes is added whenever any
+    appear. Striping keeps infinities readable at any matrix size, since the
+    numeric annotations only render when there are <= 20 columns.
+    Display-only; the returned dict preserves the raw inf/nan values.
     """
-    
+ 
+    # Infinity rendering, all on the 0-1 transformed color scale.
+    # Diverging scales step this far off neutral (0.5); the sequential scale has no
+    # negative direction, so both infinities take one mild tint and the hatch
+    # direction carries the sign.
+    INF_TINT_DIVERGING = 0.18   # -> 0.68 / 0.32
+    INF_TINT_SEQUENTIAL = 0.30
+    STRIPE_COLOR = 'dimgray'    # must stay dark: the fills are now pale
+ 
+    def _truncate(label, max_len=18):
+        s = str(label)
+        return s if len(s) <= max_len else s[:max_len - 1] + '\u2026'
+ 
     data_dict = {k: unsorted_data_dict[k] for k in sorted(unsorted_data_dict.keys())}
-    # Convert dict to 2D array for heatmap
     keys = list(data_dict.keys())
-    data_matrix = np.array([data_dict[key] for key in keys])
-
+ 
+    # Build the matrix as float so None -> nan (numpy coerces None to nan under dtype=float).
+    try:
+        data_matrix = np.array([data_dict[key] for key in keys], dtype=float)
+    except (TypeError, ValueError):
+        # Ragged rows or values that don't cast cleanly -> coerce element by element.
+        data_matrix = np.array([
+            [0 if v is None else float(v) for v in np.atleast_1d(data_dict[key])]
+            for key in keys
+        ], dtype=float)
+ 
     # Convert id_set to sorted list if it's a set or unsorted list
     if isinstance(id_set, set):
         sorted_id_set = sorted(list(id_set))
     else:
         sorted_id_set = sorted(id_set)
-    
-    # Create mapping from original to sorted order
+ 
     original_id_list = list(id_set) if isinstance(id_set, set) else id_set
     sorted_indices = [original_id_list.index(id_val) for id_val in sorted_id_set]
-    
-    # Reorder data columns to match sorted id_set
     data_matrix = data_matrix[:, sorted_indices]
-
+ 
     # Move key 0 to the bottom if it exists as the first key
     if keys and keys[0] == 0:
         keys.append(keys.pop(0))
         data_matrix = np.vstack([data_matrix[1:], data_matrix[0:1]])
-
-    # Create the plot
+ 
+    # Range from FINITE values only, so nan/inf can't break min/max or tick filtering.
+    finite_mask = np.isfinite(data_matrix)
+    if np.any(finite_mask):
+        data_min = float(np.min(data_matrix[finite_mask]))
+        data_max = float(np.max(data_matrix[finite_mask]))
+    else:
+        data_min, data_max = 0.0, 1.0
+ 
     fig, ax = plt.subplots(figsize=figsize)
-    
+ 
     if center_at_zero:
-        # Custom colormap and scaling for center_at_zero mode
-        # Find the actual data range
-        data_min = np.min(data_matrix)
-        data_max = np.max(data_matrix)
-        
-        # Create a custom colormap: blue -> white -> red
-        colors = ['#2166ac', '#4393c3', '#92c5de', '#d1e5f0', '#f7f7f7', 
-                 '#fddbc7', '#f4a582', '#d6604d', '#b2182b']
-        n_bins = 256
-        cmap = LinearSegmentedColormap.from_list('custom_diverging', colors, N=n_bins)
-        
-        # Create symmetric nonlinear transformation
-        def transform_data(data):
-            transformed = np.zeros_like(data)
-            
-            # Get max absolute value for symmetric scaling
-            max_abs = max(abs(data_min), abs(data_max))
-            
-            if max_abs == 0:
-                return transformed + 0.5
-            
-            # For negative values: map to [0, 0.5)
-            mask_neg = data < 0
-            if np.any(mask_neg):
-                # Use sqrt of absolute value for more resolution near zero
-                transformed[mask_neg] = 0.5 * (1 - np.sqrt(np.abs(data[mask_neg])) / np.sqrt(max_abs))
-            
-            # For positive values: map to (0.5, 1.0]
-            mask_pos = data > 0
-            if np.any(mask_pos):
-                transformed[mask_pos] = 0.5 + 0.5 * np.sqrt(data[mask_pos]) / np.sqrt(max_abs)
-            
-            # Zero maps to 0.5 (center)
-            mask_zero = data == 0
-            transformed[mask_zero] = 0.5
-            
-            return transformed
-        
-        # Transform the data for visualization
-        transformed_matrix = transform_data(data_matrix)
-        
-        # Create heatmap with custom colormap
-        im = ax.imshow(transformed_matrix, cmap=cmap, aspect='auto', vmin=0, vmax=1)
-        
-        # Create custom colorbar with original values
-        cbar = ax.figure.colorbar(im, ax=ax)
-        
-        # Set colorbar ticks to show meaningful values
-        # Create symmetric ticks around zero
+        colors = ['#2166ac', '#4393c3', '#92c5de', '#d1e5f0', '#f7f7f7',
+                  '#fddbc7', '#f4a582', '#d6604d', '#b2182b']
+        cmap = LinearSegmentedColormap.from_list('custom_diverging', colors, N=256)
+        cmap.set_bad(color='lightgray')  # nan cells only
+ 
         max_abs = max(abs(data_min), abs(data_max))
-        tick_values = []
-        
+ 
+        inf_pos_level = 0.5 + INF_TINT_DIVERGING
+        inf_neg_level = 0.5 - INF_TINT_DIVERGING
+ 
+        def transform_data(data):
+            data = np.asarray(data, dtype=float)
+            transformed = np.full(data.shape, np.nan)
+            transformed[np.isposinf(data)] = inf_pos_level
+            transformed[np.isneginf(data)] = inf_neg_level
+            finite = np.isfinite(data)
+            if max_abs == 0:
+                transformed[finite] = 0.5
+                return transformed
+            neg = finite & (data < 0)
+            transformed[neg] = 0.5 * (1 - np.sqrt(np.abs(data[neg])) / np.sqrt(max_abs))
+            pos = finite & (data > 0)
+            transformed[pos] = 0.5 + 0.5 * np.sqrt(data[pos]) / np.sqrt(max_abs)
+            transformed[finite & (data == 0)] = 0.5
+            return transformed
+ 
+        transformed_matrix = transform_data(data_matrix)
+        im = ax.imshow(transformed_matrix, cmap=cmap, aspect='auto', vmin=0, vmax=1)
+        cbar = ax.figure.colorbar(im, ax=ax)
+ 
         if max_abs <= 1:
             step_values = [0, 0.25, 0.5, 0.75, 1.0]
         elif max_abs <= 2:
             step_values = [0, 0.5, 1.0, 1.5, 2.0]
         else:
             step_values = [0, 1.0, 2.0, 3.0, 4.0, 5.0]
-        
-        # Add negative and positive versions of each step
+ 
+        tick_values = []
         for val in step_values:
             if -val >= data_min and val != 0:
                 tick_values.append(-val)
@@ -305,120 +688,136 @@ def plot_dict_heatmap(unsorted_data_dict, id_set, figsize=(12, 8), title="Neighb
         for val in step_values:
             if val <= data_max and val != 0:
                 tick_values.append(val)
-        
         tick_values = sorted(set(tick_values))
-        
-        # Transform tick values for colorbar positioning
-        transformed_ticks = transform_data(np.array(tick_values))
-        cbar.set_ticks(transformed_ticks)
+ 
+        cbar.set_ticks(transform_data(np.array(tick_values, dtype=float)))
         cbar.set_ticklabels([f'{v:.2f}' for v in tick_values])
         cbar.ax.set_ylabel('Value (centered at 0)', rotation=-90, va="bottom")
-        
+ 
     elif center_at_one:
-        # Custom colormap and scaling for center_at_one mode
-        # Find the actual data range
-        data_min = np.min(data_matrix)
-        data_max = np.max(data_matrix)
-        
-        # Create a custom colormap: blue -> white -> red
-        colors = ['#2166ac', '#4393c3', '#92c5de', '#d1e5f0', '#f7f7f7', 
-                 '#fddbc7', '#f4a582', '#d6604d', '#b2182b']
-        n_bins = 256
-        cmap = LinearSegmentedColormap.from_list('custom_diverging', colors, N=n_bins)
-        
-        # Create nonlinear transformation
-        # Map 0->1 with more resolution, 1+ with less resolution
+        colors = ['#2166ac', '#4393c3', '#92c5de', '#d1e5f0', '#f7f7f7',
+                  '#fddbc7', '#f4a582', '#d6604d', '#b2182b']
+        cmap = LinearSegmentedColormap.from_list('custom_diverging', colors, N=256)
+        cmap.set_bad(color='lightgray')  # nan cells only
+ 
+        # Reference excess from the finite matrix max, shared by matrix and ticks
+        # (previously each call recomputed its own max, misaligning the colorbar).
+        ref_max_excess = max(data_max - 1, 0.0)
+ 
+        inf_pos_level = 0.5 + INF_TINT_DIVERGING
+        inf_neg_level = 0.5 - INF_TINT_DIVERGING
+ 
         def transform_data(data):
-            transformed = np.zeros_like(data)
-            
-            # For values 0 to 1: use square root for faster approach to middle
-            mask_low = data <= 1
-            transformed[mask_low] = 0.5 * np.sqrt(data[mask_low])
-            
-            # For values > 1: use slower logarithmic scaling
-            mask_high = data > 1
-            if np.any(mask_high):
-                # Scale from 0.5 to 1.0 based on log of excess above 1
-                max_excess = np.max(data[mask_high] - 1) if np.any(mask_high) else 0
-                if max_excess > 0:
-                    excess_normalized = np.log1p(data[mask_high] - 1) / np.log1p(max_excess)
-                    transformed[mask_high] = 0.5 + 0.5 * excess_normalized
+            data = np.asarray(data, dtype=float)
+            transformed = np.full(data.shape, np.nan)
+            transformed[np.isposinf(data)] = inf_pos_level
+            transformed[np.isneginf(data)] = inf_neg_level
+            finite = np.isfinite(data)
+            low = finite & (data <= 1)
+            transformed[low] = 0.5 * np.sqrt(np.clip(data[low], 0, None))
+            high = finite & (data > 1)
+            if np.any(high):
+                if ref_max_excess > 0:
+                    excess_norm = np.log1p(data[high] - 1) / np.log1p(ref_max_excess)
+                    transformed[high] = 0.5 + 0.5 * np.clip(excess_norm, 0, 1)
                 else:
-                    transformed[mask_high] = 0.5
-            
+                    transformed[high] = 0.5
             return transformed
-        
-        # Transform the data for visualization
+ 
         transformed_matrix = transform_data(data_matrix)
-        
-        # Create heatmap with custom colormap
         im = ax.imshow(transformed_matrix, cmap=cmap, aspect='auto', vmin=0, vmax=1)
-        
-        # Create custom colorbar with original values
         cbar = ax.figure.colorbar(im, ax=ax)
-        
-        # Set colorbar ticks to show meaningful values
+ 
         if data_max > 1:
             tick_values = [0, 0.25, 0.5, 0.75, 1.0, 1.25, 1.5, 2.0]
-            tick_values = [v for v in tick_values if data_min <= v <= data_max]
         else:
             tick_values = [0, 0.25, 0.5, 0.75, 1.0]
-            tick_values = [v for v in tick_values if data_min <= v <= data_max]
-        
-        # Transform tick values for colorbar positioning
-        transformed_ticks = transform_data(np.array(tick_values))
-        cbar.set_ticks(transformed_ticks)
+        tick_values = [v for v in tick_values if data_min <= v <= data_max]
+ 
+        cbar.set_ticks(transform_data(np.array(tick_values, dtype=float)))
         cbar.set_ticklabels([f'{v:.2f}' for v in tick_values])
-        cbar.ax.set_ylabel('Representation Ratio', rotation=-90, va="bottom")
-        
+        cbar.ax.set_ylabel(bar_label, rotation=-90, va="bottom")
+ 
     else:
-        # Default behavior: white-to-red colormap
-        im = ax.imshow(data_matrix, cmap='Reds', aspect='auto', vmin=0, vmax=1)
-        
-        # Add standard colorbar
+        cmap = plt.cm.Reds.copy()
+        cmap.set_bad(color='lightgray')  # nan cells only
+        # No negative direction on a sequential ramp, so both infinities take the
+        # same mild tint and the hatch direction distinguishes them.
+        inf_pos_level = inf_neg_level = INF_TINT_SEQUENTIAL
+        display_matrix = np.where(np.isinf(data_matrix), INF_TINT_SEQUENTIAL, data_matrix)
+        im = ax.imshow(display_matrix, cmap=cmap, aspect='auto', vmin=0, vmax=1)
         cbar = ax.figure.colorbar(im, ax=ax)
         cbar.ax.set_ylabel('Intensity', rotation=-90, va="bottom")
-    
-    # Set ticks and labels (use sorted_id_set)
+ 
+    # Stripe the infinities: the tint is already painted by imshow, so a
+    # transparent-faced hatch just lays dark lines over it. Runs for every branch
+    # and at every matrix size, unlike the numeric annotations below.
+    has_pos_inf = bool(np.any(np.isposinf(data_matrix)))
+    has_neg_inf = bool(np.any(np.isneginf(data_matrix)))
+    for i, j in zip(*np.nonzero(np.isinf(data_matrix))):
+        hatch = '///' if data_matrix[i, j] > 0 else '\\\\\\'
+        ax.add_patch(Rectangle((j - 0.5, i - 0.5), 1, 1, facecolor='none',
+                               edgecolor=STRIPE_COLOR, hatch=hatch, linewidth=0))
+ 
+    # Legend, only when there is actually a stripe on the plot to explain. The
+    # tint alone no longer reads as "extreme", so this is what carries the meaning.
+    legend_handles = []
+    if has_pos_inf:
+        legend_handles.append(Patch(facecolor=cmap(inf_pos_level), edgecolor=STRIPE_COLOR,
+                                    hatch='///', label='\u221e  (divide by zero)'))
+    if has_neg_inf:
+        legend_handles.append(Patch(facecolor=cmap(inf_neg_level), edgecolor=STRIPE_COLOR,
+                                    hatch='\\\\\\', label='-\u221e  (divide by zero)'))
+ 
+    # Ticks and labels (truncated so long names don't squish the plot)
     ax.set_xticks(np.arange(len(sorted_id_set)))
     ax.set_yticks(np.arange(len(keys)))
-    ax.set_xticklabels(sorted_id_set)
+    ax.set_xticklabels([_truncate(s) for s in sorted_id_set], fontsize=8)
+ 
     labels = list(keys)
     if labels and labels[-1] == 0:
         labels[-1] = 'Excluded (0)'
-    ax.set_yticklabels(labels)
-
-    # Rotate x-axis labels for better readability
+    ax.set_yticklabels([_truncate(s) for s in labels], fontsize=8)
+ 
     plt.setp(ax.get_xticklabels(), rotation=45, ha="right", rotation_mode="anchor")
-    
-    # Add text annotations only if id_set is not too large
+ 
+    # Annotations: color carries magnitude, glyph carries provenance.
     if len(sorted_id_set) <= 20:
         for i in range(len(keys)):
             for j in range(len(sorted_id_set)):
-                # Use original data values for annotations
-                text = ax.text(j, i, f'{data_matrix[i, j]:.3f}',
-                              ha="center", va="center", color="black", fontsize=8)
-
-    ret_dict = {}
-
-    for i, row in enumerate(data_matrix):
-        ret_dict[keys[i]] = row
-    
-    # Set labels and title
-    if center_at_zero:
+                val = data_matrix[i, j]
+                if np.isfinite(val):
+                    txt = f'{val:.3f}'
+                elif np.isposinf(val):
+                    txt = '\u221e'
+                elif np.isneginf(val):
+                    txt = '-\u221e'
+                else:
+                    txt = 'n/a'
+                ax.text(j, i, txt, ha="center", va="center", color="black", fontsize=8)
+ 
+    ret_dict = {keys[i]: row for i, row in enumerate(data_matrix)}
+ 
+    if x_label:
+        ax.set_xlabel(x_label)
+    elif center_at_zero:
         ax.set_xlabel('Value Relative to Zero')
     elif center_at_one:
         ax.set_xlabel('Representation Factor of Node Type')
     else:
         ax.set_xlabel('Proportion of Node Type')
-
+ 
     ax.set_ylabel(f'{sublabel}')
     ax.set_title(title)
-    
-    # Adjust layout to prevent label cutoff
+ 
+    # Placed after set_xlabel so the legend anchors clear of the rotated tick labels.
+    if legend_handles:
+        ax.legend(handles=legend_handles, loc='upper left', bbox_to_anchor=(0.0, -0.16),
+                  ncol=len(legend_handles), frameon=False, fontsize=8,
+                  handlelength=2.2, handleheight=1.4)
     plt.tight_layout()
     plt.show()
-
+ 
     return ret_dict, sorted_id_set
     
 
@@ -1444,7 +1843,7 @@ def _generate_graph_consistent_colors(labels, idens=None):
     return [color_map.get(lbl, '#808080') for lbl in labels]
 
 
-def create_neighbor_heatmap(distance_dict, identities, dpi=300, title="Nearest Neighbor Distance Matrix", subtitle="Average spatial distances between node populations", y_label="Distance", color_swap=False):
+def create_neighbor_heatmap(distance_dict, identities, dpi=300, title="Nearest Neighbor Distance Matrix", subtitle="Average spatial distances between node populations", y_label="Distance", color_swap=False, max_label_length=20):
     """
     Create a professional heatmap from nearest neighbor distance data.
 
@@ -1462,7 +1861,16 @@ def create_neighbor_heatmap(distance_dict, identities, dpi=300, title="Nearest N
     color_swap : bool
         If True, uses blue-to-red colormap with log1p normalization
         to better handle left-skewed distributions.
+    max_label_length : int or None
+        Maximum displayed length for axis tick labels. Longer labels are
+        cropped with a trailing ellipsis. Set to None to disable truncation.
     """
+
+    def _truncate(label, max_len):
+        s = str(label)
+        if max_len is None or len(s) <= max_len:
+            return s
+        return s[:max_len - 1] + '…'
 
     class Log1pNorm(mcolors.Normalize):
         """Normalize using log1p to handle zero values and left-skewed distributions."""
@@ -1516,11 +1924,12 @@ def create_neighbor_heatmap(distance_dict, identities, dpi=300, title="Nearest N
     # Plot heatmap
     im = ax.imshow(matrix, cmap=cmap, norm=norm, aspect='auto', interpolation='nearest')
 
-    # Set ticks and labels using sorted identities
+    # Set ticks and labels using sorted identities (truncated for display)
+    display_labels = [_truncate(lbl, max_label_length) for lbl in sorted_identities]
     ax.set_xticks(np.arange(n))
     ax.set_yticks(np.arange(n))
-    ax.set_xticklabels(sorted_identities, color='#cccccc', fontsize=11, fontweight='500')
-    ax.set_yticklabels(sorted_identities, color='#cccccc', fontsize=11, fontweight='500')
+    ax.set_xticklabels(display_labels, color='#cccccc', fontsize=11, fontweight='500')
+    ax.set_yticklabels(display_labels, color='#cccccc', fontsize=11, fontweight='500')
 
     plt.setp(ax.get_xticklabels(), rotation=45, ha='right', rotation_mode='anchor')
 

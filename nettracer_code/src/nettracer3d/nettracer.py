@@ -38,8 +38,108 @@ from collections import defaultdict, deque
 import pickle
 from . import neighborhoods as nhoods
 import random
+import warnings
+from numba import njit
 from typing import Optional, Tuple
 
+
+# for edge counting: 
+
+@njit(cache=True, nogil=True)
+def _count_edges_numba(U, V, id_start, id_count, id_flat, n_labels):
+    """
+    Edge counting over a CSR-style identity layout.
+
+    Node n's label codes are id_flat[id_start[n] : id_start[n] + id_count[n]].
+    A count of 0 means unlabeled; those edges are skipped, matching the
+    KeyError continue in the Python version.
+
+    Unordered identity pairs are deduplicated per edge, and counting gets one
+    increment per distinct identity present across both endpoints.
+    """
+    matrix = np.zeros((n_labels, n_labels), np.int64)
+    counting = np.zeros(n_labels, np.int64)
+    seen_pair = np.zeros((n_labels, n_labels), np.uint8)
+    seen_iden = np.zeros(n_labels, np.uint8)
+
+    for e in range(U.shape[0]):
+        u = U[e]
+        v = V[e]
+        nu = id_count[u]
+        nv = id_count[v]
+        if nu == 0 or nv == 0:
+            continue
+        su = id_start[u]
+        sv = id_start[v]
+
+        if nu == 1 and nv == 1:
+            a = id_flat[su]
+            b = id_flat[sv]
+            if a == b:
+                matrix[a, a] += 1
+                counting[a] += 1
+            else:
+                matrix[b, a] += 1
+                matrix[a, b] += 1
+                counting[a] += 1
+                counting[b] += 1
+            continue
+
+        for i in range(nu):
+            a = id_flat[su + i]
+            for j in range(nv):
+                b = id_flat[sv + j]
+                lo = a if a < b else b
+                hi = b if a < b else a
+                if seen_pair[lo, hi] == 0:
+                    seen_pair[lo, hi] = 1
+                    if lo == hi:
+                        matrix[lo, lo] += 1
+                    else:
+                        matrix[hi, lo] += 1
+                        matrix[lo, hi] += 1
+
+        for i in range(nu):
+            a = id_flat[su + i]
+            if seen_iden[a] == 0:
+                seen_iden[a] = 1
+                counting[a] += 1
+        for j in range(nv):
+            b = id_flat[sv + j]
+            if seen_iden[b] == 0:
+                seen_iden[b] = 1
+                counting[b] += 1
+
+        for i in range(nu):
+            a = id_flat[su + i]
+            seen_iden[a] = 0
+            for j in range(nv):
+                b = id_flat[sv + j]
+                lo = a if a < b else b
+                hi = b if a < b else a
+                seen_pair[lo, hi] = 0
+        for j in range(nv):
+            seen_iden[id_flat[sv + j]] = 0
+
+    return matrix, counting
+
+
+def _build_identity_csr(node_identities, ref_dict, max_node):
+    """Flatten {node: [labels]} into CSR arrays indexed by node id."""
+    id_start = np.zeros(max_node + 1, np.int64)
+    id_count = np.zeros(max_node + 1, np.int64)
+    total = sum(len(ids) for node, ids in node_identities.items() if node <= max_node)
+    id_flat = np.empty(total, np.int64)
+    pos = 0
+    for node, ids in node_identities.items():
+        if node > max_node:
+            continue
+        id_start[node] = pos
+        id_count[node] = len(ids)
+        for x in ids:
+            id_flat[pos] = ref_dict[x]
+            pos += 1
+    return id_start, id_count, id_flat
 
 #These next several methods relate to searching with 3D objects by dilating each one in a subarray around their neighborhood although I don't explicitly use this anywhere... can call them deprecated although I may want to use them later again so I have them still written out here.
 
@@ -186,22 +286,9 @@ def find_shared_value_pairs(input_dict):
 #Below are helper methods that are used for the main algorithm (calculate_all)
 
 def array_trim(edge_array, node_array):
-    """Internal method used by the primary algorithm to efficiently and massively reduce extraneous search regions for edge-node intersections"""
-    edge_list = edge_array.flatten() #Turn arrays into lists
-    node_list = node_array.flatten()
-
-    edge_bools = edge_list != 0 #establish where edges/nodes exist by converting to a boolean list
-    node_bools = node_list != 0
-
-    overlaps = edge_bools * node_bools #Establish boolean list where edges and nodes intersect.
-
-    edge_overlaps = overlaps * edge_list #Set all vals in the edges/nodes to 0 where intersections are not occurring
-    node_overlaps = overlaps * node_list
-
-    edge_overlaps = remove_zeros(edge_overlaps) #Remove all values where intersections are not present, so we don't have to iterate through them later
-    node_overlaps = remove_zeros(node_overlaps)
-
-    return edge_overlaps, node_overlaps
+    """Reduce two label arrays to only the elements where both are nonzero."""
+    mask = np.logical_and(edge_array, node_array)
+    return edge_array[mask], node_array[mask]
 
 def establish_connections_parallel(edge_labels, num_edge, node_labels):
     """Internal method used by the primary algorithm to look at dilated edges array and nodes array. Iterates through edges. 
@@ -237,7 +324,6 @@ def establish_connections_parallel(edge_labels, num_edge, node_labels):
         else:
             return None
 
-    #These lines makes CPU run for loop iterations simultaneously, speeding up the program:
     with concurrent.futures.ThreadPoolExecutor() as executor:
         results = list(executor.map(process_edge, range(1, num_edge + 1)))
 
@@ -286,22 +372,22 @@ def extract_pairwise_connections(connections):
         # Retrieve the results as they are completed
         for future in concurrent.futures.as_completed(futures):
             pairwise_connections.extend(future.result())
-    
+
     return pairwise_connections
 
 
 #Saving outputs
 def create_and_save_dataframe(pairwise_connections, excel_filename=None):
     """Internal method used to convert lists of discrete connections into an excel output"""
-    
-    # Create DataFrame directly from the connections with 3 columns
-    df = pd.DataFrame(pairwise_connections, columns=['Node A', 'Node B', 'Edge C'])
-    
+ 
+    # np.asarray -> DataFrame is much faster than building from a Python
+    # list-of-lists when there are many rows (pandas skips per-row inference).
+    arr = np.asarray(pairwise_connections)
+    df = pd.DataFrame(arr, columns=['Node A', 'Node B', 'Edge C'])
+ 
     if excel_filename is not None:
-        # Remove file extension if present to use as base path
         base_path = excel_filename.rsplit('.', 1)[0]
-        
-        # First try to save as CSV
+ 
         try:
             csv_path = f"{base_path}.csv"
             df.to_csv(csv_path, index=False)
@@ -309,8 +395,7 @@ def create_and_save_dataframe(pairwise_connections, excel_filename=None):
             return
         except Exception as e:
             print(f"Could not save as CSV: {str(e)}")
-            
-            # If CSV fails, try to save as Excel
+ 
             try:
                 xlsx_path = f"{base_path}.xlsx"
                 df.to_excel(xlsx_path, index=False)
@@ -414,8 +499,9 @@ def invert_dict_special(d):
 
 def invert_array(array):
     """Internal method used to flip node array indices. 0 becomes 255 and vice versa."""
-    inverted_array = np.where(array == 0, 255, 0).astype(np.uint8)
-    return inverted_array
+    out = (array == 0).view(np.uint8)   # zero-copy: bool and uint8 are both 1 byte
+    out *= 255                          # in place
+    return out
 
 def invert_boolean(array):
     """Internal method to flip a boolean array"""
@@ -423,10 +509,8 @@ def invert_boolean(array):
     return inverted_array
 
 def establish_edges(nodes, edge):
-    """Internal  method used to black out where edges interact with nodes"""
-    invert_nodes = invert_array(nodes)
-    edges = edge * invert_nodes
-    return edges
+    """Zero out edge values wherever a node is present."""
+    return np.where(nodes, 0, edge)
 
 def establish_inner_edges(nodes, edge):
     """Internal method to find inner edges that may exist betwixt dilated nodes."""
@@ -1012,7 +1096,7 @@ def remove_branches_deep(skeleton, length):
 
 
 
-def estimate_object_radii(labeled_array, gpu=False, n_jobs=None, xy_scale = 1, z_scale = 1):
+def estimate_object_radii(labeled_array, gpu=False, n_jobs=None, mode = 0, xy_scale = 1, z_scale = 1):
     """
     Estimate the radii of labeled objects in a 3D numpy array.
     Dispatches to appropriate implementation based on parameters.
@@ -1043,45 +1127,18 @@ def estimate_object_radii(labeled_array, gpu=False, n_jobs=None, xy_scale = 1, z
         print("Warning: GPU acceleration requested but CuPy not available. Falling back to CPU.")
         gpu = False
     
+
     if gpu:
-        return morphology.estimate_object_radii_gpu(labeled_array, xy_scale = xy_scale, z_scale = z_scale)
+        return morphology.estimate_object_radii_gpu(labeled_array, xy_scale = xy_scale, z_scale = z_scale) # Deprecated
     else:
-        return morphology.estimate_object_radii_cpu(labeled_array, n_jobs, xy_scale = xy_scale, z_scale = z_scale)
+        return morphology.estimate_object_radii_cpu(labeled_array, n_jobs, mode = mode, xy_scale = xy_scale, z_scale = z_scale)
 
 def get_surface_areas(labeled, xy_scale=1, z_scale=1):
-    labels = np.unique(labeled)
-    labels = labels[labels > 0]
-    max_label = int(np.max(labeled))
-    
-    surface_areas = np.zeros(max_label + 1, dtype=np.float64)
-    
-    for axis in range(3):
-        if axis == 2:
-            face_area = xy_scale * xy_scale
-        else:
-            face_area = xy_scale * z_scale
-        
-        for direction in [-1, 1]:
-            # Pad with zeros only on the axis we're checking
-            pad_width = [(1, 1) if i == axis else (0, 0) for i in range(3)]
-            padded = np.pad(labeled, pad_width, mode='constant', constant_values=0)
-            
-            # Roll the padded array
-            shifted = np.roll(padded, direction, axis=axis)
-            
-            # Extract the center region (original size) from shifted
-            slices = [slice(1, -1) if i == axis else slice(None) for i in range(3)]
-            shifted_cropped = shifted[tuple(slices)]
-            
-            # Find exposed faces
-            exposed_faces = (labeled != shifted_cropped) & (labeled > 0)
-            
-            face_counts = np.bincount(labeled[exposed_faces], 
-                                     minlength=max_label + 1)
-            surface_areas += face_counts * face_area
-    
-    result = {int(label): float(surface_areas[label]) for label in labels}
-    return result
+    from . import crofton_surface as crofs
+
+    areas = crofs.crofton_surface_areas(labeled, spacing=(z_scale, xy_scale, xy_scale))
+
+    return areas
 
 def save_json(filename, my_dict):
 
@@ -1098,40 +1155,16 @@ def save_json(filename, my_dict):
 
 
 def get_background_surface_areas(labeled, xy_scale=1, z_scale=1):
-    """Calculate surface area exposed to background (value 0) for each object."""
-    labels = np.unique(labeled)
-    labels = labels[labels > 0]
-    max_label = int(np.max(labeled))
-    
-    surface_areas = np.zeros(max_label + 1, dtype=np.float64)
-    
-    for axis in range(3):
-        if axis == 2:
-            face_area = xy_scale * xy_scale
-        else:
-            face_area = xy_scale * z_scale
-        
-        for direction in [-1, 1]:
-            # Pad with zeros only on the axis we're checking
-            pad_width = [(1, 1) if i == axis else (0, 0) for i in range(3)]
-            padded = np.pad(labeled, pad_width, mode='constant', constant_values=0)
-            
-            # Roll the padded array
-            shifted = np.roll(padded, direction, axis=axis)
-            
-            # Extract the center region (original size) from shifted
-            slices = [slice(1, -1) if i == axis else slice(None) for i in range(3)]
-            shifted_cropped = shifted[tuple(slices)]
-            
-            # Find faces exposed to background (neighbor is 0)
-            exposed_faces = (shifted_cropped == 0) & (labeled > 0)
-            
-            face_counts = np.bincount(labeled[exposed_faces], 
-                                     minlength=max_label + 1)
-            surface_areas += face_counts * face_area
-    
-    result = {int(label): float(surface_areas[label]) for label in labels}
-    return result
+    """Surface area of each object exposed to background (label 0).
+ 
+    For an isolated object this equals get_surface_areas(). Where objects
+    touch, the difference between the two is the contact area between them.
+    """
+    from . import crofton_surface as crofs
+
+    return crofs.crofton_surface_areas(
+        labeled, spacing=(z_scale, xy_scale, xy_scale), interface="background"
+    )
 
 
 def get_background_proportion(labeled, xy_scale=1, z_scale=1):
@@ -1255,10 +1288,9 @@ def break_and_label_skeleton(skeleton, nodes, unify=False):
     labeled : ndarray — each skeleton segment gets a unique label
     verts : ndarray or None — the original nodes (only when unify=True)
     """
-    inverted_nodes = invert_array(nodes)
-    broken = skeleton * inverted_nodes
+    broken = (nodes == 0)
+    np.logical_and(broken, skeleton, out=broken)   # no new allocation
     labeled, _ = label_objects(broken)
-
     verts = nodes if unify else None
     return labeled, verts
 
@@ -1755,26 +1787,139 @@ def fill_holes_3d_old(array, head_on = False, fill_borders = True):
         return array_xy * 255
 
 
+def _target_shape(in_shape, zoom_factors):
+    """Output shape scipy.ndimage.zoom would produce, so sparse/dense agree."""
+    zf = np.broadcast_to(np.asarray(zoom_factors, dtype=float), (len(in_shape),))
+    return tuple(max(1, int(round(s * z))) for s, z in zip(in_shape, zf))
+ 
+ 
+def _nn_resize(arr, out_shape):
+    """Exact nearest-neighbour resample to an explicit shape. No interpolation."""
+    if tuple(arr.shape) == tuple(out_shape):
+        return arr
+    idx = [((np.arange(o) * i) // o).astype(np.intp)
+           for o, i in zip(out_shape, arr.shape)]
+    return arr[np.ix_(*idx)]
+ 
+ 
+def _sparse_mode_reduce(data, out_shape):
+    """
+    Block-reduce `data` to `out_shape` taking the modal non-zero label per block.
+ 
+    Blocks are defined by the same integer mapping used for nearest-neighbour
+    resampling, so non-integer factors just give blocks of slightly unequal size.
+    Work and memory scale with the number of foreground voxels, not with the
+    volume, which is what makes this cheap on genuinely sparse label data.
+    """
+    out = np.zeros(out_shape, dtype=data.dtype)
+ 
+    coords = np.nonzero(data)
+    if coords[0].size == 0:
+        return out
+    vals = data[coords]
+ 
+    # Which output block does each foreground voxel fall into?
+    block_idx = tuple(
+        np.minimum((c.astype(np.int64, copy=False) * o) // i, o - 1)
+        for c, i, o in zip(coords, data.shape, out_shape)
+    )
+    flat_block = np.ravel_multi_index(block_idx, out_shape).astype(np.int64, copy=False)
+    n_blocks = np.int64(np.prod(out_shape))
+ 
+    # Pack (block, label) into a single integer key. Use the raw label values as
+    # the low digits when they fit, otherwise densify them first.
+    span = int(vals.max()) + 1 if np.issubdtype(vals.dtype, np.integer) else 0
+    if span and int(n_blocks) * span < (1 << 62):
+        uniq_vals, codes = None, vals.astype(np.int64, copy=False)
+        n_vals = np.int64(span)
+    else:
+        # Label ids too large (or non-integer) to pack directly: densify first.
+        uniq_vals, codes = np.unique(vals, return_inverse=True)
+        codes = codes.astype(np.int64, copy=False).ravel()
+        n_vals = np.int64(uniq_vals.size)
+ 
+    keys, counts = np.unique(flat_block * n_vals + codes, return_counts=True)
+ 
+    # np.unique returns keys sorted, hence already grouped by block and, within a
+    # block, ordered by ascending label. So the winner of each block is the first
+    # entry attaining that block's maximum count -- no second sort needed, and
+    # ties resolve toward the smallest label id (deterministic).
+    starts = np.flatnonzero(np.r_[True, keys[1:] // n_vals != keys[:-1] // n_vals])
+    group_of = np.repeat(np.arange(starts.size),
+                         np.diff(np.r_[starts, np.int64(keys.size)]))
+    is_max = counts == np.maximum.reduceat(counts, starts)[group_of]
+    cand = np.flatnonzero(is_max)
+    winner = cand[np.r_[True, group_of[cand][1:] != group_of[cand][:-1]]]
+ 
+    win_keys = keys[winner]
+    labels = win_keys % n_vals
+    flat = out.reshape(-1)
+    flat[win_keys // n_vals] = labels if uniq_vals is None else uniq_vals[labels]
+    return flat.reshape(out_shape)
+ 
+ 
+def _sparse_zoom(data, zoom_factors, out_shape=None):
+    """Sparse equivalent of scipy zoom. Handles mixed up/downsampling per axis."""
+    data = np.asarray(data)
+    if np.issubdtype(data.dtype, np.floating):
+        warnings.warn(
+            "sparse=True treats 0 as background and takes a modal label; it is "
+            "intended for integer segmentations, not float intensity images.",
+            stacklevel=3,
+        )
+    if out_shape is None:
+        out_shape = _target_shape(data.shape, zoom_factors)
+ 
+    # Reduce only the axes that are actually shrinking, then nearest-neighbour
+    # expand any axis that is growing.
+    down_shape = tuple(min(o, i) for o, i in zip(out_shape, data.shape))
+    return _nn_resize(_sparse_mode_reduce(data, down_shape), out_shape)
 
 
+def resize(array, factor, order=0, sparse=False):
+    """
+    Simply resizes an array by a factor.
+ 
+    :param sparse: (Optional - Val = False, bool) - If True, resample with a
+        background-aware modal filter instead of interpolation, so that small
+        non-zero labels are not lost when shrinking. Axes that are being enlarged
+        fall back to nearest-neighbour. Intended for label/segmentation data.
+    """
 
-def resize(array, factor, order = 0):
-    """Simply resizes an array by a factor"""
+    try: # Tuple
+        for item in factor:
+            if item < 1:
+                upsample = False
+                break
+            else:
+                upsample = True
+    except: # Not tuple
+        if factor < 1:
+            upsample = False
+        else:
+            upsample = True
+
+    if upsample or order != 0:
+        sparse = False #There is no reason to use this on an upsample.
 
     if len(array.shape) == 4:  # presumably this is a color image
         processed_arrays = []
         for i in range(array.shape[3]):  # iterate through the color dimension
             color_array = array[:, :, :, i]  # get 3D array for each color channel
-            processed_color = zoom(color_array, (factor), order = order)
-
+            if sparse:
+                processed_color = _sparse_zoom(color_array, factor)
+            else:
+                processed_color = zoom(color_array, (factor), order=order)
             processed_arrays.append(processed_color)
-        
+ 
         # Stack them back together along the 4th dimension
         result = np.stack(processed_arrays, axis=3)
         return result
-
-    array = zoom(array, (factor), order = order)
-
+ 
+    if sparse:
+        return _sparse_zoom(array, factor)
+ 
+    array = zoom(array, (factor), order=order)
     return array
 
 
@@ -1912,20 +2057,11 @@ def approx_boundaries(array, iden_set = None, node_identities = None, keep_label
 
 
 
-def hash_inners(search_region, inner_edges, GPU = False):
-    """Internal method used to help sort out inner edge connections. The inner edges of the array will not differentiate between what nodes they contact if those nodes themselves directly touch each other.
-    This method allows these elements to be efficiently seperated from each other"""
-
+def hash_inners(search_region, inner_edges, GPU=False):
     from skimage.segmentation import find_boundaries
-
     borders = find_boundaries(search_region, mode='thick')
-
-    inner_edges = inner_edges * borders #And as a result, we can mask out only 'inner edges' that themselves exist within borders
-
-    inner_edges = dilate_3D_old(inner_edges, 3, 3, 3) #Not sure if dilating is necessary. Want to ensure that the inner edge pieces still overlap with the proper nodes after the masking.
-
-    return inner_edges
-
+    np.logical_and(borders, inner_edges, out=borders)   # zero new allocation
+    return dilate_3D_old(borders.view(np.uint8), 3, 3, 3)
 
 def dilate_2D(array, search, scaling = 1):
 
@@ -1940,65 +2076,14 @@ def dilate_2D(array, search, scaling = 1):
     return inv
 
 
-def dilate_3D_dt(array, search_distance, xy_scaling=1.0, z_scaling=1.0, fast_dil = False):
-    """
-    Dilate a 3D array using distance transform method. Dt dilation produces perfect results but only works in euclidean geometry and lags in big arrays.
-    
-    Parameters:
-    array -- Input 3D binary array
-    search_distance -- Distance within which to dilate
-    xy_scaling -- Scaling factor for x and y dimensions (default: 1.0)
-    z_scaling -- Scaling factor for z dimension (default: 1.0)
-    
-    Returns:
-    Dilated 3D array
-    """
-
+def dilate_3D_dt(array, search_distance, xy_scaling=1.0, z_scaling=1.0, fast_dil=False):
     if array.shape[0] == 1:
-
-        return dilate_2D(array, search_distance, scaling = xy_scaling) #Use the 2d method in psueod-3d cases
-
-
-    # Invert the array (find background)
+        return dilate_2D(array, search_distance, scaling=xy_scaling)
     inv = array < 1
-
     del array
-
-    """
-    # Determine which dimension needs resampling
-    if (z_scaling > xy_scaling):
-        # Z dimension needs to be stretched
-        zoom_factor = [z_scaling/xy_scaling, 1, 1]  # Scale factor for [z, y, x]
-        rev_factor = [xy_scaling/z_scaling, 1, 1] 
-        cardinal = xy_scaling
-    elif (xy_scaling > z_scaling):
-        # XY dimensions need to be stretched
-        zoom_factor = [1, xy_scaling/z_scaling, xy_scaling/z_scaling]  # Scale factor for [z, y, x]
-        rev_factor = [1, z_scaling/xy_scaling, z_scaling/xy_scaling]  # Scale factor for [z, y, x]
-        cardinal = z_scaling
-    else:
-        # Already uniform scaling, no need to resample
-        zoom_factor = None
-        rev_factor = None
-        cardinal = xy_scaling
-
-    # Resample the mask if needed
-    if zoom_factor:
-        inv = ndimage.zoom(inv, zoom_factor, order=0)  # Use order=0 for binary masks
-    """
-
-    # Compute distance transform (Euclidean)
-    inv = smart_dilate.compute_distance_transform_distance(inv, sampling = [z_scaling, xy_scaling, xy_scaling], fast_dil = fast_dil)
-
-    #inv = inv * cardinal
-    
-    # Threshold the distance transform to get dilated result
-    inv = inv <= search_distance
-
-    #if rev_factor:
-        #inv = ndimage.zoom(inv, rev_factor, order=0)  # Use order=0 for binary masks
-    
-    return inv.astype(np.uint8)
+    return smart_dilate.compute_distance_transform_distance(
+        inv, sampling=[z_scaling, xy_scaling, xy_scaling],
+        fast_dil=fast_dil, threshold=search_distance)
 
 def erode_2D(array, search, scaling=1, preserve_labels = False):
     """
@@ -2222,10 +2307,9 @@ def dilate_3D_old(tiff_array, dilated_x=3, dilated_y=3, dilated_z=3):
     kernel = np.ones((3, 3, 3), dtype=bool)
     
     # Perform binary dilation
-    dilated_array = ndimage.binary_dilation(tiff_array.astype(bool), structure=kernel)
-    
-    return dilated_array.astype(np.uint8)
-
+    out = np.empty(tiff_array.shape, dtype=bool)
+    ndimage.binary_dilation(tiff_array, structure=kernel, output=out)
+    return out.view(np.uint8)
 
 def dilation_length_to_pixels(xy_scaling, z_scaling, micronx, micronz):
     """Internal method to find XY and Z dilation parameters based on voxel micron scaling"""
@@ -2491,17 +2575,24 @@ def apply_edge_correction_to_ripley(roots, targs, proportion, bounds, dim, node_
     
     return roots, mirrored_targs
 
-
 #CLASSLESS FUNCTIONS THAT MAY BE USEFUL TO USERS TO RUN DIRECTLY THAT SUPPORT ANALYSIS IN SOME WAY. NOTE THESE METHODS SOMETIMES ARE USED INTERNALLY AS WELL:
-
-def downsample(data, factor, directory=None, order=0):
+def downsample(data, factor, directory=None, order=0, sparse=False):
     """
-    Can be used to downsample an image by some arbitrary factor. Downsampled output will be saved to the active directory if none is specified.
-    
-    :param data: (Mandatory, string or ndarray) - If string, a path to a tif file to downsample. Note that the ndarray alternative is for internal use mainly and will not save its output.
+    Can be used to downsample an image by some arbitrary factor. Downsampled output
+    will be saved to the active directory if none is specified.
+ 
+    :param data: (Mandatory, string or ndarray) - If string, a path to a tif file to
+        downsample. Note that the ndarray alternative is for internal use mainly and
+        will not save its output.
     :param factor: (Mandatory, int) - A factor by which to downsample the image.
     :param directory: (Optional - Val = None, string) - A filepath to save outputs.
-    :param order: (Optional - Val = 0, int) - The order of interpolation for scipy.ndimage.zoom
+    :param order: (Optional - Val = 0, int) - The order of interpolation for
+        scipy.ndimage.zoom. Ignored when sparse=True.
+    :param sparse: (Optional - Val = False, bool) - If True, downsample with a
+        background-aware modal filter: each output voxel takes the most common
+        non-zero label in its source block, and is 0 only if that block is entirely
+        background. Small or thin labels are preserved (inflated) rather than lost.
+        Intended for label/segmentation volumes, not intensity images.
     :returns: a downsampled ndarray.
     """
     # Load the data if it's a file path
@@ -2511,29 +2602,35 @@ def downsample(data, factor, directory=None, order=0):
     else:
         data2 = None
 
+    if order != 0:
+        sparse = False #There is no reason to use this on an upsample.
+ 
     if len(data.shape) == 4:  # presumably this is a color image
         processed_arrays = []
         for i in range(data.shape[3]):  # iterate through the color dimension
             color_array = data[:, :, :, i]  # get 3D array for each color channel
-            processed_color = downsample(color_array, factor, directory = None, order = order) #right now this is only for internal use - color array downsampling that is
+            processed_color = downsample(color_array, factor, directory=None,
+                                         order=order, sparse=sparse)
             processed_arrays.append(processed_color)
-        
+ 
         # Stack them back together along the 4th dimension
         result = np.stack(processed_arrays, axis=3)
         return result
-    
+ 
     # Check if Z dimension is too small relative to downsample factor
     if data.ndim == 3 and data.shape[0] < factor * 4:
         print(f"Warning: Z dimension ({data.shape[0]}) is less than 4x the downsample factor ({factor}). "
               f"Skipping Z-axis downsampling to preserve resolution.")
-        zoom_factors = (1, 1/factor, 1/factor)
+        zoom_factors = (1, 1 / factor, 1 / factor)
     else:
-        zoom_factors = 1/factor
-
-
+        zoom_factors = 1 / factor
+ 
     # Apply downsampling
-    data = zoom(data, zoom_factors, order=order)
-    
+    if sparse:
+        data = _sparse_zoom(data, zoom_factors)
+    else:
+        data = zoom(data, zoom_factors, order=order)
+ 
     # Save if input was a file path
     if isinstance(data2, str):
         if directory is None:
@@ -2541,10 +2638,8 @@ def downsample(data, factor, directory=None, order=0):
         else:
             filename = f"{directory}/downsampled.tif"
         tifffile.imwrite(filename, data)
-    
+ 
     return data
-
-
 
 
 def otsu_binarize(image_array, non_bool = False):
@@ -2613,6 +2708,16 @@ def convert_to_multigraph(G, weight_attr='weight'):
         - Original node/edge attributes are preserved on first edge
         - Directed graphs become MultiDiGraphs
     """
+
+    if G.is_multigraph():
+        return G
+
+    weights = [data.get(weight_attr, 1) for _, _, data in G.edges(data=True)]
+
+    if all(weight == 1 for weight in weights):
+        return G
+
+    print("Converting network to multigraph (Your graph has weighted edges which indicate duplicates in NetTracer3D...)")
 
     MG = nx.MultiGraph()
     
@@ -2831,10 +2936,9 @@ def label_branches(edges, nodes, skeleton=None, down_factor=None,
 
     # Derive skeleton from edges if not provided
     if skeleton is None:
-        tmp = edges.copy()
-        if down_factor is not None:
-            tmp = downsample(tmp, down_factor)
+        tmp = downsample(edges, down_factor) if down_factor is not None else edges
         skeleton = skeletonize(tmp > 0)
+        del tmp
 
     # Downsample edges to match the (possibly downsampled) skeleton/nodes
     working_edges = edges
@@ -3441,11 +3545,11 @@ def watershed(image, directory = None, proportion = 0.1, GPU = True, smallest_ra
     if labels.shape[1] < original_shape[1]: #If downsample was used, upsample output
         labels = upsample_with_padding(labels, downsample_needed, original_shape)
         labels = labels * old_mask
-        labels = water(-distance, labels, mask=old_mask) # Here i like skimage watershed over smart_label, mainly because skimage just kicks out too-small nodes from the image, while smart label just labels them sort of wrongly.
-        #labels = smart_dilate.smart_label(old_mask, labels, GPU = GPU, predownsample = predownsample2)
+        #labels = water(-distance, labels, mask=old_mask) # Here i like skimage watershed over smart_label, mainly because skimage just kicks out too-small nodes from the image, while smart label just labels them sort of wrongly.
+        labels = smart_dilate.smart_label(old_mask, labels, GPU = GPU, predownsample = predownsample2, mode = 1)
     else:
-        labels = water(-distance, labels, mask=image)
-        #labels = smart_dilate.smart_label(image, labels, GPU = GPU, predownsample = predownsample2)
+        #labels = water(-distance, labels, mask=image)
+        labels = smart_dilate.smart_label(image, labels, GPU = GPU, predownsample = predownsample2, mode = 1)
 
     if directory is None:
         pass
@@ -3455,6 +3559,89 @@ def watershed(image, directory = None, proportion = 0.1, GPU = True, smallest_ra
 
     return labels
 
+def geodesic_flood(array, centroid, distance, connectivity=1, method="auto"):
+    """
+    Parameters
+    ----------
+    array : 3-D ndarray         non-zero = foreground scaffold, zero = background
+    centroid : (z, y, x)        seed voxel (rounded to nearest integer)
+    distance : int              number of voxel-steps to march along the scaffold
+    connectivity : 1 | 2 | 3    what counts as one step (see module docstring)
+    method : "auto" | "dilation" | "bfs"
+        "dilation" - scipy masked geodesic dilation; C-vectorised, best when the
+                     reachable region is dense/blobby.
+        "bfs"      - frontier breadth-first search; only ever touches reachable
+                     voxels, best when the scaffold is thin/sparse relative to its
+                     bounding box (the common case for filaments).
+        "auto"     - pick based on foreground density inside the crop box.
+ 
+    Returns
+    -------
+    uint8 ndarray (same shape as `array`), 255 inside the flooded region else 0.
+    """
+    shape = array.shape
+    out = np.zeros(shape, np.uint8)
+ 
+    c = tuple(int(round(v)) for v in centroid)
+    d = int(distance)
+    if d < 0 or any(not (0 <= c[i] < shape[i]) for i in range(3)):
+        return out
+    if array[c] == 0:                       # seed sits in background -> nothing
+        return out
+ 
+    # The flood can move at most `d` steps, so every reachable voxel lies inside
+    # a (+/- d) box around the seed. Cropping bounds both work and memory.
+    lo = [max(c[i] - d, 0) for i in range(3)]
+    hi = [min(c[i] + d + 1, shape[i]) for i in range(3)]
+    sub = array[lo[0]:hi[0], lo[1]:hi[1], lo[2]:hi[2]]
+    mask = sub != 0
+    seed_local = (c[0] - lo[0], c[1] - lo[1], c[2] - lo[2])
+ 
+    if method == "auto":
+        method = "bfs" if mask.mean() < 0.05 else "dilation"
+ 
+    if method == "dilation":
+        flooded = _flood_dilation(mask, seed_local, d, connectivity)
+    elif method == "bfs":
+        flooded = _flood_bfs(mask, seed_local, d, connectivity)
+    else:
+        raise ValueError("method must be 'auto', 'dilation', or 'bfs'")
+ 
+    out[lo[0]:hi[0], lo[1]:hi[1], lo[2]:hi[2]] = flooded.view(np.uint8) * 255
+    return out
+ 
+ 
+def _flood_dilation(mask, seed, d, connectivity):
+    struct = ndimage.generate_binary_structure(3, connectivity)
+    seed_arr = np.zeros(mask.shape, bool)
+    seed_arr[seed] = True
+    # iterations=d + mask=foreground == geodesic dilation by d steps
+    return ndimage.binary_dilation(seed_arr, struct, iterations=d, mask=mask)
+ 
+ 
+def _flood_bfs(mask, seed, d, connectivity):
+    shape = np.array(mask.shape)
+    struct = ndimage.generate_binary_structure(3, connectivity)
+    offs = np.argwhere(struct) - 1
+    offs = offs[~np.all(offs == 0, axis=1)]          # drop the centre offset
+ 
+    visited = np.zeros(mask.shape, bool)
+    visited[seed] = True
+    frontier = np.array([seed], dtype=np.int64)
+ 
+    for _ in range(d):
+        nb = (frontier[:, None, :] + offs[None, :, :]).reshape(-1, 3)
+        nb = nb[np.all((nb >= 0) & (nb < shape), axis=1)]
+        i, j, k = nb[:, 0], nb[:, 1], nb[:, 2]
+        nb = nb[mask[i, j, k] & ~visited[i, j, k]]
+        if nb.size == 0:
+            break
+        nb = np.unique(nb, axis=0)                    # dedupe within the level
+        visited[nb[:, 0], nb[:, 1], nb[:, 2]] = True
+        frontier = nb
+ 
+    return visited
+    
 def filter_by_size(array, proportion=0.1, directory = None):
     """
     Threshold out objects below a certain proportion of the total volume in a 3D binary array.
@@ -3520,17 +3707,18 @@ def mask(image, mask, directory = None):
 
         image = image * mask
     else:
-        # Split into separate color channels
-        channels = [image[..., i] for i in range(3)]
+        n_channels = image.shape[-1]  # 3 or 4
+
+        # Split into separate channels (including alpha if present)
+        channels = [image[..., i] for i in range(n_channels)]
         masked_channels = []
-        
-        for image in channels:
-            # Upsample each channel separately
-            if len(image.shape) == 2:
-                np.expand_dims(image, axis = 0)
-            image = image * mask
-            masked_channels.append(image)
-            
+
+        for ch in channels:
+            if len(ch.shape) == 2:
+                ch = np.expand_dims(ch, axis=0)  # assign the result!
+            ch = ch * mask
+            masked_channels.append(ch)
+
         # Stack the channels back together
         image = np.stack(masked_channels, axis=-1)
 
@@ -3627,7 +3815,7 @@ def create_convex_hull_mask(binary_array):
     # Delaunay triangulation using only hull vertices
     deln = Delaunay(points[hull.vertices])
     
-    # Create index grid for entire image (memory intensive but fast)
+    # Create index grid for entire image
     idx = np.stack(np.indices(binary_array.shape), axis=-1)
     
     # Vectorized check: find_simplex returns -1 for outside, >= 0 for inside
@@ -3676,7 +3864,16 @@ def encapsulate(parent_dir = None, name = None):
     
     return new_folder_path
 
-
+def _resolve_save_path(directory, filename, default_base, extension):
+    """
+    Builds an output path from an optional directory and optional custom base name.
+    Any extension on `filename` is stripped and replaced with `extension`.
+    """
+    base = default_base if filename is None else os.path.splitext(filename)[0]
+    name = f'{base}{extension}'
+    if not directory:
+        return name
+    return os.path.join(directory, name)
 
 
 #THE 3D NETWORK CLASS
@@ -3761,28 +3958,33 @@ class Network_3D:
         if G is None:
             self._network = None 
             self._network_lists = None
-            self.communities = None
+            #self.communities = None
             return
 
         self._network = G
-        self.communities = None
+        #self.communities = None
         node_pairings = list(G.edges(data=True)) #Assembling the network lists property.
         lista = []
         listb = []
         listc = []
 
         try:
-            #Networks default to have a weighted attribute of 1 if not otherwise weighted. Here we update the weights
-            for u, v, data in node_pairings:
-                weight = data.get('weight', 1)  # Default weight is 1 if not specified
-                for _ in range(weight):
+            if G.is_multigraph():
+                # Each parallel edge already represents one connection
+                for u, v in G.edges():
                     lista.append(u)
                     listb.append(v)
                     listc.append(0)
+            else:
+                #Networks default to have a weighted attribute of 1 if not otherwise weighted. Here we update the weights
+                for u, v, data in node_pairings:
+                    weight = data.get('weight', 1)  # Default weight is 1 if not specified
+                    for _ in range(weight):
+                        lista.append(u)
+                        listb.append(v)
+                        listc.append(0)
             
             self._network_lists = [lista, listb, listc]
-
-
         except:
             pass
 
@@ -3807,7 +4009,7 @@ class Network_3D:
             raise ValueError("network lists must be a list.")
         self._network_lists = value
         self._network, _ = network_analysis.weighted_network(self._network_lists)
-        self.communities = None
+        #self.communities = None
 
     @network_lists.deleter
     def network_lists(self):
@@ -4114,29 +4316,20 @@ class Network_3D:
 
         print(f"Voxel scaling has been written to {file_name}")
 
-    def save_node_centroids(self, directory = None):
+    def save_node_centroids(self, directory=None, filename=None):
         """
-        Can be called on a Network_3D object to save the node centroids properties to hard mem as a .xlsx file. It will save to the active directory if none is specified.
-        :param directory: (Optional - Val = None; String). The path to an indended directory to save the centroids to.
+        Can be called on a Network_3D object to save the node centroids properties to hard mem as a .csv file.
+        It will save to the active directory if none is specified.
+        :param directory: (Optional - Val = None; String). The path to an intended directory to save the centroids to.
+        :param filename: (Optional - Val = None; String). Custom base name for the output file. Any extension
+                         passed in is stripped, since .csv is applied automatically.
+                         Defaults to 'node_centroids'.
         """
+        path = _resolve_save_path(directory, filename, 'node_centroids', '.csv')
+        centroid_dict = self._node_centroids if self._node_centroids is not None else {}
 
-        if self._node_centroids is not None:
-            if directory is None:
-                network_analysis._save_centroid_dictionary(self._node_centroids, 'node_centroids.xlsx')
-                print("Centroids saved to node_centroids.xlsx")
-
-            if directory is not None:
-                network_analysis._save_centroid_dictionary(self._node_centroids, f'{directory}/node_centroids.xlsx')
-                print(f"Centroids saved to {directory}/node_centroids.xlsx")
-
-        if self._node_centroids is None:
-            if directory is None:
-                network_analysis._save_centroid_dictionary({}, 'node_centroids.xlsx')
-                print("Centroids saved to node_centroids.xlsx")
-
-            if directory is not None:
-                network_analysis._save_centroid_dictionary({}, f'{directory}/node_centroids.xlsx')
-                print(f"Centroids saved to {directory}/node_centroids.xlsx")
+        network_analysis._save_centroid_dictionary(centroid_dict, path)
+        print(f"Centroids saved to {path}")
 
 
     def save_edge_centroids(self, directory = None):
@@ -4186,70 +4379,69 @@ class Network_3D:
         :param directory: (Optional - Val = None; String). The path to an intended directory to save the network lists to.
         """
 
+        try:
+            if self._network_lists is not None:
+                if directory is None:
 
-        if self._network_lists is not None:
-            if directory is None:
+                    temp_list = network_analysis.combine_lists_to_sublists(self._network_lists)
+                    create_and_save_dataframe(temp_list, 'output_network.csv')
 
-                temp_list = network_analysis.combine_lists_to_sublists(self._network_lists)
-                create_and_save_dataframe(temp_list, 'output_network.csv')
+                if directory is not None:
+                    temp_list = network_analysis.combine_lists_to_sublists(self._network_lists)
 
-            if directory is not None:
-                temp_list = network_analysis.combine_lists_to_sublists(self._network_lists)
+                    create_and_save_dataframe(temp_list, f'{directory}/output_network.csv')
 
-                create_and_save_dataframe(temp_list, f'{directory}/output_network.csv')
+            if self._network_lists is None:
+                print("Network associated attributes are empty (must set network_lists property to save network)...")
+        except:
+            print("Could not save network")
 
-        if self._network_lists is None:
-            print("Network associated attributes are empty (must set network_lists property to save network)...")
-
-    def save_node_identities(self, directory = None):
+    def save_node_identities(self, directory=None, filename=None):
         """
-        Can be called on a Network_3D object to save the node_identities property to hard mem as a .csv. It will save to the active directory if none is specified.
+        Can be called on a Network_3D object to save the node_identities property to hard mem as a .csv (and .json).
+        Saves to the active directory if none is specified.
         :param directory: (Optional - Val = None; String). The path to an intended directory to save the node_identities to.
+        :param filename: (Optional - Val = None; String). Custom base name for the output files. Any extension
+                         passed in is stripped, since the .json/.csv suffixes are applied automatically.
+                         Defaults to 'node_identities'.
         """
-        if self._node_identities is not None:
-            if directory is None:
-                save_json('node_identities', self._node_identities)
-                network_analysis.save_singval_iden_dict(self._node_identities, 'NodeID', 'Identity', 'node_identities.csv')
-                print("Node identities saved")
+        if filename is None:
+            base = 'node_identities'
+        else:
+            base = os.path.splitext(filename)[0]  # tolerate 'foo.csv' / 'foo.json' being passed in
 
-            if directory is not None:
-                save_json(f'{directory}/node_identities', self._node_identities)
-                network_analysis.save_singval_iden_dict(self._node_identities, 'NodeID', 'Identity', f'{directory}/node_identities.csv')
-                print(f"Node identities saved to {directory}")
+        if directory is None:
+            json_path = base
+            csv_path = f'{base}.csv'
+        else:
+            json_path = os.path.join(directory, base)
+            csv_path = os.path.join(directory, f'{base}.csv')
 
-        if self._node_identities is None:
-            if directory is None:
-                save_json('node_identities', self._node_identities)
-                network_analysis.save_singval_iden_dict({}, 'NodeID', 'Identity', 'node_identities.csv')
-                print("Node identities saved")
+        # csv writer gets an empty dict when there are no identities, matching prior behavior
+        iden_dict = self._node_identities if self._node_identities is not None else {}
 
-            if directory is not None:
-                save_json(f'{directory}/node_identities', self._node_identities)
-                network_analysis.save_singval_iden_dict({}, 'NodeID', 'Identity', f'{directory}/node_identities.csv')
-                print(f"Node identities saved to {directory}")
+        save_json(json_path, self._node_identities)
+        network_analysis.save_singval_iden_dict(iden_dict, 'NodeID', 'Identity', csv_path)
 
-    def save_communities(self, directory = None):
+        if directory is None:
+            print("Node identities saved")
+        else:
+            print(f"Node identities saved to {directory}")
+
+    def save_communities(self, directory=None, filename=None):
         """
-        Can be called on a Network_3D object to save the communities property to hard mem as a .xlsx. It will save to the active directory if none is specified.
+        Can be called on a Network_3D object to save the communities property to hard mem as a .xlsx.
+        It will save to the active directory if none is specified.
         :param directory: (Optional - Val = None; String). The path to an intended directory to save the communities to.
+        :param filename: (Optional - Val = None; String). Custom base name for the output file. Any extension
+                         passed in is stripped, since .xlsx is applied automatically.
+                         Defaults to 'node_communities'.
         """
-        if self._communities is not None:
-            if directory is None:
-                network_analysis.save_singval_dict(self._communities, 'NodeID', 'Community', 'node_communities.xlsx')
-                print("Communities saved to node_communities.xlsx")
+        path = _resolve_save_path(directory, filename, 'node_communities', '.xlsx')
+        community_dict = self._communities if self._communities is not None else {}
 
-            if directory is not None:
-                network_analysis.save_singval_dict(self._communities, 'NodeID', 'Community', f'{directory}/node_communities.xlsx')
-                print(f"Communities saved to {directory}/node_communities.xlsx")
-
-        if self._communities is None:
-            if directory is None:
-                network_analysis.save_singval_dict({}, 'NodeID', 'Community', 'node_communities.xlsx')
-                print("Communities saved to node_communities.xlsx")
-
-            if directory is not None:
-                network_analysis.save_singval_dict({}, 'NodeID', 'Community', f'{directory}/node_communities.xlsx')
-                print(f"Communities saved to {directory}/node_communities.xlsx")
+        network_analysis.save_singval_dict(community_dict, 'NodeID', 'Community', path)
+        print(f"Communities saved to {path}")
 
     def save_network_overlay(self, directory = None, filename = None, compression = None):
 
@@ -4597,15 +4789,21 @@ class Network_3D:
         print("Could not find node centroids. They must be in the specified directory and named 'node_centroids.xlsx'")
 
 
-    def load_node_identities(self, directory=None, file_path=None, update=False):
+    def load_node_identities(self, directory=None, file_path=None,
+                             update=False, mode=None):
         """
         Load a .xlsx/.csv/.json into the node_identities property as a dictionary.
-        
+
         :param directory: Path to search for 'node_identities.*'.
         :param file_path: Direct path to a specific file.
-        :param update: If True, merge new data into existing node_identities rather than replacing.
+        :param mode: How to combine with existing identities:
+                     'replace'  - discard all existing identities (default)
+                     'override' - replace identities for nodes named in the
+                                  file, leave all other nodes untouched
+                     'update'   - union the identity lists per node
+        :param update: Deprecated. update=True is equivalent to mode='update'.
+                       Ignored when mode is given explicitly.
         """
-
         def normalize_to_lists(d):
             result = {}
             for k, v in d.items():
@@ -4621,6 +4819,21 @@ class Network_3D:
                     result[k] = v
             return result
 
+        def _is_nan_or_empty(val):
+            """Check if a value is NaN, None, or empty."""
+            import math
+            if val is None:
+                return True
+            if isinstance(val, float) and math.isnan(val):
+                return True
+            if isinstance(val, str) and val.strip() in ('', 'nan'):
+                return True
+            if isinstance(val, list):
+                if len(val) == 0:
+                    return True
+                return all(_is_nan_or_empty(item) for item in val)
+            return False
+
         def clean_and_normalize(d):
             try:
                 d = self.clear_null(d)
@@ -4629,6 +4842,8 @@ class Network_3D:
                         d = normalize_to_lists(d)
                 except StopIteration:
                     pass
+                # Purge any entries with NaN/empty identities
+                d = {k: v for k, v in d.items() if not _is_nan_or_empty(v)}
                 return d
             except:
                 return None
@@ -4636,22 +4851,24 @@ class Network_3D:
         def resolve_file_path():
             if file_path is not None:
                 return file_path
-
             items = directory_info(directory)
             valid_names = {'node_identities.json', 'node_identities.csv', 'node_identities.xlsx'}
             found = [item for item in items if item in valid_names]
-
             if not found:
                 return None
-
             prefix = f'{directory}/' if directory else ''
-            # prefer .json, fall back to whatever was found
             for ext in ('node_identities.json', found[0]):
                 path = f'{prefix}{ext}'
                 data = network_analysis.read_excel_to_singval_dict(path)
                 if data:
                     return path
             return f'{prefix}{found[0]}'
+
+        def override_identities(existing, new):
+            # Wholesale per-node replacement: nodes absent from `new` are
+            # left exactly as they were.
+            existing.update(new)
+            return existing
 
         def merge_identities(existing, new):
             for key, values in new.items():
@@ -4663,6 +4880,11 @@ class Network_3D:
                     existing[key] = values
             return existing
 
+        if mode is None:
+            mode = 'update' if update else 'replace'
+        if mode not in ('replace', 'override', 'update'):
+            raise ValueError(f"Unknown node identity load mode: {mode!r}")
+
         resolved = resolve_file_path()
         if resolved is None:
             print("Could not find node identities. They must be in the specified directory "
@@ -4672,12 +4894,21 @@ class Network_3D:
         new_data = network_analysis.read_excel_to_singval_dict(resolved)
         new_data = clean_and_normalize(new_data)
 
-        if update and self._node_identities:
+        if not new_data:
+            print(f"No usable node identities found in {resolved}; "
+                  "existing identities left unchanged")
+            return
+
+        if not self._node_identities:
+            self._node_identities = new_data
+        elif mode == 'update':
             self._node_identities = merge_identities(self._node_identities, new_data)
-        else:
+        elif mode == 'override':
+            self._node_identities = override_identities(self._node_identities, new_data)
+        else:  # 'replace'
             self._node_identities = new_data
 
-        print("Successfully loaded node identities")
+        print(f"Successfully loaded node identities (mode={mode})")
 
     def load_communities(self, directory = None, file_path = None):
         """
@@ -4922,18 +5153,18 @@ class Network_3D:
 
         if type(binary_edges) == str:
             binary_edges = tifffile.imread(binary_edges)
+        else:
+            binary_edges = binary_edges.pop() if isinstance(binary_edges, list) else binary_edges
 
         if skeletonized:
             binary_edges = skeletonize(binary_edges)
 
         if search is not None and hasattr(self, '_nodes') and self._nodes is not None and self._search_region is None:
-            search_region = binarize(self._nodes)
+            self._search_region = binarize(self._nodes)
             dilate_xy, dilate_z = dilation_length_to_pixels(self._xy_scale, self._z_scale, search, search)
-            search_region = dilate_3D_dt(search_region, diledge, self._xy_scale, self._z_scale, fast_dil = fast_dil)
-        else:
-            search_region = binarize(self._search_region)
+            self._search_region = dilate_3D_dt(self._search_region, diledge, self._xy_scale, self._z_scale, fast_dil = fast_dil)
 
-        outer_edges = establish_edges(search_region, binary_edges)
+        outer_edges = establish_edges(self._search_region, binary_edges)
 
         if not inners:
             del binary_edges
@@ -4958,22 +5189,14 @@ class Network_3D:
 
         del binary_edges
 
-        outer_edges = (inner_edges > 0) | (outer_edges > 0)
-
-            #inner_labels, num_edge = ndimage.label(inner_edges)
-
+        np.logical_or(outer_edges, inner_edges, out=outer_edges, casting='unsafe')
         del inner_edges
 
+            #inner_labels, num_edge = ndimage.label(inner_edges)
         outer_edges, num_edge = ndimage.label(outer_edges)
 
-            #labelled_edges = combine_edges(labelled_edges, inner_labels)
-
-            #num_edge = np.max(labelled_edges)
-
-            #if num_edge < 256:
-             #   labelled_edges = labelled_edges.astype(np.uint8)
-            #elif num_edge < 65536:
-             #   labelled_edges = labelled_edges.astype(np.uint16)
+        if num_edge < 65536:
+            outer_edges = outer_edges.astype(np.uint16 if num_edge >= 256 else np.uint8)
 
         self._edges = outer_edges
 
@@ -4982,7 +5205,7 @@ class Network_3D:
         Method to assign a unique numerical label to all discrete objects contained in the ndarray in the nodes property.
         Expects the nodes property to be set to (presumably) a binary ndarray. Sets the nodes property.
         """
-        self._nodes, num_nodes = label_objects(nodes, structure_3d)
+        self._nodes, num_nodes = label_objects(self._nodes, structure_3d)
 
     def combine_nodes(self, root_nodes, other_nodes, other_ID, identity_dict, root_ID = None, centroids = False, down_factor = None):
         """Internal method to merge two labelled node arrays into one"""
@@ -5321,12 +5544,12 @@ class Network_3D:
                     self.save_search_region(directory)
                 except:
                     pass
-
-            self.calculate_edges(edges, diledge = diledge, inners = inners, search = search, remove_edgetrunk = remove_trunk, GPU = GPU, fast_dil = fast_dil, skeletonized = skeletonize) #Will have to be moved out if the second method becomes more directly implemented
+            holder = [edges]
+            del edges
+            self.calculate_edges(holder, diledge = diledge, inners = inners, search = search, remove_edgetrunk = remove_trunk, GPU = GPU, fast_dil = fast_dil, skeletonized = skeletonize) #Will have to be moved out if the second method becomes more directly implemented
         else:
             self._edges, _ = label_objects(edges)
 
-        del edges
         if directory is not None:
             try:
                 self.save_edges(directory)
@@ -5344,18 +5567,18 @@ class Network_3D:
         if self._nodes is None:
             self.load_nodes(directory)
 
-        self.calculate_node_centroids(down_factor)
-        if directory is not None:
-            try:
-                self.save_node_centroids(directory)
-            except:
-                pass
-        self.calculate_edge_centroids(down_factor)
-        if directory is not None:
-            try:
-                self.save_edge_centroids(directory)
-            except:
-                pass
+        #self.calculate_node_centroids(down_factor)
+        #if directory is not None:
+        #    try:
+        #        self.save_node_centroids(directory)
+        #    except:
+        #        pass
+        #self.calculate_edge_centroids(down_factor)
+        #if directory is not None:
+        #    try:
+        #        self.save_edge_centroids(directory)
+        #    except:
+        #        pass
 
 
     def draw_network(self, directory = None, down_factor = None, GPU = False):
@@ -5456,7 +5679,9 @@ class Network_3D:
 
         self._network_lists = network_analysis.remove_dupes(self._network_lists)
 
-        self._network = network_analysis.open_network(self._network_lists)
+        self.network_lists = self.network_lists
+
+        #self._network = network_analysis.open_network(self._network_lists)
 
 
 
@@ -5913,10 +6138,12 @@ class Network_3D:
             weights = np.array(self.network_lists[2])
 
             mask = np.isin(src, list(nodes_set)) & np.isin(dst, list(nodes_set))
+            self._network = None # To save RAM by not letting 2 networks exist at once
 
             self.network_lists[0] = src[mask].tolist()
             self.network_lists[1] = dst[mask].tolist()
             self.network_lists[2] = weights[mask].tolist()
+            self.network_lists = self.network_lists
             print("Updated Network")
         except Exception:
             pass
@@ -6110,7 +6337,7 @@ class Network_3D:
         return hubs, hub_img
 
 
-    def extract_communities(self, color_code = True, down_factor = None, identities = False):
+    def extract_communities(self, color_code = True, down_factor = None, identities = False, alt_color_schema = False, color_blind_schema = False, use_previous = False, custom = False):
 
         def remove_dupe_ids(idens):
 
@@ -6129,9 +6356,9 @@ class Network_3D:
             temp = downsample(self._nodes, down_factor)
             if color_code:
                 if not identities:
-                    image, output = community_extractor.assign_community_colors(self.communities, temp)
+                    image, output = community_extractor.assign_community_colors(self.communities, temp, alt_color_schema = alt_color_schema, color_blind_schema = color_blind_schema, use_previous_communities = use_previous, custom = custom)
                 else:
-                    image, output = community_extractor.assign_community_colors(remove_dupe_ids(self.node_identities), temp)
+                    image, output = community_extractor.assign_community_colors(remove_dupe_ids(self.node_identities), temp, alt_color_schema = alt_color_schema, color_blind_schema = color_blind_schema, use_previous_identities = use_previous, custom = custom)
             else:
                 if not identities:
                     image, output = community_extractor.assign_community_grays(self.communities, temp)
@@ -6142,9 +6369,9 @@ class Network_3D:
 
             if color_code:
                 if not identities:
-                    image, output = community_extractor.assign_community_colors(self.communities, self._nodes)
+                    image, output = community_extractor.assign_community_colors(self.communities, self._nodes, alt_color_schema = alt_color_schema, color_blind_schema = color_blind_schema, use_previous_communities = use_previous, custom = custom)
                 else:
-                    image, output = community_extractor.assign_community_colors(remove_dupe_ids(self.node_identities), self._nodes)
+                    image, output = community_extractor.assign_community_colors(remove_dupe_ids(self.node_identities), self._nodes, alt_color_schema = alt_color_schema, color_blind_schema = color_blind_schema, use_previous_identities = use_previous, custom = custom)
             else:
                 if not identities:
                     image, output = community_extractor.assign_community_grays(self.communities, self._nodes)
@@ -6154,7 +6381,7 @@ class Network_3D:
 
         return image, output
 
-    def node_to_color(self, down_factor = None, mode = 0):
+    def node_to_color(self, down_factor = None, mode = 0, color_mode = 0, use_previous = False):
 
         if mode == 0:
             array = self._nodes
@@ -6170,7 +6397,7 @@ class Network_3D:
             original_shape = array.shape
             array = downsample(array, down_factor)
 
-        array, output = community_extractor.assign_node_colors(items, array)
+        array, output = community_extractor.assign_node_colors(items, array, color_mode = color_mode)
 
         if down_factor is not None:
             array = upsample_with_padding(array, down_factor, original_shape)
@@ -6309,7 +6536,7 @@ class Network_3D:
         return stats
 
 
-    def neighborhood_identities(self, root, directory = None, mode = 0, search = 0, fastdil = False, show_graphs = True):
+    def neighborhood_identities(self, root, directory = None, mode = 0, search = 0, fastdil = False, show_graphs = True, count_edges = False, count_nodes = False):
 
         targets = []
         total_dict = {}
@@ -6329,35 +6556,88 @@ class Network_3D:
             total_dict[val] = 0
             neighborhood_dict[val] = 0
 
-        for node in node_identities:
-            nodeid = node_identities[node]
-            for node_iden in nodeid:
-                total_dict[node_iden] += 1
-            if root in nodeid:
-                targets.append(node)
+        if not count_edges:
+            for node in node_identities:
+                nodeid = node_identities[node]
+                for node_iden in nodeid:
+                    total_dict[node_iden] += 1
+                if root in nodeid:
+                    targets.append(node)
+        elif count_edges:
+            G = convert_to_multigraph(G)
+            for u, v in G.edges():
+                try:
+                    ids_u = node_identities[u]
+                    ids_v = node_identities[v]
+                except KeyError:
+                    continue
+                for iden in set(ids_u) | set(ids_v):
+                    total_dict[iden] += 1
+            for node in node_identities:
+                nodeid = node_identities[node]
+                if root in nodeid:
+                    targets.append(node)
 
         if mode == 0: #search neighbor ids within the network
 
-            for node in G.nodes():
-                try:
-                    nodeid = node_identities[node]
-                    neighbors = list(G.neighbors(node))
-                    for subnode in neighbors:
-                        try:
-                            subnodeid = node_identities[subnode]
-                            if root in subnodeid:
-                                for iden in nodeid:
-                                    neighborhood_dict[iden] += 1
-                                break
-                        except:
-                            pass
+            if not count_edges and not count_nodes:
+                for node in G.nodes():
+                    try:
+                        nodeid = node_identities[node]
+                        neighbors = list(G.neighbors(node))
+                        for subnode in neighbors:
+                            try:
+                                subnodeid = node_identities[subnode]
+                                if root in subnodeid:
+                                    for iden in nodeid:
+                                        neighborhood_dict[iden] += 1
+                                    break
+                            except:
+                                pass
 
-                except:
-                    pass
+                    except:
+                        pass
 
-            title1 = f'Neighborhood Distribution of Nodes in Network from Node Type: {root}'
-            title2 = f'Neighborhood Distribution of Nodes in Network from Node Type {root} as a Proportion (# neighbors with ID x / Total # ID x)'
+                title1 = f'Neighborhood Distribution of Nodes in Network from Node Type: {root}'
+                title2 = f'Neighborhood Distribution of Nodes in Network from Node Type {root} as a Proportion (# neighbors with ID x / Total # ID x)'
+            elif count_edges:
+                for u, v in G.edges():
+                    try:
+                        ids_u = node_identities[u]
+                        ids_v = node_identities[v]
+                    except KeyError:
+                        continue
+                    u_has_root = root in ids_u
+                    v_has_root = root in ids_v
+                    if not (u_has_root or v_has_root):
+                        continue
+                    # Credit the identities on the far side of the edge from root.
+                    # If both endpoints carry root, credit both sides' identities —
+                    # but any single identity is credited at most once per edge,
+                    # matching the batch convention (a root-root edge adds 1 to
+                    # root's tally, not 2).
+                    credited = set()
+                    if u_has_root:
+                        credited.update(ids_v)
+                    if v_has_root:
+                        credited.update(ids_u)
+                    for iden in credited:
+                        neighborhood_dict[iden] += 1
 
+                title1 = f'Edge Counts in Network from Node Type: {root}'
+                title2 = (f'Edge Counts in Network from Node Type {root} as a Proportion '
+                          f'(# edges from {root} to ID x / Total # edges touching ID x)')
+            elif count_nodes:
+                idens = invert_dict_special(self.node_identities)
+                nodes = idens[root]
+                neighbors = set().union(*(self.network.neighbors(n) for n in nodes))
+                for node in neighbors:
+                    node_idens = self.node_identities[node]
+                    for node_iden in node_idens:
+                        neighborhood_dict[node_iden] += 1
+                title1 = f'Node Counts in Network from Node Type: {root}'
+                title2 = (f'Node Counts in Network from Node Type {root} as a Proportion '
+                          f'(# Nodes from {root} to ID x / Total # Nodes ID x)')
 
         elif mode == 1: #Search neighborhoods morphologically, obtain densities
             neighborhood_dict, total_dict, densities = morphology.search_neighbor_ids(self._nodes, targets, node_identities, neighborhood_dict, total_dict, search, self._xy_scale, self._z_scale, root, fastdil = fastdil)
@@ -6381,7 +6661,7 @@ class Network_3D:
 
         return neighborhood_dict, proportion_dict, title1, title2, densities
 
-    def batch_neighborhood_identities(self):
+    def batch_neighborhood_identities(self, count_edges=False, count_nodes = False, edge_list = None):
         G = self._network
         node_identities = self._node_identities
         all_idens = set()
@@ -6392,249 +6672,309 @@ class Network_3D:
         returned_dict = {item: [0] * len(available) for item in available}
         counting_dict = dict.fromkeys(available, 0)
 
-        for node in G.nodes():
-            try:
-                nodeid = node_identities[node]
-            except KeyError:
-                continue
-            # Collect the set of identities present across ALL neighbors
-            neighbor_idens = set()
-            for neighbor in G.neighbors(node):
-                try:
-                    neighbor_idens.update(node_identities[neighbor])
-                except KeyError:
-                    pass
-            # For each neighbor identity acting as "root":
-            # this node has at least one neighbor with that root identity,
-            # so credit each of this node's own identities once.
-            # Using a set mirrors the `break` in the original single-root method.
-            for root_iden in neighbor_idens:
-                for node_iden in nodeid:
-                    returned_dict[root_iden][ref_dict[node_iden]] += 1
+        if count_edges:
+            # Iterate each edge exactly once. Cell [A][B] ends up holding the
+            # number of edges connecting population A to population B (the
+            # matrix is symmetric; A-A edges land on the diagonal once).
+            E = np.asarray(edge_list, dtype=np.int64)
+            U = np.ascontiguousarray(E[:, 0])
+            V = np.ascontiguousarray(E[:, 1])
 
+            max_node = int(max(U.max(), V.max()))
+            if node_identities:
+                max_node = max(max_node, max(node_identities))
 
+            id_start, id_count, id_flat = _build_identity_csr(
+                node_identities, ref_dict, max_node)
 
-        if self.nodes is not None:
-            print("Normalizing rows based on what nodes exist in nodes channel... (delete the nodes channel if this behavior is undesired and you want to normalize based on what's available in the node_identities property)")
-            temp_network = Network_3D(nodes = self.nodes, node_identities = copy.copy(self.node_identities))
-            temp_network.purge_properties()
-            idens = invert_dict_special(temp_network.node_identities)
-        else:
+            matrix, counting = _count_edges_numba(
+                U, V, id_start, id_count, id_flat, len(available))
+
+            for i, item in enumerate(available):
+                returned_dict[item] = matrix[i].tolist()
+                counting_dict[item] = int(counting[i])
+        elif count_nodes:
             idens = invert_dict_special(self.node_identities)
-        for iden in available:
-            counting_dict[iden] = len(idens[iden])
-        del temp_network
+            adj = self.network.adj
+            for iden, nodes in idens.items():
+                neighbors = set().union(*(adj[n] for n in nodes if n in adj)) or set()
+                counting_dict[iden] = len(neighbors)
+                row = returned_dict[iden]
+                for node in neighbors:
+                    try:
+                        node_idens = self.node_identities[node]
+                    except:
+                        continue
+                    for node_iden in node_idens:
+                        row[ref_dict[node_iden]] += 1
+                counting_dict[iden] = len(neighbors)
 
+        # --- Default node-based behavior (unchanged) ---
+        else:
+            for node in G.nodes():
+                try:
+                    nodeid = node_identities[node]
+                except KeyError:
+                    continue
+                # Collect the set of identities present across ALL neighbors
+                neighbor_idens = set()
+                for neighbor in G.neighbors(node):
+                    try:
+                        neighbor_idens.update(node_identities[neighbor])
+                    except KeyError:
+                        pass
+                # For each neighbor identity acting as "root":
+                # this node has at least one neighbor with that root identity,
+                # so credit each of this node's own identities once.
+                for root_iden in neighbor_idens:
+                    for node_iden in nodeid:
+                        returned_dict[root_iden][ref_dict[node_iden]] += 1
+
+        temp_network = None
+        #if self.nodes is not None: # This stuff has moved up a level but I am leaving it here for the time being
+        #    print("Normalizing rows based on what nodes exist in nodes channel... "
+        #          "(delete the nodes channel if this behavior is undesired and you want "
+        #          "to normalize based on what's available in the node_identities property)")
+        #    temp_network = Network_3D(nodes=self.nodes, node_identities=copy.copy(self.node_identities))
+        #    temp_network.purge_properties()
+        #    idens = invert_dict_special(temp_network.node_identities)
+        #else:
+        #    idens = invert_dict_special(self.node_identities)
+
+        idens = invert_dict_special(self.node_identities)
+
+
+        if not count_edges and not count_nodes:
+            for iden in available:
+                try:
+                    counting_dict[iden] = len(idens[iden])
+                except:
+                    counting_dict[iden] = 0
+
+        if temp_network is not None:
+            del temp_network
         return returned_dict, available, ref_dict, counting_dict
 
 
-    def get_ripley(self, root = None, targ = None, distance = 1, edgecorrect = True, bounds = None, ignore_dims = False, proportion = 0.5, mode = 0, safe = False, factor = 0.25):
+    def get_ripley(self, root=None, targ=None, distance=1, edgecorrect=True,
+                   bounds=None, ignore_dims=False, proportion=0.5, mode=0,
+                   safe=False, factor=0.25):
+        """
+        Ripley's K / H between a root population and a target population.
 
-        is_subset = False
+        root, targ    : a single node identity each.  If either is None the
+                        analysis is run on every node against every other node.
+        distance      : bucket width for the r values (scaled internally).
+        edgecorrect   : mirror points across the image border.
+        bounds        : (min_coords, max_coords) in (x, y, z) order.  Derived
+                        from the centroids when omitted.
+        ignore_dims   : drop root points that sit too close to a border.
+        proportion    : fraction of the image the r values may span.
+        mode          : 0 image border, 1 edges mask, 2 overlay1, 3 overlay2.
+        safe          : cap the search radius so it stays inside the border.
+        factor        : how internal a root point has to be to survive.
 
-        if bounds is None:
-            big_array = proximity.convert_centroids_to_array(list(self.node_centroids.values()))
-            min_coords = np.array([0,0,0])
-            max_coords = [np.max(big_array[:, 0]), np.max(big_array[:, 1]), np.max(big_array[:, 2])]
-            del big_array
-            max_coords = np.flip(max_coords)
-            bounds = (min_coords, max_coords)
+        Returns (r_vals, k_vals, h_vals).
+        """
+
+        # ---- search volume -------------------------------------------------
+        min_coords, max_coords = self._ripley_bounds(bounds)
+        bounds = (min_coords, max_coords)
+        sides = max_coords - min_coords
+
+        dim = self._ripley_dim()
+        if dim == 2:
+            volume = sides[0] * sides[1] * self.xy_scale ** 2
         else:
-            min_coords, max_coords = bounds
+            volume = np.prod(sides) * self.z_scale * self.xy_scale ** 2
 
-        min_bounds, max_bounds = bounds
-        sides = max_bounds - min_bounds
-        # Set max_r to None since we've handled edge effects through mirroring
-
-        if root is None or targ is None: #Self clustering in this case
-            roots = self._node_centroids.values()
-            root_ids = self.node_centroids.keys()
-            targs = self._node_centroids.values()
+        # ---- pick the two populations --------------------------------------
+        if root is None or targ is None:
+            # Self clustering: every node is both a root and a target.
+            root_ids = list(self._node_centroids.keys())
+            root_centroids = list(self._node_centroids.values())
+            targ_centroids = list(self._node_centroids.values())
             is_subset = True
         else:
-            if root:
-                root_list = ast.literal_eval(root)
-                    
-                if len(root_list) == 1:
-                    # Single identity: find all nodes containing this identity
-                    root = root_list[0]
-                    roots = [
-                        self.node_centroids[node] 
-                        for node, identity_list in self.node_identities.items() 
-                        if root in identity_list
-                    ]
-                else:
-                    # Multiple identities: exact match only
-                    roots = [
-                        self.node_centroids[node] 
-                        for node, identity_list in self.node_identities.items() 
-                        if identity_list == root_list
-                    ]
-            else:
-                roots = None
-            if targ:
-                targ_list = ast.literal_eval(targ)
-                    
-                if len(targ_list) == 1:
-                    # Single identity: find all nodes containing this identity
-                    targ = targ_list[0]
-                    targs = [
-                        self.node_centroids[node] 
-                        for node, identity_list in self.node_identities.items() 
-                        if targ in identity_list
-                    ]
-                else:
-                    # Multiple identities: exact match only
-                    targs = [
-                        self.node_centroids[node] 
-                        for node, identity_list in self.node_identities.items() 
-                        if identity_list == targ_list
-                    ]
-            else:
-                targs = None
-        if not is_subset:
-            if np.array_equal(roots, targs):
-                is_subset = True
+            root_ids = [node for node, identities in self.node_identities.items()
+                        if root in identities]
+            root_centroids = [self.node_centroids[node] for node in root_ids]
+            targ_centroids = [self.node_centroids[node]
+                              for node, identities in self.node_identities.items()
+                              if targ in identities]
+            is_subset = np.array_equal(root_centroids, targ_centroids)
 
-        rooties = proximity.convert_centroids_to_array(roots, xy_scale = self.xy_scale, z_scale = self.z_scale)
-        targs = proximity.convert_centroids_to_array(targs, xy_scale = self.xy_scale, z_scale = self.z_scale)
-        
-        try:
-            if self.nodes.shape[0] == 1:
-                dim = 2
-            else:
-                dim = 3
-        except:
-            dim = 2
-            for centroid in self.node_centroids.values():
-                if centroid[0] != 0:
-                    dim = 3
-                    break
+        root_points = proximity.convert_centroids_to_array(
+            root_centroids, xy_scale=self.xy_scale, z_scale=self.z_scale)
+        targ_points = proximity.convert_centroids_to_array(
+            targ_centroids, xy_scale=self.xy_scale, z_scale=self.z_scale)
 
-        if dim == 2:
-            volume = sides[0] * sides[1] * self.xy_scale**2
-        else:
-            volume = np.prod(sides) * self.z_scale * self.xy_scale**2
+        # r values come from the full, unfiltered cloud even when roots get
+        # trimmed below, so build this before any border exclusion.
+        points_array = np.vstack((root_points, targ_points))
+        n_subset = len(targ_points)
 
-        points_array = np.vstack((rooties, targs))
-        del rooties
         max_r = None
         if safe:
             proportion = factor
-            
 
+        # ---- optionally drop root points that sit near a border -------------
         if ignore_dims:
-
-            new_list = []
-
             if mode == 0:
-
-                try:
-                    dim_list = max_coords - min_coords
-                except:
-                    min_coords = np.array([0,0,0])
-                    bounds = (min_coords, max_coords)
-                    dim_list = max_coords - min_coords
-
-                for centroid in roots:
-                    # Assuming centroid is [z, y, x] based on your indexing
-                    z, y, x = centroid[0], centroid[1], centroid[2]
-                    
-                    # Check x-dimension
-                    x_ok = (x - min_coords[0]) > dim_list[0] * factor and (max_coords[0] - x) > dim_list[0] * factor
-                    # Check y-dimension  
-                    y_ok = (y - min_coords[1]) > dim_list[1] * factor and (max_coords[1] - y) > dim_list[1] * factor
-                    
-                    if dim == 3:  # 3D case
-                        # Check z-dimension
-                        z_ok = (z - min_coords[2]) > dim_list[2] * factor and (max_coords[2] - z) > dim_list[2] * factor
-                        if x_ok and y_ok and z_ok:
-                            new_list.append(centroid)
-                    else:  # 2D case
-                        if x_ok and y_ok:
-                            new_list.append(centroid)
-
+                root_centroids = self._ripley_roots_inside_image(
+                    root_centroids, min_coords, max_coords, dim, factor)
             else:
-                if mode == 1:
-                    legal = self.edges != 0
-                elif mode == 2:
-                    legal = self.network_overlay != 0
-                elif mode == 3:
-                    legal = self.id_overlay != 0
-                if self.nodes is None:
-                    temp_array = proximity.populate_array(self.node_centroids, shape = legal.shape)
-                else:
-                    temp_array = self.nodes
-                if dim == 2:
-                    volume = np.count_nonzero(legal) * self.xy_scale**2
-                    # Pad in x and y dimensions (assuming shape is [y, x])
-                    legal = np.pad(legal, pad_width=1, mode='constant', constant_values=0)
-                else:
-                    volume = np.count_nonzero(legal) * self.z_scale * self.xy_scale**2
-                    # Pad in x, y, and z dimensions (assuming shape is [z, y, x])
-                    legal = np.pad(legal, pad_width=1, mode='constant', constant_values=0)
-                
-                print(f"Using {volume} for the volume measurement (Volume of provided mask as scaled by xy and z scaling)")
-                
-                # Compute distance transform on padded array
-                legal = smart_dilate.compute_distance_transform_distance(legal, sampling = [self.z_scale, self.xy_scale, self.xy_scale], fast_dil = True)
-                
-                # Remove padding after distance transform
-                if dim == 2:
-                    legal = legal[1:-1, 1:-1]  # Remove padding from x and y dimensions
-                else:
-                    legal = legal[1:-1, 1:-1, 1:-1]  # Remove padding from x, y, and z dimensions
-                
-                max_avail = np.max(legal) # Most internal point
-                min_legal = factor * max_avail # Values of stuff 25% within the tissue
+                root_centroids, volume, max_r = self._ripley_roots_inside_mask(
+                    root_ids, mode, dim, factor, safe)
 
-                legal = legal > min_legal
-
-                if safe:
-                    max_r = min_legal
-
-
-                legal = temp_array * legal
-
-                legal = np.unique(legal)
-                if 0 in legal:
-                    legal = np.delete(legal, 0)
-                for node in legal:
-                    if node in root_ids:
-                        new_list.append(self.node_centroids[node])
-
-            roots = new_list
-            print(f"Utilizing {len(roots)} root points. Note that low n values are unstable.")
+            root_points = proximity.convert_centroids_to_array(
+                root_centroids, xy_scale=self.xy_scale, z_scale=self.z_scale)
             is_subset = True
+            print(f"Utilizing {len(root_centroids)} root points. "
+                  f"Note that low n values are unstable.")
 
-        roots = proximity.convert_centroids_to_array(roots, xy_scale = self.xy_scale, z_scale = self.z_scale)
+        # ---- edge correction and dimensional bookkeeping --------------------
+        n_ref = len(root_points)
 
-        n_subset = len(targs)
-
-        # Apply edge correction through mirroring
         if edgecorrect:
-
-
-            roots, targs = apply_edge_correction_to_ripley(
-                roots, targs, proportion, bounds, dim, 
-                node_centroids=self.node_centroids  # Pass this for bounds calculation if needed
-            )
-
+            root_points, targ_points = apply_edge_correction_to_ripley(
+                root_points, targ_points, proportion, bounds, dim,
+                node_centroids=self.node_centroids)
 
         if dim == 2:
-            roots = proximity.convert_augmented_array_to_points(roots)
-            targs = proximity.convert_augmented_array_to_points(targs)
+            root_points = proximity.convert_augmented_array_to_points(root_points)
+            targ_points = proximity.convert_augmented_array_to_points(targ_points)
 
-        print(f"Using {len(roots)} root points")
-        r_vals = proximity.generate_r_values(points_array, distance, bounds = bounds, dim = dim, max_proportion=proportion, max_r = max_r)
+        print(f"Using {len(root_points)} root points")
 
-        k_vals =  proximity.optimized_ripleys_k(roots, targs, r_vals, bounds=bounds, dim = dim, is_subset = is_subset, volume = volume, n_subset = n_subset)
+        # ---- the actual statistic -------------------------------------------
+        r_vals = proximity.generate_r_values(
+            points_array, distance, bounds=bounds, dim=dim,
+            max_proportion=proportion, max_r=max_r,
+            xy_scale=self.xy_scale, z_scale=self.z_scale)
+
+        k_vals = proximity.optimized_ripleys_k(
+            root_points, targ_points, r_vals, bounds=bounds, dim=dim,
+            is_subset=is_subset, volume=volume,
+            n_subset=n_subset, n_ref=n_ref)
 
         h_vals = proximity.compute_ripleys_h(k_vals, r_vals, dim)
 
         proximity.plot_ripley_functions(r_vals, k_vals, h_vals, dim, root, targ)
 
         return r_vals, k_vals, h_vals
+
+    # -----------------------------------------------------------------
+    # get_ripley helpers
+    # -----------------------------------------------------------------
+
+    def _ripley_bounds(self, bounds):
+        """
+        Normalise the bounds argument to (min_coords, max_coords).
+
+        Bounds are (x, y, z) ordered; centroids are (z, y, x) ordered, hence
+        the flip when they have to be derived from the centroids themselves.
+        """
+        if bounds is not None:
+            return bounds
+
+        all_centroids = proximity.convert_centroids_to_array(
+            list(self.node_centroids.values()))
+        min_coords = np.array([0, 0, 0])
+        max_coords = np.flip([np.max(all_centroids[:, 0]),
+                              np.max(all_centroids[:, 1]),
+                              np.max(all_centroids[:, 2])])
+        del all_centroids
+        return min_coords, max_coords
+
+    def _ripley_dim(self):
+        """2 for a single-slice image, 3 otherwise."""
+        try:
+            return 2 if self.nodes.shape[0] == 1 else 3
+        except AttributeError:
+            # No node mask to inspect, so fall back to the centroids: any
+            # non-zero z means the data is a real stack.
+            return 3 if any(c[0] != 0 for c in self.node_centroids.values()) else 2
+
+    def _ripley_roots_inside_image(self, root_centroids, min_coords, max_coords,
+                                   dim, factor):
+        """
+        Keep root centroids that sit at least `factor` of each image dimension
+        away from every border.  Bounds are (x, y, z), centroids are (z, y, x).
+        """
+        span = max_coords - min_coords
+        kept = []
+
+        for centroid in root_centroids:
+            z, y, x = centroid[0], centroid[1], centroid[2]
+            coords = (x, y, z) if dim == 3 else (x, y)
+            if all((c - min_coords[i]) > span[i] * factor and
+                   (max_coords[i] - c) > span[i] * factor
+                   for i, c in enumerate(coords)):
+                kept.append(centroid)
+
+        return kept
+
+    def _ripley_interior_ids(self, mode, dim, factor, safe):
+        """
+        Keep root nodes that sit deep inside a mask rather than near its
+        surface, measured by distance transform.
+
+        Returns (kept_centroids, volume, max_r).  The volume is recomputed
+        from the mask, and max_r caps the search radius when `safe` is set.
+        """
+        if mode == 1:
+            legal = self.edges != 0
+        elif mode == 2:
+            legal = self.network_overlay != 0
+        elif mode == 3:
+            legal = self.id_overlay != 0
+        else:
+            raise ValueError(f"Unsupported boundary mode: {mode}")
+
+        if self.nodes is None:
+            labels = proximity.populate_array(self.node_centroids, shape=legal.shape)
+        else:
+            labels = self.nodes
+
+        if dim == 2:
+            volume = np.count_nonzero(legal) * self.xy_scale ** 2
+            if legal.ndim == 3:      # (1, y, x) - don't pad the singleton z
+                pad = ((0, 0), (1, 1), (1, 1))
+                unpad = (slice(None), slice(1, -1), slice(1, -1))
+            else:                    # true 2D (y, x)
+                pad = ((1, 1), (1, 1))
+                unpad = (slice(1, -1), slice(1, -1))
+        else:
+            volume = np.count_nonzero(legal) * self.z_scale * self.xy_scale ** 2
+            pad = ((1, 1), (1, 1), (1, 1))
+            unpad = (slice(1, -1), slice(1, -1), slice(1, -1))
+
+        # Pad with zeros so the mask border reads as "outside", measure how far
+        # every voxel is from that outside, then strip the padding back off.
+        legal = np.pad(legal, pad_width=pad, mode='constant', constant_values=0)
+        legal = smart_dilate.compute_distance_transform_distance(
+            legal, sampling=[self.z_scale, self.xy_scale, self.xy_scale], fast_dil=True)
+        legal = legal[unpad]
+
+        min_legal = factor * np.max(legal)   # depth a voxel needs to count as interior
+        max_r = min_legal if safe else None
+
+        interior = np.unique(labels * (legal > min_legal))
+        interior_ids = [int(node) for node in interior if node != 0]
+
+        return interior_ids, volume, max_r
+
+    def _ripley_roots_inside_mask(self, root_ids, mode, dim, factor, safe):
+        """Keep root nodes deep inside the mask. (kept_centroids, volume, max_r)."""
+        interior_ids, volume, max_r = self._ripley_interior_ids(
+            mode, dim, factor, safe)
+
+        root_ids = set(int(node) for node in root_ids)
+        kept = [self.node_centroids[node] for node in interior_ids
+                if node in root_ids]
+
+        return kept, volume, max_r
 
 
 
@@ -7001,11 +7341,15 @@ class Network_3D:
         return output, id_set
 
 
-    def group_nodes_by_intensity(self, data, count = None):
+    def group_nodes_by_intensity(self, data, count = None, clustermode = 0):
 
         from . import neighborhoods
 
-        clusters = neighborhoods.cluster_arrays(data, count, seed = 42)
+        # Return here
+        if clustermode == 0:
+            clusters = neighborhoods.cluster_arrays(data, count, seed = 42)
+        elif clustermode == 1:
+            clusters = neighborhoods.cluster_arrays_leiden(data, n_clusters = count, seed = 42)
 
         coms = {}
 
@@ -7048,6 +7392,8 @@ class Network_3D:
             clusters = neighborhoods.cluster_arrays(identities, count, seed = seed)
         elif mode == 1:
             clusters = neighborhoods.cluster_arrays_dbscan(identities, seed = seed)
+        elif mode == 2:
+            clusters = neighborhoods.cluster_arrays_leiden(identities, n_clusters = count, seed = seed)
 
         coms = {}
 
@@ -7167,6 +7513,8 @@ class Network_3D:
 
     def kd_network(self, distance = 100, targets = None, make_array = False, max_neighbors = None):
 
+        print("Creating Proximity Network...")
+
         centroids = copy.deepcopy(self._node_centroids)
 
         if self._xy_scale == self._z_scale:
@@ -7190,17 +7538,9 @@ class Network_3D:
 
         neighbors = proximity.find_neighbors_kdtree(distance, targets = targets, centroids = centroids, max_neighbors = max_neighbors)
 
-        print("Creating Dataframe")
-
         network = create_and_save_dataframe(neighbors)
 
-        print("Converting df to network")
-
         self._network_lists = network_analysis.read_excel_to_lists(network)
-
-        #self._network is a networkx graph that stores the connections
-
-        print("Removing Edge Weights")
 
         self.remove_edge_weights()
 
@@ -7209,6 +7549,8 @@ class Network_3D:
             array = self.centroid_array()
 
             return array
+
+        print("Done...")
 
     def community_hex_cells(self, side_length=32, xy_scale=1, z_scale=1, shape_3d='dodecahedron'):
         from . import hexagons
@@ -7381,190 +7723,203 @@ class Network_3D:
 
 
 
-    def nearest_neighbors_avg(self, root, targ, xy_scale = 1, z_scale = 1, num = 1, heatmap = False, threed = True, numpy = False, quant = False, centroids = True, mask = None):
+    def nearest_neighbors_avg(self, root, targ, xy_scale = 1, z_scale = 1, num = 1, heatmap = False, threed = True, numpy = False, quant = False, centroids = True, mask = None, theoretical = 'Random', num_query = None, replicates = 1, do_sim = True):
 
-        def distribute_points_uniformly(n, shape, z_scale, xy_scale, num, is_2d=False, mask=None):
-            from scipy.spatial import KDTree
-            if n <= 1:
-                return 0
-            
-            if mask is not None:
-                # Handle mask-based distribution
-                # Find all valid positions where mask is True
-                valid_positions = np.where(mask)
-                total_valid_positions = len(valid_positions[0])
-                
-                if total_valid_positions == 0:
-                    raise ValueError("No valid positions found in mask")
-                
-                if n >= total_valid_positions:
-                    # If we want more points than valid positions, return scaled unit distance
-                    return xy_scale if is_2d else min(z_scale, xy_scale)
-                
-                # Create uniformly spaced indices within valid positions
-                valid_indices = np.linspace(0, total_valid_positions - 1, n, dtype=int)
-                
-                # Convert to coordinates and apply scaling
-                coords = []
-                for idx in valid_indices:
+            def distribute_points_uniformly(n, shape, z_scale, xy_scale, num, is_2d=False, mask=None):
+                from scipy.spatial import KDTree
+                if n <= 1:
+                    return 0
+
+                unit_dist = xy_scale if is_2d else min(z_scale, xy_scale)
+
+                if mask is not None:
+                    valid_positions = np.where(mask)
+                    total_valid_positions = len(valid_positions[0])
+
+                    if total_valid_positions == 0:
+                        raise ValueError("No valid positions found in mask")
+
+                    if n >= total_valid_positions:
+                        return unit_dist
+
+                    valid_indices = np.linspace(0, total_valid_positions - 1, n, dtype=int)
+
+                    coords = []
+                    for idx in valid_indices:
+                        if len(shape) == 3:
+                            coord = (valid_positions[0][idx], valid_positions[1][idx], valid_positions[2][idx])
+                            scaled_coord = [coord[0] * z_scale, coord[1] * xy_scale, coord[2] * xy_scale]
+                        elif len(shape) == 2:
+                            coord = (valid_positions[0][idx], valid_positions[1][idx])
+                            scaled_coord = [coord[0] * xy_scale, coord[1] * xy_scale]
+                        coords.append(scaled_coord)
+
+                    coords = np.array(coords)
+
                     if len(shape) == 3:
-                        coord = (valid_positions[0][idx], valid_positions[1][idx], valid_positions[2][idx])
-                        scaled_coord = [coord[0] * z_scale, coord[1] * xy_scale, coord[2] * xy_scale]
-                    elif len(shape) == 2:
-                        coord = (valid_positions[0][idx], valid_positions[1][idx])
-                        scaled_coord = [coord[0] * xy_scale, coord[1] * xy_scale]
-                    coords.append(scaled_coord)
-                
-                coords = np.array(coords)
-                
-                # Find a good query point (closest to center of valid region)
-                if len(shape) == 3:
-                    center_pos = [np.mean(valid_positions[0]) * z_scale, 
-                                 np.mean(valid_positions[1]) * xy_scale,
-                                 np.mean(valid_positions[2]) * xy_scale]
+                        center_pos = [np.mean(valid_positions[0]) * z_scale,
+                                      np.mean(valid_positions[1]) * xy_scale,
+                                      np.mean(valid_positions[2]) * xy_scale]
+                    else:
+                        center_pos = [np.mean(valid_positions[0]) * xy_scale,
+                                      np.mean(valid_positions[1]) * xy_scale]
+
+                    center_distances = np.sum((coords - center_pos) ** 2, axis=1)
+                    middle_idx = np.argmin(center_distances)
+                    query_point = coords[middle_idx]
+
                 else:
-                    center_pos = [np.mean(valid_positions[0]) * xy_scale,
-                                 np.mean(valid_positions[1]) * xy_scale]
-                
-                # Find point closest to center of valid region
-                center_distances = np.sum((coords - center_pos)**2, axis=1)
-                middle_idx = np.argmin(center_distances)
-                query_point = coords[middle_idx]
-                
-            else:
-                # Original behavior when no mask is provided
-                total_positions = np.prod(shape)
-                if n >= total_positions:
-                    return xy_scale if is_2d else min(z_scale, xy_scale)
-                
-                # Create uniformly spaced indices
-                indices = np.linspace(0, total_positions - 1, n, dtype=int)
-                
-                # Convert flat indices to coordinates
-                coords = []
-                for idx in indices:
-                    coord = np.unravel_index(idx, shape)
-                    if len(shape) == 3:
-                        scaled_coord = [coord[0] * z_scale, coord[1] * xy_scale, coord[2] * xy_scale]
-                    elif len(shape) == 2:
-                        scaled_coord = [coord[0] * xy_scale, coord[1] * xy_scale]
-                    coords.append(scaled_coord)
-                
-                coords = np.array(coords)
-                
-                # Pick a point near the middle of the array
-                middle_idx = len(coords) // 2
-                query_point = coords[middle_idx]
-            
-            # Build KDTree
-            tree = KDTree(coords)
-            
-            # Find the num+1 nearest neighbors (including the point itself)
-            distances, indices = tree.query(query_point, k=num+1)
-            
-            # Exclude the point itself (distance 0) and get the actual neighbors
-            neighbor_distances = distances[1:num+1]
-            if num == n:
-                neighbor_distances[-1] = neighbor_distances[-2]
-            
-            avg_distance = np.mean(neighbor_distances)
-            
-            return avg_distance
+                    total_positions = np.prod(shape)
+                    if n >= total_positions:
+                        return unit_dist
 
-        do_borders = not centroids
-        try:
-            root = ast.literal_eval(root)
-        except:
-            root = [root]
-        if len(root) < 2:
-            root = root[0]
-            root_list = False
-        else:
-            root = str(root)
-            root_list = True #Signifying it looks like a list
-        try:
-            targ = ast.literal_eval(targ)
-        except:
-            targ = [targ]
-        if len(targ) < 2:
-            targ = targ[0]
-            targ_list = False
-        else:
-            targ = str(targ)
-            targ_list = True #Signifying it looks like a list
+                    indices = np.linspace(0, total_positions - 1, n, dtype=int)
 
-        if centroids:
-            root_set = []
+                    coords = []
+                    for idx in indices:
+                        coord = np.unravel_index(idx, shape)
+                        if len(shape) == 3:
+                            scaled_coord = [coord[0] * z_scale, coord[1] * xy_scale, coord[2] * xy_scale]
+                        elif len(shape) == 2:
+                            scaled_coord = [coord[0] * xy_scale, coord[1] * xy_scale]
+                        coords.append(scaled_coord)
 
-            compare_set = []
+                    coords = np.array(coords)
+                    middle_idx = len(coords) // 2
+                    query_point = coords[middle_idx]
 
-            if root is None:
+                tree = KDTree(coords)
 
-                root_set = list(self.node_centroids.keys())
-                compare_set = root_set
-                title = "Nearest Neighbors Between Nodes Heatmap"
-            elif root == targ:
+                # Never request more neighbors than exist, or scipy pads with inf.
+                # k includes the query point itself, so cap at len(coords).
+                k = min(num + 1, len(coords))
+                distances, _ = tree.query(query_point, k=k)
+                distances = np.atleast_1d(distances)  # k==1 would return a scalar
 
-                for node, iden in self.node_identities.items():
+                # Drop the self-match (first, ~0) and any non-finite padding.
+                neighbor_distances = distances[1:]
+                neighbor_distances = neighbor_distances[np.isfinite(neighbor_distances)]
 
-                    if root_list:
-                        if str(iden) == str(root):
-                            root_set.append(node)
-                    elif root in iden:
-                        root_set.append(node)
-                    elif root == "All (Excluding Targets)": # If not assigned to the other group but the comprehensive root option is used
-                        root_set.append(node)
+                if neighbor_distances.size == 0:
+                    # Only the point itself was available -> no spacing to measure.
+                    return unit_dist
 
-                compare_set = root_set
-                if len(compare_set) - 1 < num:
+                return float(np.mean(neighbor_distances))
 
-                    num = len(compare_set) - 1
+            def estimate_null_spacing_random(n, shape, z_scale, xy_scale, num,
+                                      is_2d=False, mask=None,
+                                      num_query=None, replicates=1, seed=None):
+                """
+                Estimate the mean nearest-neighbor spacing for a random (unclustered)
+                arrangement of n points in the array/mask — a null baseline for
+                detecting clustering.
+                (docstring unchanged)
+                """
+                from scipy.spatial import KDTree
+                if n <= 1:
+                    return 0
 
-                    print(f"Error: Not enough neighbor nodes for requested number of neighbors. Using max available neighbors: {num}")
+                rng = np.random.default_rng(seed)
+                unit_dist = xy_scale if is_2d else min(z_scale, xy_scale)
 
-            else:
+                if num_query is None:
+                    num_query = max(1, min(30, n // 2))
 
-                title = f"Nearest Neighbors of ID {targ} from ID {root} Heatmap"
-                for node, iden in self.node_identities.items():
+                if mask is not None:
+                    valid_positions = np.where(mask)
+                    total = len(valid_positions[0])
+                    if total == 0:
+                        raise ValueError("No valid positions found in mask")
+                else:
+                    total = int(np.prod(shape))
 
-                    if root_list:
-                        if str(iden) == str(root): # Standard behavior
-                            root_set.append(node)
-                    elif root in iden:
-                        root_set.append(node)
-                    elif root == "All (Excluding Targets)": # If not assigned to the other group but the comprehensive root option is used
-                        root_set.append(node)
+                if n >= total:
+                    return unit_dist
 
-                    if targ_list:
-                        if str(iden) == str(targ):
-                            compare_set.append(node)
-                    elif targ in iden:
-                        compare_set.append(node)
-                    elif targ == 'All Others (Excluding Self)': # The other group
-                        compare_set.append(node)
+                def scale_coords(flat_or_valid_idx):
+                    coords = []
+                    for idx in flat_or_valid_idx:
+                        if mask is not None:
+                            if len(shape) == 3:
+                                c = (valid_positions[0][idx], valid_positions[1][idx], valid_positions[2][idx])
+                            else:
+                                c = (valid_positions[0][idx], valid_positions[1][idx])
+                        else:
+                            c = np.unravel_index(idx, shape)
+                        if len(shape) == 3:
+                            coords.append([c[0] * z_scale, c[1] * xy_scale, c[2] * xy_scale])
+                        else:
+                            coords.append([c[0] * xy_scale, c[1] * xy_scale])
+                    return np.array(coords, dtype=float)
 
+                replicate_means = []
+                for _ in range(replicates):
+                    chosen = rng.choice(total, size=n, replace=False)
+                    coords = scale_coords(chosen)
 
-            if len(compare_set) < num:
+                    tree = KDTree(coords)
 
-                num = len(compare_set)
+                    q = min(num_query, n)
+                    query_idx = rng.choice(n, size=q, replace=False)
+                    query_points = coords[query_idx]
 
-                print(f"Error: Not enough neighbor nodes for requested number of neighbors. Using max available neighbors: {num}")
+                    # Cap k at n so scipy doesn't pad missing neighbors with inf.
+                    k = min(num + 1, n)
+                    distances, _ = tree.query(query_points, k=k)
+                    distances = np.atleast_2d(distances)  # keep (q, k) even if q or k == 1
 
-            if num == 0:
-                print(f"No neighbors available between {root} and {targ}")
-                return None, None, None, None
+                    # Drop self (col 0); ignore any non-finite entries in the mean.
+                    neighbor_distances = distances[:, 1:]
+                    neighbor_distances = np.where(np.isfinite(neighbor_distances),
+                                                  neighbor_distances, np.nan)
 
-            avg, output = proximity.average_nearest_neighbor_distances(self.node_centroids, root_set, compare_set, xy_scale=self.xy_scale, z_scale=self.z_scale, num = num, do_borders = do_borders)
+                    if np.all(np.isnan(neighbor_distances)):
+                        replicate_means.append(unit_dist)
+                    else:
+                        replicate_means.append(np.nanmean(neighbor_distances))
 
-        else:
-            if heatmap:
+                return float(np.mean(replicate_means))
+
+            do_borders = not centroids
+
+            # Accepts plain strings, lists, or legacy "['x']" strings.
+            # root_list/targ_list True => match the whole identity, not membership.
+            root, root_list = proximity.parse_identity_spec(root)
+            targ, targ_list = proximity.parse_identity_spec(targ)
+
+            if centroids:
                 root_set = []
+
                 compare_set = []
-                if root is None and not do_borders:
+
+                if root is None:
+
+                    root_set = list(self.node_centroids.keys())
                     compare_set = root_set
-                    if not do_borders:
-                        root_set = list(self.node_centroids.keys())
-                elif self.node_identities is not None:
+                    title = "Nearest Neighbors Between Nodes Heatmap"
+                elif root == targ:
+                    title = f"Nearest Neighbors of ID {targ} from ID {root} Heatmap"
+
+                    for node, iden in self.node_identities.items():
+
+                        if root_list:
+                            if str(iden) == str(root):
+                                root_set.append(node)
+                        elif root in iden:
+                            root_set.append(node)
+                        elif root == "All (Excluding Targets)": # If not assigned to the other group but the comprehensive root option is used
+                            root_set.append(node)
+
+                    compare_set = root_set
+                    if len(compare_set) - 1 < num:
+
+                        num = len(compare_set) - 1
+
+                        print(f"Error: Not enough neighbor nodes for requested number of neighbors. Using max available neighbors: {num}")
+
+                else:
+
+                    title = f"Nearest Neighbors of ID {targ} from ID {root} Heatmap"
                     for node, iden in self.node_identities.items():
 
                         if root_list:
@@ -7584,98 +7939,218 @@ class Network_3D:
                             compare_set.append(node)
 
 
-            if root is None:
-                title = "Nearest Neighbors Between Nodes Heatmap"
-                root_set_neigh = approx_boundaries(self.nodes, keep_labels = True, root_list = root_list)
-                compare_set_neigh = approx_boundaries(self.nodes, keep_labels = False, root_list = targ_list)
+                if len(compare_set) < num:
+
+                    num = len(compare_set)
+
+                    print(f"Error: Not enough neighbor nodes for requested number of neighbors. Using max available neighbors: {num}")
+
+                if num == 0:
+                    print(f"No neighbors available between {root} and {targ}")
+                    if heatmap and numpy:
+                        return None, None, None, None, None
+                    return None, None, None, None
+
+                avg, output = proximity.average_nearest_neighbor_distances(self.node_centroids, root_set, compare_set, xy_scale=self.xy_scale, z_scale=self.z_scale, num = num, do_borders = do_borders)
+
             else:
-                title = f"Nearest Neighbors of ID {targ} from ID {root} Heatmap"
+                # Root/compare node sets are needed by the simulation as well as the
+                # heatmap, so they are always built here (previously only when heatmap=True,
+                # which left compare_set undefined for do_sim runs in border mode).
+                root_set = []
+                compare_set = []
+                if self.node_identities is not None and root is not None:
+                    for node, iden in self.node_identities.items():
 
-                root_set_neigh = approx_boundaries(self.nodes, root, self.node_identities, keep_labels = True, root_list = root_list)
+                        if root_list:
+                            if str(iden) == str(root): # Standard behavior
+                                root_set.append(node)
+                        elif root in iden:
+                            root_set.append(node)
+                        elif root == "All (Excluding Targets)": # If not assigned to the other group but the comprehensive root option is used
+                            root_set.append(node)
 
-                if targ == 'All Others (Excluding Self)':
-                    compare_set_neigh = set(self.node_identities.values())
-                    compare_set_neigh.remove(root)
-                    targ = compare_set_neigh
+                        if targ_list:
+                            if str(iden) == str(targ):
+                                compare_set.append(node)
+                        elif targ in iden:
+                            compare_set.append(node)
+                        elif targ == 'All Others (Excluding Self)': # The other group
+                            compare_set.append(node)
+
+
+                if root is None:
+                    title = "Nearest Neighbors Between Nodes Heatmap"
+                    root_set_neigh = approx_boundaries(self.nodes, keep_labels = True, root_list = root_list)
+                    compare_set_neigh = approx_boundaries(self.nodes, keep_labels = False, root_list = targ_list)
                 else:
-                    targ = [targ]
+                    title = f"Nearest Neighbors of ID {targ} from ID {root} Heatmap"
 
-                compare_set_neigh = approx_boundaries(self.nodes, targ, self.node_identities, keep_labels = False, root_list = targ_list)
+                    root_set_neigh = approx_boundaries(self.nodes, root, self.node_identities, keep_labels = True, root_list = root_list)
 
-            avg, output = proximity.average_nearest_neighbor_distances(self.node_centroids, root_set_neigh, compare_set_neigh, xy_scale=self.xy_scale, z_scale=self.z_scale, num = num, do_borders = do_borders)
+                    if targ == 'All Others (Excluding Self)':
+                        compare_set_neigh = set(self.node_identities.values())
+                        compare_set_neigh.remove(root)
+                        targ = compare_set_neigh
+                    else:
+                        targ = [targ]
 
-        if quant:
-            try:
-                quant_overlay = node_draw.degree_infect(output, self._nodes, make_floats = True)
-            except:
-                quant_overlay = None
-        else:
-            quant_overlay = None
+                    compare_set_neigh = approx_boundaries(self.nodes, targ, self.node_identities, keep_labels = False, root_list = targ_list)
 
-        if heatmap:
+                avg, output = proximity.average_nearest_neighbor_distances(self.node_centroids, root_set_neigh, compare_set_neigh, xy_scale=self.xy_scale, z_scale=self.z_scale, num = num, do_borders = do_borders)
 
-
-            from . import neighborhoods
-            try:
-                shape = self.nodes.shape
-            except:
-                big_array = proximity.convert_centroids_to_array(list(self.node_centroids.values()))
-                shape = [np.max(big_array[0, :]) + 1, np.max(big_array[1, :]) + 1, np.max(big_array[2, :]) + 1]
-
-
-            try:
-                bounds = self.nodes.shape
-            except:
+            if quant:
                 try:
-                    bounds = self.edges.shape
+                    quant_overlay = node_draw.degree_infect(output, self._nodes, make_floats = True)
                 except:
-                    try:
-                        bounds = self.network_overlay.shape
-                    except:
-                        try:
-                            bounds = self.id_overlay.shape
-                        except:
-                            big_array = proximity.convert_centroids_to_array(list(self.node_centroids.values()))
-                            max_coords = [np.max(big_array[:, 0]), np.max(big_array[:, 1]), np.max(big_array[:, 2])]
-                            del big_array
-            volume = bounds[0] * bounds[1] * bounds[2] * self.z_scale * self.xy_scale**2
-            if 1 in bounds or 0 in bounds:
-                is_2d = True
+                    quant_overlay = None
             else:
-                is_2d = False
+                quant_overlay = None
 
-            if root_set == []:
-                avail_nodes = np.unique(self.nodes)
-                compare_set = list(avail_nodes)
-                if 0 in compare_set:
-                    del compare_set[0]
-                root_set = compare_set
-            elif compare_set == []:
-                compare_set = root_set
-            pred = distribute_points_uniformly(len(compare_set), bounds, self.z_scale, self.xy_scale, num = num, is_2d = is_2d, mask = mask)
-
-            node_intensity = {}
-            import math
-            node_centroids = {}
-
-            for node in root_set:
-                node_intensity[node] = math.log(pred/output[node])
-                node_centroids[node] = self.node_centroids[node]
-
-            if numpy:
-
-                overlay = neighborhoods.create_node_heatmap(node_intensity, node_centroids, shape = shape, is_3d=threed, labeled_array = self.nodes, colorbar_label="Clustering Intensity", title = title)
-
-                return avg, output, overlay, quant_overlay, pred
-
-            else:
-                neighborhoods.create_node_heatmap(node_intensity, node_centroids, shape = shape, is_3d=threed, labeled_array = None, colorbar_label="Clustering Intensity", title = title)
-
-        else:
+            # ---- simulated (null) spacing: needed for the comparison and the heatmap
             pred = None
+            if heatmap or do_sim:
 
-        return avg, output, quant_overlay, pred
+                # Border mode with no identity filter: every labeled node is a root and
+                # a comparison node (same fallback the heatmap always used).
+                if not root_set:
+                    compare_set = [int(n) for n in np.unique(self.nodes) if n != 0]
+                    root_set = compare_set
+                elif not compare_set:
+                    compare_set = root_set
 
+                bounds = None
+                for attr in ('nodes', 'edges', 'network_overlay', 'id_overlay'):
+                    arr = getattr(self, attr, None)
+                    if arr is not None and hasattr(arr, 'shape'):
+                        bounds = tuple(arr.shape)
+                        break
+                if bounds is None:
+                    # previously left `bounds` undefined; derive it from the centroids
+                    pts = np.array(list(self.node_centroids.values()), dtype=float)
+                    bounds = tuple(int(v) + 1 for v in pts.max(axis=0))
+
+                is_2d = (1 in bounds) or (0 in bounds)
+
+                if theoretical == 'Random':
+                    if num_query is None:
+                        num_query = max(1, min(30, len(compare_set) // 2))
+                        print(f"Querying random distribution with {num_query} seed points...")
+                    pred = estimate_null_spacing_random(len(compare_set), bounds, self.z_scale, self.xy_scale, num = num, is_2d = is_2d, mask = mask, num_query = num_query, replicates = replicates)
+                elif theoretical == 'Uniform':
+                    pred = distribute_points_uniformly(len(compare_set), bounds, self.z_scale, self.xy_scale, num = num, is_2d = is_2d, mask = mask)
+
+            if heatmap:
+
+                from . import neighborhoods
+                import math
+
+                node_intensity = {}
+                node_centroids = {}
+
+                if not pred or pred <= 0:
+                    print("Heatmap skipped: the simulated spacing could not be computed "
+                          "(fewer than 2 comparison nodes).")
+                else:
+                    for node in root_set:
+                        dist = output.get(node) if isinstance(output, dict) else None
+                        if dist is None or node not in self.node_centroids:
+                            continue
+                        dist = float(np.mean(dist))
+                        if not np.isfinite(dist) or dist <= 0:
+                            continue
+                        node_intensity[node] = math.log(pred / dist)
+                        node_centroids[node] = self.node_centroids[node]
+
+                overlay = None
+                if node_intensity:
+                    if numpy:
+                        overlay = neighborhoods.create_node_heatmap(node_intensity, node_centroids, shape = bounds, is_3d=threed, labeled_array = self.nodes, colorbar_label="Clustering Intensity", title = title)
+                    else:
+                        neighborhoods.create_node_heatmap(node_intensity, node_centroids, shape = bounds, is_3d=threed, labeled_array = None, colorbar_label="Clustering Intensity", title = title)
+
+                if numpy:
+                    return avg, output, overlay, quant_overlay, pred
+
+            return avg, output, quant_overlay, pred
+
+    def _infer_bounds(self):
+        """First available array shape, falling back to the centroid extent."""
+        for attr in ('nodes', 'edges', 'network_overlay', 'id_overlay'):
+            arr = getattr(self, attr, None)
+            shape = getattr(arr, 'shape', None)
+            if shape is not None and len(shape) >= 2:
+                return tuple(int(s) for s in shape)
+
+        big_array = proximity.convert_centroids_to_array(list(self.node_centroids.values()))
+        return tuple(int(np.max(big_array[:, i])) + 1 for i in range(big_array.shape[1]))
+
+    def nearest_neighbors_batch(self, specs=None, include_multi=False, num=1, centroids=True,
+                                mask=None, theoretical='Random', num_query=None,
+                                replicates=1, do_sim=True, seed=None,
+                                sim_mode='centroids'):
+        """
+        ...
+        sim_mode : {'centroids', 'labels'}
+            'centroids' places all objects at new random/uniform positions.
+            'labels' holds observed centroids fixed and permutes identity
+            labels between them, preserving spatial architecture. Multi-identity
+            nodes are permuted as a unit. mask/theoretical are unused in this mode.
+        """
+        if self.node_identities is None:
+            raise ValueError("Batch nearest neighbor analysis requires node identities.")
+        if self.node_centroids is None:
+            raise ValueError("Batch nearest neighbor analysis requires node centroids.")
+        if not centroids:
+            print("Batch analysis is centroid-based; ignoring the border-distance option "
+                  "(run single comparisons for true nearest neighbors).")
+
+        num = max(1, int(num))
+
+        if specs is None:
+            specs = proximity.enumerate_identity_specs(self.node_identities,
+                                                       include_multi=include_multi)
+        identity_sets, labels = proximity.resolve_identity_sets(
+            self.node_identities, specs, restrict_to=self.node_centroids)
+
+        empty = [l for l in labels if len(identity_sets[l]) == 0]
+        if empty:
+            print(f"No centroids found for: {', '.join(map(str, empty))}")
+
+        observed, (all_ids, rows_by_label), (node_ids, node_table) = proximity.batch_average_nearest_neighbor_distances(
+            self.node_centroids, identity_sets, labels,
+            xy_scale=self.xy_scale, z_scale=self.z_scale, num=num)
+        full_dict = dict(zip(node_ids, node_table))
+
+        pred = None
+        if do_sim and all_ids:
+
+            if sim_mode == 'labels':
+                coords = np.array([self.node_centroids[i] for i in all_ids], dtype=float)
+                coords_scaled = proximity.scale_coords(coords, self.xy_scale, self.z_scale)
+                print(f"Scrambling identity labels across {len(all_ids)} fixed centroids "
+                      f"for {replicates} replicate(s)...")
+                pred = proximity.simulate_batch_label_scramble(
+                    coords_scaled, rows_by_label, labels, num=num,
+                    replicates=replicates, num_query=num_query, seed=seed)
+
+            else:
+                bounds = self._infer_bounds()
+                if num_query is None:
+                    print(f"Simulating {replicates} arrangement(s) of {len(all_ids)} objects "
+                          f"across {bounds}...")
+                pred = proximity.simulate_batch_nearest_neighbor_distances(
+                    rows_by_label, labels, len(all_ids), bounds,
+                    xy_scale=self.xy_scale, z_scale=self.z_scale, num=num,
+                    theoretical=theoretical, mask=mask, replicates=replicates,
+                    num_query=num_query, seed=seed)
+
+        observed_rows = proximity.matrix_to_rows(observed, labels)
+        pred_rows = proximity.matrix_to_rows(pred, labels) if pred is not None else None
+        ratio_rows = (proximity.matrix_to_rows(proximity.ratio_matrix(pred, observed, labels), labels)
+                      if pred is not None else None)
+
+        return observed_rows, labels, pred_rows, ratio_rows, full_dict
 
     def shortest_distances_to_targets(self, root_nodes, target_nodes, return_path_edges=False, compute_subgraph=False, compute_steiner = False):
         G = self.network

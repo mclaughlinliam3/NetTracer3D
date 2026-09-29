@@ -1,8 +1,8 @@
 .. _extensions:
 
-========================
-NetTracer3D Plugin System
-========================
+=========================
+NetTracer3D Plugin System and Instructions on Using Prebundled Plugins
+=========================
 
 NetTracer3D supports a plugin system that allows both developers and users
 to extend the application with new analysis tools, processing methods,
@@ -158,6 +158,9 @@ segmentation pipeline directly into NetTracer3D.
 - Dimensionality (2-D vs 3-D) is auto-detected from the input data.
 - The segmented mask is written to the channel of your choice.
 - **Requires**: ``cellpose>=3.0`` (installed via the Extensions panel).
+
+See :ref:`cellpose-extension` for a full walkthrough of the panel,
+including chunk padding and seam handling.
 
 
 ---------------
@@ -631,3 +634,400 @@ Complete Plugin Checklist
    ✓  Error handling — plugins should not crash the host application
    ✓  No direct access to internals (use api methods; get_unsafe_*
       only as a last resort with the understanding it may break)
+
+
+.. _bundled-extensions:
+
+--------------------
+Bundled Extensions
+--------------------
+
+This section documents the extensions that ship with NetTracer3D in
+detail — what each control does and how to get sensible results out of
+it.  For the one-line summary of what is bundled, see
+`Built-In Plugins`_ in the User Guide above.
+
+Extensions documented here are installed automatically with
+NetTracer3D, but they are ordinary plugins: they appear in the
+Extensions panel like any other, can be disabled, and may need their
+dependencies installed on first use.
+
+
+.. _cellpose-extension:
+
+Cellpose Segmentation
+=====================
+
+Runs `Cellpose <https://cellpose.readthedocs.io/>`_ instance
+segmentation on a NetTracer3D channel and writes the resulting label
+mask back into a channel of your choice.
+
+**Requires**: ``cellpose>=3.0``.  On first use the extension will be
+marked **Needs Deps** — select it in the Extensions panel and click
+**Install Deps**.  Accept the CUDA prompt if you want GPU support.
+
+Opening the panel
+-----------------
+
+  **Extensions → Cellpose → Open Cellpose Panel...**
+
+There is also **Extensions → Cellpose → Quick Launch Cellpose GUI**,
+which launches the standalone Cellpose Qt application in a separate
+process.  That GUI is independent of NetTracer3D — it does not see your
+loaded channels and does not write back to them.  Use it for exploring
+models interactively; use the panel for everything else.
+
+Choosing channels
+-----------------
+
+.. list-table::
+   :widths: 30 70
+   :header-rows: 1
+
+   * - Control
+     - Meaning
+   * - Image to segment
+     - The channel Cellpose runs on.  Must contain data.
+   * - Secondary context image
+     - Optional second channel stacked as an extra input channel — for
+       example a nuclear stain alongside a cytoplasmic one.  Must have
+       the same Z/Y/X dimensions as the primary image.
+   * - Send output to
+     - Where the label mask is written.  **This overwrites whatever is
+       in that channel**, so point it at an empty channel unless you
+       mean to replace something.
+
+The output dtype is chosen automatically from the number of objects
+found (``uint8``, ``uint16``, or ``uint32``).
+
+Model selection
+---------------
+
+The dropdown lists the built-in Cellpose models (``cyto3``, ``nuclei``,
+``tissuenet_cp3`` and so on).  **Load Custom Model...** adds a trained
+``.pth`` file to the list, marked with a ✦.  Custom models are
+remembered for the lifetime of the panel.
+
+Segmentation parameters
+-----------------------
+
+.. list-table::
+   :widths: 30 70
+   :header-rows: 1
+
+   * - Parameter
+     - Meaning
+   * - Diameter
+     - Expected object diameter in pixels.  ``0`` lets Cellpose
+       estimate it.  This is the single most important parameter — if
+       results are poor, fix this before touching anything else.
+   * - Flow threshold
+     - Maximum allowed error of the flow field.  Raise it to accept
+       more objects, lower it for stricter segmentation.
+   * - Cell probability threshold
+     - Pixels above this probability are considered part of an object.
+       Lower it to pick up dimmer objects.
+   * - Minimum object size
+     - Objects smaller than this many pixels are discarded by Cellpose.
+   * - Stitch threshold
+     - IoU threshold for stitching 2-D masks across Z.  Only used for
+       3-D images when **Native 3D** is off.  ``0`` disables stitching
+       and leaves every slice independent.
+   * - Use GPU
+     - Uses CUDA if available and falls back to CPU otherwise.
+   * - Native 3D
+     - Uses true volumetric convolutions instead of the default
+       slice-by-slice-then-stitch approach.  Much slower and far more
+       memory-hungry, but can do better on roughly spherical objects.
+
+Dimensionality is detected automatically.  NetTracer3D stores images as
+``(Z, Y, X)`` even when there is only one slice, so a single-slice
+channel is treated as 2-D and the 3-D-only options are ignored.
+
+Chunked processing
+------------------
+
+Large volumes often will not fit in GPU memory.  **Enable** under
+Chunked Processing splits the image into sub-volumes, segments each
+one, and reassembles the result.  The number of chunks is a target —
+the plugin picks a Z×Y×X grid whose chunks are as close to cubic as it
+can manage, so the actual count may be slightly higher (asking for 8
+on a flat stack typically gives a 1×3×3 grid, i.e. 9 chunks).
+
+Padding
+~~~~~~~
+
+Chunking naively means objects sitting on a chunk boundary get cut in
+half by an artificial image edge, and Cellpose's flow field near that
+edge is wrong.  **Use padding** (on by default) gives each chunk an
+overlapping border of surrounding voxels when it is sent to Cellpose,
+then discards that border when the volume is put back together.  Each
+chunk therefore contributes only its central region, but that region
+was segmented with its real surroundings visible.
+
+**XY padding** and **Z padding** are set separately because data is
+often anisotropic — with thick slices you usually want much less
+padding in Z.  Both are auto-filled from the image size and the chunk
+count, and re-estimated whenever you change either.  Typing your own
+value switches that field to manual; **Auto** hands it back to the
+estimator.
+
+A good manual value is roughly one object diameter.  Note that padding
+enlarges the block actually handed to Cellpose, so it raises peak VRAM
+per chunk — if you run out of memory, reduce the padding or increase
+the chunk count.
+
+Seam handling
+~~~~~~~~~~~~~
+
+**Keep objects crossing chunk seams whole** (on by default) lets the
+first chunk that owns an object's centre also claim the parts spilling
+past its boundary, so an object straddling a seam stays one label
+instead of being split into two.  Turn it off for a strict crop, where
+each chunk contributes only what falls inside its own core region.
+
+**Filter seam artifacts** (on by default) removes labels far smaller
+than a typical object after reassembly.  These are usually thin slivers
+along a seam, left where two chunks segmented the same object and
+disagreed about its boundary by a voxel or two.  The threshold is a
+percentage of the *median* object volume — the median rather than the
+mean, because fragments are numerous and tiny enough to drag a mean
+down toward themselves, and because object sizes are right-skewed so
+plenty of legitimate objects sit below the mean.  10% is conservative;
+raise it if fragments survive, lower it if real objects vanish.
+
+.. note::
+
+   If you disable the artifact filter, expect to clean up small
+   fragments along the chunk borders yourself downstream.
+
+Reading the console
+-------------------
+
+The extension logs to the console with a ``[Cellpose]`` prefix, which
+is the quickest way to see what it actually did::
+
+   [Cellpose] Detected 3D image: (48, 512, 512) (Z, Y, X)
+   [Cellpose] Mode: slice-by-slice + stitch (stitch_threshold=0.5)
+   [Cellpose] Loading model: cyto3, GPU=True
+   [Cellpose] Chunked into 8 pieces (2x2x2), padding XY=26, Z=26
+   [Cellpose] Segmenting chunk 1/8, shape=(50, 282, 282)...
+   [Cellpose] Removed 3 fragment(s) smaller than 38 voxels
+   [Cellpose] Segmentation complete: 214 objects
+
+Worth checking on the first run of a new dataset: that the
+dimensionality is what you expected, and that the artifact filter is
+not removing more than a handful of objects.
+
+Troubleshooting
+---------------
+
+.. list-table::
+   :widths: 35 65
+   :header-rows: 1
+
+   * - Symptom
+     - Try
+   * - Out of GPU memory
+     - Enable chunking, raise the chunk count, or reduce the padding.
+       Turn off **Native 3D**, which is by far the most memory-hungry
+       mode.
+   * - Chunking seems to do nothing
+     - Check the console for the chunk grid line.  A chunk count of 1
+       is ignored.
+   * - Objects split along chunk borders
+     - Increase the padding and confirm seam recovery is enabled.
+   * - Small fragments along chunk borders
+     - Enable the artifact filter, or raise its percentage.
+   * - Real objects disappearing
+     - Lower the artifact filter percentage or disable it, and check
+       **Minimum object size**.
+   * - Too few / too many objects
+     - Fix **Diameter** first, then adjust flow and cell probability
+       thresholds.
+   * - 3-D objects fragmented across Z
+     - Raise **Stitch threshold** toward 1.0 for stricter matching, or
+       lower it to merge more readily.  Consider **Native 3D**.
+
+.. _macro-recorder-extension:
+
+Macro Recorder
+==============
+
+Records what you do in the GUI and replays it across many saved
+sessions, so a workflow you have worked out on one dataset can be run
+unattended over a whole folder of them.
+
+**Requires**: nothing beyond NetTracer3D itself.
+
+Opening the panel
+-----------------
+
+  **Extensions → Macro Recorder → Open Macro Recorder...**
+
+The panel has four buttons — **Start Recording**, **Stop Recording**,
+**Load Macro** and **Run Macro** — plus a progress bar and a log that
+reports every step as it happens.
+
+Recommended workflow
+--------------------
+
+1. Load one representative session and get it into the state you want
+   to start from.
+2. Click **Start Recording**.
+3. Carry out your analysis exactly as you normally would.
+4. Click **Stop Recording**.  You will be prompted to save the macro as
+   a ``.py`` file.
+5. Click **Run Macro** and choose the *parent* folder that contains
+   your session folders.
+
+The macro is replayed on each session folder in turn.  Recording a
+macro against a session that is representative of the batch matters —
+a dialog field or right-click entry that only exists for some datasets
+will simply be skipped on the sessions that lack it.
+
+.. note::
+
+   Only the *first* session needs to be loaded by hand.  **Run Macro**
+   loads each session itself, so do not include a session load in the
+   recording.
+
+What gets recorded
+------------------
+
+.. list-table::
+   :widths: 35 65
+   :header-rows: 1
+
+   * - Interaction
+     - Notes
+   * - Menu bar actions
+     - Recorded by menu path and re-triggered on replay.
+   * - Dialog fields and buttons
+     - Only fields you actually changed are stored, followed by the
+       button you clicked.  Works for both modal and modeless dialogs.
+   * - Right-click actions
+     - On the image display and on the data tables.  Stored by menu
+       label path, e.g. ``Show Identity > ID: neuron``.
+   * - On-screen controls
+     - Channel visibility toggles, scalebar, home/reset, the
+       **Active Image** selector, the highlight overlay toggle, and the
+       camera (screenshot) button.
+   * - File loads
+     - A file chosen through a load dialog is re-loaded from the same
+       path on every session.
+   * - Saves
+     - Tables, image channels, Network3D dumps, quickload pickles and
+       screenshots.
+   * - Message box answers
+     - Replayed so the run never stops waiting for a click.
+
+Checkable controls are replayed to the *state* that was recorded rather
+than blindly re-clicked.  If you recorded "scalebar on" and a session
+happens to load with the scalebar already on, it is left alone — every
+session ends in the same state regardless of where it started.
+
+What is not recorded
+--------------------
+
+The zoom, pan, 3D, popout and pen buttons are deliberately ignored:
+they are view and interaction modes that carry no meaning from one
+session to the next.  Left-click selection on the image canvas, and
+direct canvas manipulation such as panning, zooming and painting, are
+likewise not recorded.
+
+Anything that depends on *where* you clicked is the general limitation
+here.  Right-click entries whose meaning follows from the current
+selection — **Show Neighbors**, the **Selection** submenu, measurement
+points — are recorded, but on replay they act on whatever happens to be
+selected at that moment, which may differ per session.  For batch work
+prefer the selection-independent entries: identities, communities,
+Select All, Sort and Save As.
+
+Where the output goes
+---------------------
+
+Each run creates a new timestamped folder inside the parent folder you
+selected, containing one sub-folder per session::
+
+   YourParentFolder/
+   ├── Mouse_01/                          <- your sessions, untouched
+   ├── Mouse_02/
+   └── MacroBatch_2026-08-11_01-10-12/
+       ├── Mouse_01_Output/
+       │   ├── Proximity_Mouse_01.csv
+       │   └── screenshot_Mouse_01.png
+       └── Mouse_02_Output/
+           ├── Proximity_Mouse_02.csv
+           └── screenshot_Mouse_02.png
+
+Because the folder is timestamped, running the same macro again never
+overwrites an earlier batch.  Session folders themselves are never
+written to.
+
+Every output file also carries its session name at the end of the
+filename.  This is what makes the results poolable: you can copy the
+contents of every ``*_Output`` folder into a single directory for
+downstream analysis without anything colliding.
+
+Folders whose name starts with ``MacroBatch_`` are skipped when
+scanning for sessions, so previous results are never mistaken for
+input.
+
+When something goes wrong
+-------------------------
+
+Errors are contained to the session that caused them.  A folder that is
+corrupt, is not a NetTracer3D session, or is simply incompatible with
+the macro is logged and skipped, and the run carries on with the next
+one.  The summary at the end reports how many sessions succeeded, and
+the log lists what failed for each one that did not.
+
+Steps that cannot be applied to a particular session — a dialog field
+that is not present, a right-click entry that dataset does not produce,
+a channel toggle that is disabled, a load file that has been moved — are
+logged as skipped and the rest of the macro continues.
+
+Editing a macro by hand
+-----------------------
+
+Saved macros are plain, readable Python.  Each recorded step is one
+entry in an ``EVENTS`` list with a comment describing it::
+
+   MACRO_FORMAT = 1
+
+   EVENTS = [
+       {'op': 'menu', 'path': ['Analyze', 'Proximity Analysis...']},   # menu: Analyze > Proximity Analysis...
+       {'op': 'set', 'w_class': 'QDoubleSpinBox', 'w_index': 0, ...},  # set search distance
+       {'op': 'ui', 'target': 'scalebar', 'checked': True},            # scalebar on
+       {'op': 'save', 'method': 'save_table_as', 'fmt': 'csv', ...},   # save table 'Proximity' (csv)
+   ]
+
+You can delete steps, reorder them, or tweak a recorded value in a text
+editor rather than re-recording the whole run.  Keep the ``EVENTS``
+name and the dictionary structure intact.
+
+Troubleshooting
+---------------
+
+.. list-table::
+   :widths: 35 65
+   :header-rows: 1
+
+   * - Symptom
+     - Try
+   * - Every session reports LOAD FAILED
+     - Check you selected the *parent* folder containing the session
+       folders, not a session folder itself.
+   * - A step is skipped on some sessions
+     - The dialog field or menu entry does not exist for that dataset.
+       Record against a representative session, or split the macro.
+   * - Results differ between sessions
+     - Something in the macro depends on the current selection or on a
+       clicked position.  Prefer selection-independent actions.
+   * - A recorded file load is skipped
+     - The file has been moved or renamed.  Macros store the absolute
+       path chosen at record time.
+   * - Nothing is saved
+     - The macro contains no save step.  Saves must be performed while
+       recording for the run to produce output.

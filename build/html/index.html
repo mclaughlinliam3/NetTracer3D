@@ -6,14 +6,14 @@
   <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
 
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>NetTracer3D documentation &mdash; NetTracer3D 1.6.0 documentation</title>
+  <title>NetTracer3D documentation &mdash; NetTracer3D 2.0.0 documentation</title>
       <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=b86133f3" />
       <link rel="stylesheet" type="text/css" href="_static/css/theme.css?v=e59714d7" />
 
   
       <script src="_static/jquery.js?v=5d32c60e"></script>
       <script src="_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
-      <script src="_static/documentation_options.js?v=72d88caf"></script>
+      <script src="_static/documentation_options.js?v=51b770b3"></script>
       <script src="_static/doctools.js?v=9bcbadda"></script>
       <script src="_static/sphinx_highlight.js?v=dc90522c"></script>
     <script src="_static/js/theme.js"></script>
@@ -45,8 +45,8 @@
               <p class="caption" role="heading"><span class="caption-text">User Guide:</span></p>
 <ul>
 <li class="toctree-l1"><a class="reference internal" href="installation.html">Installation</a></li>
-<li class="toctree-l1"><a class="reference internal" href="quickstart.html">Quickstart - Segmenting Data and Generating Connectivity Networks</a></li>
-<li class="toctree-l1"><a class="reference internal" href="proximity.html">Proximity Networks - Ideal for Cellular Data</a></li>
+<li class="toctree-l1"><a class="reference internal" href="quickstart.html">Quickstart — Segmenting Data and Generating Connectivity Networks</a></li>
+<li class="toctree-l1"><a class="reference internal" href="proximity.html">Proximity Networks — Ideal for Cellular Data</a></li>
 <li class="toctree-l1"><a class="reference internal" href="branches.html">Labeling Branches and Branch Networks</a></li>
 <li class="toctree-l1"><a class="reference internal" href="properties.html">Properties of a Network3D Object</a></li>
 <li class="toctree-l1"><a class="reference internal" href="excel_helper.html">Using the Spreadsheet Loader</a></li>
@@ -54,12 +54,12 @@
 </ul>
 <p class="caption" role="heading"><span class="caption-text">Detailed Function Guide:</span></p>
 <ul>
-<li class="toctree-l1"><a class="reference internal" href="right_clicking.html">Right Clicking - All Options Available by Right Clicking in the GUI</a></li>
+<li class="toctree-l1"><a class="reference internal" href="right_clicking.html">Right Clicking — All Options Available by Right Clicking in the GUI</a></li>
 <li class="toctree-l1"><a class="reference internal" href="file_menu.html">All File Menu Options</a></li>
 <li class="toctree-l1"><a class="reference internal" href="analyze_menu.html">All Analyze Menu Options</a></li>
 <li class="toctree-l1"><a class="reference internal" href="process_menu.html">All Process Menu Options</a></li>
 <li class="toctree-l1"><a class="reference internal" href="image_menu.html">All Image Menu Options</a></li>
-<li class="toctree-l1"><a class="reference internal" href="extensions.html">NetTracer3D Plugin System</a></li>
+<li class="toctree-l1"><a class="reference internal" href="extensions.html">NetTracer3D Plugin System and Instructions on Using Prebundled Plugins</a></li>
 </ul>
 <p class="caption" role="heading"><span class="caption-text">Development:</span></p>
 <ul>
@@ -113,43 +113,46 @@
 </section>
 <section id="getting-started">
 <h2>Getting Started<a class="headerlink" href="#getting-started" title="Link to this heading"></a></h2>
-<p>To get started with NetTracer3D, check out the <a class="reference internal" href="installation.html"><span class="doc">Installation</span></a> guide and then proceed to the <a class="reference internal" href="quickstart.html"><span class="doc">Quickstart - Segmenting Data and Generating Connectivity Networks</span></a> tutorial.</p>
+<p>To get started with NetTracer3D, check out the <a class="reference internal" href="installation.html"><span class="doc">Installation</span></a> guide and then proceed to the <a class="reference internal" href="quickstart.html"><span class="doc">Quickstart — Segmenting Data and Generating Connectivity Networks</span></a> tutorial.</p>
 <p>A youtube tutorial on installing and using the program can be found here: <a class="reference external" href="https://www.youtube.com/watch?v=_4uDy0mzG94&amp;list=PLsrhxiimzKJMZ3_gTWkfrcAdJQQobUhj7">https://www.youtube.com/watch?v=_4uDy0mzG94&amp;list=PLsrhxiimzKJMZ3_gTWkfrcAdJQQobUhj7</a></p>
 <div class="toctree-wrapper compound">
 <p class="caption" role="heading"><span class="caption-text">User Guide:</span></p>
 <ul>
 <li class="toctree-l1"><a class="reference internal" href="installation.html">Installation</a><ul>
 <li class="toctree-l2"><a class="reference internal" href="installation.html#system-requirements">System Requirements</a></li>
-<li class="toctree-l2"><a class="reference internal" href="installation.html#installing-nettracer3d">Installing NetTracer3D</a></li>
-<li class="toctree-l2"><a class="reference internal" href="installation.html#verifying-installation">Verifying Installation</a></li>
+<li class="toctree-l2"><a class="reference internal" href="installation.html#windows-installer">Windows Installer</a></li>
+<li class="toctree-l2"><a class="reference internal" href="installation.html#installing-with-pip">Installing with pip</a></li>
+<li class="toctree-l2"><a class="reference internal" href="installation.html#installing-with-anaconda">Installing with Anaconda</a></li>
+<li class="toctree-l2"><a class="reference internal" href="installation.html#gpu-support">GPU Support</a></li>
+<li class="toctree-l2"><a class="reference internal" href="installation.html#verifying-the-installation">Verifying the Installation</a></li>
 <li class="toctree-l2"><a class="reference internal" href="installation.html#troubleshooting">Troubleshooting</a></li>
 <li class="toctree-l2"><a class="reference internal" href="installation.html#next-steps">Next Steps</a></li>
 </ul>
 </li>
-<li class="toctree-l1"><a class="reference internal" href="quickstart.html">Quickstart - Segmenting Data and Generating Connectivity Networks</a><ul>
-<li class="toctree-l2"><a class="reference internal" href="quickstart.html#launch-nettracer3d">Launch NetTracer3D</a></li>
+<li class="toctree-l1"><a class="reference internal" href="quickstart.html">Quickstart — Segmenting Data and Generating Connectivity Networks</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="quickstart.html#launching-nettracer3d">Launching NetTracer3D</a></li>
 <li class="toctree-l2"><a class="reference internal" href="quickstart.html#interface-overview">Interface Overview</a></li>
 <li class="toctree-l2"><a class="reference internal" href="quickstart.html#the-control-panel">The Control Panel</a></li>
 <li class="toctree-l2"><a class="reference internal" href="quickstart.html#loading-an-image">Loading an Image</a></li>
-<li class="toctree-l2"><a class="reference internal" href="quickstart.html#basic-navigation-of-the-image-viewer-window">Basic Navigation of the Image Viewer Window</a></li>
+<li class="toctree-l2"><a class="reference internal" href="quickstart.html#navigating-the-image-viewer-window">Navigating the Image Viewer Window</a></li>
 <li class="toctree-l2"><a class="reference internal" href="quickstart.html#segmenting-data">Segmenting Data</a></li>
-<li class="toctree-l2"><a class="reference internal" href="quickstart.html#introduction-to-types-of-networks">Introduction to Types of Networks</a></li>
-<li class="toctree-l2"><a class="reference internal" href="quickstart.html#the-connectivity-network-generating-a-network-using-an-edge-image">The Connectivity Network - Generating a Network Using An Edge Image</a></li>
+<li class="toctree-l2"><a class="reference internal" href="quickstart.html#types-of-networks">Types of Networks</a></li>
+<li class="toctree-l2"><a class="reference internal" href="quickstart.html#the-connectivity-network">The Connectivity Network</a></li>
 <li class="toctree-l2"><a class="reference internal" href="quickstart.html#analysis">Analysis</a></li>
 <li class="toctree-l2"><a class="reference internal" href="quickstart.html#exporting-data">Exporting Data</a></li>
 <li class="toctree-l2"><a class="reference internal" href="quickstart.html#next-steps">Next Steps</a></li>
 </ul>
 </li>
-<li class="toctree-l1"><a class="reference internal" href="proximity.html">Proximity Networks - Ideal for Cellular Data</a><ul>
+<li class="toctree-l1"><a class="reference internal" href="proximity.html">Proximity Networks — Ideal for Cellular Data</a><ul>
 <li class="toctree-l2"><a class="reference internal" href="proximity.html#generating-a-network-based-on-proximity">Generating a Network Based on Proximity</a></li>
-<li class="toctree-l2"><a class="reference internal" href="proximity.html#cellular-data-modality-of-analysis">Cellular Data - Modality of Analysis</a></li>
-<li class="toctree-l2"><a class="reference internal" href="proximity.html#using-proximity-networks-for-advanced-cellular-neighborhood-analysis-walthrough-analysis-of-codex-sample">Using Proximity Networks for Advanced Cellular Neighborhood Analysis - Walthrough Analysis of CODEX sample</a></li>
+<li class="toctree-l2"><a class="reference internal" href="proximity.html#cellular-data-modalities-of-analysis">Cellular Data — Modalities of Analysis</a></li>
+<li class="toctree-l2"><a class="reference internal" href="proximity.html#advanced-cellular-neighborhood-analysis-codex-walkthrough">Advanced Cellular Neighborhood Analysis — CODEX Walkthrough</a></li>
 <li class="toctree-l2"><a class="reference internal" href="proximity.html#next-steps">Next Steps</a></li>
 </ul>
 </li>
 <li class="toctree-l1"><a class="reference internal" href="branches.html">Labeling Branches and Branch Networks</a><ul>
 <li class="toctree-l2"><a class="reference internal" href="branches.html#labeling-branches">Labeling Branches</a></li>
-<li class="toctree-l2"><a class="reference internal" href="branches.html#examples-of-tweaking-branch-labels-optional">Examples of Tweaking Branch Labels (Optional)</a></li>
+<li class="toctree-l2"><a class="reference internal" href="branches.html#tweaking-branch-labels-optional">Tweaking Branch Labels (Optional)</a></li>
 <li class="toctree-l2"><a class="reference internal" href="branches.html#branch-adjacency-network">Branch Adjacency Network</a></li>
 <li class="toctree-l2"><a class="reference internal" href="branches.html#using-branch-labels-as-nodes">Using Branch Labels as Nodes</a></li>
 <li class="toctree-l2"><a class="reference internal" href="branches.html#branchpoint-networks">Branchpoint Networks</a></li>
@@ -158,21 +161,23 @@
 </li>
 <li class="toctree-l1"><a class="reference internal" href="properties.html">Properties of a Network3D Object</a><ul>
 <li class="toctree-l2"><a class="reference internal" href="properties.html#main-properties">Main Properties</a></li>
-<li class="toctree-l2"><a class="reference internal" href="properties.html#necessary-structures-to-properties-stored-in-csvs">Necessary Structures to Properties stored in CSVs</a></li>
-<li class="toctree-l2"><a class="reference internal" href="properties.html#temp-properties">Temp Properties</a></li>
+<li class="toctree-l2"><a class="reference internal" href="properties.html#structures-required-for-properties-stored-in-csvs">Structures Required for Properties Stored in CSVs</a></li>
+<li class="toctree-l2"><a class="reference internal" href="properties.html#temporary-properties">Temporary Properties</a></li>
 <li class="toctree-l2"><a class="reference internal" href="properties.html#next-steps">Next Steps</a></li>
 </ul>
 </li>
 <li class="toctree-l1"><a class="reference internal" href="excel_helper.html">Using the Spreadsheet Loader</a><ul>
 <li class="toctree-l2"><a class="reference internal" href="excel_helper.html#opening-the-excel-helper">Opening the Excel Helper</a></li>
+<li class="toctree-l2"><a class="reference internal" href="excel_helper.html#reclassifying-node-identities">Reclassifying Node Identities</a></li>
+<li class="toctree-l2"><a class="reference internal" href="excel_helper.html#enhanced-search">Enhanced Search</a></li>
 <li class="toctree-l2"><a class="reference internal" href="excel_helper.html#next-steps">Next Steps</a></li>
 </ul>
 </li>
 <li class="toctree-l1"><a class="reference internal" href="keyboard_shortcuts.html">Available Keyboard Shortcuts</a><ul>
-<li class="toctree-l2"><a class="reference internal" href="keyboard_shortcuts.html#in-the-default-viewer-mode">In the default viewer mode:</a></li>
-<li class="toctree-l2"><a class="reference internal" href="keyboard_shortcuts.html#if-in-the-upper-right-or-lower-right-network-tabulated-data-widgets">If in the upper right or lower right network/tabulated data widgets:</a></li>
-<li class="toctree-l2"><a class="reference internal" href="keyboard_shortcuts.html#if-in-paint-mode">If in paint mode:</a></li>
-<li class="toctree-l2"><a class="reference internal" href="keyboard_shortcuts.html#if-using-the-machine-learning-segmenter">If using the machine-learning segmenter:</a></li>
+<li class="toctree-l2"><a class="reference internal" href="keyboard_shortcuts.html#default-viewer-mode">Default Viewer Mode</a></li>
+<li class="toctree-l2"><a class="reference internal" href="keyboard_shortcuts.html#network-and-tabulated-data-widgets">Network and Tabulated Data Widgets</a></li>
+<li class="toctree-l2"><a class="reference internal" href="keyboard_shortcuts.html#paint-mode">Paint Mode</a></li>
+<li class="toctree-l2"><a class="reference internal" href="keyboard_shortcuts.html#machine-learning-segmenter">Machine-Learning Segmenter</a></li>
 <li class="toctree-l2"><a class="reference internal" href="keyboard_shortcuts.html#next-steps">Next Steps</a></li>
 </ul>
 </li>
@@ -181,7 +186,7 @@
 <div class="toctree-wrapper compound">
 <p class="caption" role="heading"><span class="caption-text">Detailed Function Guide:</span></p>
 <ul>
-<li class="toctree-l1"><a class="reference internal" href="right_clicking.html">Right Clicking - All Options Available by Right Clicking in the GUI</a><ul>
+<li class="toctree-l1"><a class="reference internal" href="right_clicking.html">Right Clicking — All Options Available by Right Clicking in the GUI</a><ul>
 <li class="toctree-l2"><a class="reference internal" href="right_clicking.html#right-clicking-in-the-image-viewer-window">Right Clicking in the Image Viewer Window</a></li>
 <li class="toctree-l2"><a class="reference internal" href="right_clicking.html#right-clicking-in-the-network-table-widget">Right Clicking in the Network Table Widget</a></li>
 <li class="toctree-l2"><a class="reference internal" href="right_clicking.html#right-clicking-in-the-tabbed-data-widget">Right Clicking in the Tabbed Data Widget</a></li>
@@ -189,99 +194,103 @@
 </ul>
 </li>
 <li class="toctree-l1"><a class="reference internal" href="file_menu.html">All File Menu Options</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="file_menu.html#new-session">New Session</a></li>
 <li class="toctree-l2"><a class="reference internal" href="file_menu.html#save">Save</a></li>
 <li class="toctree-l2"><a class="reference internal" href="file_menu.html#save-as">Save As</a></li>
 <li class="toctree-l2"><a class="reference internal" href="file_menu.html#load">Load</a></li>
-<li class="toctree-l2"><a class="reference internal" href="file_menu.html#images-node-identities">Images -&gt; Node Identities</a></li>
+<li class="toctree-l2"><a class="reference internal" href="file_menu.html#images-node-identities">Images → Node Identities</a></li>
 <li class="toctree-l2"><a class="reference internal" href="file_menu.html#next-steps">Next Steps</a></li>
 </ul>
 </li>
 <li class="toctree-l1"><a class="reference internal" href="analyze_menu.html">All Analyze Menu Options</a><ul>
-<li class="toctree-l2"><a class="reference internal" href="analyze_menu.html#analyze-network-show-network">‘Analyze -&gt; Network -&gt; Show Network’</a></li>
-<li class="toctree-l2"><a class="reference internal" href="analyze_menu.html#analyze-network-generic-network-report">‘Analyze -&gt; Network -&gt; Generic Network Report’</a></li>
-<li class="toctree-l2"><a class="reference internal" href="analyze_menu.html#analyze-network-create-communities-based-on-network">‘Analyze -&gt; Network -&gt; Create Communities based on Network’</a></li>
-<li class="toctree-l2"><a class="reference internal" href="analyze_menu.html#analyze-network-create-communities-based-on-nodes-immediate-neighbors">‘Analyze -&gt; Network -&gt; Create Communities based on Nodes Immediate Neighbors’</a></li>
-<li class="toctree-l2"><a class="reference internal" href="analyze_menu.html#analyze-network-create-communities-based-on-hexagonal-rhomboid-proximity-cells">‘Analyze -&gt; Network -&gt; Create Communities Based on Hexagonal/Rhomboid Proximity Cells?’</a></li>
-<li class="toctree-l2"><a class="reference internal" href="analyze_menu.html#analyze-network-calculate-composition-of-network-communities-and-umap">‘Analyze -&gt; Network -&gt; Calculate Composition of Network Communities (And UMAP)’</a></li>
-<li class="toctree-l2"><a class="reference internal" href="analyze_menu.html#analyze-network-convert-network-communities-into-supercommunities-also-returns-compositional-heatmaps">‘Analyze -&gt; Network -&gt; Convert Network Communities Into Supercommunities (Also Returns Compositional Heatmaps)’</a></li>
-<li class="toctree-l2"><a class="reference internal" href="analyze_menu.html#analyze-stats-network-related-calculate-generic-network-stats">‘Analyze -&gt; Stats -&gt; Network Related -&gt; Calculate Generic Network Stats’</a></li>
-<li class="toctree-l2"><a class="reference internal" href="analyze_menu.html#analyze-stats-network-related-network-statistics-histograms">‘Analyze -&gt; Stats -&gt; Network Related -&gt; Network Statistics Histograms’</a></li>
-<li class="toctree-l2"><a class="reference internal" href="analyze_menu.html#analyze-stats-network-related-radial-distribution-analysis">‘Analyze -&gt; Stats -&gt; Network Related -&gt; Radial Distribution Analysis’</a></li>
-<li class="toctree-l2"><a class="reference internal" href="analyze_menu.html#analyze-stats-network-related-network-nearest-neighbors">‘Analyze -&gt; Stats -&gt; Network Related -&gt; Network Nearest Neighbors’</a></li>
-<li class="toctree-l2"><a class="reference internal" href="analyze_menu.html#analyze-stats-network-related-community-cluster-heatmap">‘Analyze -&gt; Stats -&gt; Network Related -&gt; Community Cluster Heatmap’</a></li>
-<li class="toctree-l2"><a class="reference internal" href="analyze_menu.html#analyze-stats-spatial-identity-distribution-of-neighbors">‘Analyze -&gt; Stats -&gt; Spatial -&gt; Identity Distribution of Neighbors’</a></li>
-<li class="toctree-l2"><a class="reference internal" href="analyze_menu.html#analyze-stats-spatial-ripley-clustering-analysis">‘Analyze -&gt; Stats -&gt; Spatial -&gt; Ripley Clustering Analysis’</a></li>
-<li class="toctree-l2"><a class="reference internal" href="analyze_menu.html#analyze-stats-spatial-average-nearest-neighbors-with-clustering-heatmaps">‘Analyze -&gt; Stats -&gt; Spatial -&gt; Average Nearest Neighbors (With Clustering Heatmaps)’</a></li>
-<li class="toctree-l2"><a class="reference internal" href="analyze_menu.html#analyze-stats-spatial-calculate-node-edge-interactions">‘Analyze -&gt; Stats -&gt; Spatial -&gt; Calculate Node &lt; &gt; Edge Interactions’</a></li>
-<li class="toctree-l2"><a class="reference internal" href="analyze_menu.html#analyze-stats-morphological-calculate-volumes">‘Analyze -&gt; Stats -&gt; Morphological -&gt; Calculate Volumes’</a></li>
-<li class="toctree-l2"><a class="reference internal" href="analyze_menu.html#analyze-stats-morphological-calculate-radii">‘Analyze -&gt; Stats -&gt; Morphological -&gt; Calculate Radii’</a></li>
-<li class="toctree-l2"><a class="reference internal" href="analyze_menu.html#analyze-stats-morphological-calculate-surface-area">‘Analyze -&gt; Stats -&gt; Morphological -&gt; Calculate Surface Area’</a></li>
-<li class="toctree-l2"><a class="reference internal" href="analyze_menu.html#analyze-stats-morphological-calculate-sphericities">‘Analyze -&gt; Stats -&gt; Morphological -&gt; Calculate Sphericities’</a></li>
-<li class="toctree-l2"><a class="reference internal" href="analyze_menu.html#analyze-stats-morphological-calculate-branch-stats">‘Analyze -&gt; Stats -&gt; Morphological -&gt; Calculate Branch Stats’</a></li>
-<li class="toctree-l2"><a class="reference internal" href="analyze_menu.html#analyze-stats-significance-testing">‘Analyze -&gt; Stats -&gt; Significance Testing’</a></li>
-<li class="toctree-l2"><a class="reference internal" href="analyze_menu.html#analyze-stats-cellular-esque-analysis">‘Analyze -&gt; Stats -&gt; Cellular-Esque Analysis’</a></li>
-<li class="toctree-l2"><a class="reference internal" href="analyze_menu.html#analyze-data-overlays-get-degree-information">‘Analyze -&gt; Data/Overlays -&gt; Get Degree Information’</a></li>
-<li class="toctree-l2"><a class="reference internal" href="analyze_menu.html#analyze-data-overlays-get-hub-information">‘Analyze -&gt; Data/Overlays -&gt; Get Hub Information’</a></li>
-<li class="toctree-l2"><a class="reference internal" href="analyze_menu.html#analyze-data-overlays-get-transcommunity-nodes">‘Analyze -&gt; Data/Overlays -&gt; Get Transcommunity Nodes’</a></li>
-<li class="toctree-l2"><a class="reference internal" href="analyze_menu.html#analyze-data-overlays-code-communities">‘Analyze -&gt; Data/Overlays -&gt; Code Communities’</a></li>
-<li class="toctree-l2"><a class="reference internal" href="analyze_menu.html#analyze-data-overlays-code-identities">‘Analyze -&gt; Data/Overlays -&gt; Code Identities’</a></li>
-<li class="toctree-l2"><a class="reference internal" href="analyze_menu.html#analyze-data-overlays-centroid-umap">‘Analyze -&gt; Data/Overlays -&gt; Centroid UMAP’</a></li>
-<li class="toctree-l2"><a class="reference internal" href="analyze_menu.html#analyze-randomize-generate-equivalent-random-network">‘Analyze -&gt; Randomize -&gt; Generate Equivalent Random Network’</a></li>
-<li class="toctree-l2"><a class="reference internal" href="analyze_menu.html#analyze-randomize-scramble-nodes-centroids">‘Analyze -&gt; Randomize -&gt; Scramble Nodes (Centroids)’</a></li>
+<li class="toctree-l2"><a class="reference internal" href="analyze_menu.html#analyze-network-show-network">Analyze → Network → Show Network</a></li>
+<li class="toctree-l2"><a class="reference internal" href="analyze_menu.html#analyze-network-generic-network-report">Analyze → Network → Generic Network Report</a></li>
+<li class="toctree-l2"><a class="reference internal" href="analyze_menu.html#analyze-network-create-communities-based-on-network">Analyze → Network → Create Communities Based on Network</a></li>
+<li class="toctree-l2"><a class="reference internal" href="analyze_menu.html#analyze-network-create-communities-based-on-node-s-immediate-neighbors">Analyze → Network → Create Communities Based on Node’s Immediate Neighbors</a></li>
+<li class="toctree-l2"><a class="reference internal" href="analyze_menu.html#analyze-network-create-communities-based-on-hexagonal-rhomboid-proximity-cells">Analyze → Network → Create Communities Based on Hexagonal/Rhomboid Proximity Cells</a></li>
+<li class="toctree-l2"><a class="reference internal" href="analyze_menu.html#analyze-network-calculate-composition-of-network-communities-and-umap">Analyze → Network → Calculate Composition of Network Communities (And UMAP)</a></li>
+<li class="toctree-l2"><a class="reference internal" href="analyze_menu.html#analyze-network-convert-network-communities-into-supercommunities">Analyze → Network → Convert Network Communities Into Supercommunities</a></li>
+<li class="toctree-l2"><a class="reference internal" href="analyze_menu.html#analyze-stats-network-related-calculate-generic-network-stats">Analyze → Stats → Network Related → Calculate Generic Network Stats</a></li>
+<li class="toctree-l2"><a class="reference internal" href="analyze_menu.html#analyze-stats-network-related-network-statistics-histograms">Analyze → Stats → Network Related → Network Statistics Histograms</a></li>
+<li class="toctree-l2"><a class="reference internal" href="analyze_menu.html#analyze-stats-network-related-radial-distribution-analysis">Analyze → Stats → Network Related → Radial Distribution Analysis</a></li>
+<li class="toctree-l2"><a class="reference internal" href="analyze_menu.html#analyze-stats-network-related-network-nearest-neighbors">Analyze → Stats → Network Related → Network Nearest Neighbors</a></li>
+<li class="toctree-l2"><a class="reference internal" href="analyze_menu.html#analyze-stats-network-related-community-cluster-heatmap">Analyze → Stats → Network Related → Community Cluster Heatmap</a></li>
+<li class="toctree-l2"><a class="reference internal" href="analyze_menu.html#analyze-stats-spatial-identity-distribution-of-neighbors">Analyze → Stats → Spatial → Identity Distribution of Neighbors</a></li>
+<li class="toctree-l2"><a class="reference internal" href="analyze_menu.html#analyze-stats-spatial-ripley-clustering-analysis">Analyze → Stats → Spatial → Ripley Clustering Analysis</a></li>
+<li class="toctree-l2"><a class="reference internal" href="analyze_menu.html#analyze-stats-spatial-average-nearest-neighbors-with-clustering-heatmaps">Analyze → Stats → Spatial → Average Nearest Neighbors (With Clustering Heatmaps)</a></li>
+<li class="toctree-l2"><a class="reference internal" href="analyze_menu.html#analyze-stats-spatial-calculate-node-edge-interactions">Analyze → Stats → Spatial → Calculate Node ↔ Edge Interactions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="analyze_menu.html#analyze-stats-morphological-calculate-volumes">Analyze → Stats → Morphological → Calculate Volumes</a></li>
+<li class="toctree-l2"><a class="reference internal" href="analyze_menu.html#analyze-stats-morphological-calculate-radii">Analyze → Stats → Morphological → Calculate Radii</a></li>
+<li class="toctree-l2"><a class="reference internal" href="analyze_menu.html#analyze-stats-morphological-calculate-surface-area">Analyze → Stats → Morphological → Calculate Surface Area</a></li>
+<li class="toctree-l2"><a class="reference internal" href="analyze_menu.html#analyze-stats-morphological-calculate-sphericities">Analyze → Stats → Morphological → Calculate Sphericities</a></li>
+<li class="toctree-l2"><a class="reference internal" href="analyze_menu.html#analyze-stats-morphological-calculate-branch-stats">Analyze → Stats → Morphological → Calculate Branch Stats</a></li>
+<li class="toctree-l2"><a class="reference internal" href="analyze_menu.html#analyze-stats-identity-coexpression-matrix">Analyze → Stats → Identity Coexpression Matrix</a></li>
+<li class="toctree-l2"><a class="reference internal" href="analyze_menu.html#analyze-stats-significance-testing">Analyze → Stats → Significance Testing</a></li>
+<li class="toctree-l2"><a class="reference internal" href="analyze_menu.html#analyze-stats-cellular-esque-analysis">Analyze → Stats → Cellular-Esque Analysis</a></li>
+<li class="toctree-l2"><a class="reference internal" href="analyze_menu.html#analyze-data-overlays-get-degree-information">Analyze → Data/Overlays → Get Degree Information</a></li>
+<li class="toctree-l2"><a class="reference internal" href="analyze_menu.html#analyze-data-overlays-get-hub-information">Analyze → Data/Overlays → Get Hub Information</a></li>
+<li class="toctree-l2"><a class="reference internal" href="analyze_menu.html#analyze-data-overlays-get-transcommunity-nodes">Analyze → Data/Overlays → Get Transcommunity Nodes</a></li>
+<li class="toctree-l2"><a class="reference internal" href="analyze_menu.html#analyze-data-overlays-code-communities">Analyze → Data/Overlays → Code Communities</a></li>
+<li class="toctree-l2"><a class="reference internal" href="analyze_menu.html#analyze-data-overlays-code-identities">Analyze → Data/Overlays → Code Identities</a></li>
+<li class="toctree-l2"><a class="reference internal" href="analyze_menu.html#analyze-data-overlays-centroid-umap">Analyze → Data/Overlays → Centroid UMAP</a></li>
+<li class="toctree-l2"><a class="reference internal" href="analyze_menu.html#analyze-randomize-generate-equivalent-random-network">Analyze → Randomize → Generate Equivalent Random Network</a></li>
+<li class="toctree-l2"><a class="reference internal" href="analyze_menu.html#analyze-randomize-scramble-nodes-centroids">Analyze → Randomize → Scramble Nodes (Centroids)</a></li>
 <li class="toctree-l2"><a class="reference internal" href="analyze_menu.html#next-steps">Next Steps</a></li>
 </ul>
 </li>
 <li class="toctree-l1"><a class="reference internal" href="process_menu.html">All Process Menu Options</a><ul>
-<li class="toctree-l2"><a class="reference internal" href="process_menu.html#process-calculate-network-calculate-connectivity-network">‘Process -&gt; Calculate Network -&gt; Calculate Connectivity Network…’</a></li>
-<li class="toctree-l2"><a class="reference internal" href="process_menu.html#process-calculate-network-calculate-proximity-network">‘Process -&gt; Calculate Network -&gt; Calculate Proximity Network…’</a></li>
-<li class="toctree-l2"><a class="reference internal" href="process_menu.html#process-calculate-network-calculate-branchpoint-network">‘Process -&gt; Calculate Network -&gt; Calculate Branchpoint Network…’</a></li>
-<li class="toctree-l2"><a class="reference internal" href="process_menu.html#process-calculate-network-calculate-branch-adjacency-network">‘Process -&gt; Calculate Network -&gt; Calculate Branch Adjacency Network’</a></li>
-<li class="toctree-l2"><a class="reference internal" href="process_menu.html#process-calculate-network-calculate-centroids">‘Process -&gt; Calculate Network -&gt; Calculate Centroids…’</a></li>
-<li class="toctree-l2"><a class="reference internal" href="process_menu.html#process-image-resize">‘Process -&gt; Image -&gt; Resize’</a></li>
-<li class="toctree-l2"><a class="reference internal" href="process_menu.html#process-image-clean-segmentation">‘Process -&gt; Image -&gt; Clean Segmentation’</a></li>
-<li class="toctree-l2"><a class="reference internal" href="process_menu.html#process-image-dilate">‘Process -&gt; Image -&gt; Dilate’</a></li>
-<li class="toctree-l2"><a class="reference internal" href="process_menu.html#process-image-erode">‘Process -&gt; Image -&gt; Erode’</a></li>
-<li class="toctree-l2"><a class="reference internal" href="process_menu.html#process-image-fill-holes">‘Process -&gt; Image -&gt; Fill Holes’</a></li>
-<li class="toctree-l2"><a class="reference internal" href="process_menu.html#process-image-binarize">‘Process -&gt; Image -&gt; Binarize’</a></li>
-<li class="toctree-l2"><a class="reference internal" href="process_menu.html#process-image-label-objects">‘Process -&gt; Image -&gt; Label Objects’</a></li>
-<li class="toctree-l2"><a class="reference internal" href="process_menu.html#process-image-neighborhood-labels">‘Process -&gt; Image -&gt; Neighborhood Labels’</a></li>
-<li class="toctree-l2"><a class="reference internal" href="process_menu.html#process-image-threshold-segment">‘Process -&gt; Image -&gt; Threshold/Segment’</a></li>
-<li class="toctree-l2"><a class="reference internal" href="process_menu.html#process-image-mask-channel">‘Process -&gt; Image -&gt; Mask Channel’</a></li>
-<li class="toctree-l2"><a class="reference internal" href="process_menu.html#process-image-crop-channels">‘Process -&gt; Image -&gt; Crop Channels’</a></li>
-<li class="toctree-l2"><a class="reference internal" href="process_menu.html#process-image-channel-dtype">‘Process -&gt; Image -&gt; Channel dtype’</a></li>
-<li class="toctree-l2"><a class="reference internal" href="process_menu.html#process-image-skeletonize">‘Process -&gt; Image -&gt; Skeletonize’</a></li>
-<li class="toctree-l2"><a class="reference internal" href="process_menu.html#process-image-binary-watershed">‘Process -&gt; Image -&gt; Binary Watershed’</a></li>
-<li class="toctree-l2"><a class="reference internal" href="process_menu.html#process-image-gray-watershed">‘Process -&gt; Image -&gt; Gray Watershed’</a></li>
-<li class="toctree-l2"><a class="reference internal" href="process_menu.html#process-image-invert">‘Process -&gt; Image -&gt; Invert’</a></li>
-<li class="toctree-l2"><a class="reference internal" href="process_menu.html#process-image-z-project">‘Process -&gt; Image -&gt; Z-Project’</a></li>
-<li class="toctree-l2"><a class="reference internal" href="process_menu.html#process-image-normalize-brigthness">‘Process -&gt; Image -&gt; Normalize Brigthness’</a></li>
-<li class="toctree-l2"><a class="reference internal" href="process_menu.html#process-generate-generate-nodes-from-node-centroids">‘Process -&gt; Generate -&gt; Generate Nodes (From Node Centroids)’</a></li>
-<li class="toctree-l2"><a class="reference internal" href="process_menu.html#process-generate-generate-nodes-from-edge-vertices">‘Process -&gt; Generate -&gt; Generate Nodes (From ‘Edge’ Vertices)’</a></li>
-<li class="toctree-l2"><a class="reference internal" href="process_menu.html#process-generate-label-branches">‘Process -&gt; Generate -&gt; Label Branches’</a></li>
-<li class="toctree-l2"><a class="reference internal" href="process_menu.html#process-generate-trace-filaments">‘Process -&gt; Generate -&gt; Trace Filaments’</a></li>
-<li class="toctree-l2"><a class="reference internal" href="process_menu.html#process-generate-generate-voronoi-diagram">‘Process -&gt; Generate -&gt; Generate Voronoi Diagram’</a></li>
-<li class="toctree-l2"><a class="reference internal" href="process_menu.html#process-generate-generate-convex-hull">‘Process -&gt; Generate -&gt; Generate Convex Hull’</a></li>
-<li class="toctree-l2"><a class="reference internal" href="process_menu.html#process-generate-generate-artificial-hexagonal-nodes">‘Process -&gt; Generate -&gt; Generate Artificial Hexagonal Nodes’</a></li>
-<li class="toctree-l2"><a class="reference internal" href="process_menu.html#process-modify-network-properties">‘Process -&gt; Modify Network/Properties’</a></li>
+<li class="toctree-l2"><a class="reference internal" href="process_menu.html#process-calculate-network-calculate-connectivity-network">Process → Calculate Network → Calculate Connectivity Network</a></li>
+<li class="toctree-l2"><a class="reference internal" href="process_menu.html#process-calculate-network-calculate-proximity-network">Process → Calculate Network → Calculate Proximity Network</a></li>
+<li class="toctree-l2"><a class="reference internal" href="process_menu.html#process-calculate-network-calculate-branchpoint-network">Process → Calculate Network → Calculate Branchpoint Network</a></li>
+<li class="toctree-l2"><a class="reference internal" href="process_menu.html#process-calculate-network-calculate-branch-adjacency-network">Process → Calculate Network → Calculate Branch Adjacency Network</a></li>
+<li class="toctree-l2"><a class="reference internal" href="process_menu.html#process-calculate-network-calculate-centroids">Process → Calculate Network → Calculate Centroids</a></li>
+<li class="toctree-l2"><a class="reference internal" href="process_menu.html#process-image-resize">Process → Image → Resize</a></li>
+<li class="toctree-l2"><a class="reference internal" href="process_menu.html#process-image-clean-segmentation">Process → Image → Clean Segmentation</a></li>
+<li class="toctree-l2"><a class="reference internal" href="process_menu.html#process-image-dilate">Process → Image → Dilate</a></li>
+<li class="toctree-l2"><a class="reference internal" href="process_menu.html#process-image-erode">Process → Image → Erode</a></li>
+<li class="toctree-l2"><a class="reference internal" href="process_menu.html#process-image-fill-holes">Process → Image → Fill Holes</a></li>
+<li class="toctree-l2"><a class="reference internal" href="process_menu.html#process-image-binarize">Process → Image → Binarize</a></li>
+<li class="toctree-l2"><a class="reference internal" href="process_menu.html#process-image-label-objects">Process → Image → Label Objects</a></li>
+<li class="toctree-l2"><a class="reference internal" href="process_menu.html#process-image-neighborhood-labels">Process → Image → Neighborhood Labels</a></li>
+<li class="toctree-l2"><a class="reference internal" href="process_menu.html#process-image-threshold-segment">Process → Image → Threshold/Segment</a></li>
+<li class="toctree-l2"><a class="reference internal" href="process_menu.html#process-image-mask-channel">Process → Image → Mask Channel</a></li>
+<li class="toctree-l2"><a class="reference internal" href="process_menu.html#process-image-crop-channels">Process → Image → Crop Channels</a></li>
+<li class="toctree-l2"><a class="reference internal" href="process_menu.html#process-image-channel-dtype">Process → Image → Channel dtype</a></li>
+<li class="toctree-l2"><a class="reference internal" href="process_menu.html#process-image-skeletonize">Process → Image → Skeletonize</a></li>
+<li class="toctree-l2"><a class="reference internal" href="process_menu.html#process-image-binary-watershed">Process → Image → Binary Watershed</a></li>
+<li class="toctree-l2"><a class="reference internal" href="process_menu.html#process-image-gray-watershed">Process → Image → Gray Watershed</a></li>
+<li class="toctree-l2"><a class="reference internal" href="process_menu.html#process-image-invert">Process → Image → Invert</a></li>
+<li class="toctree-l2"><a class="reference internal" href="process_menu.html#process-image-z-project">Process → Image → Z-Project</a></li>
+<li class="toctree-l2"><a class="reference internal" href="process_menu.html#process-image-find-borders-of-labels">Process → Image → Find Borders of Labels</a></li>
+<li class="toctree-l2"><a class="reference internal" href="process_menu.html#process-image-normalize-brightness">Process → Image → Normalize Brightness</a></li>
+<li class="toctree-l2"><a class="reference internal" href="process_menu.html#process-generate-generate-nodes-from-node-centroids">Process → Generate → Generate Nodes (From Node Centroids)</a></li>
+<li class="toctree-l2"><a class="reference internal" href="process_menu.html#process-generate-generate-nodes-from-edge-vertices">Process → Generate → Generate Nodes (From Edge Vertices)</a></li>
+<li class="toctree-l2"><a class="reference internal" href="process_menu.html#process-generate-label-branches">Process → Generate → Label Branches</a></li>
+<li class="toctree-l2"><a class="reference internal" href="process_menu.html#process-generate-trace-filaments">Process → Generate → Trace Filaments</a></li>
+<li class="toctree-l2"><a class="reference internal" href="process_menu.html#process-generate-generate-voronoi-diagram">Process → Generate → Generate Voronoi Diagram</a></li>
+<li class="toctree-l2"><a class="reference internal" href="process_menu.html#process-generate-generate-convex-hull">Process → Generate → Generate Convex Hull</a></li>
+<li class="toctree-l2"><a class="reference internal" href="process_menu.html#process-generate-generate-artificial-hexagonal-nodes">Process → Generate → Generate Artificial Hexagonal Nodes</a></li>
+<li class="toctree-l2"><a class="reference internal" href="process_menu.html#process-modify-network-properties">Process → Modify Network/Properties</a></li>
 <li class="toctree-l2"><a class="reference internal" href="process_menu.html#next-steps">Next Steps</a></li>
 </ul>
 </li>
 <li class="toctree-l1"><a class="reference internal" href="image_menu.html">All Image Menu Options</a><ul>
-<li class="toctree-l2"><a class="reference internal" href="image_menu.html#image-properties">‘Image -&gt; Properties’</a></li>
-<li class="toctree-l2"><a class="reference internal" href="image_menu.html#image-adjust-brightness-contrast">‘Image -&gt; Adjust Brightness/Contrast’</a></li>
-<li class="toctree-l2"><a class="reference internal" href="image_menu.html#image-channel-colors">‘Image -&gt; Channel Colors’</a></li>
-<li class="toctree-l2"><a class="reference internal" href="image_menu.html#image-overlays-create-network-overlay">‘Image -&gt; Overlays -&gt; Create Network Overlay’</a></li>
-<li class="toctree-l2"><a class="reference internal" href="image_menu.html#image-overlays-create-id-overlay">‘Image -&gt; Overlays -&gt; Create ID Overlay’</a></li>
-<li class="toctree-l2"><a class="reference internal" href="image_menu.html#image-overlays-color-nodes-or-edges">‘Image -&gt; Overlays -&gt; Color Nodes (or edges)’</a></li>
-<li class="toctree-l2"><a class="reference internal" href="image_menu.html#image-overlays-shuffle">‘Image -&gt; Overlays -&gt; Shuffle’</a></li>
-<li class="toctree-l2"><a class="reference internal" href="image_menu.html#image-select-objects">‘Image -&gt; Select Objects’</a></li>
-<li class="toctree-l2"><a class="reference internal" href="image_menu.html#image-show-3d-napari">‘Image -&gt; Show 3D (Napari)’</a></li>
+<li class="toctree-l2"><a class="reference internal" href="image_menu.html#image-properties">Image → Properties</a></li>
+<li class="toctree-l2"><a class="reference internal" href="image_menu.html#image-adjust-brightness-contrast">Image → Adjust Brightness/Contrast</a></li>
+<li class="toctree-l2"><a class="reference internal" href="image_menu.html#image-channel-colors">Image → Channel Colors</a></li>
+<li class="toctree-l2"><a class="reference internal" href="image_menu.html#image-overlays-create-network-overlay">Image → Overlays → Create Network Overlay</a></li>
+<li class="toctree-l2"><a class="reference internal" href="image_menu.html#image-overlays-create-id-overlay">Image → Overlays → Create ID Overlay</a></li>
+<li class="toctree-l2"><a class="reference internal" href="image_menu.html#image-overlays-color-nodes-or-edges">Image → Overlays → Color Nodes (or Edges)</a></li>
+<li class="toctree-l2"><a class="reference internal" href="image_menu.html#image-overlays-shuffle">Image → Overlays → Shuffle</a></li>
+<li class="toctree-l2"><a class="reference internal" href="image_menu.html#image-select-objects">Image → Select Objects</a></li>
+<li class="toctree-l2"><a class="reference internal" href="image_menu.html#image-show-3d-napari">Image → Show 3D (Napari)</a></li>
 <li class="toctree-l2"><a class="reference internal" href="image_menu.html#next-steps">Next Steps</a></li>
 </ul>
 </li>
-<li class="toctree-l1"><a class="reference internal" href="extensions.html">NetTracer3D Plugin System</a><ul>
+<li class="toctree-l1"><a class="reference internal" href="extensions.html">NetTracer3D Plugin System and Instructions on Using Prebundled Plugins</a><ul>
 <li class="toctree-l2"><a class="reference internal" href="extensions.html#user-guide">User Guide</a></li>
 <li class="toctree-l2"><a class="reference internal" href="extensions.html#developer-guide">Developer Guide</a></li>
+<li class="toctree-l2"><a class="reference internal" href="extensions.html#bundled-extensions">Bundled Extensions</a></li>
 </ul>
 </li>
 </ul>

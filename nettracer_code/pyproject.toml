@@ -1,6 +1,6 @@
 [project]
 name = "nettracer3d"
-version = "1.6.0"
+version = "2.0.0"
 authors = [
   { name="Liam McLaughlin", email="liamm@wustl.edu" },
 ]
@@ -25,7 +25,10 @@ dependencies = [
     "umap-learn",
     "numba",
     "lightgbm",
-    "napari"]
+    "napari",
+    "igraph",
+    "leidenalg",
+    "pynndescent"]
 
 readme = "README.md"
 requires-python = ">=3.7"
@@ -42,8 +45,7 @@ CUDA12 = ["cupy-cuda12x"]
 cupy = ["cupy"]
 
 # Features
-edt = ["edt"]
-rec = ["edt", "igraph", "leidenalg"]
+edt = ["edt", "xs3d"]
 
 [project.scripts]
 nettracer3d = "nettracer3d.run:main"

@@ -120,77 +120,97 @@ def create_bar_graph(data_dict, title, x_label, y_label, directory=None):
 
 def open_network(excel_file_path):
     """opens an unweighted network from the network excel file"""
-
     if type(excel_file_path) == str:
-        # Read the Excel file into a pandas DataFrame
         master_list = read_excel_to_lists(excel_file_path)
     else:
         master_list = excel_file_path
-
-    # Create a graph
+ 
     G = nx.Graph()
-
-    nodes_a = master_list[0]
-    nodes_b = master_list[1]
-
-    # Add edges to the graph
-    for i in range(len(nodes_a)):
-        G.add_edge(nodes_a[i], nodes_b[i])
-
+    # add_edges_from with a zip is far faster than add_edge in a Python loop
+    G.add_edges_from(zip(master_list[0], master_list[1]))
     return G
-def read_excel_to_lists(file_path, sheet_name=0):
-    """Convert a pd dataframe to lists. Handles both .xlsx and .csv files"""
+
+def read_excel_to_lists(file_path, sheet_name=0, as_arrays=False):
+    """Convert a pd dataframe to lists. Handles both .xlsx and .csv files.
+ 
+    as_arrays=False (default): returns [[ints], [ints], [ints]] exactly as before.
+    as_arrays=True: returns three numpy int arrays instead — near-instant
+    (zero-copy views of the DataFrame) and accepted by remove_dupes /
+    open_network unchanged. Opt in where the caller doesn't need real lists.
+    """
     def load_json_to_list(filename):
         with open(filename, 'r') as f:
             data = json.load(f)
-        
-        # Convert only numeric strings to integers, leave other strings as is
-        converted_data = [[],[],[]]
-        for i in data[0]:
+ 
+        converted_data = [[], [], []]
+        col0, col1, col2 = data[0], data[1], data[2] if len(data) > 2 else None
+        for i in col0:
             try:
-                converted_data[0].append(int(data[0][i]))
-                converted_data[1].append(int(data[1][i]))
-                try:
-                    converted_data[2].append(int(data[2][i]))
-                except IndexError:
+                converted_data[0].append(int(col0[i]))
+                converted_data[1].append(int(col1[i]))
+                if col2 is not None and i in col2:
+                    converted_data[2].append(int(col2[i]))
+                else:
                     converted_data[2].append(0)
             except ValueError:
-                converted_data[k] = v
-        
+                continue
+ 
         return converted_data
-        
+ 
     if type(file_path) == str:
-        # Check file extension
-        if file_path.lower().endswith('.xlsx'):
-            # Read the Excel file with headers (since your new save method includes them)
-            df = pd.read_excel(file_path, sheet_name=sheet_name)
-        elif file_path.lower().endswith('.csv'):
-            # Read the CSV file with headers and specify dtype to avoid the warning
-            df = pd.read_csv(file_path, dtype=str, low_memory=False)
-        elif file_path.lower().endswith('.json'):
-            df = load_json_to_list(file_path)
-            return df
+        lower = file_path.lower()
+        if lower.endswith('.xlsx'):
+            try:
+                df = pd.read_excel(file_path, sheet_name=sheet_name,
+                                   engine='calamine')  # ~5x faster if installed
+            except ImportError:
+                df = pd.read_excel(file_path, sheet_name=sheet_name)
+        elif lower.endswith('.csv'):
+            try:
+                df = pd.read_csv(file_path, engine='pyarrow')
+            except (ImportError, ValueError):
+                df = pd.read_csv(file_path, low_memory=False)
+        elif lower.endswith('.json'):
+            return load_json_to_list(file_path)
         else:
             raise ValueError("File must be either .xlsx, .csv, or .json format")
     else:
         df = file_path
-        
-    # Initialize an empty list to store the lists of values
-    data_lists = []
-    # Iterate over each column in the DataFrame
-    for column_name, column_data in df.items():
-        # Convert the column values to a list and append to the data_lists
-        data_lists.append(column_data.tolist())
-        
-    master_list = [[], [], []]
-    for i in range(0, len(data_lists), 3):
-        master_list[0].extend([int(x) for x in data_lists[i]])
-        master_list[1].extend([int(x) for x in data_lists[i+1]])
+ 
+    def to_int_array(col):
+        arr = np.asarray(col)
+        if arr.dtype.kind in 'iu':
+            return arr                      # zero-copy for int columns
+        return pd.to_numeric(pd.Series(arr)).astype(np.int64).to_numpy()
+ 
+    columns = [df[c] for c in df.columns]
+ 
+    # -------- fast path: exactly one group of 3 columns (the normal case) --
+    if len(columns) == 3:
+        arrs = [to_int_array(c) for c in columns]
+        if as_arrays:
+            return arrs                     # ~1000x faster: no boxing at all
+        # .tolist() per column is the true floor for producing Python lists;
+        # returning them directly skips the extend() copy of every element.
+        return [a.tolist() for a in arrs]
+ 
+    # -------- general path: multiple 3-column groups ----------------------
+    parts = [[], [], []]
+    for i in range(0, len(columns), 3):
+        parts[0].append(to_int_array(columns[i]))
+        parts[1].append(to_int_array(columns[i + 1]))
         try:
-            master_list[2].extend([int(x) for x in data_lists[i+2]])
+            parts[2].append(to_int_array(columns[i + 2]))
         except IndexError:
-            master_list[2].extend([0])  # Note: Changed to list with single int 0
-            
+            parts[2].append(np.array([0]))  # preserved original single-0 behavior
+
+    if as_arrays:
+        return [np.concatenate(p) if len(p) > 1 else p[0] for p in parts]
+ 
+    master_list = [[], [], []]
+    for j in range(3):
+        for arr in parts[j]:
+            master_list[j].extend(arr.tolist())
     return master_list
 
 def read_excel_to_lists_old(file_path, sheet_name=0):
@@ -892,29 +912,32 @@ def get_degrees(nodes, network, down_factor = None, directory = None, centroids 
 
 
 def remove_dupes(network):
-    """Remove Duplicates using numpy arrays"""    
+    """Remove Duplicates using numpy arrays"""
     if type(network) == str:
-        network = read_excel_to_lists
-    
-    nodesA = np.array(network[0])
-    nodesB = np.array(network[1])
-    edgesC = np.array(network[2])
-    
-    # Create normalized edges (smaller node first)
-    edges = np.column_stack([np.minimum(nodesA, nodesB), np.maximum(nodesA, nodesB)])
-    
-    # Find unique edges and their indices
-    _, unique_indices = np.unique(edges, axis=0, return_index=True)
-    
-    # Sort indices to maintain original order
+        network = read_excel_to_lists(network)  # BUGFIX: original was missing the call ()
+ 
+    nodesA = np.asarray(network[0])
+    nodesB = np.asarray(network[1])
+    edgesC = np.asarray(network[2])
+ 
+    mn = np.minimum(nodesA, nodesB)
+    mx = np.maximum(nodesA, nodesB)
+ 
+    # Fast path: pack both endpoints into one 64-bit key so np.unique runs
+    # on a 1-D array (much faster than axis=0 unique on a 2-D array).
+    if (mn.dtype.kind in 'iu' and mn.size and
+            mn.min() >= 0 and mx.max() < 2**32):
+        keys = (mn.astype(np.uint64) << np.uint64(32)) | mx.astype(np.uint64)
+        _, unique_indices = np.unique(keys, return_index=True)
+    else:
+        edges = np.column_stack([mn, mx])
+        _, unique_indices = np.unique(edges, axis=0, return_index=True)
+ 
     unique_indices = np.sort(unique_indices)
-    
-    # Extract unique connections
-    filtered_nodesA = nodesA[unique_indices].tolist()
-    filtered_nodesB = nodesB[unique_indices].tolist()
-    filtered_edgesC = edgesC[unique_indices].tolist()
-    
-    return [filtered_nodesA, filtered_nodesB, filtered_edgesC]
+ 
+    return [nodesA[unique_indices].tolist(),
+            nodesB[unique_indices].tolist(),
+            edgesC[unique_indices].tolist()]
 
 
 

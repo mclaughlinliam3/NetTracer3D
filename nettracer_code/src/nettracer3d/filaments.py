@@ -97,105 +97,98 @@ class VesselDenoiser:
         self.cached_state = cached_state
         self._sphere_cache = {}  # Cache sphere masks for different radii
 
-    def filter_large_spherical_blobs(self, binary_array, 
-                                      min_volume=200,
-                                      min_sphericity=1.0,
-                                      verbose=True):
-        """
-        Remove large spherical artifacts prior to denoising.
-        Vessels are elongated; large spherical blobs are likely artifacts.
-        
-        Parameters:
-        -----------
+    def filter_large_spherical_blobs(self, binary_array,
+                                     min_volume=200,
+                                     min_sphericity=0.90,
+                                     xy_scale=1.0,
+                                     z_scale=1.0,
+                                     verbose=True):
+        """Remove large spherical artifacts prior to denoising.
+     
+        Vessels are elongated; large, near-spherical objects are likely artifacts.
+        An object is removed only if it is BOTH large enough and round enough.
+     
+        Sphericity is the Wadell index, psi = pi^(1/3) * (6V)^(2/3) / S, which is
+        1.0 for a perfect sphere and lower for elongated or irregular objects.
+        Surface area uses the 13-direction Crofton estimator; volume and surface
+        area are both in physical units so the ratio stays dimensionless.
+     
+        NOTE ON THRESHOLDS: the previous face-counting implementation
+        systematically overestimated surface area by 20-50%, which capped
+        sphericity at about 0.81 and made the old default of min_sphericity=1.0
+        unreachable -- the filter never removed anything. With the Crofton
+        estimator, spheres score ~1.00, so this filter is now active. Retune
+        min_sphericity on your own data before trusting it; 0.90 is a starting
+        point, not a validated value.
+     
+        Parameters
+        ----------
         binary_array : ndarray
-            3D binary segmentation
-        min_volume : int
-            Minimum volume (voxels) to consider for removal
+            3D binary segmentation, indexed (z, y, x).
+        min_volume : float
+            Minimum volume to consider for removal, in physical units (i.e. the
+            same units implied by xy_scale/z_scale). With default scales of 1.0
+            this is a voxel count, matching the previous behaviour.
         min_sphericity : float
-            Minimum sphericity (0-1) to consider for removal
-            Objects with BOTH large volume AND high sphericity are removed
-            
-        Returns:
-        --------
+            Minimum Wadell sphericity to consider for removal.
+        xy_scale, z_scale : float
+            Physical voxel size in the lateral and axial directions.
+        verbose : bool
+            Print a summary of what was removed.
+     
+        Returns
+        -------
         filtered : ndarray
-            Binary array with large spherical blobs removed
+            Binary array with large spherical blobs removed.
         """
-        from scipy.ndimage import label
-        
         if verbose:
             print("Filtering large spherical blobs...")
-        
-        # Label connected components
+     
         labeled, num_features = n3d.label_objects(binary_array)
-        
+     
         if num_features == 0:
             return binary_array.copy()
-        
-        # Calculate volumes using bincount (very fast)
-        volumes = np.bincount(labeled.ravel())
-        
-        # Calculate surface areas efficiently by counting exposed faces
-        surface_areas = np.zeros(num_features + 1, dtype=np.int64)
-        
-        # Check each of 6 face directions (±x, ±y, ±z)
-        # A voxel contributes to surface area if any neighbor is different
-        for axis in range(3):
-            for direction in [-1, 1]:
-                # Pad with zeros only on the axis we're checking
-                pad_width = [(1, 1) if i == axis else (0, 0) for i in range(3)]
-                padded = np.pad(labeled, pad_width, mode='constant', constant_values=0)
-                
-                # Roll the padded array
-                shifted = np.roll(padded, direction, axis=axis)
-                
-                # Extract the center region (original size) from shifted
-                slices = [slice(1, -1) if i == axis else slice(None) for i in range(3)]
-                shifted_cropped = shifted[tuple(slices)]
-                
-                # Find exposed faces
-                exposed_faces = (labeled != shifted_cropped) & (labeled > 0)
-                
-                face_counts = np.bincount(labeled[exposed_faces], 
-                                         minlength=num_features + 1)
-                surface_areas += face_counts
-        del padded
-        
-        # Calculate sphericity for each component
-        # Sphericity = (surface area of sphere with same volume) / (actual surface area)
-        # For a sphere: A = π^(1/3) * (6V)^(2/3)
-        # Perfect sphere = 1.0, elongated objects < 1.0
-        sphericities = np.zeros(num_features + 1)
-        valid_mask = (volumes > 0) & (surface_areas > 0)
-        
-        # Ideal surface area for a sphere of this volume
-        ideal_surface = np.pi**(1/3) * (6 * volumes[valid_mask])**(2/3)
-        sphericities[valid_mask] = ideal_surface / surface_areas[valid_mask]
-        
-        # Identify components to remove: BOTH large AND spherical
+     
+        voxel_volume = float(z_scale) * float(xy_scale) ** 2
+        volumes = np.bincount(labeled.ravel(), minlength=num_features + 1).astype(np.float64)
+        volumes *= voxel_volume
+     
+        # Crofton surface area, returned as an array indexed by label so it lines
+        # up with `volumes` directly.
+        from . import crofton_surface as crofs
+        surface_areas = crofs.crofton_surface_areas(
+            labeled,
+            spacing=(z_scale, xy_scale, xy_scale),
+            as_array=True,
+        )
+     
+        # Wadell sphericity: ideal sphere surface for this volume, over actual.
+        sphericities = np.zeros(num_features + 1, dtype=np.float64)
+        valid = (volumes > 0) & (surface_areas > 0)
+        ideal_surface = np.pi ** (1 / 3) * (6 * volumes[valid]) ** (2 / 3)
+        sphericities[valid] = ideal_surface / surface_areas[valid]
+     
         to_remove = (volumes >= min_volume) & (sphericities >= min_sphericity)
-        
+        to_remove[0] = False  # never remove background
+     
         if verbose:
-            num_removed = np.sum(to_remove[1:])  # Exclude background label 0
-            total_voxels_removed = np.sum(volumes[to_remove])
-            
+            removed_indices = np.flatnonzero(to_remove)
+            num_removed = removed_indices.size
             if num_removed > 0:
                 print(f"  Found {num_removed} large spherical blob(s) to remove:")
-                removed_indices = np.where(to_remove)[0]
-                for idx in removed_indices[1:5]:  # Show first few, skip background
-                    if idx > 0:
-                        print(f"    Blob {idx}: volume={volumes[idx]} voxels, "
-                              f"sphericity={sphericities[idx]:.3f}")
+                for idx in removed_indices[:4]:
+                    print(f"    Blob {idx}: volume={volumes[idx]:.1f}, "
+                          f"sphericity={sphericities[idx]:.3f}")
                 if num_removed > 4:
                     print(f"    ... and {num_removed - 4} more")
-                print(f"  Total voxels removed: {total_voxels_removed}")
+                print(f"  Total volume removed: {volumes[to_remove].sum():.1f}")
             else:
-                print(f"  No large spherical blobs found (criteria: volume≥{min_volume}, "
-                      f"sphericity≥{min_sphericity})")
-        
-        # Create output array, removing unwanted blobs
+                print(f"  No large spherical blobs found (criteria: "
+                      f"volume>={min_volume}, sphericity>={min_sphericity})")
+     
         keep_mask = ~to_remove[labeled]
         filtered = binary_array & keep_mask
-        
+     
         return filtered.astype(binary_array.dtype)
 
 

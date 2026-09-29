@@ -17,6 +17,15 @@ try:
     HAS_CUPY = True
 except ImportError:
     HAS_CUPY = False
+import itertools
+from skimage.morphology import skeletonize
+
+try:
+    import xs3d
+except:
+    pass
+
+
 
 def get_reslice_indices(slice_obj, dilate_xy, dilate_z, array_shape):
     """Convert slice object to padded indices accounting for dilation and boundaries"""
@@ -479,7 +488,7 @@ def process_object_cpu(label, objects, labeled_array, xy_scale = 1, z_scale = 1)
     
     return label, radius
 
-def estimate_object_radii_cpu(labeled_array, n_jobs=None, xy_scale = 1, z_scale = 1):
+def estimate_object_radii_cpu(labeled_array, n_jobs=None, mode = 0, xy_scale = 1, z_scale = 1):
     """
     Estimate the radii of labeled objects in a 3D numpy array using distance transform.
     CPU parallel implementation.
@@ -496,32 +505,40 @@ def estimate_object_radii_cpu(labeled_array, n_jobs=None, xy_scale = 1, z_scale 
     dict: Dictionary mapping object labels to estimated radii
     dict: (optional) Dictionary of shape statistics for each label
     """
-    # Find bounding box for each labeled object
-    objects = ndimage.find_objects(labeled_array)
-    
-    unique_labels = np.unique(labeled_array)
-    unique_labels = unique_labels[unique_labels != 0]  # Remove background
-    
-    # Create a partial function for parallel processing
-    process_func = partial(process_object_cpu, objects=objects, labeled_array=labeled_array, xy_scale = xy_scale, z_scale = z_scale)
-    
-    # Process objects in parallel
-    results = []
-    with concurrent.futures.ThreadPoolExecutor(max_workers=n_jobs) as executor:
-        # Submit all jobs
-        future_to_label = {executor.submit(process_func, label): label for label in unique_labels}
+
+    if mode == 1:
+        return estimate_object_radii_cross_section(
+        labeled_array, n_jobs=None, xy_scale=xy_scale, z_scale=z_scale,
+        statistic="median", return_profiles=False)
+
+    elif mode == 0:
+
+        # Find bounding box for each labeled object
+        objects = ndimage.find_objects(labeled_array)
         
-        # Collect results as they complete
-        for future in concurrent.futures.as_completed(future_to_label):
-            results.append(future.result())
-    
-    # Organize results
-    radii = {}
-    
-    for label, radius in results:
-        radii[label] = radius
-    
-    return radii
+        unique_labels = np.unique(labeled_array)
+        unique_labels = unique_labels[unique_labels != 0]  # Remove background
+        
+        # Create a partial function for parallel processing
+        process_func = partial(process_object_cpu, objects=objects, labeled_array=labeled_array, xy_scale = xy_scale, z_scale = z_scale)
+        
+        # Process objects in parallel
+        results = []
+        with concurrent.futures.ThreadPoolExecutor(max_workers=n_jobs) as executor:
+            # Submit all jobs
+            future_to_label = {executor.submit(process_func, label): label for label in unique_labels}
+            
+            # Collect results as they complete
+            for future in concurrent.futures.as_completed(future_to_label):
+                results.append(future.result())
+        
+        # Organize results
+        radii = {}
+        
+        for label, radius in results:
+            radii[label] = radius
+        
+        return radii
 
 def estimate_object_radii_gpu(labeled_array, xy_scale = 1, z_scale = 1):
     """
@@ -638,3 +655,303 @@ def compute_distance_transform_distance(nodes, sampling = [1,1,1]):
     if is_pseudo_3d:
         np.expand_dims(distance, axis = 0)
     return distance
+
+
+_OFFSETS = [o for o in itertools.product((-1, 0, 1), repeat=3) if o != (0, 0, 0)]
+ 
+ 
+def _skeleton_paths(skel):
+    """
+    Split a thin binary skeleton into ordered, non-branching paths.
+ 
+    Vertices with degree > 2 (junctions) are removed; each remaining
+    connected component is walked from one end to produce an ordered
+    coordinate array. Closed loops have no endpoint and are started
+    arbitrarily.
+ 
+    Returns list of (n, 3) int arrays of voxel coordinates.
+    """
+    coords = np.argwhere(skel)
+    if coords.shape[0] == 0:
+        return []
+ 
+    index = {tuple(c): i for i, c in enumerate(coords)}
+    nbrs = [[] for _ in range(coords.shape[0])]
+    for i, c in enumerate(coords):
+        for o in _OFFSETS:
+            j = index.get((c[0] + o[0], c[1] + o[1], c[2] + o[2]))
+            if j is not None:
+                nbrs[i].append(j)
+ 
+    keep = np.array([len(n) <= 2 for n in nbrs])
+    visited = np.zeros(coords.shape[0], dtype=bool)
+    paths = []
+ 
+    for seed in range(coords.shape[0]):
+        if not keep[seed] or visited[seed]:
+            continue
+ 
+        comp, stack = [], [seed]
+        visited[seed] = True
+        while stack:
+            u = stack.pop()
+            comp.append(u)
+            for v in nbrs[u]:
+                if keep[v] and not visited[v]:
+                    visited[v] = True
+                    stack.append(v)
+ 
+        compset = set(comp)
+        ends = [u for u in comp
+                if sum(1 for v in nbrs[u] if v in compset) <= 1]
+        cur = ends[0] if ends else comp[0]
+ 
+        order, seen = [cur], {cur}
+        while True:
+            nxt = [v for v in nbrs[cur] if v in compset and v not in seen]
+            if not nxt:
+                break
+            cur = nxt[0]
+            seen.add(cur)
+            order.append(cur)
+ 
+        paths.append(coords[order])
+ 
+    return paths
+ 
+ 
+def _native_skeleton(mask):
+    """
+    Skeletonize -> fill holes -> skeletonize, on the native voxel grid.
+ 
+    The second pass re-thins any region the fill step restored to solid.
+    For structures with no enclosed voids the fill is a no-op and the second
+    pass returns the first skeleton unchanged, so this costs a thinning pass
+    but never changes correct results.
+ 
+    Returns list of (n, 3) float arrays of native voxel coordinates.
+    """
+    skel = skeletonize(mask)
+ 
+    skel = nettracer.fill_holes_3d(skel)
+    skel = skeletonize(skel)
+ 
+    return [np.asarray(p, dtype=np.float64) for p in _skeleton_paths(skel)]
+ 
+ 
+def _snap_to_foreground(points, mask, nearest_idx):
+    """
+    Round to integer voxels and snap any that landed on background to the
+    nearest foreground voxel. xs3d requires the seed point to be inside the
+    shape; smoothing can pull a point off the medial axis on tight curves.
+ 
+    `nearest_idx` is the return_indices output of the background EDT,
+    computed once per mask by the caller.
+    """
+    pts = np.rint(points).astype(np.int64)
+    for a in range(3):
+        pts[:, a] = np.clip(pts[:, a], 0, mask.shape[a] - 1)
+ 
+    inside = mask[pts[:, 0], pts[:, 1], pts[:, 2]]
+    if not inside.all():
+        bad = ~inside
+        b = pts[bad]
+        pts[bad] = np.stack([nearest_idx[a][b[:, 0], b[:, 1], b[:, 2]]
+                             for a in range(3)], axis=1)
+    return pts
+ 
+ 
+def _smooth(path, window):
+    """Moving average along a path, endpoints handled by edge padding."""
+    if window <= 1 or path.shape[0] < 3:
+        return path
+    w = min(window, path.shape[0])
+    if w % 2 == 0:
+        w -= 1
+    if w < 3:
+        return path
+    pad = w // 2
+    padded = np.pad(path, ((pad, pad), (0, 0)), mode="edge")
+    kern = np.ones(w) / w
+    return np.stack([np.convolve(padded[:, a], kern, mode="valid")
+                     for a in range(3)], axis=1)
+ 
+ 
+# ----------------------------------------------------------------------
+# per-object measurement
+# ----------------------------------------------------------------------
+ 
+def _aggregate(values, statistic):
+    if values.size == 0:
+        return np.nan
+    if statistic == "median":
+        return float(np.median(values))
+    if statistic == "mean":
+        return float(np.mean(values))
+    if statistic == "min":
+        return float(np.min(values))
+    if statistic == "max":
+        return float(np.max(values))
+    if isinstance(statistic, (int, float)):
+        return float(np.percentile(values, statistic))
+    raise ValueError(f"unknown statistic: {statistic!r}")
+ 
+ 
+def measure_mask_cross_sections(
+    mask,
+    xy_scale=1.0,
+    z_scale=1.0,
+    tangent_window=5,
+    smoothing_window=5,
+    trim_ends=2,
+    min_path_length=3,
+    exclude_border_contacts=True):
+    """
+    Cross-sectional radii along the medial axis of a single binary mask.
+ 
+    No resampling occurs; anisotropy is applied to the tangent vector and
+    passed to xs3d. `tangent_window` and `min_path_length` count skeleton
+    VERTICES, so a path running along the coarse axis has fewer of them for
+    the same physical length -- min_path_length is deliberately low.
+ 
+    Returns (radii, positions) where radii is a 1-D array in physical units
+    and positions is the (n, 3) array of native voxel coords they came from.
+    """
+    mask = np.ascontiguousarray(mask, dtype=bool)
+    if mask.ndim != 3 or 1 in mask.shape or not mask.any():
+        return np.array([]), np.zeros((0, 3), dtype=np.int64)
+ 
+    anisotropy = np.array([z_scale, xy_scale, xy_scale], dtype=np.float64)
+    scale_sq = anisotropy ** 2
+    fmask = np.asfortranarray(mask)
+ 
+    # one background EDT per mask, reused by every path
+    _, nearest_idx = ndimage.distance_transform_edt(~mask, return_indices=True)
+ 
+    radii, positions = [], []
+ 
+    for path in _native_skeleton(mask):
+        if path.shape[0] < min_path_length:
+            continue
+ 
+        sm = _smooth(path, smoothing_window)
+        pts = _snap_to_foreground(sm, mask, nearest_idx)
+        n = pts.shape[0]
+ 
+        lo = min(trim_ends, max(0, (n - 1) // 2))
+        hi = max(lo + 1, n - trim_ends)
+        hi = min(hi, n)
+ 
+        for i in range(lo, hi):
+            a = max(0, i - tangent_window)
+            b = min(n - 1, i + tangent_window)
+            t_vox = sm[b] - sm[a]
+            if not np.any(t_vox):
+                continue
+ 
+            # covector transform -- see module docstring
+            normal = (t_vox * scale_sq).astype(np.float32)
+ 
+            area, contact = xs3d.cross_sectional_area(
+                fmask, pts[i].astype(np.int32), normal,
+                anisotropy, return_contact=True,
+            )
+            if area <= 0 or not np.isfinite(area):
+                continue
+            if exclude_border_contacts and contact != 0:
+                continue
+ 
+            radii.append(np.sqrt(area / np.pi))
+            positions.append(pts[i])
+ 
+    if not radii:
+        return np.array([]), np.zeros((0, 3), dtype=np.int64)
+    return np.asarray(radii), np.asarray(positions)
+ 
+ 
+def _edt_radius(mask, sampling):
+    if not mask.any():
+        return 0.0
+    return float(ndimage.distance_transform_edt(mask, sampling=sampling).max())
+ 
+ 
+
+def process_object_cross_section(
+    label, objects, labeled_array, xy_scale=1.0, z_scale=1.0,
+    statistic="median", pad=3, fallback_to_edt=True, **kwargs
+):
+    """
+    Drop-in replacement for process_object_cpu. Same signature and return
+    shape (label, radius), so the existing ThreadPoolExecutor loop is
+    unchanged.
+ 
+    `pad` is larger than the original 1 voxel: an oblique section plane can
+    reach the subvolume face even when the object does not, and those
+    sections get discarded as border contacts. More padding keeps them.
+    """
+    obj_slice = objects[label - 1]
+    if obj_slice is None:
+        return label, 0.0
+ 
+    padded = tuple(
+        slice(max(0, s.start - pad), min(labeled_array.shape[i], s.stop + pad))
+        for i, s in enumerate(obj_slice)
+    )
+    mask = labeled_array[padded] == label
+ 
+    radii, _ = measure_mask_cross_sections(
+        mask, xy_scale=xy_scale, z_scale=z_scale, **kwargs
+    )
+ 
+    if radii.size:
+        return label, _aggregate(radii, statistic)
+    if fallback_to_edt:
+        return label, _edt_radius(mask, [z_scale, xy_scale, xy_scale])
+    return label, np.nan
+ 
+ 
+def estimate_object_radii_cross_section(
+    labeled_array, n_jobs=None, xy_scale=1.0, z_scale=1.0,
+    statistic="median", pad=3, return_profiles=False, **kwargs
+):
+    """
+    Cross-section radius per label. Mirrors estimate_object_radii_cpu.
+ 
+    Runs serially -- xs3d releases the GIL poorly enough that threads buy
+    little, and if you want real parallelism use ProcessPoolExecutor with a
+    'spawn' context so a native crash cannot take down the host process.
+    """
+    objects = ndimage.find_objects(labeled_array)
+    labels = np.unique(labeled_array)
+    labels = labels[labels != 0]
+ 
+    radii, profiles = {}, {}
+    for label in labels:
+        label = int(label)
+        obj_slice = objects[label - 1]
+        if obj_slice is None:
+            radii[label] = 0.0
+            if return_profiles:
+                profiles[label] = (np.array([]), np.zeros((0, 3), dtype=np.int64))
+            continue
+ 
+        padded = tuple(
+            slice(max(0, s.start - pad), min(labeled_array.shape[i], s.stop + pad))
+            for i, s in enumerate(obj_slice)
+        )
+        mask = labeled_array[padded] == label
+ 
+        prof = measure_mask_cross_sections(
+            mask, xy_scale=xy_scale, z_scale=z_scale, **kwargs
+        )
+        if prof[0].size:
+            radii[label] = _aggregate(prof[0], statistic)
+        else:
+            radii[label] = _edt_radius(mask, [z_scale, xy_scale, xy_scale])
+ 
+        if return_profiles:
+            profiles[label] = prof
+ 
+    if return_profiles:
+        return radii, profiles
+    return radii

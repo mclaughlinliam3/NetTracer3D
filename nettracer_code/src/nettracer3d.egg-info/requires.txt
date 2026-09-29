@@ -17,6 +17,9 @@ umap-learn
 numba
 lightgbm
 napari
+igraph
+leidenalg
+pynndescent
 
 [CUDA11]
 cupy-cuda11x
@@ -29,8 +32,4 @@ cupy
 
 [edt]
 edt
-
-[rec]
-edt
-igraph
-leidenalg
+xs3d

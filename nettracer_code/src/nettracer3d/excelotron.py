@@ -1,1952 +1,1518 @@
+"""
+excelotron.py - Spreadsheet -> NetTracer3D property importer.
+
+Loads a .csv/.xlsx exported from an external program (QuPath, CellProfiler, HALO,
+etc.) and turns selected columns into a NetTracer3D node property dictionary.
+
+Supported properties
+--------------------
+Node Identities   : three import styles (see below)
+Node Centroids    : ID + Z/Y/X columns
+Node Communities  : ID + community column
+
+Node Identity import styles
+---------------------------
+1. Single identity column
+       one column of text labels; each node gets that one identity.
+2. Identity matrix (0/1)
+       several columns, one per marker; column header is the identity name and a
+       1 means the node carries it. Nodes may end up with several identities.
+3. Raw intensity columns
+       several numeric columns; optionally z-scored, then thresholded one marker
+       at a time in a histogram GUI. Values at/above the threshold are positive.
+
+Emitted data
+------------
+`data_exported(result_dict, property_name, add_flag)` keeps the original contract:
+parallel lists keyed by the template field names, e.g.
+
+    {'Numerical IDs': [1, 2, 3], 'Identity Column': ['CD3', ['CD3', 'CD20'], 'CD20']}
+
+For convenience `identities_exported(identity_dict, add_flag)` is also emitted for
+Node Identities, carrying the plain {node_id: [identity, ...]} mapping.
+Set ALWAYS_LIST = True below if NetTracer3D would rather always receive lists.
+"""
+
 import sys
-import pandas as pd
-import numpy as np
-from PyQt6.QtWidgets import (QApplication, QMainWindow, QHBoxLayout, QVBoxLayout, 
-                           QWidget, QTableWidget, QTableWidgetItem, QPushButton, 
-                           QLabel, QLineEdit, QScrollArea, QFrame, QMessageBox,
-                           QHeaderView, QAbstractItemView, QSplitter, QTabWidget, QCheckBox)
-from PyQt6.QtCore import Qt, QMimeData, pyqtSignal
-from PyQt6.QtGui import QDragEnterEvent, QDropEvent, QDrag, QPainter, QPixmap
 import os
-from PyQt6.QtWidgets import QComboBox
-from ast import literal_eval
-from PyQt6.QtCore import QObject, pyqtSignal
+import math
+import builtins
 
-class DraggableTableWidget(QTableWidget):
-    """Custom table widget that supports drag and drop operations"""
-    
-    def __init__(self, parent=None):
-        super().__init__(parent)
-        self.setDragEnabled(True)
-        self.setAcceptDrops(True)
-        self.setDragDropMode(QAbstractItemView.DragDropMode.DragDrop)
-        self.setDefaultDropAction(Qt.DropAction.MoveAction)
-        
-    def startDrag(self, supportedActions):
-        if self.currentColumn() >= 0:
-            # Create drag data with column index and header
-            drag = QDrag(self)
-            mimeData = QMimeData()
-            
-            # Store column index and header text
-            col_idx = self.currentColumn()
-            header_text = self.horizontalHeaderItem(col_idx).text() if self.horizontalHeaderItem(col_idx) else f"Column_{col_idx}"
-            
-            mimeData.setText(f"excel_column:{col_idx}:{header_text}")
-            drag.setMimeData(mimeData)
-            
-            # Create drag pixmap
-            pixmap = QPixmap(100, 30)
-            pixmap.fill(Qt.GlobalColor.lightGray)
-            painter = QPainter(pixmap)
-            painter.drawText(pixmap.rect(), Qt.AlignmentFlag.AlignCenter, header_text)
-            painter.end()
-            drag.setPixmap(pixmap)
-            
-            drag.exec(Qt.DropAction.CopyAction)
+import numpy as np
+import pandas as pd
 
+from PyQt6.QtCore import Qt, pyqtSignal
+from PyQt6.QtGui import QDragEnterEvent, QDropEvent, QFont
+from PyQt6.QtWidgets import (
+    QApplication, QMainWindow, QDialog, QWidget, QFrame, QSplitter,
+    QVBoxLayout, QHBoxLayout, QFormLayout,
+    QLabel, QPushButton, QLineEdit, QComboBox, QCheckBox, QRadioButton,
+    QButtonGroup, QListWidget, QListWidgetItem, QTableWidget, QTableWidgetItem,
+    QStackedWidget, QScrollArea, QMessageBox, QFileDialog, QTextEdit,
+    QAbstractItemView, QGroupBox, QSizePolicy
+)
+
+try:
+    from matplotlib.figure import Figure
+    from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg as FigureCanvas
+    MATPLOTLIB_AVAILABLE = True
+except Exception:  # pragma: no cover - matplotlib is optional
+    MATPLOTLIB_AVAILABLE = False
+
+
+# If True, every node's identity value is a list, even when it has only one.
+ALWAYS_LIST = False
+
+MAX_PREVIEW_ROWS = 200
+MAX_HIST_SAMPLES = 2_000_000
+
+MODE_SINGLE = 0
+MODE_MATRIX = 1
+MODE_INTENSITY = 2
+
+
+# --------------------------------------------------------------------------- #
+#  helpers
+# --------------------------------------------------------------------------- #
+
+def _is_nan_or_empty(val):
+    """True for None, NaN, blank strings, 'nan', and lists made only of those."""
+    if val is None:
+        return True
+    if isinstance(val, float) and math.isnan(val):
+        return True
+    if isinstance(val, str):
+        s = val.strip()
+        return s == '' or s.lower() == 'nan'
+    if isinstance(val, (list, tuple)):
+        if len(val) == 0:
+            return True
+        return all(_is_nan_or_empty(v) for v in val)
+    return False
+
+
+def _coerce_node_id(val):
+    """Node IDs are label values in a segmentation, so prefer ints."""
+    try:
+        f = float(val)
+    except (TypeError, ValueError):
+        return str(val).strip()
+    if math.isnan(f):
+        return None
+    if f.is_integer():
+        return int(f)
+    return f
+
+
+def _numeric_column(series):
+    """Series -> float ndarray, non-numeric entries become NaN."""
+    return pd.to_numeric(series, errors='coerce').to_numpy(dtype=float)
+
+
+def _looks_binary(series):
+    """True if the column only holds 0/1 (or False/True) plus blanks."""
+    vals = pd.unique(series.dropna())
+    if len(vals) == 0 or len(vals) > 3:
+        return False
+    allowed = {0, 1, 0.0, 1.0, True, False, '0', '1'}
+    for v in vals:
+        if isinstance(v, str):
+            v = v.strip()
+        if v not in allowed:
+            return False
+    return True
+
+
+def _looks_numeric(series):
+    conv = pd.to_numeric(series, errors='coerce')
+    return conv.notna().sum() >= max(1, int(0.5 * len(series)))
+
+
+def _truthy(val):
+    """Positive call for a 0/1 matrix cell."""
+    if _is_nan_or_empty(val):
+        return False
+    if isinstance(val, str):
+        s = val.strip().lower()
+        if s in ('1', 'true', 'yes', 'y', 'pos', 'positive', '+'):
+            return True
+        if s in ('0', 'false', 'no', 'n', 'neg', 'negative', '-'):
+            return False
+        try:
+            return float(s) >= 0.5
+        except ValueError:
+            return False
+    try:
+        return float(val) >= 0.5
+    except (TypeError, ValueError):
+        return False
+
+
+def _zscore(arr):
+    """Z-score a float array, ignoring NaNs. Flat columns come back as zeros."""
+    finite = arr[np.isfinite(arr)]
+    if finite.size == 0:
+        return arr
+    mu = float(np.mean(finite))
+    sd = float(np.std(finite))
+    if sd == 0:
+        return np.where(np.isfinite(arr), 0.0, arr)
+    return (arr - mu) / sd
+
+
+def _otsu_threshold(values, nbins=256):
+    """Otsu's method on a 1D array; used as the default intensity cut."""
+    v = np.asarray(values, dtype=float)
+    v = v[np.isfinite(v)]
+    if v.size == 0:
+        return 0.0
+    if np.all(v == v[0]):
+        return float(v[0])
+    counts, edges = np.histogram(v, bins=nbins)
+    centers = 0.5 * (edges[:-1] + edges[1:])
+    w = counts.astype(float)
+    total = w.sum()
+    if total == 0:
+        return float(np.mean(v))
+    omega = np.cumsum(w) / total
+    mu = np.cumsum(w * centers) / total
+    mu_t = mu[-1]
+    denom = omega * (1.0 - omega)
+    with np.errstate(divide='ignore', invalid='ignore'):
+        sigma_b = ((mu_t * omega - mu) ** 2) / denom
+    sigma_b[~np.isfinite(sigma_b)] = -1.0
+    return float(centers[int(np.argmax(sigma_b))])
+
+
+def _guess_column(columns, keywords, exclude=()):
+    """Best-effort header match, used to pre-fill the pickers on load."""
+    lowered = [(str(c), str(c).strip().lower()) for c in columns]
+    for kw in keywords:
+        for original, low in lowered:
+            if original in exclude:
+                continue
+            if low == kw:
+                return original
+    for kw in keywords:
+        for original, low in lowered:
+            if original in exclude:
+                continue
+            if kw in low:
+                return original
+    return None
+
+
+def _fmt(value, places=4):
+    try:
+        return f"{float(value):.{places}g}"
+    except (TypeError, ValueError):
+        return str(value)
+
+
+# --------------------------------------------------------------------------- #
+#  small reusable widgets
+# --------------------------------------------------------------------------- #
 
 class DropZoneWidget(QFrame):
-    """Widget that accepts file drops for Excel/CSV files"""
+    """Click-or-drop target for a spreadsheet file."""
+
     file_dropped = pyqtSignal(str)
-    
+
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setAcceptDrops(True)
+        self.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.setFixedHeight(64)
         self.setStyleSheet("""
             QFrame {
                 border: 2px dashed #aaa;
-                border-radius: 5px;
-                background-color: #f9f9f9;
+                border-radius: 6px;
+                background-color: #fafafa;
             }
             QFrame:hover {
                 border-color: #007acc;
                 background-color: #f0f8ff;
             }
         """)
-        
-        layout = QVBoxLayout()
-        label = QLabel("Drag Excel (.xlsx) or CSV files here")
-        label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        label.setStyleSheet("color: #666; font-size: 14px;")
-        layout.addWidget(label)
-        self.setLayout(layout)
-        
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(8, 6, 8, 6)
+        self.label = QLabel("Click to browse, or drop a .csv / .xlsx here")
+        self.label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.label.setStyleSheet("border: none; color: #555; font-size: 13px;")
+        layout.addWidget(self.label)
+
+    def set_message(self, text):
+        self.label.setText(text)
+
+    def mousePressEvent(self, event):
+        path, _ = QFileDialog.getOpenFileName(
+            self, "Open spreadsheet", "", "Spreadsheets (*.csv *.xlsx *.xls);;All files (*)"
+        )
+        if path:
+            self.file_dropped.emit(path)
+
     def dragEnterEvent(self, event: QDragEnterEvent):
         if event.mimeData().hasUrls():
             urls = event.mimeData().urls()
-            if len(urls) == 1:
-                file_path = urls[0].toLocalFile()
-                if file_path.lower().endswith(('.xlsx', '.csv')):
-                    event.acceptProposedAction()
-                    return
+            if len(urls) == 1 and urls[0].toLocalFile().lower().endswith(('.xlsx', '.xls', '.csv')):
+                event.acceptProposedAction()
+                return
         event.ignore()
-        
+
     def dropEvent(self, event: QDropEvent):
         if event.mimeData().hasUrls():
-            file_path = event.mimeData().urls()[0].toLocalFile()
-            self.file_dropped.emit(file_path)
+            self.file_dropped.emit(event.mimeData().urls()[0].toLocalFile())
             event.acceptProposedAction()
 
-class DictColumnWidget(QFrame):
-    """Widget representing a dictionary column that can accept drops"""
-    column_dropped = pyqtSignal(str, int, str)  # widget_id, col_idx, col_name
-    delete_requested = pyqtSignal(str)  # widget_id
-    
-    def __init__(self, widget_id, parent=None):
+
+class ColumnCombo(QComboBox):
+    """Column picker. Index 0 is a placeholder / '(none)' entry."""
+
+    def __init__(self, placeholder="Select column...", parent=None):
         super().__init__(parent)
-        self.widget_id = widget_id
-        self.column_data = None
-        self.column_name = None
-        self.setAcceptDrops(True)
-        self.setFixedHeight(80)
-        self.setStyleSheet("""
-            QFrame {
-                border: 1px solid #ccc;
-                border-radius: 3px;
-                background-color: white;
-                margin: 2px;
-            }
-            QFrame:hover {
-                border-color: #007acc;
-            }
-        """)
-        
-        layout = QVBoxLayout()
-        
-        # Header input
-        self.header_input = QLineEdit()
-        self.header_input.setPlaceholderText("Dictionary key name...")
-        self.header_input.textChanged.connect(self.on_header_changed)
-        layout.addWidget(self.header_input)
-        
-        # Drop zone / content area
-        self.content_label = QLabel("Drop column here")
-        self.content_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self.content_label.setStyleSheet("color: #888; font-style: italic;")
-        layout.addWidget(self.content_label)
-        
-        # Delete button
-        self.delete_btn = QPushButton("×")
-        self.delete_btn.setFixedSize(20, 20)
-        self.delete_btn.setStyleSheet("""
-            QPushButton {
-                background-color: #ff4444;
-                color: white;
-                border: none;
-                border-radius: 10px;
-                font-weight: bold;
-            }
-            QPushButton:hover {
-                background-color: #cc0000;
-            }
-        """)
-        self.delete_btn.clicked.connect(lambda: self.delete_requested.emit(self.widget_id))
-        
-        # Position delete button in top-right
-        self.delete_btn.setParent(self)
-        self.delete_btn.move(self.width() - 25, 5)
-        
-        self.setLayout(layout)
-        
-    def resizeEvent(self, event):
-        super().resizeEvent(event)
-        self.delete_btn.move(self.width() - 25, 5)
-        
-    def on_header_changed(self):
-        # Update display when header changes
-        if self.column_data is not None:
-            self.content_label.setText(f"Column: {self.column_name}\nKey: {self.header_input.text()}")
-        
-    def dragEnterEvent(self, event: QDragEnterEvent):
-        if event.mimeData().hasText() and event.mimeData().text().startswith("excel_column:"):
-            event.acceptProposedAction()
-        else:
-            event.ignore()
-            
-    def dropEvent(self, event: QDropEvent):
-        text = event.mimeData().text()
-        if text.startswith("excel_column:"):
-            parts = text.split(":", 2)
-            if len(parts) >= 3:
-                col_idx = int(parts[1])
-                col_name = parts[2]
-                self.column_name = col_name
-                self.content_label.setText(f"Column: {col_name}\nKey: {self.header_input.text()}")
-                self.column_dropped.emit(self.widget_id, col_idx, col_name)
-                event.acceptProposedAction()
+        self.placeholder = placeholder
+        self.setMinimumWidth(180)
+        self.set_columns([])
 
+    def set_columns(self, columns):
+        current = self.current_column()
+        self.blockSignals(True)
+        self.clear()
+        self.addItem(self.placeholder)
+        for col in columns:
+            self.addItem(str(col))
+        if current is not None:
+            idx = self.findText(str(current))
+            if idx >= 0:
+                self.setCurrentIndex(idx)
+        self.blockSignals(False)
 
-class ClassifierWidget(QFrame):
-    """Widget representing a single classifier with substrings and new ID"""
-    
-    def __init__(self, classifier_id, classifier_group_widget, parent=None):
-        super().__init__(parent)
-        self.classifier_id = classifier_id
-        self.classifier_group_widget = classifier_group_widget  # Store reference to parent group
-        self.positive_substrings = []
-        self.negative_substrings = []
-        
-        self.setStyleSheet("""
-            QFrame {
-                border: 1px solid #ddd;
-                border-radius: 5px;
-                background-color: #f8f9fa;
-                margin: 2px;
-                padding: 5px;
-            }
-        """)
-        
-        # Header with classifier number and buttons
-        # Header with classifier number and buttons
-        layout = QVBoxLayout()
-        header_layout = QHBoxLayout()
-        self.header_label = QLabel(f"Classifier {classifier_id}")  # Store reference to label
-        self.header_label.setStyleSheet("font-weight: bold; color: #495057;")
-        header_layout.addWidget(self.header_label)
+    def current_column(self):
+        if self.currentIndex() <= 0:
+            return None
+        return self.currentText()
 
-        header_layout.addStretch()
-
-        # Move up button
-        self.up_btn = QPushButton("↑")
-        self.up_btn.setFixedSize(20, 20)
-        self.up_btn.setStyleSheet("""
-            QPushButton {
-                background-color: #6c757d;
-                color: white;
-                border: none;
-                border-radius: 10px;
-                font-weight: bold;
-                font-size: 10px;
-            }
-            QPushButton:hover {
-                background-color: #5a6268;
-            }
-        """)
-        self.up_btn.clicked.connect(self.move_up)  # Connect to instance method
-        header_layout.addWidget(self.up_btn)
-
-        # Move down button
-        self.down_btn = QPushButton("↓")
-        self.down_btn.setFixedSize(20, 20)
-        self.down_btn.setStyleSheet("""
-            QPushButton {
-                background-color: #6c757d;
-                color: white;
-                border: none;
-                border-radius: 10px;
-                font-weight: bold;
-                font-size: 10px;
-            }
-            QPushButton:hover {
-                background-color: #5a6268;
-            }
-        """)
-        self.down_btn.clicked.connect(self.move_down)  # Connect to instance method
-        header_layout.addWidget(self.down_btn)
-
-        # Copy button
-        self.copy_btn = QPushButton("⎘")
-        self.copy_btn.setFixedSize(20, 20)
-        self.copy_btn.setStyleSheet("""
-            QPushButton {
-                background-color: #28a745;
-                color: white;
-                border: none;
-                border-radius: 10px;
-                font-weight: bold;
-                font-size: 10px;
-            }
-            QPushButton:hover {
-                background-color: #218838;
-            }
-        """)
-        self.copy_btn.clicked.connect(self.copy_classifier)  # Connect to instance method
-        header_layout.addWidget(self.copy_btn)
-
-        self.delete_btn = QPushButton("×")
-        self.delete_btn.setFixedSize(20, 20)
-        self.delete_btn.setStyleSheet("""
-            QPushButton {
-                background-color: #dc3545;
-                color: white;
-                border: none;
-                border-radius: 10px;
-                font-weight: bold;
-                font-size: 10px;
-            }
-            QPushButton:hover {
-                background-color: #c82333;
-            }
-        """)
-        self.delete_btn.clicked.connect(self.delete_requested)
-        header_layout.addWidget(self.delete_btn)
-        
-        layout.addLayout(header_layout)
-        
-        # Substring input area
-        substring_layout = QHBoxLayout()
-        substring_label = QLabel("Substrings:")
-        substring_label.setStyleSheet("font-weight: bold; color: #6c757d;")
-        substring_layout.addWidget(substring_label)
-        
-        self.substring_input = QLineEdit()
-        self.substring_input.setPlaceholderText("Enter substring to match...")
-        substring_layout.addWidget(self.substring_input)
-        
-        # Positive substring button (green)
-        add_positive_btn = QPushButton("+ Positive")
-        add_positive_btn.setStyleSheet("""
-            QPushButton {
-                background-color: #28a745;
-                color: white;
-                border: none;
-                padding: 5px 10px;
-                border-radius: 3px;
-            }
-            QPushButton:hover {
-                background-color: #218838;
-            }
-        """)
-        add_positive_btn.clicked.connect(lambda: self.add_substring(positive=True))
-        substring_layout.addWidget(add_positive_btn)
-        
-        # Negative substring button (red)
-        add_negative_btn = QPushButton("- Negative")
-        add_negative_btn.setStyleSheet("""
-            QPushButton {
-                background-color: #dc3545;
-                color: white;
-                border: none;
-                padding: 5px 10px;
-                border-radius: 3px;
-            }
-            QPushButton:hover {
-                background-color: #c82333;
-            }
-        """)
-        add_negative_btn.clicked.connect(lambda: self.add_substring(positive=False))
-        substring_layout.addWidget(add_negative_btn)
-        
-        layout.addLayout(substring_layout)
-        
-        # Connect Enter key to add positive substring (default)
-        self.substring_input.returnPressed.connect(lambda: self.add_substring(positive=True))
-        
-        # Substrings display
-        self.substrings_display = QLabel("Substrings: (none)")
-        self.substrings_display.setStyleSheet("color: #6c757d; font-style: italic; margin: 5px 0;")
-        self.substrings_display.setWordWrap(True)
-        layout.addWidget(self.substrings_display)
-        
-        # New ID input
-        new_id_layout = QHBoxLayout()
-        new_id_label = QLabel("New ID:")
-        new_id_label.setStyleSheet("font-weight: bold; color: #6c757d;")
-        new_id_layout.addWidget(new_id_label)
-        
-        self.new_id_input = QLineEdit()
-        self.new_id_input.setPlaceholderText("Enter new ID for matches...")
-        new_id_layout.addWidget(self.new_id_input)
-        
-        layout.addLayout(new_id_layout)
-        
-        self.setLayout(layout)
-    
-    def add_substring(self, positive=True):
-        substring = self.substring_input.text().strip()
-        if substring:
-            if positive:
-                if substring not in self.positive_substrings:
-                    self.positive_substrings.append(substring)
-                    self.update_substrings_display()
-                    self.substring_input.clear()
-            else:
-                if substring not in self.negative_substrings:
-                    self.negative_substrings.append(substring)
-                    self.update_substrings_display()
-                    self.substring_input.clear()
-    
-    def update_substrings_display(self):
-        if self.positive_substrings or self.negative_substrings:
-            # Create clickable labels for each substring
-            if hasattr(self, 'substrings_container') and self.substrings_container is not None:
-                try:
-                    self.substrings_container.deleteLater()
-                except RuntimeError:
-                    pass  # Object already deleted
-                self.substrings_container = None
-            
-            self.substrings_container = QWidget()
-            container_layout = QHBoxLayout()
-            container_layout.setContentsMargins(0, 0, 0, 0)
-            
-            # Add positive substrings (green)
-            for i, substring in enumerate(self.positive_substrings):
-                substring_widget = QFrame()
-                substring_widget.setStyleSheet("""
-                    QFrame {
-                        background-color: #d4edda;
-                        border: 1px solid #28a745;
-                        border-radius: 3px;
-                        padding: 2px 5px;
-                        margin: 1px;
-                    }
-                """)
-                
-                substring_layout = QHBoxLayout()
-                substring_layout.setContentsMargins(2, 2, 2, 2)
-                
-                label = QLabel(f'"{substring}"')
-                label.setStyleSheet("background: transparent; border: none; color: #155724;")
-                substring_layout.addWidget(label)
-                
-                remove_btn = QPushButton("×")
-                remove_btn.setFixedSize(16, 16)
-                remove_btn.setStyleSheet("""
-                    QPushButton {
-                        background-color: #dc3545;
-                        color: white;
-                        border: none;
-                        border-radius: 8px;
-                        font-size: 8px;
-                        font-weight: bold;
-                    }
-                    QPushButton:hover {
-                        background-color: #c82333;
-                    }
-                """)
-                remove_btn.clicked.connect(lambda checked, idx=i: self.remove_substring(idx, positive=True))
-                substring_layout.addWidget(remove_btn)
-                
-                substring_widget.setLayout(substring_layout)
-                container_layout.addWidget(substring_widget)
-            
-            # Add negative substrings (red)
-            for i, substring in enumerate(self.negative_substrings):
-                substring_widget = QFrame()
-                substring_widget.setStyleSheet("""
-                    QFrame {
-                        background-color: #f8d7da;
-                        border: 1px solid #dc3545;
-                        border-radius: 3px;
-                        padding: 2px 5px;
-                        margin: 1px;
-                    }
-                """)
-                
-                substring_layout = QHBoxLayout()
-                substring_layout.setContentsMargins(2, 2, 2, 2)
-                
-                label = QLabel(f'"{substring}"')
-                label.setStyleSheet("background: transparent; border: none; color: #721c24;")
-                substring_layout.addWidget(label)
-                
-                remove_btn = QPushButton("×")
-                remove_btn.setFixedSize(16, 16)
-                remove_btn.setStyleSheet("""
-                    QPushButton {
-                        background-color: #dc3545;
-                        color: white;
-                        border: none;
-                        border-radius: 8px;
-                        font-size: 8px;
-                        font-weight: bold;
-                    }
-                    QPushButton:hover {
-                        background-color: #c82333;
-                    }
-                """)
-                remove_btn.clicked.connect(lambda checked, idx=i: self.remove_substring(idx, positive=False))
-                substring_layout.addWidget(remove_btn)
-                
-                substring_widget.setLayout(substring_layout)
-                container_layout.addWidget(substring_widget)
-            
-            container_layout.addStretch()
-            self.substrings_container.setLayout(container_layout)
-            
-            # Replace the old display
-            layout = self.layout()
-            old_display_index = -1
-            for i in range(layout.count()):
-                item = layout.itemAt(i)
-                if item and item.widget() == getattr(self, 'substrings_display', None):
-                    old_display_index = i
-                    break
-            
-            if old_display_index >= 0:
-                layout.removeWidget(self.substrings_display)
-                try:
-                    self.substrings_display.deleteLater()
-                except RuntimeError:
-                    pass
-                layout.insertWidget(old_display_index, self.substrings_container)
-            else:
-                # Insert after substring input layout (index 2)
-                layout.insertWidget(2, self.substrings_container)
-        else:
-            if hasattr(self, 'substrings_container') and self.substrings_container is not None:
-                try:
-                    self.substrings_container.deleteLater()
-                except RuntimeError:
-                    pass
-                self.substrings_container = None
-            
-            self.substrings_display = QLabel("Substrings: (none)")
-            self.substrings_display.setStyleSheet("color: #6c757d; font-style: italic; margin: 5px 0;")
-            self.substrings_display.setWordWrap(True)
-            
-            layout = self.layout()
-            # Find where to insert (after substring input layout)
-            insert_index = 2  # After header and substring input
-            layout.insertWidget(insert_index, self.substrings_display)
-
-    def remove_substring(self, index, positive=True):
-        if positive:
-            if 0 <= index < len(self.positive_substrings):
-                self.positive_substrings.pop(index)
-                self.update_substrings_display()
-        else:
-            if 0 <= index < len(self.negative_substrings):
-                self.negative_substrings.pop(index)
-                self.update_substrings_display()
-    
-    def delete_requested(self):
-        # Use the stored reference instead of parent()
-        self.classifier_group_widget.remove_classifier(self.classifier_id)
-    
-    def matches_identity(self, identity_str):
-        """Check if this classifier matches the given identity string"""
-        # Empty classifier matches everything
-        if not self.positive_substrings and not self.negative_substrings:
-            return True
-        
-        identity_str = str(identity_str)
-        
-        # Check all positive substrings must be present (AND logic)
-        if self.positive_substrings:
-            if not all(substring in identity_str for substring in self.positive_substrings):
-                return False
-        
-        # Check no negative substrings should be present (NOT logic)
-        if self.negative_substrings:
-            if any(substring in identity_str for substring in self.negative_substrings):
-                return False
-        
-        return True
-    
-    def get_new_id(self):
-        """Get the new ID for this classifier"""
-        return self.new_id_input.text().strip()
-
-    def move_up(self):
-        """Move this classifier up using current classifier_id"""
-        self.classifier_group_widget.move_classifier_up(self.classifier_id)
-
-    def move_down(self):
-        """Move this classifier down using current classifier_id"""
-        self.classifier_group_widget.move_classifier_down(self.classifier_id)
-
-    def copy_classifier(self):
-        """Copy this classifier using current classifier_id"""
-        self.classifier_group_widget.copy_classifier(self.classifier_id)
-
-    def update_header_label(self):
-        """Update the header label text"""
-        if hasattr(self, 'header_label'):
-            self.header_label.setText(f"Classifier {self.classifier_id}")
-
-
-class ClassifierGroupWidget(QFrame):
-    """Widget containing multiple classifiers for enhanced search functionality"""
-    
-    def __init__(self, identity_remap_widget, parent=None):
-        super().__init__(parent)
-        self.identity_remap_widget = identity_remap_widget
-        self.classifier_counter = 0
-        self.classifiers = {}  # classifier_id -> ClassifierWidget
-        
-        self.setStyleSheet("""
-            QFrame {
-                border: 2px solid #007acc;
-                border-radius: 5px;
-                background-color: #f8f9fa;
-                margin: 5px;
-                padding: 5px;
-            }
-        """)
-        
-        layout = QVBoxLayout()
-        
-        # Header
-        header_layout = QHBoxLayout()
-        header = QLabel("Enhanced Search & Classification")
-        header.setStyleSheet("font-weight: bold; font-size: 14px; color: #007acc; margin-bottom: 5px;")
-        header_layout.addWidget(header)
-        
-        header_layout.addStretch()
-        
-        # Hierarchical toggle
-        self.hierarchical_checkbox = QCheckBox("Hierarchical")
-        self.hierarchical_checkbox.setChecked(True)  # Default to hierarchical
-        self.hierarchical_checkbox.setStyleSheet("""
-            QCheckBox {
-                font-weight: bold;
-                color: #007acc;
-                padding: 5px;
-            }
-            QCheckBox::indicator {
-                width: 18px;
-                height: 18px;
-            }
-            QCheckBox::indicator:unchecked {
-                border: 2px solid #007acc;
-                background-color: white;
-                border-radius: 3px;
-            }
-            QCheckBox::indicator:checked {
-                border: 2px solid #007acc;
-                background-color: #007acc;
-                border-radius: 3px;
-            }
-            QCheckBox::indicator:checked:hover {
-                background-color: #005a9e;
-            }
-        """)
-        header_layout.addWidget(self.hierarchical_checkbox)
-        
-        # Add classifier button
-        add_btn = QPushButton("+ Add Classifier")
-        add_btn.setStyleSheet("""
-            QPushButton {
-                background-color: #007acc;
-                color: white;
-                border: none;
-                padding: 5px 10px;
-                border-radius: 3px;
-                font-weight: bold;
-            }
-            QPushButton:hover {
-                background-color: #005a9e;
-            }
-        """)
-        add_btn.clicked.connect(self.add_classifier)
-        header_layout.addWidget(add_btn)
-        
-        layout.addLayout(header_layout)
-        
-        # Scroll area for classifiers
-        scroll = QScrollArea()
-        scroll.setWidgetResizable(True)
-        scroll.setMinimumHeight(300)
-        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
-        scroll.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
-        
-        # Container for classifiers
-        self.container = QWidget()
-        self.container_layout = QVBoxLayout()
-        self.container_layout.setSpacing(5)
-        self.container_layout.addStretch()
-        self.container.setLayout(self.container_layout)
-        scroll.setWidget(self.container)
-        
-        layout.addWidget(scroll)
-        
-        # Preview button
-        preview_btn = QPushButton("🔍 Preview Classification")
-        preview_btn.setStyleSheet("""
-            QPushButton {
-                background-color: #ffc107;
-                color: #212529;
-                border: none;
-                padding: 8px 15px;
-                border-radius: 5px;
-                font-weight: bold;
-                font-size: 13px;
-            }
-            QPushButton:hover {
-                background-color: #e0a800;
-            }
-        """)
-        preview_btn.clicked.connect(self.preview_classification)
-        layout.addWidget(preview_btn)
-        
-        self.setLayout(layout)
-
-    def add_classifier(self):
-        self.classifier_counter += 1
-        classifier_id = self.classifier_counter
-        
-        # Pass reference to self (ClassifierGroupWidget) as second parameter
-        classifier_widget = ClassifierWidget(classifier_id, self, self)
-        self.classifiers[classifier_id] = classifier_widget
-        
-        # Insert before the stretch
-        self.container_layout.insertWidget(self.container_layout.count() - 1, classifier_widget)
-    
-    def remove_classifier(self, classifier_id):
-        if classifier_id in self.classifiers:
-            widget = self.classifiers[classifier_id]
-            self.container_layout.removeWidget(widget)
-            widget.deleteLater()
-            del self.classifiers[classifier_id]
-            self.renumber_classifiers()
-    
-    def preview_classification(self):
-        """Apply classification rules to the identity remapping widget - OPTIMIZED"""
-        table = self.identity_remap_widget.table
-        
-        if table.rowCount() == 0:
-            QMessageBox.warning(self, "Warning", "No identity data loaded yet.")
+    def select(self, column):
+        if column is None:
+            self.setCurrentIndex(0)
             return
-        
-        if not self.classifiers:
-            QMessageBox.warning(self, "Warning", "No classifiers defined.")
-            return
-        
-        # Cache frequently accessed values
-        classifier_ids = sorted(self.classifiers.keys())
-        removed_rows = self.identity_remap_widget.removed_rows
-        is_hierarchical = self.hierarchical_checkbox.isChecked()
-        
-        # Single-pass processing
-        matched_identities = set()
-        classifier_usage = {cid: 0 for cid in classifier_ids}
-        rows_to_remove = []  # Batch removal for efficiency
-        
-        # Process all rows in one pass
-        for row in range(table.rowCount()):
-            if row in removed_rows:
-                continue
-                
-            orig_item = table.item(row, 0)
-            if not orig_item:
-                continue
-                
-            identity_str = orig_item.text()
-            matched = False
-            
-            # Check classifiers in order
-            for classifier_id in classifier_ids:
-                classifier = self.classifiers[classifier_id]
-                
-                if classifier.matches_identity(identity_str):
-                    # This classifier matches
-                    matched = True
-                    matched_identities.add(identity_str)
-                    classifier_usage[classifier_id] += 1
-                    
-                    # Set the new ID if provided
-                    new_id = classifier.get_new_id()
-                    if new_id:
-                        new_item = table.item(row, 1)
-                        if new_item:
-                            if is_hierarchical:
-                                new_item.setText(new_id)
-                            else:
-                                # Non-hierarchical mode - append to existing
-                                current_text = new_item.text().strip()
-                                if current_text:
-                                    try:
-                                        existing_list = literal_eval(current_text)
-                                        if isinstance(existing_list, list):
-                                            existing_list.append(new_id)
-                                            new_item.setText(str(existing_list))
-                                        else:
-                                            new_item.setText(str([current_text, new_id]))
-                                    except:
-                                        new_item.setText(str([current_text, new_id]))
-                                else:
-                                    new_item.setText(new_id)
-                    
-                    # Only break if hierarchical mode (first match wins)
-                    if is_hierarchical:
-                        break
-            
-            # Collect unmatched rows for batch removal
-            if not matched:
-                rows_to_remove.append(row)
-        
-        # Batch remove unmatched rows (much faster than one-by-one)
-        for row in rows_to_remove:
-            self.identity_remap_widget.remove_identity_row(row)
-        
-        # Create usage report
-        usage_report = ""
-        for classifier_id in classifier_ids:
-            classifier = self.classifiers[classifier_id]
-            count = classifier_usage[classifier_id]
-            new_id = classifier.get_new_id() or "(no new ID set)"
-            pos_substrings = classifier.positive_substrings or ["(none)"]
-            neg_substrings = classifier.negative_substrings or ["(none)"]
-            
-            usage_report += f"  Classifier {classifier_id}: {count} matches → '{new_id}'\n"
-            usage_report += f"    Include (positive): {pos_substrings}\n"
-            usage_report += f"    Exclude (negative): {neg_substrings}\n"
+        idx = self.findText(str(column))
+        self.setCurrentIndex(idx if idx >= 0 else 0)
 
-        QMessageBox.information(
-            self, 
-            "Classification Preview Applied", 
-            f"Classification complete!\n\n"
-            f"• Matched identities: {len(matched_identities)}\n"
-            f"• Removed identities: {len(rows_to_remove)}\n"
-            f"• Total classifiers used: {len(self.classifiers)}\n\n"
-            f"Classifier Usage:\n{usage_report}\n"
-            f"Check the Identity Remapping widget to see the results."
+
+class ColumnCheckList(QWidget):
+    """Filterable checkbox list of columns, with select-all / auto-detect."""
+
+    selection_changed = pyqtSignal()
+
+    def __init__(self, auto_label="Auto-detect", parent=None):
+        super().__init__(parent)
+        self._auto_predicate = None
+        self._summaries = {}
+
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(4)
+
+        top = QHBoxLayout()
+        self.search = QLineEdit()
+        self.search.setPlaceholderText("Filter columns...")
+        self.search.setClearButtonEnabled(True)
+        self.search.textChanged.connect(self._apply_filter)
+        top.addWidget(self.search)
+
+        self.auto_btn = QPushButton(auto_label)
+        self.auto_btn.setToolTip("Tick every column that looks like it belongs here")
+        self.auto_btn.clicked.connect(self._auto_select)
+        top.addWidget(self.auto_btn)
+
+        all_btn = QPushButton("All")
+        all_btn.setFixedWidth(46)
+        all_btn.clicked.connect(lambda: self._set_all(True))
+        top.addWidget(all_btn)
+
+        none_btn = QPushButton("None")
+        none_btn.setFixedWidth(52)
+        none_btn.clicked.connect(lambda: self._set_all(False))
+        top.addWidget(none_btn)
+        layout.addLayout(top)
+
+        self.list = QListWidget()
+        self.list.setSelectionMode(QAbstractItemView.SelectionMode.NoSelection)
+        self.list.setAlternatingRowColors(True)
+        self.list.setMinimumHeight(110)
+        self.list.setMaximumHeight(150)
+        self.list.itemChanged.connect(lambda _: self.selection_changed.emit())
+        layout.addWidget(self.list)
+
+        self.count_label = QLabel("0 columns selected")
+        self.count_label.setStyleSheet("color: #666; font-size: 11px;")
+        layout.addWidget(self.count_label)
+        self.selection_changed.connect(self._update_count)
+
+    def set_auto_predicate(self, predicate):
+        self._auto_predicate = predicate
+
+    def set_columns(self, columns, summaries=None):
+        checked = set(self.checked_columns())
+        self._summaries = summaries or {}
+        self.list.blockSignals(True)
+        self.list.clear()
+        for col in columns:
+            item = QListWidgetItem(str(col))
+            item.setFlags(item.flags() | Qt.ItemFlag.ItemIsUserCheckable)
+            item.setCheckState(
+                Qt.CheckState.Checked if str(col) in checked else Qt.CheckState.Unchecked
+            )
+            summary = self._summaries.get(str(col))
+            if summary:
+                item.setToolTip(summary)
+            self.list.addItem(item)
+        self.list.blockSignals(False)
+        self._apply_filter(self.search.text())
+        self.selection_changed.emit()
+
+    def checked_columns(self):
+        out = []
+        for i in range(self.list.count()):
+            item = self.list.item(i)
+            if item.checkState() == Qt.CheckState.Checked:
+                out.append(item.text())
+        return out
+
+    def set_checked(self, columns):
+        wanted = {str(c) for c in columns}
+        self.list.blockSignals(True)
+        for i in range(self.list.count()):
+            item = self.list.item(i)
+            item.setCheckState(
+                Qt.CheckState.Checked if item.text() in wanted else Qt.CheckState.Unchecked
+            )
+        self.list.blockSignals(False)
+        self.selection_changed.emit()
+
+    def _set_all(self, state):
+        self.list.blockSignals(True)
+        for i in range(self.list.count()):
+            item = self.list.item(i)
+            if item.isHidden():
+                continue
+            item.setCheckState(Qt.CheckState.Checked if state else Qt.CheckState.Unchecked)
+        self.list.blockSignals(False)
+        self.selection_changed.emit()
+
+    def _auto_select(self):
+        if self._auto_predicate is None:
+            return
+        matches = [
+            self.list.item(i).text()
+            for i in range(self.list.count())
+            if self._auto_predicate(self.list.item(i).text())
+        ]
+        if not matches:
+            QMessageBox.information(self, "Nothing found",
+                                    "No columns in this file matched that pattern.")
+            return
+        self.set_checked(matches)
+
+    def _apply_filter(self, text):
+        needle = (text or "").strip().lower()
+        for i in range(self.list.count()):
+            item = self.list.item(i)
+            item.setHidden(bool(needle) and needle not in item.text().lower())
+
+    def _update_count(self):
+        n = len(self.checked_columns())
+        self.count_label.setText(f"{n} column{'' if n == 1 else 's'} selected")
+
+
+class HintLabel(QLabel):
+    def __init__(self, text="", parent=None):
+        super().__init__(text, parent)
+        self.setWordWrap(True)
+        self.setStyleSheet("color: #666; font-size: 11px;")
+
+
+# --------------------------------------------------------------------------- #
+#  intensity thresholding dialog
+# --------------------------------------------------------------------------- #
+
+class ThresholdDialog(QDialog):
+    """
+    Walk through each intensity column and pick the cut that separates positive
+    from negative nodes. Left-drag moves the low line, right-drag the high line.
+    """
+
+    def __init__(self, data, thresholds=None, parent=None):
+        """
+        data       : {column_name: 1D float ndarray}
+        thresholds : {column_name: (low, high_or_None)} starting values
+        """
+        super().__init__(parent)
+        self.setWindowTitle("Set identity thresholds")
+        self.setMinimumSize(820, 540)
+
+        self.data = data
+        self.names = list(data.keys())
+        self.thresholds = {}
+        for name in self.names:
+            if thresholds and name in thresholds:
+                self.thresholds[name] = tuple(thresholds[name])
+            else:
+                self.thresholds[name] = (_otsu_threshold(data[name]), None)
+
+        self.current = None
+        self._dragging = None
+        self._hist_cache = {}
+
+        root = QHBoxLayout(self)
+
+        # ---- left: marker list -------------------------------------------- #
+        left = QVBoxLayout()
+        left.addWidget(QLabel("<b>Identities</b>"))
+        self.list = QListWidget()
+        self.list.setMinimumWidth(230)
+        self.list.currentRowChanged.connect(self._select_row)
+        left.addWidget(self.list)
+        left.addWidget(HintLabel("Positive nodes are shown in brackets. "
+                                 "Click an identity to adjust its cut."))
+        root.addLayout(left, 0)
+
+        # ---- right: plot + controls --------------------------------------- #
+        right = QVBoxLayout()
+
+        self.title_label = QLabel("")
+        self.title_label.setStyleSheet("font-weight: bold; font-size: 14px;")
+        right.addWidget(self.title_label)
+
+        if MATPLOTLIB_AVAILABLE:
+            self.figure = Figure(figsize=(5, 3.2), tight_layout=True)
+            self.canvas = FigureCanvas(self.figure)
+            self.canvas.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
+            self.ax = self.figure.add_subplot(111)
+            self.canvas.mpl_connect('button_press_event', self._on_press)
+            self.canvas.mpl_connect('motion_notify_event', self._on_motion)
+            self.canvas.mpl_connect('button_release_event', self._on_release)
+            right.addWidget(self.canvas, 1)
+        else:
+            self.canvas = None
+            note = QLabel("matplotlib is not available - type thresholds by hand below.")
+            note.setStyleSheet("color: #b36b00;")
+            right.addWidget(note)
+
+        controls = QHBoxLayout()
+        controls.addWidget(QLabel("Positive at or above:"))
+        self.low_edit = QLineEdit()
+        self.low_edit.setFixedWidth(110)
+        self.low_edit.editingFinished.connect(self._low_typed)
+        controls.addWidget(self.low_edit)
+
+        self.use_high = QCheckBox("and at or below")
+        self.use_high.toggled.connect(self._toggle_high)
+        controls.addWidget(self.use_high)
+
+        self.high_edit = QLineEdit()
+        self.high_edit.setFixedWidth(110)
+        self.high_edit.setEnabled(False)
+        self.high_edit.editingFinished.connect(self._high_typed)
+        controls.addWidget(self.high_edit)
+        controls.addStretch()
+
+        self.log_check = QCheckBox("Log y")
+        self.log_check.setChecked(True)
+        self.log_check.toggled.connect(lambda _: self._redraw())
+        controls.addWidget(self.log_check)
+        right.addLayout(controls)
+
+        buttons = QHBoxLayout()
+        otsu_btn = QPushButton("Auto (Otsu)")
+        otsu_btn.setToolTip("Pick the cut that best splits this column into two populations")
+        otsu_btn.clicked.connect(self._auto_current)
+        buttons.addWidget(otsu_btn)
+
+        mean_btn = QPushButton("Mean + 1 SD")
+        mean_btn.clicked.connect(self._mean_sd_current)
+        buttons.addWidget(mean_btn)
+
+        auto_all_btn = QPushButton("Auto for all")
+        auto_all_btn.clicked.connect(self._auto_all)
+        buttons.addWidget(auto_all_btn)
+
+        copy_btn = QPushButton("Copy value to all")
+        copy_btn.clicked.connect(self._copy_to_all)
+        buttons.addWidget(copy_btn)
+        buttons.addStretch()
+        right.addLayout(buttons)
+
+        self.stats_label = HintLabel("")
+        right.addWidget(self.stats_label)
+
+        nav = QHBoxLayout()
+        prev_btn = QPushButton("< Previous")
+        prev_btn.clicked.connect(lambda: self._step(-1))
+        nav.addWidget(prev_btn)
+        next_btn = QPushButton("Next >")
+        next_btn.clicked.connect(lambda: self._step(1))
+        nav.addWidget(next_btn)
+        nav.addStretch()
+
+        cancel_btn = QPushButton("Cancel")
+        cancel_btn.clicked.connect(self.reject)
+        nav.addWidget(cancel_btn)
+
+        ok_btn = QPushButton("Done")
+        ok_btn.setDefault(True)
+        ok_btn.setStyleSheet(
+            "QPushButton { background-color: #28a745; color: white; font-weight: bold;"
+            " padding: 6px 18px; border: none; border-radius: 4px; }"
+            "QPushButton:hover { background-color: #218838; }"
+        )
+        ok_btn.clicked.connect(self.accept)
+        nav.addWidget(ok_btn)
+        right.addLayout(nav)
+
+        root.addLayout(right, 1)
+
+        self._refresh_list()
+        if self.names:
+            self.list.setCurrentRow(0)
+
+    # -- data helpers ------------------------------------------------------- #
+
+    def _positive_count(self, name):
+        low, high = self.thresholds[name]
+        arr = self.data[name]
+        mask = np.isfinite(arr) & (arr >= low)
+        if high is not None:
+            mask &= arr <= high
+        return int(np.count_nonzero(mask))
+
+    def _histogram(self, name):
+        if name not in self._hist_cache:
+            arr = self.data[name]
+            arr = arr[np.isfinite(arr)]
+            if arr.size > MAX_HIST_SAMPLES:
+                step = int(np.ceil(arr.size / MAX_HIST_SAMPLES))
+                arr = arr[::step]
+            if arr.size == 0:
+                self._hist_cache[name] = (np.array([0]), np.array([0.0, 1.0]))
+            else:
+                bins = int(np.clip(np.sqrt(arr.size), 32, 256))
+                self._hist_cache[name] = np.histogram(arr, bins=bins)
+        return self._hist_cache[name]
+
+    # -- list --------------------------------------------------------------- #
+
+    def _refresh_list(self):
+        row = self.list.currentRow()
+        self.list.blockSignals(True)
+        self.list.clear()
+        for name in self.names:
+            n = self._positive_count(name)
+            self.list.addItem(f"{name}   [{n}]")
+        self.list.blockSignals(False)
+        if 0 <= row < self.list.count():
+            self.list.setCurrentRow(row)
+
+    def _refresh_current_list_row(self):
+        if self.current is None:
+            return
+        idx = self.names.index(self.current)
+        item = self.list.item(idx)
+        if item is not None:
+            item.setText(f"{self.current}   [{self._positive_count(self.current)}]")
+
+    def _select_row(self, row):
+        if not (0 <= row < len(self.names)):
+            return
+        self.current = self.names[row]
+        low, high = self.thresholds[self.current]
+        self.title_label.setText(self.current)
+        self.low_edit.setText(_fmt(low))
+        self.use_high.blockSignals(True)
+        self.use_high.setChecked(high is not None)
+        self.use_high.blockSignals(False)
+        self.high_edit.setEnabled(high is not None)
+        arr = self.data[self.current]
+        finite = arr[np.isfinite(arr)]
+        self.high_edit.setText(_fmt(high if high is not None
+                                    else (finite.max() if finite.size else 0.0)))
+        self._redraw()
+
+    def _step(self, delta):
+        row = self.list.currentRow() + delta
+        if 0 <= row < self.list.count():
+            self.list.setCurrentRow(row)
+
+    # -- threshold edits ---------------------------------------------------- #
+
+    def _set_threshold(self, low=None, high=..., redraw=True):
+        if self.current is None:
+            return
+        cur_low, cur_high = self.thresholds[self.current]
+        new_low = cur_low if low is None else float(low)
+        new_high = cur_high if high is ... else high
+        if new_high is not None and new_high < new_low:
+            new_high = new_low
+        self.thresholds[self.current] = (new_low, new_high)
+        self.low_edit.setText(_fmt(new_low))
+        if new_high is not None:
+            self.high_edit.setText(_fmt(new_high))
+        self._refresh_current_list_row()
+        if redraw:
+            self._redraw()
+
+    def _low_typed(self):
+        try:
+            self._set_threshold(low=float(self.low_edit.text()))
+        except ValueError:
+            if self.current is not None:
+                self.low_edit.setText(_fmt(self.thresholds[self.current][0]))
+
+    def _high_typed(self):
+        if not self.use_high.isChecked():
+            return
+        try:
+            self._set_threshold(high=float(self.high_edit.text()))
+        except ValueError:
+            if self.current is not None:
+                self.high_edit.setText(_fmt(self.thresholds[self.current][1] or 0.0))
+
+    def _toggle_high(self, checked):
+        self.high_edit.setEnabled(checked)
+        if self.current is None:
+            return
+        if checked:
+            try:
+                value = float(self.high_edit.text())
+            except ValueError:
+                finite = self.data[self.current][np.isfinite(self.data[self.current])]
+                value = float(finite.max()) if finite.size else 0.0
+            self._set_threshold(high=value)
+        else:
+            self._set_threshold(high=None)
+
+    def _auto_current(self):
+        if self.current is not None:
+            self._set_threshold(low=_otsu_threshold(self.data[self.current]))
+
+    def _mean_sd_current(self):
+        if self.current is None:
+            return
+        arr = self.data[self.current]
+        finite = arr[np.isfinite(arr)]
+        if finite.size:
+            self._set_threshold(low=float(np.mean(finite) + np.std(finite)))
+
+    def _auto_all(self):
+        for name in self.names:
+            self.thresholds[name] = (_otsu_threshold(self.data[name]), self.thresholds[name][1])
+        self._refresh_list()
+        if self.current is not None:
+            self._select_row(self.names.index(self.current))
+
+    def _copy_to_all(self):
+        if self.current is None:
+            return
+        low, high = self.thresholds[self.current]
+        for name in self.names:
+            self.thresholds[name] = (low, high)
+        self._refresh_list()
+        self._select_row(self.names.index(self.current))
+
+    # -- plotting ----------------------------------------------------------- #
+
+    def _redraw(self):
+        if self.current is None:
+            return
+        name = self.current
+        arr = self.data[name]
+        finite = arr[np.isfinite(arr)]
+        low, high = self.thresholds[name]
+        n_pos = self._positive_count(name)
+        total = int(finite.size)
+        pct = (100.0 * n_pos / total) if total else 0.0
+        self.stats_label.setText(
+            f"{n_pos:,} of {total:,} nodes positive ({pct:.1f}%)   |   "
+            f"range {_fmt(finite.min()) if total else 'n/a'} to "
+            f"{_fmt(finite.max()) if total else 'n/a'}   |   "
+            f"mean {_fmt(np.mean(finite)) if total else 'n/a'}"
         )
 
-    def copy_classifier(self, classifier_id):
-        if classifier_id in self.classifiers:
-            original = self.classifiers[classifier_id]
-            
-            # Create new classifier
-            self.classifier_counter += 1
-            new_classifier_id = self.classifier_counter
-            
-            new_classifier = ClassifierWidget(new_classifier_id, self, self)
-            
-            # Copy data
-            new_classifier.positive_substrings = original.positive_substrings.copy()
-            new_classifier.negative_substrings = original.negative_substrings.copy()
-            new_classifier.new_id_input.setText(original.new_id_input.text())
-            new_classifier.update_substrings_display()
-            
-            self.classifiers[new_classifier_id] = new_classifier
-            
-            # Insert after the original
-            original_index = self.get_classifier_index(classifier_id)
-            self.container_layout.insertWidget(original_index + 1, new_classifier)
-            
-            self.renumber_classifiers()
-
-    def move_classifier_up(self, classifier_id):
-        current_index = self.get_classifier_index(classifier_id)
-        if current_index > 0:
-            self.swap_classifiers(current_index, current_index - 1)
-
-    def move_classifier_down(self, classifier_id):
-        current_index = self.get_classifier_index(classifier_id)
-        classifier_count = len(self.classifiers)
-        if current_index < classifier_count - 1:
-            self.swap_classifiers(current_index, current_index + 1)
-
-    def get_classifier_index(self, classifier_id):
-        """Get the current layout index of a classifier by its ID"""
-        for i in range(self.container_layout.count() - 1):  # -1 for stretch
-            widget = self.container_layout.itemAt(i).widget()
-            if (widget is not None and 
-                hasattr(widget, 'classifier_id') and 
-                widget.classifier_id == classifier_id):
-                return i
-        return -1
-
-    def swap_classifiers(self, index1, index2):
-        # Get widgets at the positions
-        widget1 = self.container_layout.itemAt(index1).widget()
-        widget2 = self.container_layout.itemAt(index2).widget()
-        
-        if not (hasattr(widget1, 'classifier_id') and hasattr(widget2, 'classifier_id')):
+        if not MATPLOTLIB_AVAILABLE:
             return
-        
-        # Remove widgets in reverse order to maintain indices
-        if index1 > index2:
-            self.container_layout.removeWidget(widget1)  # Remove higher index first
-            self.container_layout.removeWidget(widget2)
-            # Now reinsert: widget1 goes to index2, widget2 goes to index1
-            self.container_layout.insertWidget(index2, widget1)
-            self.container_layout.insertWidget(index1, widget2)
-        else:
-            self.container_layout.removeWidget(widget2)  # Remove higher index first
-            self.container_layout.removeWidget(widget1)
-            # Now reinsert: widget1 goes to index2, widget2 goes to index1
-            self.container_layout.insertWidget(index1, widget2)
-            self.container_layout.insertWidget(index2, widget1)
-        
-        # Renumber all classifiers to maintain correct order and references
-        self.renumber_classifiers()
-        
-    def renumber_classifiers(self):
-        # Create new dictionary to avoid issues during iteration
-        new_classifiers = {}
-        
-        # Renumber all classifiers to maintain order
-        for i in range(self.container_layout.count() - 1):  # -1 for stretch
-            widget = self.container_layout.itemAt(i).widget()
-            if hasattr(widget, 'classifier_id'):
-                old_id = widget.classifier_id
-                new_id = i + 1
-                
-                # Update the widget's ID
-                widget.classifier_id = new_id
-                
-                # Update the header label using the new method
-                widget.update_header_label()
-                
-                # Add to new dictionary with new ID
-                new_classifiers[new_id] = widget
-        
-        # Replace the old dictionary
-        self.classifiers = new_classifiers
-        
-        # Update counter to the highest number
-        self.classifier_counter = len(self.classifiers)
 
-class IdentityRemapWidget(QFrame):
-    """Widget for remapping node identities using QTableWidget for performance"""
-    
+        counts, edges = self._histogram(name)
+        centers = 0.5 * (edges[:-1] + edges[1:])
+        widths = np.diff(edges)
+
+        self.ax.clear()
+        pos_mask = centers >= low
+        if high is not None:
+            pos_mask = pos_mask & (centers <= high)
+        colors = np.where(pos_mask, '#28a745', '#b0b0b0')
+        self.ax.bar(centers, counts, width=widths, align='center', color=list(colors), alpha=0.85)
+        if self.log_check.isChecked():
+            self.ax.set_yscale('log')
+        self.low_line = self.ax.axvline(low, color='#d62728', linewidth=2.2, zorder=10)
+        if high is not None:
+            self.high_line = self.ax.axvline(high, color='#1f77b4', linewidth=2.2, zorder=10)
+        else:
+            self.high_line = None
+        self.ax.set_xlabel(name)
+        self.ax.set_ylabel("nodes")
+        self.ax.set_title("left-drag = lower cut     right-drag = upper cut", fontsize=9, color='#666')
+        self.canvas.draw_idle()
+
+    def _on_press(self, event):
+        if event.inaxes != getattr(self, 'ax', None) or event.xdata is None:
+            return
+        if event.button == 1:
+            self._dragging = 'low'
+            self._set_threshold(low=event.xdata, redraw=False)
+            self._quick_move()
+        elif event.button == 3 and self.use_high.isChecked():
+            self._dragging = 'high'
+            self._set_threshold(high=float(event.xdata), redraw=False)
+            self._quick_move()
+
+    def _on_motion(self, event):
+        if not self._dragging or event.inaxes != getattr(self, 'ax', None) or event.xdata is None:
+            return
+        if self._dragging == 'low':
+            self._set_threshold(low=event.xdata, redraw=False)
+        else:
+            self._set_threshold(high=float(event.xdata), redraw=False)
+        self._quick_move()
+
+    def _quick_move(self):
+        """Cheap update while dragging - move the line, skip the full replot."""
+        if not MATPLOTLIB_AVAILABLE or self.current is None:
+            return
+        low, high = self.thresholds[self.current]
+        if getattr(self, 'low_line', None) is not None:
+            self.low_line.set_xdata([low, low])
+        if getattr(self, 'high_line', None) is not None and high is not None:
+            self.high_line.set_xdata([high, high])
+        self.canvas.draw_idle()
+
+    def _on_release(self, event):
+        if self._dragging:
+            self._dragging = None
+            self._redraw()
+
+    def get_thresholds(self):
+        return dict(self.thresholds)
+
+
+# --------------------------------------------------------------------------- #
+#  property panels
+# --------------------------------------------------------------------------- #
+
+class BasePanel(QWidget):
+    changed = pyqtSignal()
+
     def __init__(self, parent=None):
         super().__init__(parent)
-        self.setStyleSheet("""
-            QFrame {
-                border: 2px solid #007acc;
-                border-radius: 5px;
-                background-color: #f8f9fa;
-                margin: 5px;
-                padding: 5px;
-            }
-        """)
-        
-        layout = QVBoxLayout()
-        
-        # Header
-        header = QLabel("Identity Remapping & Filtering")
-        header.setStyleSheet("font-weight: bold; font-size: 14px; color: #007acc; margin-bottom: 5px;")
-        header.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        layout.addWidget(header)
-        
-        # Action buttons
-        action_layout = QHBoxLayout()
-        
-        # Delete checked button
-        self.delete_checked_btn = QPushButton("🗑 Delete Checked Rows")
-        self.delete_checked_btn.setStyleSheet("""
-            QPushButton {
-                background-color: #dc3545;
-                color: white;
-                border: none;
-                padding: 5px 10px;
-                border-radius: 3px;
-                font-weight: bold;
-            }
-            QPushButton:hover {
-                background-color: #c82333;
-            }
-        """)
-        self.delete_checked_btn.clicked.connect(self.delete_checked_rows)
-        action_layout.addWidget(self.delete_checked_btn)
-        
-        # Select/Deselect all button
-        self.toggle_all_btn = QPushButton("☑ Toggle All")
-        self.toggle_all_btn.setStyleSheet("""
-            QPushButton {
-                background-color: #6c757d;
-                color: white;
-                border: none;
-                padding: 5px 10px;
-                border-radius: 3px;
-                font-weight: bold;
-            }
-            QPushButton:hover {
-                background-color: #5a6268;
-            }
-        """)
-        self.toggle_all_btn.clicked.connect(self.toggle_all_checkboxes)
-        action_layout.addWidget(self.toggle_all_btn)
-        
-        action_layout.addStretch()
-        layout.addLayout(action_layout)
-        
-        # Create table widget
-        self.table = QTableWidget()
-        self.table.setColumnCount(3)
-        self.table.setHorizontalHeaderLabels(["Original ID", "New ID (leave blank to keep)", "Mark for Deletion"])
-        self.table.horizontalHeader().setStretchLastSection(False)
-        self.table.horizontalHeader().setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
-        self.table.horizontalHeader().setSectionResizeMode(1, QHeaderView.ResizeMode.Stretch)
-        self.table.horizontalHeader().setSectionResizeMode(2, QHeaderView.ResizeMode.Fixed)
-        self.table.setColumnWidth(2, 120)
-        self.table.setAlternatingRowColors(True)
-        self.table.setMinimumHeight(250)
-        
-        layout.addWidget(self.table)
-        self.setLayout(layout)
-        
-        # Store mapping data - now just track original identities and removed ones
-        self.original_identities = []  # List of original identities in order
-        self.removed_rows = set()  # Set of row indices that are marked for removal
-        
-    def populate_identities(self, identities):
-        """Populate the table with unique identities from the data - optimized for large datasets"""
-        # Clear existing data
-        self.table.setRowCount(0)
-        self.removed_rows.clear()
-        
-        # Get unique identities
-        unique_identities = sorted(list(set(identities)))
-        self.original_identities = unique_identities
-        
-        # Set row count once (much faster than adding rows one by one)
-        self.table.setRowCount(len(unique_identities))
-        
-        # Disable sorting during population for better performance
-        self.table.setSortingEnabled(False)
-        
-        # Populate table - now much faster without widget creation
-        for row, identity in enumerate(unique_identities):
-            # Original ID (read-only)
-            orig_item = QTableWidgetItem(str(identity))
-            orig_item.setFlags(orig_item.flags() & ~Qt.ItemFlag.ItemIsEditable)
-            orig_item.setBackground(Qt.GlobalColor.lightGray)
-            self.table.setItem(row, 0, orig_item)
-            
-            # New ID (editable)
-            new_item = QTableWidgetItem("")
-            self.table.setItem(row, 1, new_item)
-            
-            # Checkbox for deletion (much faster than button widgets!)
-            checkbox_item = QTableWidgetItem()
-            checkbox_item.setFlags(Qt.ItemFlag.ItemIsUserCheckable | Qt.ItemFlag.ItemIsEnabled)
-            checkbox_item.setCheckState(Qt.CheckState.Unchecked)
-            checkbox_item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
-            self.table.setItem(row, 2, checkbox_item)
-        
-        # Re-enable sorting after population
-        self.table.setSortingEnabled(True)
-    
-    def delete_checked_rows(self):
-        """Delete all rows that are checked"""
-        for row in range(self.table.rowCount()):
-            checkbox_item = self.table.item(row, 2)
-            if checkbox_item and checkbox_item.checkState() == Qt.CheckState.Checked:
-                self.remove_identity_row(row)
-    
-    def toggle_all_checkboxes(self):
-        """Toggle all checkboxes on/off"""
-        # Check if any are unchecked
-        any_unchecked = False
-        for row in range(self.table.rowCount()):
-            if row not in self.removed_rows:
-                checkbox_item = self.table.item(row, 2)
-                if checkbox_item and checkbox_item.checkState() == Qt.CheckState.Unchecked:
-                    any_unchecked = True
-                    break
-        
-        # If any unchecked, check all. Otherwise uncheck all.
-        new_state = Qt.CheckState.Checked if any_unchecked else Qt.CheckState.Unchecked
-        
-        for row in range(self.table.rowCount()):
-            if row not in self.removed_rows:
-                checkbox_item = self.table.item(row, 2)
-                if checkbox_item:
-                    checkbox_item.setCheckState(new_state)
-    
-    def remove_identity_row(self, row):
-        """Mark a row as removed (visually hide it)"""
-        self.removed_rows.add(row)
-        # Hide the row
-        self.table.setRowHidden(row, True)
-    
-    def remove_identity(self, identity):
-        """Remove an identity by value (for compatibility with classifier)"""
-        # Find the row with this identity
-        for row in range(self.table.rowCount()):
-            if row not in self.removed_rows:
-                orig_item = self.table.item(row, 0)
-                if orig_item and orig_item.text() == str(identity):
-                    self.remove_identity_row(row)
-                    break
-    
-    def get_remapped_identities(self, original_identities):
-        """Return the remapped identities based on user input, filtering out removed ones"""
-        # Create a mapping from original identity to new identity
-        remap_dict = {}
-        for row in range(self.table.rowCount()):
-            if row not in self.removed_rows:
-                orig_item = self.table.item(row, 0)
-                new_item = self.table.item(row, 1)
-                if orig_item and new_item:
-                    orig_id = orig_item.text()
-                    new_id = new_item.text().strip()
-                    if new_id:
-                        remap_dict[orig_id] = new_id
-        
-        # Create set of removed identities for quick lookup
-        removed_identities = set()
-        for row in self.removed_rows:
-            orig_item = self.table.item(row, 0)
-            if orig_item:
-                removed_identities.add(orig_item.text())
-        
-        # Apply remapping and filtering
-        remapped = []
-        for orig_id in original_identities:
-            orig_id_str = str(orig_id)
-            
-            # Skip if removed
-            if orig_id_str in removed_identities:
-                continue
-            
-            # Use remapped ID if available, otherwise keep original
-            if orig_id_str in remap_dict:
-                remapped.append(remap_dict[orig_id_str])
-            else:
-                remapped.append(orig_id)
-        
-        return remapped
-    
-    def get_filtered_indices(self, original_identities):
-        """Return indices of identities that should be kept (not removed)"""
-        # Create set of removed identities for quick lookup
-        removed_identities = set()
-        for row in self.removed_rows:
-            orig_item = self.table.item(row, 0)
-            if orig_item:
-                removed_identities.add(orig_item.text())
-        
-        # Find indices to keep
-        kept_indices = []
-        for i, orig_id in enumerate(original_identities):
-            if str(orig_id) not in removed_identities:
-                kept_indices.append(i)
-        
-        return kept_indices
-    
-    def update_font_sizes(self, scale_factor):
-        """Update widget sizes based on scale but keep font sizes constant"""
-        # Table handles sizing automatically, no manual adjustment needed
+        self.df = None
+
+    def set_dataframe(self, df):
+        self.df = df
+        self.on_dataframe(df)
+        self.changed.emit()
+
+    def on_dataframe(self, df):
         pass
 
+    def node_ids(self, column):
+        """IDs from `column`, or sequential 1..N when column is None."""
+        if column is None:
+            return [int(i) for i in range(1, len(self.df) + 1)]
+        return [_coerce_node_id(v) for v in self.df[column].tolist()]
 
-class TabbedIdentityWidget(QFrame):
-    """Widget that contains both identity remapping and classifier widgets with tabs"""
-    
+    def build(self):
+        """-> (result_dict, summary_string). Raise ValueError with a friendly message."""
+        raise NotImplementedError
+
+
+class SimplePanel(BasePanel):
+    """One combo per required field - used for Centroids and Communities."""
+
+    def __init__(self, fields, guesses, parent=None):
+        """
+        fields  : list of (key_name, label, required)
+        guesses : {key_name: [header keywords]}
+        """
+        super().__init__(parent)
+        self.fields = fields
+        self.guesses = guesses
+        self.combos = {}
+
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(0, 0, 0, 0)
+
+        form = QFormLayout()
+        form.setLabelAlignment(Qt.AlignmentFlag.AlignRight)
+        for key, label, required in fields:
+            placeholder = ("Auto: 1, 2, 3, ..." if key == 'Numerical IDs'
+                           else "Select column...")
+            combo = ColumnCombo(placeholder)
+            combo.currentIndexChanged.connect(lambda _: self.changed.emit())
+            self.combos[key] = combo
+            form.addRow(f"{label}{'' if required else ' (optional)'}:", combo)
+        layout.addLayout(form)
+        layout.addWidget(HintLabel(
+            "Leave the node ID column empty to number nodes 1, 2, 3 ... in row order."))
+        layout.addStretch()
+
+    def on_dataframe(self, df):
+        cols = list(df.columns) if df is not None else []
+        for key, combo in self.combos.items():
+            combo.set_columns(cols)
+            if df is not None and combo.current_column() is None:
+                guess = _guess_column(cols, self.guesses.get(key, []))
+                if guess is not None:
+                    combo.select(guess)
+
+    def build(self):
+        if self.df is None:
+            raise ValueError("Load a spreadsheet first.")
+        result = {}
+        id_col = self.combos['Numerical IDs'].current_column()
+        result['Numerical IDs'] = self.node_ids(id_col)
+        for key, label, required in self.fields:
+            if key == 'Numerical IDs':
+                continue
+            col = self.combos[key].current_column()
+            if col is None:
+                if required:
+                    raise ValueError(f"Choose a column for '{label}'.")
+                continue
+            result[key] = self.df[col].tolist()
+
+        # drop rows where any non-ID field is blank
+        keys = [k for k in result if k != 'Numerical IDs']
+        keep = [i for i in range(len(result['Numerical IDs']))
+                if not any(_is_nan_or_empty(result[k][i]) for k in keys)
+                and result['Numerical IDs'][i] is not None]
+        for k in result:
+            result[k] = [result[k][i] for i in keep]
+
+        n = len(result['Numerical IDs'])
+        summary = (f"{n:,} nodes ready.\n"
+                   f"IDs from: {id_col or 'sequential 1..N'}\n"
+                   + "\n".join(f"{k}: {self.combos[k].current_column()}"
+                               for k, _, _ in self.fields if k != 'Numerical IDs'
+                               and self.combos[k].current_column()))
+        return result, summary
+
+
+class IdentityPanel(BasePanel):
+    """Three ways to turn columns into node identities."""
+
     def __init__(self, parent=None):
         super().__init__(parent)
-        
-        layout = QVBoxLayout()
-        
-        # Tab buttons
-        tab_layout = QHBoxLayout()
-        
-        self.remap_tab_btn = QPushButton("Identity Remapping")
-        self.remap_tab_btn.setCheckable(True)
-        self.remap_tab_btn.setChecked(True)
-        self.remap_tab_btn.setStyleSheet("""
-            QPushButton {
-                background-color: #007acc;
-                color: white;
-                border: none;
-                padding: 8px 15px;
-                border-radius: 5px 5px 0 0;
-                font-weight: bold;
-            }
-            QPushButton:hover {
-                background-color: #005a9e;
-            }
-            QPushButton:checked {
-                background-color: #004d7a;
-            }
-        """)
-        self.remap_tab_btn.clicked.connect(self.show_remap_tab)
-        
-        self.classifier_tab_btn = QPushButton("Enhanced Search")
-        self.classifier_tab_btn.setCheckable(True)
-        self.classifier_tab_btn.setStyleSheet("""
-            QPushButton {
-                background-color: #6c757d;
-                color: white;
-                border: none;
-                padding: 8px 15px;
-                border-radius: 5px 5px 0 0;
-                font-weight: bold;
-            }
-            QPushButton:hover {
-                background-color: #5a6268;
-            }
-            QPushButton:checked {
-                background-color: #007acc;
-            }
-        """)
-        self.classifier_tab_btn.clicked.connect(self.show_classifier_tab)
-        
-        tab_layout.addWidget(self.remap_tab_btn)
-        tab_layout.addWidget(self.classifier_tab_btn)
-        tab_layout.addStretch()
-        
-        layout.addLayout(tab_layout)
-        
-        # Save/Load buttons
-        save_load_layout = QHBoxLayout()
+        self.mode = MODE_SINGLE
+        self.thresholds = {}          # column -> (low, high or None)
+        self.zscore = False
+        self._asked_zscore = False
+        self._numeric_cache = {}
 
-        save_btn = QPushButton("💾 Save Config")
-        save_btn.setStyleSheet("""
-            QPushButton {
-                background-color: #17a2b8;
-                color: white;
-                border: none;
-                padding: 5px 10px;
-                border-radius: 3px;
-                font-weight: bold;
-            }
-            QPushButton:hover {
-                background-color: #138496;
-            }
-        """)
-        save_btn.clicked.connect(self.save_configuration)
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(8)
 
-        load_btn = QPushButton("📁 Load Config")
-        load_btn.setStyleSheet("""
-            QPushButton {
-                background-color: #6f42c1;
-                color: white;
-                border: none;
-                padding: 5px 10px;
-                border-radius: 3px;
-                font-weight: bold;
-            }
-            QPushButton:hover {
-                background-color: #5a2d91;
-            }
-        """)
-        load_btn.clicked.connect(self.load_configuration)
+        # --- node id column ------------------------------------------------ #
+        id_box = QGroupBox("1.  Node ID column")
+        id_layout = QVBoxLayout(id_box)
+        self.id_combo = ColumnCombo("Auto: number rows 1, 2, 3, ...")
+        self.id_combo.currentIndexChanged.connect(lambda _: self.changed.emit())
+        id_layout.addWidget(self.id_combo)
+        id_layout.addWidget(HintLabel(
+            "Leave empty to number nodes 1, 2, 3 ... in row order."))
+        layout.addWidget(id_box)
 
-        save_load_layout.addWidget(save_btn)
-        save_load_layout.addWidget(load_btn)
-        save_load_layout.addStretch()
+        # --- mode ----------------------------------------------------------- #
+        mode_box = QGroupBox("2.  How are identities stored in this file?")
+        mode_layout = QVBoxLayout(mode_box)
+        self.mode_group = QButtonGroup(self)
 
-        layout.addLayout(save_load_layout)
+        self.radio_single = QRadioButton("One identity column")
+        self.radio_matrix = QRadioButton("Several 0 / 1 columns (identity matrix)")
+        self.radio_intensity = QRadioButton("Several raw intensity columns (threshold them)")
+        self.radio_single.setChecked(True)
 
-        # Create both widgets
-        self.identity_remap_widget = IdentityRemapWidget()
-        self.classifier_group_widget = ClassifierGroupWidget(self.identity_remap_widget)
-        
-        # Initially hide classifier widget
-        self.classifier_group_widget.hide()
-        
-        layout.addWidget(self.identity_remap_widget)
-        layout.addWidget(self.classifier_group_widget)
-        
-        self.setLayout(layout)
-    
-    def show_remap_tab(self):
-        self.remap_tab_btn.setChecked(True)
-        self.classifier_tab_btn.setChecked(False)
-        
-        self.identity_remap_widget.show()
-        self.classifier_group_widget.hide()
-        
-        # Update button styles
-        self.remap_tab_btn.setStyleSheet("""
-            QPushButton {
-                background-color: #007acc;
-                color: white;
-                border: none;
-                padding: 8px 15px;
-                border-radius: 5px 5px 0 0;
-                font-weight: bold;
-            }
-            QPushButton:hover {
-                background-color: #005a9e;
-            }
-            QPushButton:checked {
-                background-color: #004d7a;
-            }
-        """)
-        
-        self.classifier_tab_btn.setStyleSheet("""
-            QPushButton {
-                background-color: #6c757d;
-                color: white;
-                border: none;
-                padding: 8px 15px;
-                border-radius: 5px 5px 0 0;
-                font-weight: bold;
-            }
-            QPushButton:hover {
-                background-color: #5a6268;
-            }
-            QPushButton:checked {
-                background-color: #007acc;
-            }
-        """)
-    
-    def show_classifier_tab(self):
-        self.remap_tab_btn.setChecked(False)
-        self.classifier_tab_btn.setChecked(True)
-        
-        self.identity_remap_widget.hide()
-        self.classifier_group_widget.show()
-        
-        # Update button styles
-        self.classifier_tab_btn.setStyleSheet("""
-            QPushButton {
-                background-color: #007acc;
-                color: white;
-                border: none;
-                padding: 8px 15px;
-                border-radius: 5px 5px 0 0;
-                font-weight: bold;
-            }
-            QPushButton:hover {
-                background-color: #005a9e;
-            }
-            QPushButton:checked {
-                background-color: #004d7a;
-            }
-        """)
-        
-        self.remap_tab_btn.setStyleSheet("""
-            QPushButton {
-                background-color: #6c757d;
-                color: white;
-                border: none;
-                padding: 8px 15px;
-                border-radius: 5px 5px 0 0;
-                font-weight: bold;
-            }
-            QPushButton:hover {
-                background-color: #5a6268;
-            }
-            QPushButton:checked {
-                background-color: #007acc;
-            }
-        """)
-    
-    def populate_identities(self, identities):
-        """Delegate to the identity remap widget"""
-        self.identity_remap_widget.populate_identities(identities)
-    
-    def get_remapped_identities(self, original_identities):
-        """Delegate to the identity remap widget"""
-        return self.identity_remap_widget.get_remapped_identities(original_identities)
-    
-    def get_filtered_indices(self, original_identities):
-        """Delegate to the identity remap widget"""
-        return self.identity_remap_widget.get_filtered_indices(original_identities)
-    
-    def update_font_sizes(self, scale_factor):
-        """Delegate to the identity remap widget"""
-        self.identity_remap_widget.update_font_sizes(scale_factor)
-
-    def save_configuration(self):
-        from PyQt6.QtWidgets import QFileDialog
-        import json
-        
-        file_path, _ = QFileDialog.getSaveFileName(
-            self, 
-            "Save Identity Configuration", 
-            "", 
-            "JSON Files (*.json)"
+        self.MODE_HINTS = (
+            "A single column of labels, e.g. \"Class\" holding Tumor / Stroma / Immune.",
+            "One column per marker; the header becomes the identity name and a 1 "
+            "means the node carries it. Nodes may get several identities.",
+            "One column per marker holding measured intensities. You set a cut-off "
+            "per marker in a histogram; at or above it counts as positive.",
         )
-        
-        if file_path:
-            config = {
-                'identity_mappings': {},
-                'removed_rows': list(self.identity_remap_widget.removed_rows),
-                'classifiers': []
-            }
-            
-            # Save identity mappings from table
-            table = self.identity_remap_widget.table
-            for row in range(table.rowCount()):
-                orig_item = table.item(row, 0)
-                new_item = table.item(row, 1)
-                if orig_item and new_item:
-                    config['identity_mappings'][orig_item.text()] = {
-                        'new_id': new_item.text()
-                    }
-            
-            # Save classifiers in order
-            for i in range(self.classifier_group_widget.container_layout.count() - 1):
-                widget = self.classifier_group_widget.container_layout.itemAt(i).widget()
-                if hasattr(widget, 'classifier_id'):
-                    classifier_config = {
-                        'id': widget.classifier_id,
-                        'positive_substrings': widget.positive_substrings,
-                        'negative_substrings': widget.negative_substrings,
-                        'new_id': widget.get_new_id()
-                    }
-                    config['classifiers'].append(classifier_config)
-            
-            try:
-                with open(file_path, 'w') as f:
-                    json.dump(config, f, indent=2)
-                QMessageBox.information(self, "Success", "Configuration saved successfully!")
-            except Exception as e:
-                QMessageBox.critical(self, "Error", f"Failed to save configuration: {str(e)}")
+        for i, radio in enumerate((self.radio_single, self.radio_matrix, self.radio_intensity)):
+            radio.setToolTip(self.MODE_HINTS[i])
+            self.mode_group.addButton(radio, i)
+            mode_layout.addWidget(radio)
 
-    def load_configuration(self):
-        from PyQt6.QtWidgets import QFileDialog
-        import json
-        
-        file_path, _ = QFileDialog.getOpenFileName(
-            self, 
-            "Load Identity Configuration", 
-            "", 
-            "JSON Files (*.json)"
+        self.mode_hint = HintLabel(self.MODE_HINTS[0])
+        self.mode_hint.setContentsMargins(20, 4, 0, 0)
+        mode_layout.addWidget(self.mode_hint)
+
+        self.mode_group.idToggled.connect(self._mode_changed)
+        layout.addWidget(mode_box)
+
+        # --- mode-specific -------------------------------------------------- #
+        self.detail_box = QGroupBox("3.  Identity columns")
+        detail_layout = QVBoxLayout(self.detail_box)
+        self.stack = QStackedWidget()
+
+        # single
+        single_page = QWidget()
+        single_form = QFormLayout(single_page)
+        self.identity_combo = ColumnCombo("Select column...")
+        self.identity_combo.currentIndexChanged.connect(lambda _: self.changed.emit())
+        single_form.addRow("Identity column:", self.identity_combo)
+        self.stack.addWidget(single_page)
+
+        # matrix
+        matrix_page = QWidget()
+        matrix_layout = QVBoxLayout(matrix_page)
+        matrix_layout.setContentsMargins(0, 0, 0, 0)
+        self.matrix_list = ColumnCheckList("Auto-detect 0/1 columns")
+        self.matrix_list.set_auto_predicate(self._is_binary_column)
+        self.matrix_list.selection_changed.connect(self.changed.emit)
+        matrix_layout.addWidget(self.matrix_list)
+        matrix_layout.addWidget(HintLabel(
+            "Tick every marker column. A node gets each identity whose column holds a 1."))
+        self.stack.addWidget(matrix_page)
+
+        # intensity
+        intensity_page = QWidget()
+        intensity_layout = QVBoxLayout(intensity_page)
+        intensity_layout.setContentsMargins(0, 0, 0, 0)
+        self.intensity_list = ColumnCheckList("Auto-detect numeric columns")
+        self.intensity_list.set_auto_predicate(self._is_intensity_column)
+        self.intensity_list.selection_changed.connect(self._intensity_selection_changed)
+        intensity_layout.addWidget(self.intensity_list)
+
+        action_row = QHBoxLayout()
+        self.zscore_check = QCheckBox("Z-score normalise first")
+        self.zscore_check.setToolTip(
+            "Centre and scale each selected column before thresholding.\n"
+            "Leave off if these values are already normalised.")
+        self.zscore_check.toggled.connect(self._zscore_toggled)
+        action_row.addWidget(self.zscore_check)
+        action_row.addStretch()
+
+        self.threshold_btn = QPushButton("Set thresholds...")
+        self.threshold_btn.setStyleSheet(
+            "QPushButton { background-color: #007acc; color: white; font-weight: bold;"
+            " padding: 7px 16px; border: none; border-radius: 4px; }"
+            "QPushButton:hover { background-color: #005a9e; }"
         )
-        
-        if file_path:
+        self.threshold_btn.clicked.connect(self.open_threshold_dialog)
+        action_row.addWidget(self.threshold_btn)
+        intensity_layout.addLayout(action_row)
+
+        self.threshold_summary = HintLabel(
+            "Thresholds start at an automatic estimate; open the dialog to refine them.")
+        intensity_layout.addWidget(self.threshold_summary)
+        self.stack.addWidget(intensity_page)
+
+        detail_layout.addWidget(self.stack)
+        layout.addWidget(self.detail_box)
+        layout.addStretch()
+
+    # -- column helpers ----------------------------------------------------- #
+
+    def _is_binary_column(self, name):
+        if self.df is None or name not in self.df.columns:
+            return False
+        if name == self.id_combo.current_column():
+            return False
+        return _looks_binary(self.df[name])
+
+    def _is_intensity_column(self, name):
+        if self.df is None or name not in self.df.columns:
+            return False
+        if name == self.id_combo.current_column():
+            return False
+        series = self.df[name]
+        return _looks_numeric(series) and not _looks_binary(series)
+
+    def _column_values(self, name):
+        if name not in self._numeric_cache:
+            self._numeric_cache[name] = _numeric_column(self.df[name])
+        arr = self._numeric_cache[name]
+        return _zscore(arr) if self.zscore else arr
+
+    def _column_summaries(self, df):
+        summaries = {}
+        sample = df.head(2000)
+        for col in df.columns:
+            series = sample[col]
             try:
-                with open(file_path, 'r') as f:
-                    config = json.load(f)
-                
-                # Clear existing classifiers
-                for classifier_id in list(self.classifier_group_widget.classifiers.keys()):
-                    self.classifier_group_widget.remove_classifier(classifier_id)
-                
-                # Load identity mappings into table
-                table = self.identity_remap_widget.table
-                for row in range(table.rowCount()):
-                    orig_item = table.item(row, 0)
-                    new_item = table.item(row, 1)
-                    if orig_item and new_item:
-                        orig_id = orig_item.text()
-                        if orig_id in config.get('identity_mappings', {}):
-                            new_item.setText(config['identity_mappings'][orig_id]['new_id'])
-                
-                # Load removed rows
-                removed_rows = config.get('removed_rows', [])
-                # Also support old format with 'removed_identities'
-                if 'removed_identities' in config:
-                    # Find rows matching removed identities
-                    for identity in config['removed_identities']:
-                        for row in range(table.rowCount()):
-                            orig_item = table.item(row, 0)
-                            if orig_item and orig_item.text() == str(identity):
-                                self.identity_remap_widget.remove_identity_row(row)
-                                break
+                if _looks_numeric(series):
+                    conv = pd.to_numeric(series, errors='coerce')
+                    summaries[str(col)] = (f"numeric | {_fmt(conv.min())} to {_fmt(conv.max())}"
+                                           f"{' | looks binary' if _looks_binary(series) else ''}")
                 else:
-                    # Use removed_rows directly
-                    for row in removed_rows:
-                        if row < table.rowCount():
-                            self.identity_remap_widget.remove_identity_row(row)
-                
-                # Load classifiers
-                for classifier_config in config.get('classifiers', []):
-                    self.classifier_group_widget.add_classifier()
-                    # Get the last added classifier
-                    last_classifier = list(self.classifier_group_widget.classifiers.values())[-1]
-                    last_classifier.positive_substrings = classifier_config.get('positive_substrings', [])
-                    last_classifier.negative_substrings = classifier_config.get('negative_substrings', [])
-                    last_classifier.new_id_input.setText(classifier_config['new_id'])
-                    last_classifier.update_substrings_display()
-                
-                QMessageBox.information(self, "Success", "Configuration loaded successfully!")
-                
-            except Exception as e:
-                QMessageBox.critical(self, "Error", f"Failed to load configuration: {str(e)}")
+                    uniques = pd.unique(series.dropna())[:6]
+                    summaries[str(col)] = "text | " + ", ".join(str(u) for u in uniques)
+            except Exception:
+                summaries[str(col)] = ""
+        return summaries
 
+    # -- events -------------------------------------------------------------- #
+
+    def on_dataframe(self, df):
+        cols = list(df.columns) if df is not None else []
+        self._numeric_cache.clear()
+        self.thresholds.clear()
+        self._asked_zscore = False
+
+        self.id_combo.set_columns(cols)
+        self.identity_combo.set_columns(cols)
+        if df is not None:
+            guess = _guess_column(cols, ['object id', 'label', 'node id', 'cell id',
+                                         'id', 'node', 'object'])
+            self.id_combo.select(guess)
+            id_guess = self.id_combo.current_column()
+            identity_guess = _guess_column(
+                cols, ['classification', 'class', 'identity', 'cell type', 'celltype',
+                       'type', 'phenotype', 'name'], exclude=(id_guess,) if id_guess else ())
+            self.identity_combo.select(identity_guess)
+
+        summaries = self._column_summaries(df) if df is not None else {}
+        self.matrix_list.set_columns(cols, summaries)
+        self.intensity_list.set_columns(cols, summaries)
+        self._update_threshold_summary()
+
+    def _mode_changed(self, mode_id, checked):
+        if not checked:
+            return
+        self.mode = mode_id
+        self.stack.setCurrentIndex(mode_id)
+        self.mode_hint.setText(self.MODE_HINTS[mode_id])
+        if mode_id == MODE_INTENSITY:
+            self._maybe_ask_zscore()
+        self.changed.emit()
+
+    def _maybe_ask_zscore(self):
+        """The z-score question, asked once when intensity mode is first chosen."""
+        if self._asked_zscore or self.df is None:
+            return
+        self._asked_zscore = True
+        answer = QMessageBox.question(
+            self,
+            "Normalise intensities?",
+            "Z-score normalise the selected intensity columns before thresholding?\n\n"
+            "Choose No if these values are already normalised.\n"
+            "You can change this any time with the checkbox.",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.No,
+        )
+        self.zscore_check.setChecked(answer == QMessageBox.StandardButton.Yes)
+
+    def _zscore_toggled(self, checked):
+        self.zscore = checked
+        self.thresholds.clear()   # old cuts are in the wrong units now
+        self._update_threshold_summary()
+        self.changed.emit()
+
+    def _intensity_selection_changed(self):
+        selected = set(self.intensity_list.checked_columns())
+        for name in list(self.thresholds):
+            if name not in selected:
+                del self.thresholds[name]
+        self._update_threshold_summary()
+        self.changed.emit()
+
+    def _ensure_thresholds(self):
+        """Fill in Otsu defaults so a preview exists before the dialog is opened."""
+        for name in self.intensity_list.checked_columns():
+            if name not in self.thresholds:
+                self.thresholds[name] = (_otsu_threshold(self._column_values(name)), None)
+
+    def _update_threshold_summary(self):
+        cols = self.intensity_list.checked_columns()
+        if not cols:
+            self.threshold_summary.setText("Tick the intensity columns you want to import.")
+            return
+        set_count = sum(1 for c in cols if c in self.thresholds)
+        unit = " (z-scored)" if self.zscore else ""
+        self.threshold_summary.setText(
+            f"{set_count} of {len(cols)} thresholds set{unit}. "
+            "Unset ones fall back to an automatic estimate."
+        )
+
+    def open_threshold_dialog(self):
+        if self.df is None:
+            QMessageBox.warning(self, "No data", "Load a spreadsheet first.")
+            return
+        self._maybe_ask_zscore()
+        cols = self.intensity_list.checked_columns()
+        if not cols:
+            QMessageBox.warning(self, "No columns",
+                                "Tick at least one intensity column first.")
+            return
+        data = {name: self._column_values(name) for name in cols}
+        dialog = ThresholdDialog(data, self.thresholds, parent=self)
+        if dialog.exec() == QDialog.DialogCode.Accepted:
+            self.thresholds = dialog.get_thresholds()
+            self._update_threshold_summary()
+            self.changed.emit()
+
+    # -- build ---------------------------------------------------------------- #
+
+    def _identity_map(self):
+        """-> ordered {node_id: [identity, ...]} plus a per-identity tally."""
+        id_col = self.id_combo.current_column()
+        ids = self.node_ids(id_col)
+        mapping = {}
+        tally = {}
+
+        def identity_columns(picked):
+            # the ID column is never an identity, even if it got ticked
+            return [c for c in picked if c != id_col]
+
+        def add(node, label):
+            if node is None or _is_nan_or_empty(label):
+                return
+            label = str(label).strip()
+            bucket = mapping.setdefault(node, [])
+            if label not in bucket:
+                bucket.append(label)
+                tally[label] = tally.get(label, 0) + 1
+
+        if self.mode == MODE_SINGLE:
+            col = self.identity_combo.current_column()
+            if col is None:
+                raise ValueError("Choose the column holding the identities.")
+            for node, label in zip(ids, self.df[col].tolist()):
+                add(node, label)
+
+        elif self.mode == MODE_MATRIX:
+            cols = identity_columns(self.matrix_list.checked_columns())
+            if not cols:
+                raise ValueError("Tick at least one 0/1 identity column.")
+            for col in cols:
+                flags = self.df[col].tolist()
+                for node, flag in zip(ids, flags):
+                    if _truthy(flag):
+                        add(node, col)
+
+        else:
+            cols = identity_columns(self.intensity_list.checked_columns())
+            if not cols:
+                raise ValueError("Tick at least one intensity column.")
+            self._ensure_thresholds()
+            id_array = np.array(ids, dtype=object)
+            for col in cols:
+                low, high = self.thresholds[col]
+                values = self._column_values(col)
+                mask = np.isfinite(values) & (values >= low)
+                if high is not None:
+                    mask &= values <= high
+                for node in id_array[mask]:
+                    add(node, col)
+
+        return mapping, tally
+
+    def build(self):
+        if self.df is None:
+            raise ValueError("Load a spreadsheet first.")
+        mapping, tally = self._identity_map()
+        if not mapping:
+            raise ValueError("No node ended up with an identity. Check the columns "
+                             "you picked (and your thresholds, in intensity mode).")
+
+        node_list = list(mapping.keys())
+        identity_values = []
+        for node in node_list:
+            labels = mapping[node]
+            identity_values.append(labels if (ALWAYS_LIST or len(labels) > 1) else labels[0])
+
+        result = {'Numerical IDs': node_list, 'Identity Column': identity_values}
+
+        multi = sum(1 for node in node_list if len(mapping[node]) > 1)
+        lines = [
+            f"{len(node_list):,} nodes with at least one identity.",
+            f"IDs from: {self.id_combo.current_column() or 'sequential 1..N'}",
+            f"{len(tally)} distinct identit{'y' if len(tally) == 1 else 'ies'}"
+            + (f", {multi:,} nodes carry more than one." if multi else "."),
+            "",
+        ]
+        for label, count in sorted(tally.items(), key=lambda kv: -kv[1])[:15]:
+            lines.append(f"  {label}: {count:,}")
+        if len(tally) > 15:
+            lines.append(f"  ... and {len(tally) - 15} more")
+
+        sample = node_list[:5]
+        lines.append("")
+        lines.append("Sample: " + "; ".join(f"{n} -> {mapping[n]}" for n in sample))
+        return result, "\n".join(lines), mapping
+
+
+# --------------------------------------------------------------------------- #
+#  main window
+# --------------------------------------------------------------------------- #
 
 class ExcelToDictGUI(QMainWindow):
-    # Add this signal
-    data_exported = pyqtSignal(dict, str, bool)  # dictionary, property_name, add_status
-    
+    # dictionary, property_name, add_status  (unchanged contract)
+    data_exported = pyqtSignal(dict, str, bool)
+    # {node_id: [identity, ...]}, add_status  (convenience, Node Identities only)
+    identities_exported = pyqtSignal(dict, bool)
+
+    PROPERTIES = ['Node Identities', 'Node Centroids', 'Node Communities']
+
     def __init__(self):
         super().__init__()
         self.df = None
-        self.dict_columns = {}  # widget_id -> column_data
-        self.column_counter = 0
-        self.identity_remap_widget = None
-
-        self.templates = {
-            'Node Identities': ['Numerical IDs', 'Identity Column'],
-            'Node Centroids': ['Numerical IDs', 'Z', 'Y', 'X'],
-            'Node Communities': ['Numerical IDs', 'Community Identifier']
-        }
-        
-        self.setWindowTitle("Excel to Python Dictionary Converter")
-        self.setGeometry(100, 100, 1200, 800)
         self.add = False
-        
-        self.setup_ui()
+        self.identity_dict = {}
 
-    def on_splitter_moved(self, pos, index):
-        """Handle splitter movement to update font sizes"""
-        splitter = self.sender()
-        sizes = splitter.sizes()
-        total_width = sum(sizes)
-        
-        if total_width > 0:
-            right_width = sizes[1]
-            # Calculate scale factor based on right panel width (300 is base width)
-            scale_factor = max(0.7, min(2.0, right_width / 300))
-            
-            # Update identity remapping widget font sizes
-            if self.identity_remap_widget.isVisible():
-                self.identity_remap_widget.update_font_sizes(scale_factor)
-        
-    def setup_ui(self):
-        central_widget = QWidget()
-        self.setCentralWidget(central_widget)
-        
-        main_layout = QHBoxLayout()
+        self.setWindowTitle("Spreadsheet Importer - NetTracer3D")
+        self.setGeometry(100, 100, 1250, 780)
+        self._build_ui()
+        self._refresh_preview()
 
-        # Template selector at top
-        template_layout = QHBoxLayout()
-        template_label = QLabel("Templates:")
-        template_label.setStyleSheet("font-weight: bold;")
-        template_layout.addWidget(template_label)
+    # -- ui ------------------------------------------------------------------ #
 
-        self.template_combo = QComboBox()
-        self.template_combo.addItem("Select Template...")
-        self.template_combo.addItems(['Node Identities', 'Node Centroids', 'Node Communities'])
-        self.template_combo.currentTextChanged.connect(self.load_template)
-        template_layout.addWidget(self.template_combo)
-        template_layout.addStretch()
+    def _build_ui(self):
+        central = QWidget()
+        self.setCentralWidget(central)
+        outer = QVBoxLayout(central)
 
-        template_widget = QWidget()
-        template_widget.setLayout(template_layout)
-        template_widget.setMaximumHeight(40)
-
-        # Add to main layout
-        main_layout_with_template = QVBoxLayout()
-        main_layout_with_template.addWidget(template_widget)
-        main_layout_with_template.addLayout(main_layout)
-        central_widget.setLayout(main_layout_with_template)
-        
         splitter = QSplitter(Qt.Orientation.Horizontal)
-        splitter.setHandleWidth(8)
-        splitter.setStyleSheet("""
-                    QSplitter::handle {
-                        background-color: #cccccc;
-                        border: 1px solid #999999;
-                    }
-                    QSplitter::handle:hover {
-                        background-color: #007acc;
-                    }
-                """)
-                
-        # Left side - Excel data viewer
-        left_widget = QWidget()
-        left_widget.setMinimumWidth(400)  # Set minimum width
-        left_layout = QVBoxLayout()
+        splitter.setHandleWidth(6)
 
-        left_label = QLabel("Excel Data Viewer")
-        left_label.setStyleSheet("font-weight: bold; font-size: 16px; margin-bottom: 10px;")
-        left_layout.addWidget(left_label)
+        # ---- left: file + table ------------------------------------------- #
+        left = QWidget()
+        left.setMinimumWidth(420)
+        left_layout = QVBoxLayout(left)
 
-        # File drop zone
+        heading = QLabel("Spreadsheet")
+        heading.setStyleSheet("font-weight: bold; font-size: 15px;")
+        left_layout.addWidget(heading)
+
         self.drop_zone = DropZoneWidget()
         self.drop_zone.file_dropped.connect(self.load_file)
-        self.drop_zone.setFixedHeight(60)
         left_layout.addWidget(self.drop_zone)
 
-        # Excel table
-        self.excel_table = DraggableTableWidget()
-        self.excel_table.setAlternatingRowColors(True)
-        self.excel_table.horizontalHeader().setStretchLastSection(True)
-        left_layout.addWidget(self.excel_table)
+        self.file_label = HintLabel("No file loaded.")
+        left_layout.addWidget(self.file_label)
 
-        left_widget.setLayout(left_layout)
+        self.table = QTableWidget()
+        self.table.setAlternatingRowColors(True)
+        self.table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
+        self.table.horizontalHeader().setStretchLastSection(True)
+        left_layout.addWidget(self.table)
 
-        # Right side - Dictionary builder
-        right_widget = QWidget()
-        right_widget.setMinimumWidth(300)  # Set minimum width
-        right_layout = QVBoxLayout()
+        splitter.addWidget(left)
 
-        # Header with controls
-        header_layout = QHBoxLayout()
-        right_label = QLabel("Python Dictionary Builder")
-        right_label.setStyleSheet("font-weight: bold; font-size: 16px;")
-        header_layout.addWidget(right_label)
+        # ---- right: property builder --------------------------------------- #
+        right = QWidget()
+        right.setMinimumWidth(430)
+        right_layout = QVBoxLayout(right)
 
-        # Add column button
-        self.add_btn = QPushButton("+")
-        self.add_btn.setFixedSize(30, 30)
-        self.add_btn.setStyleSheet("""
-            QPushButton {
-                background-color: #007acc;
-                color: white;
-                border: none;
-                border-radius: 15px;
-                font-weight: bold;
-                font-size: 16px;
-            }
-            QPushButton:hover {
-                background-color: #005a9e;
-            }
-        """)
-        self.add_btn.clicked.connect(self.add_dict_column)
-        header_layout.addWidget(self.add_btn)
-
-        right_layout.addLayout(header_layout)
-
-        # Dictionary columns scroll area
-        self.dict_scroll = QScrollArea()
-        self.dict_scroll.setWidgetResizable(True)
-        self.dict_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
-
-        self.dict_container = QWidget()
-        self.dict_layout = QVBoxLayout()
-        self.dict_layout.addStretch()
-        self.dict_container.setLayout(self.dict_layout)
-        self.dict_scroll.setWidget(self.dict_container)
-
-        right_layout.addWidget(self.dict_scroll)
-
-        # Tabbed identity remapping widget (initially hidden)
-        self.identity_remap_widget = TabbedIdentityWidget()
-        self.identity_remap_widget.hide()
-        right_layout.addWidget(self.identity_remap_widget)
-
-        # Export controls
-        export_layout = QHBoxLayout()
-
-        # Property selector
+        prop_row = QHBoxLayout()
+        prop_label = QLabel("Import as:")
+        prop_label.setStyleSheet("font-weight: bold; font-size: 15px;")
+        prop_row.addWidget(prop_label)
         self.property_combo = QComboBox()
-        self.property_combo.addItem("Select Property...")
-        self.property_combo.addItems(['Node Identities', 'Node Centroids', 'Node Communities'])
-        export_layout.addWidget(self.property_combo)
+        self.property_combo.addItems(self.PROPERTIES)
+        self.property_combo.currentIndexChanged.connect(self._property_changed)
+        prop_row.addWidget(self.property_combo, 1)
+        right_layout.addLayout(prop_row)
 
-        # Export button
-        self.export_btn = QPushButton("→ Export to NetTracer3D")
-        self.export_btn.setStyleSheet("""
-            QPushButton {
-                background-color: #28a745;
-                color: white;
-                border: none;
-                padding: 10px;
-                font-weight: bold;
-                border-radius: 5px;
-            }
-            QPushButton:hover {
-                background-color: #218838;
-            }
-        """)
+        self.identity_panel = IdentityPanel()
+        self.centroid_panel = SimplePanel(
+            fields=[('Numerical IDs', 'Node ID column', False),
+                    ('Z', 'Z', True), ('Y', 'Y', True), ('X', 'X', True)],
+            guesses={'Numerical IDs': ['object id', 'label', 'node id', 'id'],
+                     'Z': ['centroid z', 'z position', ' z', 'z'],
+                     'Y': ['centroid y', 'y position', ' y', 'y'],
+                     'X': ['centroid x', 'x position', ' x', 'x']},
+        )
+        self.community_panel = SimplePanel(
+            fields=[('Numerical IDs', 'Node ID column', False),
+                    ('Community Identifier', 'Community column', True)],
+            guesses={'Numerical IDs': ['object id', 'label', 'node id', 'id'],
+                     'Community Identifier': ['community', 'cluster', 'group', 'region']},
+        )
+
+        self.panels = {
+            'Node Identities': self.identity_panel,
+            'Node Centroids': self.centroid_panel,
+            'Node Communities': self.community_panel,
+        }
+
+        panel_stack_host = QScrollArea()
+        panel_stack_host.setWidgetResizable(True)
+        panel_stack_host.setFrameShape(QFrame.Shape.NoFrame)
+        self.panel_stack = QStackedWidget()
+        for name in self.PROPERTIES:
+            panel = self.panels[name]
+            panel.changed.connect(self._refresh_preview)
+            self.panel_stack.addWidget(panel)
+        panel_stack_host.setWidget(self.panel_stack)
+        right_layout.addWidget(panel_stack_host, 1)
+
+        preview_box = QGroupBox("Preview")
+        preview_layout = QVBoxLayout(preview_box)
+        self.preview_text = QTextEdit()
+        self.preview_text.setReadOnly(True)
+        self.preview_text.setFixedHeight(132)
+        self.preview_text.setFont(QFont("Monospace", 9))
+        preview_layout.addWidget(self.preview_text)
+        right_layout.addWidget(preview_box)
+
+        export_row = QHBoxLayout()
+        self.add_check = QCheckBox("Add to existing properties")
+        self.add_check.setToolTip("Off: replace what NetTracer3D already holds.\n"
+                                  "On: merge with it.")
+        self.add_check.toggled.connect(self._toggle_add)
+        export_row.addWidget(self.add_check)
+        export_row.addStretch()
+
+        self.export_btn = QPushButton("Send to NetTracer3D")
+        self.export_btn.setStyleSheet(
+            "QPushButton { background-color: #28a745; color: white; font-weight: bold;"
+            " padding: 10px 22px; border: none; border-radius: 5px; font-size: 13px; }"
+            "QPushButton:hover { background-color: #218838; }"
+            "QPushButton:disabled { background-color: #b5b5b5; }"
+        )
         self.export_btn.clicked.connect(self.export_dictionary)
-        export_layout.addWidget(self.export_btn)
+        export_row.addWidget(self.export_btn)
+        right_layout.addLayout(export_row)
 
-        self.add_button = QPushButton("+")
-        self.add_button.setFixedSize(20, 20)
-        self.add_button.setCheckable(True)
-        self.add_button.setChecked(False)
-        self.add_button.clicked.connect(self.toggle_add)
-        export_layout.addWidget(self.add_button)
+        splitter.addWidget(right)
+        splitter.setSizes([680, 570])
+        outer.addWidget(splitter)
 
+    # -- file ---------------------------------------------------------------- #
 
-        right_layout.addLayout(export_layout)
-
-        right_widget.setLayout(right_layout)
-
-        # Add widgets to splitter
-        splitter.addWidget(left_widget)
-        splitter.addWidget(right_widget)
-
-        # Set initial sizes (60% left, 40% right)
-        splitter.setSizes([600, 400])
-
-        # Connect splitter moved signal to update font sizes
-        splitter.splitterMoved.connect(self.on_splitter_moved)
-
-        # Add splitter to main layout
-        main_layout.addWidget(splitter)
-
-    def toggle_add(self):
-
-        if self.add_button.isChecked():
-            print("Exported Properties will be added onto existing ones")
-            self.add = True
-        else:
-            print("Exported Properties will be override existing ones")
-            self.add = False
-
-    def load_template(self, template_name):
-        if template_name in self.templates:
-            # Clear existing columns
-            for widget_id in list(self.dict_columns.keys()):
-                self.remove_dict_column(widget_id)
-            
-            # Clear widgets
-            for i in reversed(range(self.dict_layout.count())):
-                item = self.dict_layout.itemAt(i)
-                if item and item.widget() and hasattr(item.widget(), 'widget_id'):
-                    widget = item.widget()
-                    self.dict_layout.removeWidget(widget)
-                    widget.deleteLater()
-            
-            # Add stretch back
-            self.dict_layout.addStretch()
-            
-            # Add new columns for template
-            for key_name in self.templates[template_name]:
-                self.add_dict_column()
-                # Get the last added widget and set its header
-                for i in range(self.dict_layout.count()):
-                    item = self.dict_layout.itemAt(i)
-                    if item and item.widget() and hasattr(item.widget(), 'widget_id'):
-                        widget = item.widget()
-                        if widget.widget_id not in [w.widget_id for w in self.get_existing_widgets()]:
-                            widget.header_input.setText(key_name)
-                            break
-            
-            # Set property combo to match
-            self.property_combo.setCurrentText(template_name)
-            
-            # Show/hide identity remapping widget
-            if template_name == 'Node Identities':
-                self.identity_remap_widget.show()
-            else:
-                self.identity_remap_widget.hide()
-
-    def get_existing_widgets(self):
-        widgets = []
-        for i in range(self.dict_layout.count()):
-            item = self.dict_layout.itemAt(i)
-            if item and item.widget() and hasattr(item.widget(), 'widget_id'):
-                widgets.append(item.widget())
-        return widgets[:-1]  # Exclude the stretch
-        
     def load_file(self, file_path):
         try:
-            if file_path.lower().endswith('.xlsx'):
-                self.df = pd.read_excel(file_path)
-            elif file_path.lower().endswith('.csv'):
-                self.df = pd.read_csv(file_path)
+            lowered = file_path.lower()
+            if lowered.endswith(('.xlsx', '.xls')):
+                df = pd.read_excel(file_path)
+            elif lowered.endswith('.csv'):
+                df = pd.read_csv(file_path)
+            elif lowered.endswith(('.tsv', '.txt')):
+                df = pd.read_csv(file_path, sep='\t')
             else:
-                QMessageBox.warning(self, "Error", "Unsupported file format")
+                QMessageBox.warning(self, "Unsupported file",
+                                    "Please choose a .csv, .tsv or .xlsx file.")
                 return
-                
-            self.populate_excel_table()
-            QMessageBox.information(self, "Success", f"Loaded {len(self.df)} rows and {len(self.df.columns)} columns")
-            
-        except Exception as e:
-            QMessageBox.critical(self, "Error", f"Failed to load file: {str(e)}")
-            
-    def populate_excel_table(self):
-        if self.df is None:
+        except Exception as exc:
+            QMessageBox.critical(self, "Could not read file", str(exc))
             return
-            
-        # Limit display to 200 rows but keep full dataframe
-        display_rows = min(200, len(self.df))
-        
-        self.excel_table.setRowCount(display_rows)
-        self.excel_table.setColumnCount(len(self.df.columns))
-        
-        # Set headers
-        self.excel_table.setHorizontalHeaderLabels([str(col) for col in self.df.columns])
-        
-        # Populate data
-        for i in range(display_rows):
-            for j, col in enumerate(self.df.columns):
-                item = QTableWidgetItem(str(self.df.iloc[i, j]))
-                item.setFlags(item.flags() & ~Qt.ItemFlag.ItemIsEditable)  # Make read-only
-                self.excel_table.setItem(i, j, item)
-                
-        # Resize columns to content
-        self.excel_table.resizeColumnsToContents()
-        
-    def add_dict_column(self):
-        self.column_counter += 1
-        widget_id = f"col_{self.column_counter}"
-        
-        dict_widget = DictColumnWidget(widget_id)
-        dict_widget.column_dropped.connect(self.on_column_dropped)
-        dict_widget.delete_requested.connect(self.remove_dict_column)
-        
-        # Insert before the stretch
-        self.dict_layout.insertWidget(self.dict_layout.count() - 1, dict_widget)
-        
-    def remove_dict_column(self, widget_id):
-        # Find and remove the widget
-        for i in range(self.dict_layout.count()):
-            item = self.dict_layout.itemAt(i)
-            if item and item.widget() and hasattr(item.widget(), 'widget_id'):
-                if item.widget().widget_id == widget_id:
-                    widget = item.widget()
-                    self.dict_layout.removeWidget(widget)
-                    widget.deleteLater()
-                    break
-                    
-        # Remove from data storage
-        if widget_id in self.dict_columns:
-            del self.dict_columns[widget_id]
-            
-    def on_column_dropped(self, widget_id, col_idx, col_name):
-        if self.df is not None and col_idx < len(self.df.columns):
-            # Store the column data
-            column_data = self.df.iloc[:, col_idx].values
-            self.dict_columns[widget_id] = {
-                'column_name': col_name,
-                'column_index': col_idx,
-                'data': column_data
-            }
-            
-            # If this is the identity column in Node Identities template, populate remapping widget
-            current_template = self.template_combo.currentText()
-            if current_template == 'Node Identities':
-                # Find the widget that received the drop
-                for i in range(self.dict_layout.count()):
-                    item = self.dict_layout.itemAt(i)
-                    if item and item.widget() and hasattr(item.widget(), 'widget_id'):
-                        if item.widget().widget_id == widget_id:
-                            key_name = item.widget().header_input.text().strip()
-                            if key_name == 'Identity Column':
-                                # Populate the identity remapping widget
-                                self.identity_remap_widget.populate_identities(column_data)
-                            break
+
+        if df.empty or len(df.columns) == 0:
+            QMessageBox.warning(self, "Empty file", "That file has no usable rows.")
+            return
+
+        df.columns = [str(c) for c in df.columns]
+        self.df = df
+        self.drop_zone.set_message(os.path.basename(file_path))
+        self.file_label.setText(
+            f"{os.path.basename(file_path)} - {len(df):,} rows, {len(df.columns)} columns"
+        )
+        self._populate_table()
+        for panel in self.panels.values():
+            panel.set_dataframe(df)
+        self._refresh_preview()
+
+    def _populate_table(self):
+        df = self.df
+        rows = min(MAX_PREVIEW_ROWS, len(df))
+        self.table.clear()
+        self.table.setRowCount(rows)
+        self.table.setColumnCount(len(df.columns))
+        self.table.setHorizontalHeaderLabels([str(c) for c in df.columns])
+        for i in range(rows):
+            for j in range(len(df.columns)):
+                value = df.iat[i, j]
+                if isinstance(value, float) and not math.isnan(value):
+                    text = f"{value:.6g}"
+                else:
+                    text = "" if _is_nan_or_empty(value) else str(value)
+                self.table.setItem(i, j, QTableWidgetItem(text))
+        self.table.resizeColumnsToContents()
+
+    # -- state --------------------------------------------------------------- #
+
+    def _property_changed(self, index):
+        self.panel_stack.setCurrentIndex(index)
+        self._refresh_preview()
+
+    def _toggle_add(self, checked):
+        self.add = checked
+
+    def _current_panel(self):
+        return self.panels[self.property_combo.currentText()]
+
+    def _current_result(self):
+        """-> (result_dict, summary, identity_map_or_None) or (None, message, None)."""
+        panel = self._current_panel()
+        if self.df is None:
+            return None, "Load a spreadsheet to get started.", None
+        try:
+            out = panel.build()
+        except ValueError as exc:
+            return None, str(exc), None
+        except Exception as exc:  # unexpected - still shouldn't crash the window
+            return None, f"Could not build the dictionary: {exc}", None
+        if len(out) == 3:
+            result, summary, mapping = out
+        else:
+            result, summary = out
+            mapping = None
+        return result, summary, mapping
+
+    def _refresh_preview(self):
+        result, summary, _ = self._current_result()
+        self.preview_text.setPlainText(summary)
+        self.export_btn.setEnabled(result is not None)
+
+    # -- export --------------------------------------------------------------- #
 
     def export_dictionary(self):
-
-        def to_list(item):
-            if isinstance(item, list):
-                return item
-            else:
-                try:
-                    return literal_eval(item)
-                except:
-                    return [item]
-
-        if not self.dict_columns:
-            QMessageBox.warning(self, "Warning", "No dictionary columns defined")
+        result, summary, mapping = self._current_result()
+        if result is None:
+            QMessageBox.warning(self, "Not ready", summary)
             return
-            
+
         property_name = self.property_combo.currentText()
-        if property_name == "Select Property...":
-            QMessageBox.warning(self, "Warning", "Please select a property")
-            return
-            
-        try:
-            result_dict = {}
-            
-            # Build dictionary from all defined columns
-            for widget_id in self.dict_columns:
-                # Find the corresponding widget to get the key name
-                for i in range(self.dict_layout.count()):
-                    item = self.dict_layout.itemAt(i)
-                    if item and item.widget() and hasattr(item.widget(), 'widget_id'):
-                        if item.widget().widget_id == widget_id:
-                            key_name = item.widget().header_input.text().strip()
-                            if key_name:
-                                column_data = self.dict_columns[widget_id]['data']
-                                
-                                # Apply identity remapping and filtering if this is Node Identities
-                                if property_name == 'Node Identities':
-                                    if key_name == 'Identity Column':
-                                        # Get filtered indices and remapped identities
-                                        filtered_indices = self.identity_remap_widget.get_filtered_indices(column_data.tolist())
-                                        filtered_data = [column_data[i] for i in filtered_indices]
-                                        remapped_data = self.identity_remap_widget.get_remapped_identities(filtered_data)
-                                        remapped_data = [to_list(item) for item in remapped_data]
-                                        result_dict[key_name] = remapped_data
-                                    elif key_name == 'Numerical IDs':
-                                        
-                                        # Check if user actually dropped a numerical IDs column
-                                        if widget_id not in self.dict_columns or 'data' not in self.dict_columns[widget_id]:
-                                            # Auto-generate sequential IDs and assign to column_data
-                                            column_data = np.array(list(range(1, len(self.df) + 1)))
-                                        
-                                        # Now use the exact same logic as if user provided the data
-                                        identity_column_data = None
-                                        # Find the identity column data
-                                        for other_widget_id in self.dict_columns:
-                                            for j in range(self.dict_layout.count()):
-                                                item_j = self.dict_layout.itemAt(j)
-                                                if item_j and item_j.widget() and hasattr(item_j.widget(), 'widget_id'):
-                                                    if item_j.widget().widget_id == other_widget_id:
-                                                        other_key_name = item_j.widget().header_input.text().strip()
-                                                        if other_key_name == 'Identity Column':
-                                                            identity_column_data = self.dict_columns[other_widget_id]['data']
-                                                            break
-                                                if identity_column_data is not None:
-                                                    break
-                                        
-                                        if identity_column_data is not None:
-                                            filtered_indices = self.identity_remap_widget.get_filtered_indices(identity_column_data.tolist())
-                                            filtered_numerical_ids = [column_data[i] for i in filtered_indices]
-                                            result_dict[key_name] = filtered_numerical_ids
-                                        else:
-                                            result_dict[key_name] = column_data.tolist()
-                                        
+        self.identity_dict = mapping or {}
 
-                                    else:
-                                        result_dict[key_name] = column_data.tolist()
-                                else:
-                                    result_dict[key_name] = column_data.tolist()
-                            break
+        self.data_exported.emit(result, property_name, self.add)
+        if property_name == 'Node Identities' and mapping is not None:
+            self.identities_exported.emit(mapping, self.add)
 
-            for i in range(self.dict_layout.count()):
-                item = self.dict_layout.itemAt(i)
-                if item and item.widget() and hasattr(item.widget(), 'widget_id'):
-                    widget = item.widget()
-                    widget_id = widget.widget_id
-                    key_name = widget.header_input.text().strip()
-                    
-                    # Skip if already processed (has dropped data) or no key name
-                    if widget_id in self.dict_columns or not key_name:
-                        continue
-                        
-                    # Handle auto-generation for Node Identities template
-                    if property_name == 'Node Identities' and key_name == 'Numerical IDs':
-                        
-                        # Find the identity column data
-                        identity_column_data = None
-                        for other_widget_id in self.dict_columns:
-                            for j in range(self.dict_layout.count()):
-                                item_j = self.dict_layout.itemAt(j)
-                                if item_j and item_j.widget() and hasattr(item_j.widget(), 'widget_id'):
-                                    if item_j.widget().widget_id == other_widget_id:
-                                        other_key_name = item_j.widget().header_input.text().strip()
-                                        if other_key_name == 'Identity Column':
-                                            identity_column_data = self.dict_columns[other_widget_id]['data']
-                                            break
-                                if identity_column_data is not None:
-                                    break
-                        
-                        if identity_column_data is not None:
-                            # Auto-generate sequential IDs
-                            auto_generated_ids = np.array(list(range(1, len(self.df) + 1)))
-                            
-                            filtered_indices = self.identity_remap_widget.get_filtered_indices(identity_column_data.tolist())
-                            
-                            filtered_numerical_ids = [auto_generated_ids[i] for i in filtered_indices]
-                            
-                            result_dict[key_name] = filtered_numerical_ids
-                        else:
-                            # Fallback: generate sequential IDs for all rows
-                            result_dict[key_name] = list(range(1, len(self.df) + 1))
+        # kept for backwards compatibility with older call sites
+        builtins.excel_dict = result
+        builtins.target_property = property_name
+        builtins.add = self.add
 
-            
-            if not result_dict:
-                QMessageBox.warning(self, "Warning", "No valid dictionary keys defined")
-                return
-                
-            # Emit signal to parent application
-            self.data_exported.emit(result_dict, property_name, self.add)
-            
-            # Still store in global variables for backward compatibility
-            import builtins
-            builtins.excel_dict = result_dict
-            builtins.target_property = property_name
-            builtins.add = self.add
-            
-            # Show success message with preview
-            preview = str(result_dict)
-            if len(preview) > 150:
-                preview = preview[:150] + "..."
-                
-            QMessageBox.information(
-                self, 
-                "Export Successful", 
-                f"Dictionary exported for property '{property_name}'.\n\nData sent to parent application.\n\nPreview:\n{preview}"
-            )
-            
-        except Exception as e:
-            QMessageBox.critical(self, "Error", f"Failed to export dictionary: {str(e)}")
+        QMessageBox.information(
+            self, "Sent",
+            f"{property_name} sent to NetTracer3D "
+            f"({'added to' if self.add else 'replacing'} existing).\n\n{summary}"
+        )
+
 
 def main(standalone=True):
     if standalone:
         app = QApplication(sys.argv)
         app.setStyle('Fusion')
-        
         window = ExcelToDictGUI()
         window.show()
-        
         sys.exit(app.exec())
-    else:
-        # Return a fresh instance of the class
-        return ExcelToDictGUI
+    return ExcelToDictGUI
+
 
 if __name__ == "__main__":
     main(True)

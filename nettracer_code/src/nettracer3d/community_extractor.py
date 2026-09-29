@@ -11,7 +11,79 @@ from networkx.algorithms import community
 import random
 import copy
 from . import node_draw
+import math
+from . import color_schemes as _cschemes
 
+# These overlays are composited over the main window, which is black.
+# The palette engine uses this to avoid emitting near-black colors.
+_COLOR_BACKGROUND = 'black'
+
+# Okabe-Ito. Their black is dropped (it IS the background); white takes its slot.
+_CB_PALETTE_HEX = [
+    "FFFFFF",  # white          (stands in for Okabe-Ito's black)
+    "E69F00",  # orange
+    "56B4E9",  # sky blue
+    "009E73",  # bluish green
+    "F0E442",  # yellow
+    "0072B2",  # blue
+    "D55E00",  # vermillion
+    "CC79A7",  # reddish purple
+    # Paul Tol "muted" extras, also CVD-conscious, for n > 8.
+    "88CCEE",  # cyan
+    "999933",  # olive
+    "882255",  # wine
+    "44AA99",  # teal
+    "DDCC77",  # sand
+    "AA4499",  # purple
+]
+ 
+# Deuteranopia simulation matrix (Vienot et al. 1999), applied to LINEAR RGB.
+_DEUTAN_MATRIX = (
+    (0.33066007, 0.66933993, 0.0),
+    (0.33066007, 0.66933993, 0.0),
+    (-0.02785538, 0.02785538, 1.0),
+)
+ 
+# Lightness weights. Under normal vision hue/chroma carry the categorical
+# signal, so lightness is discounted. A deuteranope has lost the red-green
+# axis, leaving lightness as the main surviving channel -- so it is weighted
+# UP there. This is exactly why Okabe-Ito works: its colors are staggered in
+# lightness, not just in hue.
+_CB_L_WEIGHT_NORMAL = 0.75
+_CB_L_WEIGHT_DEUTAN = 1.6
+ 
+# Separation below which two colors read as "the same" to a deuteranope.
+# Calibrated empirically: the tightest pair in Okabe-Ito -- a palette
+# published as CVD-safe -- scores 0.083 under the metric below.
+CB_CONFUSABLE = 0.083
+
+RGB = Tuple[int, int, int]
+ 
+# Kelly's 22 colors of maximum contrast, minus black.
+# Includes white, grays, tans and browns on purpose.
+_BASE_PALETTE_HEX = [
+    "F2F3F4",  # white
+    "F3C300",  # vivid yellow
+    "875692",  # strong purple
+    "F38400",  # vivid orange
+    "A1CAF1",  # very light blue
+    "BE0032",  # vivid red
+    "C2B280",  # grayish yellow / buff
+    "848482",  # medium gray
+    "008856",  # vivid green
+    "E68FAC",  # strong purplish pink
+    "0067A5",  # strong blue
+    "F99379",  # strong yellowish pink
+    "604E97",  # strong violet
+    "F6A600",  # vivid orange yellow
+    "B3446C",  # strong purplish red
+    "DCD300",  # vivid greenish yellow
+    "882D17",  # strong reddish brown
+    "8DB600",  # vivid yellowish green
+    "654522",  # deep yellowish brown
+    "E25822",  # vivid reddish orange
+    "2B3D26",  # dark olive green
+]
 
 
 def binarize(image):
@@ -704,89 +776,161 @@ def generate_distinct_colors(n_colors: int) -> List[Tuple[int, int, int]]:
         colors.append(rgb)
     return colors
 
-def assign_node_colors(node_list: List[int], labeled_array: np.ndarray) -> Tuple[np.ndarray, Dict[int, str]]:
-    """fast version using lookup table approach."""
-    
-    # Sort nodes by size (descending)
-    sorted_nodes = sorted(node_list, reverse=True)
-    
-    # Generate distinct colors
-    colors = generate_distinct_colors(len(node_list))
-    random.shuffle(colors)  # Randomly sorted to make adjacent structures likely stand out
-    
-    # Convert RGB colors to RGBA by adding alpha channel
-    colors_rgba = np.array([(r, g, b, 255) for r, g, b in colors], dtype=np.uint8)
-    
-    # Create mapping from node to color
-    node_to_color = {node: colors_rgba[i] for i, node in enumerate(sorted_nodes)}
-    
+def assign_node_colors(node_list: List[int], labeled_array: np.ndarray,
+                       color_mode = 0, custom_map = None,
+                       use_previous = False,
+                       parent = None) -> Tuple[np.ndarray, Dict[int, str]]:
+    """
+    Color each node individually.
+
+    Thin wrapper: normalises its arguments into the shared contract in
+    color_schemes.resolve_palette, then does the LUT work.
+
+    This function takes its instruction as a single integer `color_mode`:
+
+        0 = default          2 = colorblind      4 = use previous
+        1 = alt              3 = custom
+
+    Scheme name strings ('Custom', 'Previous', ...) work too. `use_previous`
+    is kept as an explicit override for callers that prefer a flag; when set
+    it wins over color_mode.
+
+    color_mode 3 TRIGGERS the custom color editor -- the caller does not need
+    to build a palette first. Pass custom_map={node_id: '#rrggbb'} to skip the
+    prompt and apply a prepared map instead. If the editor cannot be shown
+    (headless, no PyQt6) or is cancelled, this falls back to the default
+    scheme rather than failing.
+
+    color_mode 4 reuses the last palette applied to NODES -- a separate
+    registry slot from communities and identities. Nodes seen before keep
+    their exact colors; anything new is colored from the same scheme. With
+    nothing recorded yet it falls back to the default scheme.
+
+    Note: these are individual nodes, not communities or identities, so there
+    is no outlier group -- node 0 is not special-cased to brown here.
+    """
+    scheme = (_cschemes.SCHEME_PREVIOUS if use_previous
+              else _cschemes.scheme_from_legacy(color_mode))
+
+    node_to_hex = _cschemes.resolve_palette_interactive(
+        node_list,
+        scheme=scheme,
+        background=_COLOR_BACKGROUND,
+        custom_map=custom_map,
+        parent=parent,
+        category_name='Node',
+        shuffle='colors',        # historical: shuffle colors, unseeded
+        sort_reverse=True,       # historical: nodes sorted descending
+        outlier_label=None,      # individual nodes have no outlier group
+        domain=_cschemes.DOMAIN_NODES,
+    )
+
+    node_to_color = {n: np.array(_cschemes.hex_to_rgba(h), dtype=np.uint8)
+                     for n, h in node_to_hex.items()}
+
     # Create lookup table
     max_label = max(max(labeled_array.flat), max(node_list) if node_list else 0)
     color_lut = np.zeros((int(max_label) + 1, 4), dtype=np.uint8)  # Transparent by default
-    
+
     for node_id, color in node_to_color.items():
         color_lut[node_id] = color
-    
+
     # Single vectorized operation - eliminates all loops!
     rgba_array = color_lut[labeled_array]
-    
+
     # Convert colors for naming
     node_to_color_rgb = {k: tuple(v[:3]) for k, v in node_to_color.items()}
     node_to_color_names = convert_node_colors_to_names(node_to_color_rgb, show_legend = False)
-    
+
     return rgba_array, node_to_color_names
 
-def assign_community_colors(community_dict: Dict[int, int], labeled_array: np.ndarray) -> Tuple[np.ndarray, Dict[int, str]]:
-    """Fast version using lookup table approach with brown outliers for community 0."""
-    
-    # Separate outliers (community 0) from regular communities
-    outliers = {node: comm for node, comm in community_dict.items() if comm == 0}
-    non_outlier_dict = {node: comm for node, comm in community_dict.items() if comm != 0}
-    
-    # Get communities excluding outliers
-    try:
-        communities = sorted(set(non_outlier_dict.values())) if non_outlier_dict else []
-    except TypeError:
-        # Convert the dictionary values to strings
-        if non_outlier_dict:
-            non_outlier_dict = {node: str(comm) for node, comm in non_outlier_dict.items()}
-        community_dict = {node: str(comm) for node, comm in community_dict.items()}
-        communities = sorted(set(non_outlier_dict.values())) if non_outlier_dict else []
+def _detect_color_domain(values) -> str:
+    """
+    Work out whether these labels are communities or identities.
 
-    # Generate colors for non-outlier communities only
-    colors = generate_distinct_colors(len(communities)) if communities else []
-    colors_rgba = np.array([(r, g, b, 255) for r, g, b in colors], dtype=np.uint8)
-    
-    # Sort communities by size for consistent color assignment
-    if non_outlier_dict:
-        community_sizes = Counter(non_outlier_dict.values())
-        sorted_communities = random.Random(42).sample(list(communities), len(communities))
-        community_to_color = {comm: colors_rgba[i] for i, comm in enumerate(sorted_communities)}
+    assign_community_colors handles both, and the caller often does not say
+    which, so the registry slot has to be inferred from the data:
+
+        list/tuple/set values  -> identities  ({node: ['type A', 'type B']})
+        anything else          -> communities ({node: 3})
+
+    Getting this wrong is not a crash, it is worse: identities silently reuse
+    the community palette (and vice versa), so 'previous' returns colors from
+    the wrong render. Pass domain= explicitly to override.
+    """
+    for v in values:
+        if isinstance(v, (list, tuple, set, frozenset)):
+            return _cschemes.DOMAIN_IDENTITIES
+    return _cschemes.DOMAIN_COMMUNITIES
+
+
+def assign_community_colors(community_dict, labeled_array,
+                            alt_color_schema = False, color_blind_schema = False,
+                            custom = False,
+                            use_previous_communities = False,
+                            use_previous_identities = False,
+                            color_scheme = None, custom_map = None,
+                            domain = None, parent = None):
+    # --- which registry slot ---
+    if domain is not None:
+        effective_domain = domain
+    elif use_previous_identities:
+        effective_domain = _cschemes.DOMAIN_IDENTITIES
+    elif use_previous_communities:
+        effective_domain = _cschemes.DOMAIN_COMMUNITIES
     else:
-        community_to_color = {}
-    
-    # Add brown color for outliers (community 0)
-    brown_rgba = np.array([139, 69, 19, 255], dtype=np.uint8)  # Brown color
-    if outliers:
-        community_to_color[0] = brown_rgba
-    
-    # Create node to color mapping using original community_dict
-    node_to_color = {node: community_to_color[comm] for node, comm in community_dict.items()}
-    
-    # Create lookup table - this is the key optimization
-    max_label = max(max(labeled_array.flat), max(node_to_color.keys()) if node_to_color else 0)
-    color_lut = np.zeros((int(max_label) + 1, 4), dtype=np.uint8)  # Transparent by default
-    
+        effective_domain = _detect_color_domain(community_dict.values())
+
+    # --- which scheme ---
+    if custom:
+        scheme = _cschemes.SCHEME_CUSTOM
+    elif use_previous_communities or use_previous_identities:
+        scheme = _cschemes.SCHEME_PREVIOUS
+    elif color_scheme is not None:
+        scheme = _cschemes.scheme_from_legacy(color_scheme)
+    elif alt_color_schema:
+        scheme = _cschemes.SCHEME_ALT
+    elif color_blind_schema:
+        scheme = _cschemes.SCHEME_COLORBLIND
+    else:
+        scheme = _cschemes.SCHEME_DEFAULT
+
+    community_to_hex = _cschemes.resolve_palette_interactive(
+        community_dict.values(),
+        scheme=scheme,
+        background=_COLOR_BACKGROUND,
+        custom_map=custom_map,
+        parent=parent,
+        category_name=('Identity'
+                       if effective_domain == _cschemes.DOMAIN_IDENTITIES
+                       else 'Community'),
+        shuffle='seeded',
+        outlier_label=0,
+        outlier_consumes_slot=False,
+        domain=effective_domain,
+    )
+
+    community_to_color = {c: np.array(_cschemes.hex_to_rgba(h), dtype=np.uint8)
+                          for c, h in community_to_hex.items()}
+
+    # normalize_label collapses an identity list to the single member the
+    # palette was keyed by, so the lookup matches instead of missing (a miss
+    # here leaves the node fully transparent).
+    node_to_color = {}
+    for node, comm in community_dict.items():
+        key = _cschemes.normalize_label(comm, None)
+        if key in community_to_color:
+            node_to_color[node] = community_to_color[key]
+
+    max_label = max(max(labeled_array.flat),
+                    max(node_to_color.keys()) if node_to_color else 0)
+    color_lut = np.zeros((int(max_label) + 1, 4), dtype=np.uint8)
     for node_id, color in node_to_color.items():
         color_lut[node_id] = color
-    
-    # Single vectorized operation - this is much faster!
+
     rgba_array = color_lut[labeled_array]
-    
-    # Convert to RGB for color names (including brown for outliers)
     community_to_color_rgb = {k: tuple(v[:3]) for k, v in community_to_color.items()}
     node_to_color_names = convert_node_colors_to_names(community_to_color_rgb)
-    
     return rgba_array, node_to_color_names
 
 def assign_community_grays(community_dict: Dict[int, Union[int, str, Any]], labeled_array: np.ndarray) -> np.ndarray:
@@ -850,34 +994,291 @@ def assign_community_grays(community_dict: Dict[int, Union[int, str, Any]], labe
     return gray_array, community_to_gray
     
 
+# New color stuff:
 
-if __name__ == "__main__":
+def _hex_to_rgb(h: str) -> RGB:
+    return (int(h[0:2], 16), int(h[2:4], 16), int(h[4:6], 16))
+ 
+ 
+def _srgb_to_linear(c: float) -> float:
+    c /= 255.0
+    return c / 12.92 if c <= 0.04045 else ((c + 0.055) / 1.055) ** 2.4
+ 
+ 
+def _linear_to_srgb(c: float) -> int:
+    c = 12.92 * c if c <= 0.0031308 else 1.055 * (c ** (1 / 2.4)) - 0.055
+    return max(0, min(255, round(c * 255)))
+ 
+ 
+def _rgb_to_oklab(rgb: RGB) -> Tuple[float, float, float]:
+    r, g, b = (_srgb_to_linear(v) for v in rgb)
+    l = 0.4122214708 * r + 0.5363325363 * g + 0.0514459929 * b
+    m = 0.2119034982 * r + 0.6806995451 * g + 0.1073969566 * b
+    s = 0.0883024619 * r + 0.2817188376 * g + 0.6299787005 * b
+    l, m, s = (math.copysign(abs(v) ** (1 / 3), v) for v in (l, m, s))
+    return (
+        0.2104542553 * l + 0.7936177850 * m - 0.0040720468 * s,
+        1.9779984951 * l - 2.4285922050 * m + 0.4505937099 * s,
+        0.0259040371 * l + 0.7827717662 * m - 0.8086757660 * s,
+    )
+ 
+ 
+def _dist(a: Tuple[float, float, float], b: Tuple[float, float, float]) -> float:
+    """Euclidean distance in OKLab, with lightness weighted down slightly so
+    hue/chroma differences count for more (better for categorical legends)."""
+    dl = (a[0] - b[0]) * 0.75
+    return math.sqrt(dl * dl + (a[1] - b[1]) ** 2 + (a[2] - b[2]) ** 2)
+ 
+ 
+def _blend_toward(rgb: RGB, target: RGB, t: float) -> RGB:
+    """Blend in linear light, which keeps the result from looking muddy."""
+    out = []
+    for c, tc in zip(rgb, target):
+        v = _srgb_to_linear(c) * (1 - t) + _srgb_to_linear(tc) * t
+        out.append(_linear_to_srgb(v))
+    return tuple(out)
+ 
+ 
+def _ensure_lightness(rgb: RGB, min_l: float, toward: RGB = (255, 255, 255)) -> RGB:
+    """Lift a color until its OKLab lightness clears min_l."""
+    if _rgb_to_oklab(rgb)[0] >= min_l:
+        return rgb
+    lo, hi = 0.0, 1.0
+    for _ in range(24):
+        mid = (lo + hi) / 2
+        if _rgb_to_oklab(_blend_toward(rgb, toward, mid))[0] < min_l:
+            lo = mid
+        else:
+            hi = mid
+    return _blend_toward(rgb, toward, hi)
+ 
+ 
+def _candidate_grid(step_levels: int = 8) -> List[RGB]:
+    levels = [round(i * 255 / (step_levels - 1)) for i in range(step_levels)]
+    return [(r, g, b) for r in levels for g in levels for b in levels]
+ 
+ 
+def generate_distinct_colors_alternative(
+    n_colors: int,
+    background: RGB = (0, 0, 0),
+    min_lightness: float = 0.45,
+    min_separation: float = 0.20,
+) -> List[RGB]:
+    """
+    Generate visually distinct RGB colors suitable for plotting on `background`.
+ 
+    Args:
+        n_colors:       how many colors to return
+        background:     canvas color; nothing returned will sit near it
+        min_lightness:  OKLab L floor (0-1). On black, ~0.45 keeps everything
+                        readable; raise it for thin lines or small markers.
+        min_separation: OKLab distance a generated color must keep from every
+                        already-chosen color and from the background.
+ 
+    Returns:
+        List of (r, g, b) tuples, 0-255.
+    """
+    if n_colors <= 0:
+        return []
+ 
+    bg_lab = _rgb_to_oklab(background)
+    chosen: List[RGB] = []
+    chosen_lab: List[Tuple[float, float, float]] = []
+ 
+    def accept(rgb: RGB, threshold: float) -> bool:
+        lab = _rgb_to_oklab(rgb)
+        if _dist(lab, bg_lab) < min_separation:
+            return False
+        if any(_dist(lab, c) < threshold for c in chosen_lab):
+            return False
+        chosen.append(rgb)
+        chosen_lab.append(lab)
+        return True
+ 
+    # 1. Curated palette first -- these beat anything an algorithm picks.
+    #    Their ordering is already tuned for contrast, so only reject true
+    #    near-duplicates (which lightness-lifting can occasionally create).
+    for h in _BASE_PALETTE_HEX:
+        if len(chosen) >= n_colors:
+            return chosen
+        accept(_ensure_lightness(_hex_to_rgb(h), min_lightness), 0.10)
+ 
+    # 2. Extend by greedy farthest-point sampling over an RGB grid.
+    candidates = [
+        c for c in _candidate_grid()
+        if _rgb_to_oklab(c)[0] >= min_lightness
+        and _dist(_rgb_to_oklab(c), bg_lab) >= min_separation
+    ]
+    cand_lab = [_rgb_to_oklab(c) for c in candidates]
+ 
+    while len(chosen) < n_colors and candidates:
+        best_i, best_d = -1, -1.0
+        for i, lab in enumerate(cand_lab):
+            d = min(_dist(lab, c) for c in chosen_lab) if chosen_lab else _dist(lab, bg_lab)
+            if d > best_d:
+                best_i, best_d = i, d
+        chosen.append(candidates.pop(best_i))
+        chosen_lab.append(cand_lab.pop(best_i))
+ 
+    return chosen
+ 
+ 
+def to_hex(colors: List[RGB]) -> List[str]:
+    return ["#%02X%02X%02X" % c for c in colors]
 
-    # Read the Excel file into a pandas DataFrame
-    excel_file_path = input("Excel file?: ")
-    masks = input("watershedded, dilated glom mask?: ")
-    masks = tifffile.imread(masks)
-    masks = masks.astype(np.uint16)
-
-    G = open_network(excel_file_path)
-
-    # Get a list of connected components
-    connected_components = list(nx.connected_components(G))
-
-    largest_component = max(connected_components, key=len)
 
 
-    # Choose a specific connected component (let's say, the first one)
-    #selected_component = connected_components[0]
-
-    # Convert the set of nodes to a list
-    #nodes_in_component = list(selected_component)
-
-    nodes_in_largest_component = list(largest_component)
-
-    mask2 = labels_to_boolean(masks, nodes_in_largest_component)
-
-    # Convert boolean values to 0 and 255
-    mask2 = mask2.astype(np.uint8) * 255
-
-    tifffile.imwrite("isolated_community.tif", mask2)
+# Color blind stuff
+ 
+def simulate_deuteranopia(rgb: "RGB") -> "RGB":
+    """Simulate how an RGB color appears to a deuteranope."""
+    lin = [_srgb_to_linear(c) for c in rgb]
+    return tuple(
+        _linear_to_srgb(max(0.0, min(1.0, sum(_DEUTAN_MATRIX[i][j] * lin[j]
+                                              for j in range(3)))))
+        for i in range(3)
+    )
+ 
+ 
+def _cb_dist_weighted(a, b, l_weight: float) -> float:
+    """Euclidean distance in OKLab with an explicit lightness weight."""
+    dl = (a[0] - b[0]) * l_weight
+    return math.sqrt(dl * dl + (a[1] - b[1]) ** 2 + (a[2] - b[2]) ** 2)
+ 
+ 
+def _cb_labs(rgb: "RGB"):
+    """OKLab coords of a color under (normal vision, deuteranopia)."""
+    return (_rgb_to_oklab(rgb), _rgb_to_oklab(simulate_deuteranopia(rgb)))
+ 
+ 
+def _cb_dist(a, b) -> float:
+    """Worst-case separation across normal and deuteranopic vision. A pair is
+    only 'far apart' if it looks far apart to BOTH viewers."""
+    return min(
+        _cb_dist_weighted(a[0], b[0], _CB_L_WEIGHT_NORMAL),
+        _cb_dist_weighted(a[1], b[1], _CB_L_WEIGHT_DEUTAN),
+    )
+ 
+ 
+def generate_distinct_colors_colorblind(
+    n_colors: int,
+    background: "RGB" = (0, 0, 0),
+    min_lightness: float = 0.45,
+    min_separation: float = 0.20,
+) -> "List[RGB]":
+    """
+    Generate distinct RGB colors that stay distinguishable under deuteranopia,
+    for plotting on `background`.
+ 
+    Same signature and contract as generate_distinct_colors(), so it can be
+    swapped in directly.
+ 
+    Args:
+        n_colors:       how many colors to return
+        background:     canvas color; nothing returned will sit near it
+        min_lightness:  OKLab L floor (0-1). ~0.45 keeps everything readable
+                        on black; raise it for thin lines or small markers.
+        min_separation: distance every color must keep from the background.
+ 
+    Returns:
+        List of (r, g, b) tuples, 0-255. n_colors <= 8 returns Okabe-Ito
+        unmodified.
+ 
+    Note:
+        A deuteranope perceives a 2D color space rather than 3D, so past
+        ~12 colors separation is carried increasingly by lightness alone.
+        See max_safe_colors_colorblind() and encode redundantly beyond that
+        (marker shape, dash pattern, direct labels).
+    """
+    if n_colors <= 0:
+        return []
+ 
+    bg = _cb_labs(background)
+    chosen: "List[RGB]" = []
+    chosen_v = []
+ 
+    def accept(rgb) -> bool:
+        v = _cb_labs(rgb)
+        if _cb_dist(v, bg) < min_separation:
+            return False
+        if any(_cb_dist(v, c) < CB_CONFUSABLE for c in chosen_v):
+            return False
+        chosen.append(rgb)
+        chosen_v.append(v)
+        return True
+ 
+    # 1. Curated CVD-safe palette first -- hand-tuned, beats sampling at low n.
+    for h in _CB_PALETTE_HEX:
+        if len(chosen) >= n_colors:
+            return chosen
+        accept(_ensure_lightness(_hex_to_rgb(h), min_lightness))
+ 
+    # 2. Extend by greedy farthest-point sampling under worst-case vision.
+    candidates, cand_v = [], []
+    for c in _candidate_grid():
+        if _rgb_to_oklab(c)[0] < min_lightness:
+            continue
+        v = _cb_labs(c)
+        if _cb_dist(v, bg) < min_separation:
+            continue
+        candidates.append(c)
+        cand_v.append(v)
+ 
+    while len(chosen) < n_colors and candidates:
+        best_i, best_d = -1, -1.0
+        for i, v in enumerate(cand_v):
+            d = min(_cb_dist(v, c) for c in chosen_v) if chosen_v else _cb_dist(v, bg)
+            if d > best_d:
+                best_i, best_d = i, d
+        chosen.append(candidates.pop(best_i))
+        chosen_v.append(cand_v.pop(best_i))
+ 
+    return chosen
+ 
+ 
+def audit_colorblind(colors, threshold: float = CB_CONFUSABLE):
+    """
+    Check a palette for pairs a deuteranope would confuse.
+ 
+    Returns a list of (distance, hex_a, hex_b), closest first. Empty is good.
+    Works on any palette, including hand-picked ones.
+    """
+    vs = [_cb_labs(c) for c in colors]
+    out = []
+    for i in range(len(colors)):
+        for j in range(i + 1, len(colors)):
+            d = _cb_dist(vs[i], vs[j])
+            if d < threshold:
+                out.append((round(d, 3),
+                            "#%02X%02X%02X" % tuple(colors[i]),
+                            "#%02X%02X%02X" % tuple(colors[j])))
+    return sorted(out)
+ 
+ 
+def max_safe_colors_colorblind(
+    background: "RGB" = (0, 0, 0),
+    min_lightness: float = 0.45,
+    min_separation: float = 0.20,
+    margin: float = 1.25,
+    limit: int = 30,
+) -> int:
+    """
+    Largest n whose worst-case pair still clears CB_CONFUSABLE * margin.
+ 
+    The default margin asks for 25% more headroom than the bare confusability
+    floor, since scatter markers and thin lines are read under worse
+    conditions than color swatches. Use this to decide when to stop relying
+    on color alone.
+    """
+    colors = generate_distinct_colors_colorblind(limit, background,
+                                                 min_lightness, min_separation)
+    vs = [_cb_labs(c) for c in colors]
+    target = CB_CONFUSABLE * margin
+    best = 1
+    for n in range(2, len(colors) + 1):
+        worst = min(_cb_dist(vs[i], vs[j])
+                    for i in range(n) for j in range(i + 1, n))
+        if worst < target:
+            return best
+        best = n
+    return best

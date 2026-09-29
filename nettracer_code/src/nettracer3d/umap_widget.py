@@ -8,6 +8,7 @@ from PyQt6.QtGui import QColor, QPen, QBrush, QPainterPath, QPolygonF, QCloseEve
 import pyqtgraph as pg
 from pyqtgraph import ScatterPlotItem, PlotCurveItem, GraphicsLayoutWidget
 import colorsys
+from . import color_schemes as _cschemes
 import random
 import copy
 import json
@@ -32,7 +33,9 @@ class UMAPGraphWidget(QWidget):
                  labels=False,
                  node_size=10,
                  color_mode='community',
-                 background='white'):
+                 background='white',
+                 color_scheme=None,
+                 custom_color_map=None):
         """
         Parameters
         ----------
@@ -67,6 +70,17 @@ class UMAPGraphWidget(QWidget):
         self.labels = labels
         self.node_size = node_size
         self.color_mode = color_mode  # 'community', 'identity', 'colorless', or 'heatmap'
+        # 'Default' | 'Alt Color Scheme' | 'Colorblind Scheme'
+        # None means "decide for me": start from whatever was rendered last
+        # for this kind of coding, so a freshly built widget matches the
+        # network graph and the extractor overlays instead of drawing a
+        # brand-new palette. 'Previous' degrades to the default scheme on its
+        # own when nothing has been recorded yet, so this is safe on a cold
+        # start. Pass an explicit scheme name to override.
+        self.color_scheme = (color_scheme if color_scheme is not None
+                             else _cschemes.SCHEME_PREVIOUS)
+        # {label: '#rrggbb'} used when color_scheme == 'Custom'
+        self.custom_color_map = custom_color_map
 
         # Background: map friendly names to actual colour values
         _bg_map = {'white': 'w', 'black': '#1a1a2e', 'green': '#c8d5a3'}
@@ -251,6 +265,11 @@ class UMAPGraphWidget(QWidget):
         self.settings_btn.setMaximumSize(32, 32)
         self.settings_btn.clicked.connect(self._on_settings_clicked)
 
+        self.refresh_btn = QPushButton("🔄")
+        self.refresh_btn.setToolTip("Refresh Display")
+        self.refresh_btn.setMaximumSize(32, 32)
+        self.refresh_btn.clicked.connect(self.refresh_display)
+
         self.save_btn = QPushButton("💾")
         self.save_btn.setToolTip("Save UMAP Embedding")
         self.save_btn.setMaximumSize(32, 32)
@@ -260,6 +279,7 @@ class UMAPGraphWidget(QWidget):
         panel_layout.addWidget(self.pan_btn)
         panel_layout.addWidget(self.zoom_btn)
         panel_layout.addWidget(self.home_btn)
+        panel_layout.addWidget(self.refresh_btn)
         panel_layout.addWidget(self.settings_btn)
         panel_layout.addWidget(self.save_btn)
         panel_layout.addStretch()
@@ -272,7 +292,7 @@ class UMAPGraphWidget(QWidget):
     def _on_settings_clicked(self):
         """Open the UMAP display settings dialog."""
         dlg = netg.UMAPDisplayDialog(self, parent_window=self.parent_window)
-        dlg.exec()
+        dlg.show()
 
     def set_color_mode(self, mode, new_dict=None, heatmap_center=None):
         """
@@ -513,6 +533,8 @@ class UMAPGraphWidget(QWidget):
             'node_colors': list(self.node_colors),
             '_node_alphas': list(self._node_alphas),
             'color_mode': self.color_mode,
+            'color_scheme': getattr(self, 'color_scheme', 'Default'),
+            'custom_color_map': dict(getattr(self, 'custom_color_map', None) or {}),
             'community_dict': dict(self.community_dict),
             'identity_dict': dict(self.identity_dict),
             'heatmap_dict': dict(self.heatmap_dict),
@@ -601,6 +623,8 @@ class UMAPGraphWidget(QWidget):
         self.node_colors = list(state['node_colors'])
         self._node_alphas = list(state['_node_alphas'])
         self.color_mode = state['color_mode']
+        self.color_scheme = state.get('color_scheme') or _cschemes.SCHEME_PREVIOUS
+        self.custom_color_map = state.get('custom_color_map') or None
         self.community_dict = state.get('community_dict', {})
         self.identity_dict = state.get('identity_dict', {})
         self.heatmap_dict = state.get('heatmap_dict', {})
@@ -688,6 +712,7 @@ class UMAPGraphWidget(QWidget):
                  heatmap_dict=None,
                  heatmap_center=None,
                  color_mode=None,
+                 color_scheme=None,
                  umap_kwargs=None):
         """
         Compute UMAP and render.
@@ -721,6 +746,8 @@ class UMAPGraphWidget(QWidget):
             self.heatmap_center = heatmap_center
         if color_mode is not None:
             self.color_mode = color_mode
+        if color_scheme is not None:
+            self.color_scheme = color_scheme
 
         # Remove loading text
         self._remove_loading_text()
@@ -801,6 +828,9 @@ class UMAPGraphWidget(QWidget):
                     if label is None:
                         hex_c, alpha = '#808080', 100
                     else:
+                        # Identity values can be lists; the palette is keyed
+                        # by the individual identity, so normalize first.
+                        label = _cschemes.normalize_label(label, None)
                         hex_c = color_map.get(label, '#808080')
                         alpha = 100 if hex_c == '#808080' else 200
 
@@ -866,6 +896,27 @@ class UMAPGraphWidget(QWidget):
                 and hasattr(self.parent_window, 'clicked_values')
                 and len(self.parent_window.clicked_values.get('nodes', [])) > 0):
             self.select_nodes(self.parent_window.clicked_values['nodes'])
+
+    def refresh_display(self):
+        """
+        Redraw, reusing the colors from the last color-coded render.
+
+        Refresh should give back what you are already looking at, so a
+        color-coded view returns in the SAME colors rather than being
+        reshuffled by a fresh palette draw. Heatmap and colorless modes have
+        no categorical palette, so they are simply redrawn as-is; with nothing
+        recorded yet the current scheme is kept.
+        """
+        if self.color_mode in ('community', 'identity'):
+            domain = (_cschemes.DOMAIN_IDENTITIES
+                      if self.color_mode == 'identity'
+                      else _cschemes.DOMAIN_COMMUNITIES)
+            if _cschemes.has_previous(domain):
+                self.color_scheme = _cschemes.SCHEME_PREVIOUS
+
+        if self.rendered and self.embedding is not None:
+            self._build_and_render()
+        return
 
     def _recolor_nodes(self):
         """Quick re‐colour without recomputing the embedding.
@@ -1053,39 +1104,41 @@ class UMAPGraphWidget(QWidget):
 
     def _generate_community_colors(self, my_dict):
         """
-        Consistent with NetworkGraphWidget._generate_community_colors:
-        deterministic shuffle with Random(42), HSV hues, community 0 → brown.
+        Map labels to colors through the shared palette contract in
+        color_schemes.resolve_palette, so this widget, NetworkGraphWidget and
+        community_extractor all agree on ordering and the brown outlier.
         """
-        from collections import Counter
-
         if not my_dict:
             return {}
 
-        try:
-            unique_labels = sorted(set(my_dict.values()))
-        except TypeError:
-            str_dict = {n: str(v) for n, v in my_dict.items()}
-            unique_labels = sorted(set(str_dict.values()))
+        # This widget uses one code path for both modes, so the registry slot
+        # follows the active color mode. Identities and communities are
+        # different label spaces and must not share a 'Previous' palette.
+        domain = (_cschemes.DOMAIN_IDENTITIES
+                  if getattr(self, 'color_mode', '') == 'identity'
+                  else _cschemes.DOMAIN_COMMUNITIES)
 
-        shuffled = random.Random(42).sample(unique_labels, len(unique_labels))
-        rgb_list = self._generate_distinct_colors_rgb(len(unique_labels))
-        color_map = {label: rgb_list[i] for i, label in enumerate(shuffled)}
+        return _cschemes.resolve_palette(
+            my_dict.values(),
+            scheme=getattr(self, 'color_scheme', 'Default'),
+            background=getattr(self, 'background', 'w'),
+            custom_map=getattr(self, 'custom_color_map', None),
+            shuffle='seeded',
+            domain=domain,
+        )
 
-        # Community / label 0 ➔ brown
-        if 0 in unique_labels:
-            color_map[0] = '#8B4513'
+    def _generate_distinct_colors_rgb(self, n_colors):
+        """
+        Generate n visually distinct colors under the active scheme.
 
-        return color_map
-
-    @staticmethod
-    def _generate_distinct_colors_rgb(n_colors):
-        colors = []
-        for i in range(n_colors):
-            hue = i / max(n_colors, 1)
-            r, g, b = colorsys.hsv_to_rgb(hue, 1.0, 1.0)
-            colors.append('#{:02x}{:02x}{:02x}'.format(
-                int(r * 255), int(g * 255), int(b * 255)))
-        return colors
+        'Default' reproduces the original HSV hue wheel exactly. The other
+        schemes are background-aware, which matters here because this widget
+        can render on white, dark navy or pale green.
+        """
+        return _cschemes.generate_scheme_hex(
+            n_colors,
+            getattr(self, 'color_scheme', 'Default'),
+            getattr(self, 'background', 'w'))
 
     # ------------------------------------------------------- legend -------------
     def _rebuild_legend(self, active_dict, color_map):
@@ -2073,7 +2126,8 @@ class UMAPGraphWidget(QWidget):
     def update_params(self, community_dict=None, identity_dict=None,
                       heatmap_dict=None, heatmap_center=None,
                       labels=None, node_size=None, color_mode=None,
-                      background=None):
+                      background=None, color_scheme=None,
+                      custom_color_map=None):
         """Update visualization parameters without recomputing the embedding."""
         if community_dict is not None:
             self.community_dict = community_dict
@@ -2089,6 +2143,10 @@ class UMAPGraphWidget(QWidget):
             self.node_size = node_size
         if color_mode is not None:
             self.color_mode = color_mode
+        if color_scheme is not None:
+            self.color_scheme = color_scheme
+        if custom_color_map is not None:
+            self.custom_color_map = custom_color_map
         if background is not None:
             _bg_map = {'white': 'w', 'black': '#1a1a2e', 'green': '#c8d5a3'}
             self.background = _bg_map.get(background, 'w')

@@ -13,6 +13,11 @@ from collections import defaultdict
 from multiprocessing import Pool, cpu_count
 import functools
 from . import smart_dilate as sdl
+from pathlib import Path
+from matplotlib.figure import Figure
+from matplotlib.backends.backend_agg import FigureCanvasAgg
+from matplotlib import cm
+import re
 
 # Related to morphological border searching:
 
@@ -258,7 +263,6 @@ def find_neighbors_kdtree(radius, centroids=None, array=None, targets=None, max_
     else:
         return []
     
-    print("Building KDTree...")
     # Create KD-tree from all nonzero points
     tree = KDTree(points)
     
@@ -294,9 +298,7 @@ def find_neighbors_kdtree(radius, centroids=None, array=None, targets=None, max_
         # Handle case where no target values were found
         if len(query_points) == 0:
             return []
-    
-    print("Querying KDTree...")
-    
+        
     # Determine query strategy based on parameters
     if radius is None and max_neighbors is not None:
         # Case 1: k-nearest neighbors at any distance
@@ -315,64 +317,95 @@ def find_neighbors_kdtree(radius, centroids=None, array=None, targets=None, max_
         # Case 3: all neighbors within radius (original behavior)
         neighbor_indices = tree.query_ball_point(query_points, radius)
         distances = None  # Not needed for this case
-    
-    print("Sorting Through Output...")
-    
+        
     # Process results efficiently
-    output = []
+    query_indices = np.asarray(query_indices)
     
-    for i, query_idx in enumerate(query_indices):
-        query_point = points[query_idx]
-        
-        if distances is not None:
-            # Handle k-nearest neighbor results (distances and indices are arrays)
-            # Results are already sorted by distance
-            if neighbor_indices.ndim == 1:
-                # Single query result
-                neighbor_list = neighbor_indices.tolist()
-                distance_list = distances.tolist()
-            else:
-                # Multiple query results
-                neighbor_list = neighbor_indices[i].tolist()
-                distance_list = distances[i].tolist()
-            
-            # Filter and limit in one pass
-            filtered_neighbors = []
-            for dist, neighbor_idx in zip(distance_list, neighbor_list):
-                # Skip self-reference
-                if neighbor_idx == query_idx:
-                    continue
-                    
-                # If radius is set, check distance constraint
-                if radius is not None and dist > radius:
-                    continue
-                
-                filtered_neighbors.append(neighbor_idx)
-                
-                # Stop if we've reached max_neighbors
-                if max_neighbors is not None and len(filtered_neighbors) >= max_neighbors:
-                    break
-        else:
-            # Handle radius-based results (list of indices)
-            neighbor_list = neighbor_indices[i]
-            # Filter out self - simple list comprehension
-            filtered_neighbors = [n for n in neighbor_list if n != query_idx]
-        
-        # Build output in required format
-        if centroids:
-            query_value = idx_to_node[query_idx]
-            for neighbor_idx in filtered_neighbors:
-                neighbor_value = idx_to_node[neighbor_idx]
-                output.append([query_value, neighbor_value, 0])
-        else:
-            query_value = array[point_tuples[query_idx]]
-            for neighbor_idx in filtered_neighbors:
-                neighbor_value = array[point_tuples[neighbor_idx]]
-                output.append([query_value, neighbor_value, 0])
+    # ------------------------------------------------------------------
+    # STEP 1: build flat (row_query_idx, neighbor_idx) pairs, filtered,
+    # using whole-matrix numpy ops instead of per-row work.
+    # ------------------------------------------------------------------
+    if distances is not None:
+        neigh = np.asarray(neighbor_indices)
+        dist = np.asarray(distances)
     
-    print("Organizing Network...")
+        if neigh.ndim == 1:
+            # Original semantics: every query row reuses the same 1-D result
+            neigh = np.broadcast_to(neigh, (len(query_indices), neigh.shape[0]))
+            dist = np.broadcast_to(dist, (len(query_indices), dist.shape[0]))
     
-    return output
+        # mask: not self, and within radius if set
+        mask = neigh != query_indices[:, None]
+        if radius is not None:
+            mask &= dist <= radius
+    
+        # max_neighbors: keep only the first m surviving entries per row.
+        # Rows are pre-sorted by distance, so a cumulative count along the
+        # row reproduces the original early-break exactly.
+        if max_neighbors is not None:
+            mask &= np.cumsum(mask, axis=1) <= max_neighbors
+    
+        rows, cols = np.nonzero(mask)          # row-major -> preserves order
+        q_flat = query_indices[rows]
+        n_flat = neigh[rows, cols]
+    else:
+        # Radius mode: ragged list of neighbor lists
+        lengths = np.fromiter((len(x) for x in neighbor_indices),
+                              dtype=np.int64, count=len(neighbor_indices))
+        if lengths.sum() == 0:
+            return []
+        n_flat = np.concatenate([np.asarray(x, dtype=np.int64)
+                                 for x in neighbor_indices])
+        q_flat = np.repeat(query_indices, lengths)
+        keep = n_flat != q_flat
+        q_flat = q_flat[keep]
+        n_flat = n_flat[keep]
+    
+    if len(n_flat) == 0:
+        return []
+    
+    # ------------------------------------------------------------------
+    # STEP 2: map indices -> values with array lookups (no per-row dict
+    # hits or tuple indexing inside a Python loop).
+    # ------------------------------------------------------------------
+    if centroids:
+        # Build a dense lookup table from the dict once per call.
+        hi = int(max(q_flat.max(), n_flat.max())) + 1
+        lut = np.zeros(hi, dtype=np.int64)
+        present = np.zeros(hi, dtype=bool)
+        for k, v in idx_to_node.items():
+            if 0 <= k < hi:
+                lut[k] = v
+                present[k] = True
+    
+        # Original behavior: missing *neighbor* keys are silently skipped
+        # (the try/except), but a missing *query* key raised KeyError
+        # because that lookup was outside the try block.
+        if not present[q_flat].all():
+            bad = int(q_flat[~present[q_flat]][0])
+            raise KeyError(bad)
+        keep = present[n_flat]
+        q_vals = lut[q_flat[keep]]
+        n_vals = lut[n_flat[keep]]
+    else:
+        # One pass to turn point_tuples -> value array, then pure fancy indexing
+        pt = np.asarray(point_tuples)          # (P, ndim)
+        vals = array[tuple(pt.T)]              # value for every point index
+        q_vals = vals[q_flat]
+        n_vals = vals[n_flat]
+    
+    # ------------------------------------------------------------------
+    # STEP 3: assemble [[q, n, 0], ...] in one shot
+    # ------------------------------------------------------------------
+    out = np.empty((len(q_vals), 3), dtype=np.int64)
+    out[:, 0] = q_vals
+    out[:, 1] = n_vals
+    out[:, 2] = 0
+
+    return out.tolist()
+    
+    
+    #return output
 
 def extract_pairwise_connections(connections):
     output = []
@@ -390,134 +423,100 @@ def extract_pairwise_connections(connections):
 def average_nearest_neighbor_distances(point_centroids, root_set, compare_set, xy_scale=1.0, z_scale=1.0, num=1, do_borders=False):
     """
     Calculate the average distance between each point in root_set and its nearest neighbor in compare_set.
-    
-    Args:
-        point_centroids (dict): Dictionary mapping point IDs to [Z, Y, X] coordinates (when do_borders=False)
-                               OR dictionary mapping labels to border coordinates (when do_borders=True)
-        root_set (set or dict): Set of point IDs (when do_borders=False) 
-                               OR dict {label: border_coords} (when do_borders=True)
-        compare_set (set or numpy.ndarray): Set of point IDs (when do_borders=False)
-                                           OR 1D array of border coordinates (when do_borders=True)
-        xy_scale (float): Scaling factor for X and Y coordinates
-        z_scale (float): Scaling factor for Z coordinate
-        num (int): Number of nearest neighbors (ignored when do_borders=True, always uses 1)
-        do_borders (bool): If True, perform border-to-border distance calculation
-    
-    Returns:
-        tuple: (average_distance, distances_dict)
+    (docstring unchanged)
     """
-    
+
     if do_borders:
         # Border comparison mode
         if not isinstance(compare_set, np.ndarray):
             raise ValueError("When do_borders=True, compare_set must be a numpy array of coordinates")
-        
-        # Vectorized scaling for compare coordinates
+
         compare_coords_scaled = compare_set.astype(float)
-        compare_coords_scaled[:, 0] *= z_scale  # Z coordinates
-        compare_coords_scaled[:, 1:] *= xy_scale  # Y and X coordinates
-        
+        compare_coords_scaled[:, 0] *= z_scale
+        compare_coords_scaled[:, 1:] *= xy_scale
+
         distances = {}
-        
+
         for label, border_coords in root_set.items():
             if len(border_coords) == 0:
                 continue
-                
-            # Vectorized scaling for border coordinates
+
             border_coords_scaled = border_coords.astype(float)
-            border_coords_scaled[:, 0] *= z_scale  # Z coordinates
-            border_coords_scaled[:, 1:] *= xy_scale  # Y and X coordinates
-            
-            # Remove overlapping coordinates to avoid distance = 0
-            # Create a set of tuples for fast membership testing
+            border_coords_scaled[:, 0] *= z_scale
+            border_coords_scaled[:, 1:] *= xy_scale
+
             border_coords_set = set(map(tuple, border_coords_scaled))
-            
-            # Filter out overlapping coordinates from compare set
+
             non_overlapping_mask = np.array([
-                tuple(coord) not in border_coords_set 
+                tuple(coord) not in border_coords_set
                 for coord in compare_coords_scaled
             ])
-            
+
             if not np.any(non_overlapping_mask):
-                # All compare coordinates overlap - skip this object or set to NaN
                 distances[label] = np.nan
                 continue
-            
+
             filtered_compare_coords = compare_coords_scaled[non_overlapping_mask]
-            
-            # Build KDTree with filtered coordinates
+
             tree = KDTree(filtered_compare_coords)
-            
-            # Vectorized nearest neighbor search for all border points at once
             distances_to_all, _ = tree.query(border_coords_scaled, k=1)
-            
-            # Find minimum distance for this object
             distances[label] = np.min(distances_to_all)
-        
-        # Calculate average excluding NaN values
+
         valid_distances = [d for d in distances.values() if not np.isnan(d)]
         avg = np.mean(valid_distances) if valid_distances else np.nan
         return avg, distances
-    
+
     else:
-        # Original centroid comparison mode (unchanged)
-        # Extract coordinates for compare_set
+        # Centroid comparison mode
         compare_coords = np.array([point_centroids[point_id] for point_id in compare_set])
-        
-        # Vectorized scaling for compare coordinates
         compare_coords_scaled = compare_coords.astype(float)
-        compare_coords_scaled[:, 0] *= z_scale  # Z coordinates
-        compare_coords_scaled[:, 1:] *= xy_scale  # Y and X coordinates
-        
-        # Build KDTree for efficient nearest neighbor search
+        compare_coords_scaled[:, 0] *= z_scale   # Z
+        compare_coords_scaled[:, 1:] *= xy_scale  # Y and X
+
         tree = KDTree(compare_coords_scaled)
-        
-        distances = {}
-        same_sets = root_set == compare_set
-        
-        # Extract and scale root coordinates all at once
+
         root_coords = np.array([point_centroids[root_id] for root_id in root_set])
         root_coords_scaled = root_coords.astype(float)
-        root_coords_scaled[:, 0] *= z_scale  # Z coordinates
-        root_coords_scaled[:, 1:] *= xy_scale  # Y and X coordinates
-        
-        # Vectorized nearest neighbor search for all root points
-        if same_sets:
-            distances_to_all, indices = tree.query(root_coords_scaled, k=(num + 1))
-            # Remove self-matches (first column) and average the rest
-            if num == 1:
-                distances_array = distances_to_all[:, 1]  # Just take second nearest
-            else:
-                distances_array = np.mean(distances_to_all[:, 1:], axis=1)
-        else:
-            # Query one extra neighbor in case of self-matches
-            k_query = min(num + 1, len(tree.data))  # Don't exceed available points
-            distances_to_all, _ = tree.query(root_coords_scaled, k=k_query)
-            
-            # Check if any points found themselves (distance ≈ 0)
-            epsilon = 1e-10
-            has_self_match = np.any(distances_to_all[:, 0] < epsilon)
-            
-            if has_self_match:
-                # Skip first column (self-matches) and use next 'num' neighbors
-                # Check if we have enough columns after skipping the first
-                max_col = min(num + 1, distances_to_all.shape[1])
-                if num == 1:
-                    distances_array = distances_to_all[:, 1]
-                else:
-                    distances_array = np.mean(distances_to_all[:, 1:max_col], axis=1)
-            else:
-                # No self-matches, use first 'num' neighbors as normal
-                if num == 1:
-                    distances_array = distances_to_all[:, 0]
-                else:
-                    distances_array = np.mean(distances_to_all[:, :num], axis=1)
-        
+        root_coords_scaled[:, 0] *= z_scale
+        root_coords_scaled[:, 1:] *= xy_scale
+
+        epsilon = 1e-10
+
+        # Query num+1 neighbors so a self-match (distance ~0) can be dropped when a
+        # root point also lives in compare_set. Never request more neighbors than
+        # there are points in the tree -- this avoids scipy padding with inf and,
+        # critically, avoids k==1 (which makes query() return a 1-D array).
+        k_query = min(num + 1, len(tree.data))
+        distances_to_all, _ = tree.query(root_coords_scaled, k=k_query)
+
+        # scipy squeezes the trailing axis when k == 1 (e.g. compare_set has a single
+        # point). Restore a consistent 2-D shape so the column logic below works.
+        if distances_to_all.ndim == 1:
+            distances_to_all = distances_to_all[:, np.newaxis]
+
+        # Per-row self-match removal: push ~0 distances to the back, then take the
+        # `num` nearest remaining neighbors. A row whose only neighbor is itself
+        # (no valid comparison point) becomes NaN.
+        masked = np.where(distances_to_all < epsilon, np.inf, distances_to_all)
+        masked.sort(axis=1)
+
+        selected = masked[:, :num]
+        valid_mask = ~np.isinf(selected)
+        valid_counts = valid_mask.sum(axis=1)
+        sums = np.where(valid_mask, selected, 0.0).sum(axis=1)
+        distances_array = np.where(
+            valid_counts > 0,
+            sums / np.maximum(valid_counts, 1),
+            np.nan,
+        )
+
         # Map back to root_ids
+        distances = {}
         for i, root_id in enumerate(root_set):
             distances[root_id] = distances_array[i]
-        
-        avg = np.mean(distances_array) if len(distances_array) > 0 else 0.0
+
+        valid = distances_array[~np.isnan(distances_array)]
+        avg = np.mean(valid) if len(valid) > 0 else np.nan
         return avg, distances
 
 
@@ -573,276 +572,646 @@ def create_voronoi_3d_kdtree(centroids: Dict[Union[int, str], Union[Tuple[int, i
 
 #Ripley cluster analysis:
 
-def convert_centroids_to_array(centroids_list, xy_scale = 1, z_scale = 1):
+def convert_centroids_to_array(centroids_list, xy_scale=1, z_scale=1):
     """
-    Convert a dictionary of centroids to a numpy array suitable for Ripley's K calculation.
-    
-    Parameters:
-    centroids_list: List of centroid coordinate arrays
-    
-    Returns:
-    numpy array of shape (n, d) where n is number of points and d is dimensionality
+    Convert an iterable of centroids to an (n, d) array in physical units.
+ 
+    3D centroids are taken as (z, y, x) and 2D centroids as (y, x); the
+    z_scale is only ever applied to a leading z column that actually exists.
     """
-    # Determine how many centroids we have
-    n_points = len(centroids_list)
-
-    # Get dimensionality from the first centroid
-    dim = len(list(centroids_list)[0])
-    
-    # Create empty array
-    points_array = np.zeros((n_points, dim))
-    
-    # Fill array with coordinates
-    for i, coords in enumerate(centroids_list):
-        points_array[i] = coords
-
-    points_array[:, 1:] = points_array[:, 1:] * xy_scale #account for scaling
-
-    points_array[:, 0] = points_array[:, 0] * z_scale #account for scaling
-
+    centroids_list = list(centroids_list)
+    if not centroids_list:
+        return np.zeros((0, 3))
+ 
+    points_array = np.asarray(centroids_list, dtype=float)
+    if points_array.ndim != 2:
+        raise ValueError(
+            f"expected a sequence of coordinate tuples, got shape {points_array.shape}")
+ 
+    if points_array.shape[1] == 3:
+        points_array[:, 0] *= z_scale        # z
+        points_array[:, 1:] *= xy_scale      # y, x
+    elif points_array.shape[1] == 2:
+        points_array *= xy_scale             # y, x — no z to scale
+    else:
+        raise ValueError(
+            f"centroids must be 2D or 3D, got {points_array.shape[1]} components")
+ 
     return points_array
-
-def generate_r_values(points_array, step_size, bounds = None, dim = 2, max_proportion=0.5, max_r = None):
+ 
+ 
+def convert_augmented_array_to_points(augmented_array):
+    """Drop the leading constant column from a (1, y, x) style array."""
+    return augmented_array[:, 1:]
+ 
+ 
+# ---------------------------------------------------------------------
+# radius grid
+# ---------------------------------------------------------------------
+ 
+ 
+def generate_r_values(points_array, step_size, bounds=None, dim=2,
+                      max_proportion=0.5, max_r=None,
+                      xy_scale=1.0, z_scale=1.0):
     """
-    Generate an array of r values based on point distribution and step size.
-    
-    Parameters:
-    points_array: numpy array of shape (n, d) with point coordinates
-    step_size: user-defined step size for r values
-    max_proportion: maximum proportion of the study area extent to use (default 0.5)
-                   This prevents analyzing at distances where edge effects dominate
-    
-    Returns:
-    numpy array of r values
+    Build the radius grid.
+ 
+    `bounds` is expected in (x, y, z) order and in voxel units, matching what
+    get_ripley assembles. `points_array` is in scaled units, so the bounds
+    are scaled here before max_r is derived from them — otherwise the cap is
+    wrong by a factor of the pixel size.
+ 
+    `max_r`, when supplied, is assumed to already be in scaled units (the
+    `min_legal` distance-transform value from a mask is).
     """
-
+    if step_size <= 0:
+        raise ValueError("step_size must be positive")
+ 
     if bounds is None:
-        if dim == 2:
-            min_coords = np.array([0,0])
-        else:
-            min_coords = np.array([0,0,0])
-        max_coords = np.max(points_array, axis=0)
-        max_coords = np.flip(max_coords)
+        # points_array is (n, d) with d matching dim; extents straight off it.
+        extents = np.max(points_array, axis=0) - np.min(points_array, axis=0)
+        extents = np.flip(extents)                      # -> (x, y[, z])
     else:
         min_coords, max_coords = bounds
-
-    
-    # Calculate the longest dimension
-    try:
-        dimensions = max_coords - min_coords
-    except: # Presume dimension mismatch
-        min_coords = np.array([0,0,0])
-        dimensions = max_coords - min_coords
-
-    if 1 in dimensions:
-        dimensions = np.delete(dimensions, 0) #Presuming 2D data 
-
-    min_dimension = np.min(dimensions) #Biased for smaller dimension now for safety
-    
-    # Calculate maximum r value (typically half the shortest side for 2D,
-    # or scaled by max_proportion for general use)
+        min_coords = np.asarray(min_coords, dtype=float)
+        max_coords = np.asarray(max_coords, dtype=float)
+        if min_coords.shape != max_coords.shape:
+            # Legacy callers sometimes pass a 3-vector min against a 2-vector
+            # max; fall back to an origin of the right length.
+            min_coords = np.zeros_like(max_coords)
+        extents = max_coords - min_coords
+ 
+        # bounds are voxel counts, points are scaled — put them in the
+        # same units before deriving a radius from them.
+        scale = np.array([xy_scale, xy_scale, z_scale][:extents.size])
+        extents = extents * scale
+ 
+    # Keep only the axes that actually exist. A single-slice stack has a
+    # z extent of 1 in the *last* position under the (x, y, z) convention.
+    extents = np.asarray(extents, dtype=float)[:2 if dim == 2 else 3]
+    extents = extents[extents > 0]
+    if extents.size == 0:
+        raise ValueError("degenerate bounds: every extent is zero")
+ 
     if max_r is None:
-        max_r = min_dimension * max_proportion
+        max_r = float(np.min(extents)) * max_proportion
         if max_proportion < 1:
             print(f"Omitting search radii beyond {max_r}")
     else:
-        print(f"Omitting search radii beyond {max_r} (to keep analysis within the mask)")
-
-    
-    # Generate r values from 0 to max_r with step_size increments
-    num_steps = int(max_r / step_size)
-    r_values = np.linspace(step_size, max_r, num_steps)
-
-    if r_values[0] == 0:
-        r_values = np.delete(r_values, 0)
-    
+        max_r = float(max_r)
+        print(f"Omitting search radii beyond {max_r} "
+              "(to keep analysis within the mask)")
+ 
+    if max_r < step_size:
+        raise ValueError(
+            f"step_size ({step_size}) exceeds the largest usable radius "
+            f"({max_r:.4g}); nothing to compute")
+ 
+    # arange, not linspace: the grid must actually step by step_size.
+    r_values = np.arange(step_size, max_r + step_size * 1e-9, step_size)
     return r_values
-
-def convert_augmented_array_to_points(augmented_array):
+ 
+ 
+# ---------------------------------------------------------------------
+# the K function
+# ---------------------------------------------------------------------
+ 
+ 
+def _count_coincident_pairs(reference_points, subset_points, tol=1e-9):
     """
-    Convert an array where first column is 1 and remaining columns are coordinates.
-    
-    Parameters:
-    augmented_array: 2D array where first column is 1 and rest are coordinates
-    
-    Returns:
-    numpy array with just the coordinate columns
+    Number of (reference, subset) pairs sitting at the same location.
+ 
+    These are the self-pairs: a point that appears in both sets contributes
+    a distance of zero, which lands in every cumulative bin. Counting them
+    directly means the caller never has to declare whether the sets overlap,
+    and it stays correct when only *some* of the points are shared — which
+    is exactly the case after the interior filter, and after edge-correction
+    mirroring duplicates points into both sets.
     """
-    # Extract just the coordinate columns (all except first column)
-    return augmented_array[:, 1:]
-
-def optimized_ripleys_k(reference_points, subset_points, r_values, bounds=None, dim = 2, is_subset = False, volume = None, n_subset = None):
+    if len(reference_points) == 0 or len(subset_points) == 0:
+        return 0
+    return int(KDTree(reference_points).count_neighbors(
+        KDTree(subset_points), tol))
+ 
+ 
+def optimized_ripleys_k(reference_points, subset_points, r_values, bounds=None,
+                        dim=2, is_subset=False, volume=None, n_subset=None,
+                        n_ref=None, reference_tree=None, subset_tree=None):
     """
-    Optimized computation of Ripley's K function using KD-Tree with simplified but effective edge correction.
-    
-    Parameters:
-    reference_points: numpy array of shape (n, d) containing coordinates (d=2 or d=3)
-    subset_points: numpy array of shape (m, d) containing coordinates
-    r_values: numpy array of distances at which to compute K
-    bounds: tuple of (min_coords, max_coords) defining the study area boundaries
-    edge_correction: Boolean indicating whether to apply edge correction
-    
-    Returns:
-    K_values: numpy array of K values corresponding to r_values
+    Ripley's K (or cross-K) for a reference and a subset population.
+ 
+        K(r) = |W| * (pairs closer than r) / (n_ref * n_subset)
+ 
+    reference_points : the roots, in scaled units
+    subset_points    : the targets, in scaled units
+    volume           : |W|; derived from bounds when omitted
+    n_ref, n_subset  : true population sizes. Supply these when the point
+                       arrays have been augmented by edge-correction
+                       mirroring, so the normalisation uses real counts
+                       rather than inflated ones.
+    is_subset        : accepted for backward compatibility and ignored.
+                       Overlap is now measured, not declared.
     """
-    n_ref = len(reference_points)
+    reference_points = np.asarray(reference_points, dtype=float)
+    subset_points = np.asarray(subset_points, dtype=float)
+ 
+    if reference_points.size == 0 or subset_points.size == 0:
+        raise ValueError("Ripley's K needs at least one root and one target")
+ 
+    if n_ref is None:
+        n_ref = len(reference_points)
     if n_subset is None:
         n_subset = len(subset_points)
-
-    # Determine bounds if not provided
-    if bounds is None:
-        min_coords = np.min(reference_points, axis=0)
-        max_coords = np.max(reference_points, axis=0)
-        bounds = (min_coords, max_coords)
-    
-    # Calculate volume of study area
-    min_bounds, max_bounds = bounds
-    sides = max_bounds - min_bounds
-
+    if n_ref <= 0 or n_subset <= 0:
+        raise ValueError("n_ref and n_subset must be positive")
+ 
     if volume is None:
-        if dim == 2:
-            volume = sides[0] * sides[1]
+        if bounds is None:
+            min_coords = np.min(reference_points, axis=0)
+            max_coords = np.max(reference_points, axis=0)
         else:
-            volume = np.prod(sides)
-    
-    # Point intensity (points per unit volume)
-    intensity = n_ref / volume
-    
-    # Build KD-Tree for efficient nearest neighbor search
-    tree = KDTree(reference_points)
-    
-    # Initialize K values
-    K_values = np.zeros(len(r_values))
-    
-    # For each r value, compute cumulative counts
-    for i, r in enumerate(r_values):
-        total_count = 0
+            min_coords, max_coords = bounds
+        sides = np.asarray(max_coords, dtype=float) - np.asarray(min_coords, dtype=float)
+        volume = float(sides[0] * sides[1] if dim == 2 else np.prod(sides))
+    if volume <= 0:
+        raise ValueError(f"study volume must be positive, got {volume}")
+ 
+    r_values = np.asarray(r_values, dtype=float)
+ 
+    if reference_tree is None:
+        reference_tree = KDTree(reference_points)
+    if subset_tree is None:
+        subset_tree = KDTree(subset_points)
 
-        # Query the tree for all points within radius r of each subset point
-        for j, point in enumerate(subset_points):
-            # Find all reference points within radius r
-            indices = tree.query_ball_point(point, r)
-            count = len(indices)
-                    
-            total_count += count
+    # One vectorised sweep instead of a tree query per (target, radius).
+    pair_counts = reference_tree.count_neighbors(
+        subset_tree, r_values, cumulative=True).astype(float)
 
-        # Subtract self-counts if points appear in both sets
-        if is_subset or np.array_equal(reference_points, subset_points):
-            total_count -= n_ref  # Subtract all self-counts
-
-        # Normalize
-        K_values[i] = total_count / (n_subset * intensity)
-    
-    return K_values
-
+    # Points present in both sets pair with themselves at distance zero and
+    # so appear in every bin. Remove exactly as many as are really there.
+    self_pairs = int(reference_tree.count_neighbors(subset_tree, 1e-9))
+    pair_counts -= self_pairs
+ 
+    if np.any(pair_counts < 0):
+        raise RuntimeError(
+            "negative pair count after self-pair removal — this should be "
+            "impossible; check that reference and subset arrays are in the "
+            "same units")
+ 
+    k_values = volume * pair_counts / (float(n_ref) * float(n_subset))
+ 
+    if np.any(k_values < 0):
+        raise RuntimeError("K(r) came out negative, which is not possible")
+ 
+    return k_values
+ 
+ 
+# ---------------------------------------------------------------------
+# the H function
+# ---------------------------------------------------------------------
+ 
+ 
+def _check_k(k_values):
+    k_values = np.asarray(k_values, dtype=float)
+    if np.any(~np.isfinite(k_values)):
+        raise ValueError("K contains NaN or inf")
+    if np.any(k_values < 0):
+        raise ValueError(
+            "K contains negative values, so L(r) is undefined. K is a pair "
+            "count divided by an intensity and cannot be negative — the fault "
+            "is upstream in optimized_ripleys_k, not here.")
+    return k_values
+ 
+ 
 def ripleys_h_function_3d(k_values, r_values):
-    """
-    Convert K values to H values for 3D point patterns with edge correction.
-    
-    Parameters:
-    k_values: numpy array of K function values
-    r_values: numpy array of distances at which K was computed
-    edge_weights: optional array of edge correction weights
-    
-    Returns:
-    h_values: numpy array of H function values
-    """
-    h_values = np.cbrt(k_values / (4/3 * np.pi)) - r_values
-    
-    return h_values
-
+    """Besag's L for 3D, centred: (3K / 4pi)^(1/3) - r."""
+    return np.cbrt(_check_k(k_values) / (4 / 3 * np.pi)) - np.asarray(r_values, float)
+ 
+ 
 def ripleys_h_function_2d(k_values, r_values):
-    """
-    Convert K values to H values for 2D point patterns with edge correction.
-    
-    Parameters:
-    k_values: numpy array of K function values
-    r_values: numpy array of distances at which K was computed
-    edge_weights: optional array of edge correction weights
-    
-    Returns:
-    h_values: numpy array of H function values
-    """
-    h_values = np.sqrt(k_values / np.pi) - r_values
-    
-    return h_values
-
+    """Besag's L for 2D, centred: sqrt(K / pi) - r."""
+    return np.sqrt(_check_k(k_values) / np.pi) - np.asarray(r_values, float)
+ 
+ 
 def compute_ripleys_h(k_values, r_values, dimension=2):
-    """
-    Compute Ripley's H function (normalized K) with edge correction.
-    
-    Parameters:
-    k_values: numpy array of K function values
-    r_values: numpy array of distances at which K was computed
-    edge_weights: optional array of edge correction weights
-    dimension: dimensionality of the point pattern (2 for 2D, 3 for 3D)
-    
-    Returns:
-    h_values: numpy array of H function values
-    """
+    """Ripley's H = L(r) - r. Zero under CSR, positive when clustered."""
     if dimension == 2:
         return ripleys_h_function_2d(k_values, r_values)
-    elif dimension == 3:
+    if dimension == 3:
         return ripleys_h_function_3d(k_values, r_values)
-    else:
-        raise ValueError("Dimension must be 2 or 3")
-
-def plot_ripley_functions(r_values, k_values, h_values, dimension=2, rootiden = None, compiden = None, figsize=(12, 5)):
-    """
-    Plot Ripley's K and H functions with theoretical Poisson distribution references
-    adjusted for edge effects.
-    
-    Parameters:
-    r_values: numpy array of distances at which K and H were computed
-    k_values: numpy array of K function values
-    h_values: numpy array of H function values (normalized K)
-    edge_weights: optional array of edge correction weights
-    dimension: dimensionality of the point pattern (2 for 2D, 3 for 3D)
-    figsize: tuple specifying figure size (width, height)
-    """
-
-    #plt.figure()
+    raise ValueError("Dimension must be 2 or 3")
+ 
+ 
+# ---------------------------------------------------------------------
+# plotting
+# ---------------------------------------------------------------------
+ 
+ 
+def plot_ripley_functions(r_values, k_values, h_values, dimension=2,
+                          rootiden=None, compiden=None, figsize=(12, 5)):
+    """Plot K and H against their complete-spatial-randomness references."""
     fig, (ax1, ax2) = plt.subplots(1, 2, figsize=figsize)
-    
-    # Theoretical values for complete spatial randomness (CSR)
+ 
     if dimension == 2:
-        theo_k = np.pi * r_values**2  # πr² for 2D
+        theo_k = np.pi * np.asarray(r_values) ** 2
     elif dimension == 3:
-        theo_k = (4/3) * np.pi * r_values**3  # (4/3)πr³ for 3D
+        theo_k = (4 / 3) * np.pi * np.asarray(r_values) ** 3
     else:
         raise ValueError("Dimension must be 2 or 3")
-    
-    # Theoretical H values are always 0 for CSR
-    theo_h = np.zeros_like(r_values)
-    
-    # Plot K function
+ 
     ax1.plot(r_values, k_values, 'b-', label='Observed K(r)')
     ax1.plot(r_values, theo_k, 'r--', label='Theoretical K(r) for CSR')
     ax1.set_xlabel('Distance (r)')
-    ax1.set_ylabel('L(r)')
-    if rootiden is None or compiden is None:
-        ax1.set_title("Ripley's K Function")
-    else:
-        ax1.set_title(f"Ripley's K Function for {compiden} Clustering Around {rootiden}")
+    ax1.set_ylabel('K(r)')
+    ax1.set_title("Ripley's K Function" if rootiden is None or compiden is None
+                  else f"Ripley's K Function for {compiden} Clustering Around {rootiden}")
     ax1.legend()
     ax1.grid(True, alpha=0.3)
-    
-    # Plot H function
+ 
     ax2.plot(r_values, h_values, 'b-', label='Observed H(r)')
-    ax2.plot(r_values, theo_h, 'r--', label='Theoretical H(r) for CSR')
+    ax2.plot(r_values, np.zeros_like(r_values), 'r--',
+             label='Theoretical H(r) for CSR')
     ax2.set_xlabel('Distance (r)')
-    ax2.set_ylabel('L(r) Normalized')
-    if rootiden is None or compiden is None:
-        ax2.set_title("Ripley's H Function")
-    else:
-        ax2.set_title(f"Ripley's H Function for {compiden} Clustering Around {rootiden}")
+    ax2.set_ylabel('H(r) = L(r) - r')
+    ax2.set_title("Ripley's H Function" if rootiden is None or compiden is None
+                  else f"Ripley's H Function for {compiden} Clustering Around {rootiden}")
     ax2.axhline(y=0, color='k', linestyle='-', alpha=0.3)
     ax2.legend()
     ax2.grid(True, alpha=0.3)
-    
+ 
     plt.tight_layout()
     plt.show()
     #plt.clf()
+
+class BatchRipley:
+    """
+    Ripley's K and H for every ordered identity pair, sharing one radius grid.
+
+    Every pair is computed against the same r values, the same study volume
+    and the same interior root criterion, so the columns of an output file are
+    directly comparable and the expensive geometry is paid for once.
+
+    Ordered, not unordered: roots are restricted to the mask interior while
+    targets are not, so (A as root, B as target) is a different statistic from
+    (B as root, A as target). Both are computed.
+
+    Parameters mirror `get_ripley`, minus root and targ. All-node combinations
+    are deliberately excluded — batch mode iterates identities only.
+    """
+
+    def __init__(self, network, distance=5.0, edgecorrect=False, bounds=None,
+                 ignore_dims=True, proportion=0.5, mode=0, safe=False,
+                 factor=0.25):
+
+        if network.node_identities is None:
+            raise ValueError(
+                "Batch mode needs node identities; there is nothing to pair up.")
+        if not network.node_centroids:
+            raise ValueError("Batch mode needs node centroids.")
+
+        self.network = network
+        self.distance = distance
+        self.edgecorrect = edgecorrect
+        self.ignore_dims = ignore_dims
+        self.mode = mode
+        self.safe = safe
+        self.factor = factor
+
+        # ---- geometry, once ------------------------------------------------
+        self.min_coords, self.max_coords = network._ripley_bounds(bounds)
+        self.bounds = (self.min_coords, self.max_coords)
+        sides = self.max_coords - self.min_coords
+
+        self.dim = network._ripley_dim()
+        if self.dim == 2:
+            self.volume = sides[0] * sides[1] * network.xy_scale ** 2
+        else:
+            self.volume = np.prod(sides) * network.z_scale * network.xy_scale ** 2
+
+        self.max_r = None
+        # `safe` overrides the proportion, exactly as get_ripley does.
+        self.proportion = factor if safe else proportion
+
+        # ---- node tables, once ---------------------------------------------
+        self.node_ids = np.array([int(node) for node in network.node_centroids])
+        self.centroids = np.array(
+            [network.node_centroids[node] for node in network.node_centroids],
+            dtype=float)                                     # unscaled (z, y, x)
+
+        # Scaled points. get_ripley drops the degenerate z column for 2D data
+        # after edge correction, so keep both forms: the 3-column version goes
+        # to the r-value generator and the edge corrector, the trimmed one to
+        # the trees and the K function.
+        self._points_full = convert_centroids_to_array(
+            self.centroids, xy_scale=network.xy_scale, z_scale=network.z_scale)
+        self._points = (self._points_full[:, 1:] if self.dim == 2
+                        else self._points_full)
+
+        row_of = {node: i for i, node in enumerate(self.node_ids)}
+
+        # ---- identity -> row indices, once ---------------------------------
+        rows_by_identity = {}
+        for node, identity_list in network.node_identities.items():
+            row = row_of.get(int(node))
+            if row is None:                 # identity without a centroid
+                continue
+            for identity in identity_list:
+                rows_by_identity.setdefault(identity, []).append(row)
+
+        self.identities = sorted(rows_by_identity)
+        self._rows = {identity: np.array(sorted(rows), dtype=int)
+                      for identity, rows in rows_by_identity.items()}
+
+        # ---- interior root criterion, once ---------------------------------
+        # This is the part that would otherwise redo a whole-image distance
+        # transform for all n^2 pairs.
+        interior = np.ones(len(self._points), dtype=bool)
+        if ignore_dims:
+            if mode == 0:
+                interior = self._interior_by_image_bounds(factor)
+            else:
+                interior_ids, self.volume, self.max_r = \
+                    network._ripley_interior_ids(mode, self.dim, factor, safe)
+                interior = np.zeros(len(self._points), dtype=bool)
+                for node in interior_ids:
+                    row = row_of.get(int(node))
+                    if row is not None:
+                        interior[row] = True
+        self._interior = interior
+
+        # ---- the shared radius grid, once ----------------------------------
+        # Built from every node rather than one pair's points, so all columns
+        # of an output file line up. With bounds supplied (the normal case)
+        # the point cloud is not consulted at all.
+        self.r_values = generate_r_values(
+            self._points_full, distance, bounds=self.bounds, dim=self.dim,
+            max_proportion=self.proportion, max_r=self.max_r,
+            xy_scale=network.xy_scale, z_scale=network.z_scale)
+
+        self._root_cache = {}
+        self._targ_cache = {}
+        self.failures = {}
+
+    # -----------------------------------------------------------------
+    # interior selection for mode 0
+    # -----------------------------------------------------------------
+
+    def _interior_by_image_bounds(self, factor):
+        """
+        Vectorised form of `_ripley_roots_inside_image` over every node at once.
+
+        Bounds are (x, y, z) ordered and centroids are (z, y, x), hence the
+        column reversal.
+        """
+        span = self.max_coords - self.min_coords
+        xyz = self.centroids[:, ::-1]                  # -> (x, y, z)
+        n_axes = 3 if self.dim == 3 else 2
+
+        keep = np.ones(len(xyz), dtype=bool)
+        for axis in range(n_axes):
+            margin = span[axis] * factor
+            keep &= (xyz[:, axis] - self.min_coords[axis] > margin)
+            keep &= (self.max_coords[axis] - xyz[:, axis] > margin)
+        return keep
+
+    # -----------------------------------------------------------------
+    # cached per-identity point sets and trees
+    # -----------------------------------------------------------------
+
+    def root_set(self, identity):
+        """(points, tree, n) for an identity acting as root: interior only."""
+        if identity not in self._root_cache:
+            rows = self._rows[identity][self._interior[self._rows[identity]]]
+            points = self._points[rows]
+            tree = KDTree(points) if len(points) else None
+            self._root_cache[identity] = (points, tree, rows)
+        return self._root_cache[identity]
+
+    def target_set(self, identity):
+        """(points, tree, rows) for an identity acting as target: all of them."""
+        if identity not in self._targ_cache:
+            rows = self._rows[identity]
+            points = self._points[rows]
+            tree = KDTree(points) if len(points) else None
+            self._targ_cache[identity] = (points, tree, rows)
+        return self._targ_cache[identity]
+
+    def root_count(self, identity):
+        return len(self.root_set(identity)[0])
+
+    # -----------------------------------------------------------------
+    # one pair
+    # -----------------------------------------------------------------
+
+    def pair(self, root, targ):
+        """
+        K and H for one ordered identity pair.
+
+        Returns (k_values, h_values). Both are NaN-filled and the reason is
+        recorded in `self.failures` when the pair cannot be computed — an
+        empty population, or an error from the estimator. One bad pair must
+        not abandon the other n^2 - 1.
+        """
+        blank = np.full(len(self.r_values), np.nan)
+
+        root_points, root_tree, root_rows = self.root_set(root)
+        targ_points, targ_tree, targ_rows = self.target_set(targ)
+
+        if len(root_points) == 0:
+            self.failures[(root, targ)] = "no interior root points"
+            return blank, blank.copy()
+        if len(targ_points) == 0:
+            self.failures[(root, targ)] = "no target points"
+            return blank, blank.copy()
+
+        n_ref, n_subset = len(root_points), len(targ_points)
+
+        try:
+            if self.edgecorrect:
+                # Mirroring produces new arrays, so the cached trees are no
+                # use here and K has to build its own.
+                mirrored_roots, mirrored_targs = apply_edge_correction_to_ripley(
+                    self._points_full[root_rows], self._points_full[targ_rows],
+                    self.proportion, self.bounds, self.dim,
+                    node_centroids=self.network.node_centroids)
+                if self.dim == 2:
+                    mirrored_roots = convert_augmented_array_to_points(
+                        mirrored_roots)
+                    mirrored_targs = convert_augmented_array_to_points(
+                        mirrored_targs)
+                k_values = optimized_ripleys_k(
+                    mirrored_roots, mirrored_targs, self.r_values,
+                    bounds=self.bounds, dim=self.dim, volume=self.volume,
+                    n_subset=n_subset, n_ref=n_ref)
+            else:
+                k_values = optimized_ripleys_k(
+                    root_points, targ_points, self.r_values,
+                    bounds=self.bounds, dim=self.dim, volume=self.volume,
+                    n_subset=n_subset, n_ref=n_ref,
+                    reference_tree=root_tree, subset_tree=targ_tree)
+
+            h_values = compute_ripleys_h(
+                k_values, self.r_values, self.dim)
+        except Exception as error:
+            self.failures[(root, targ)] = f"{type(error).__name__}: {error}"
+            return blank, blank.copy()
+
+        return k_values, h_values
+
+    # -----------------------------------------------------------------
+    # the batch
+    # -----------------------------------------------------------------
+
+    def run(self, output_dir, progress=None):
+        """
+        Compute every ordered identity pair and write the results out.
+
+        One CSV per root identity per statistic: `Ripley K/<root>.csv` holds a
+        radius column plus one column per target identity, including the root
+        against itself. n identities give 2n files rather than 2n^2.
+
+        A matching PNG goes beside each CSV. Figures are rendered through the
+        Agg canvas directly rather than pyplot, so nothing is drawn into the
+        application's own figure manager and no windows appear.
+
+        `progress` is an optional callable (done, total, label) -> bool.
+        Returning False cancels; `run` then returns None having written only
+        the identities it finished.
+        """
+        output_dir = Path(output_dir)
+        k_dir = output_dir / "Ripley K"
+        h_dir = output_dir / "Ripley H"
+        k_dir.mkdir(parents=True, exist_ok=True)
+        h_dir.mkdir(parents=True, exist_ok=True)
+
+        self._write_parameters(output_dir)
+
+        total = len(self.identities) ** 2
+        done = 0
+        written = 0
+        used_names = {}
+
+        for root in self.identities:
+            k_columns = {}
+            h_columns = {}
+
+            for targ in self.identities:
+                k_values, h_values = self.pair(root, targ)
+                k_columns[targ] = k_values
+                h_columns[targ] = h_values
+                done += 1
+
+                if progress is not None and not progress(
+                        done, total, f"{root} vs {targ}"):
+                    return None
+
+            stem = self._filename(root, used_names)
+            radius = {"Radius (scaled)": self.r_values}
+
+            pd.DataFrame({**radius, **k_columns}).to_csv(
+                k_dir / f"{stem}.csv", index=False)
+            pd.DataFrame({**radius, **h_columns}).to_csv(
+                h_dir / f"{stem}.csv", index=False)
+
+            self._save_figure(k_dir / f"{stem}.png", root, k_columns,
+                              statistic="K")
+            self._save_figure(h_dir / f"{stem}.png", root, h_columns,
+                              statistic="H")
+            written += 1
+
+        return written
+
+    # -----------------------------------------------------------------
+    # output helpers
+    # -----------------------------------------------------------------
+
+    @staticmethod
+    def _filename(identity, used_names):
+        """A filesystem-safe stem, disambiguated if sanitising collides."""
+        stem = re.sub(r"[^\w\-. ]", "_", str(identity)).strip() or "identity"
+        stem = stem[:120]
+        if stem in used_names:
+            used_names[stem] += 1
+            stem = f"{stem}_{used_names[stem]}"
+        else:
+            used_names[stem] = 0
+        return stem
+
+    def _write_parameters(self, output_dir):
+        """Record the settings, so a folder of results stays interpretable."""
+        lines = [
+            "Batch Ripley parameters",
+            "=" * 40,
+            f"identities        : {len(self.identities)}",
+            f"pairs             : {len(self.identities) ** 2}",
+            f"dimension         : {self.dim}D",
+            f"study volume      : {self.volume}",
+            f"bucket distance   : {self.distance}",
+            f"radius grid       : {self.r_values[0]} .. {self.r_values[-1]} "
+            f"({len(self.r_values)} values)",
+            f"proportion        : {self.proportion}",
+            f"factor            : {self.factor}",
+            f"exclude border    : {self.ignore_dims}",
+            f"boundary mode     : {self.mode}",
+            f"radius cap (safe) : {self.safe} ({self.max_r})",
+            f"edge correction   : {self.edgecorrect}",
+            f"xy scale          : {self.network.xy_scale}",
+            f"z scale           : {self.network.z_scale}",
+            "",
+            "interior root counts per identity:",
+        ]
+        for identity in self.identities:
+            lines.append(f"  {identity}: {self.root_count(identity)} of "
+                         f"{len(self._rows[identity])}")
+
+        if self.failures:
+            lines += ["", "pairs that could not be computed:"]
+            lines += [f"  {root} vs {targ}: {why}"
+                      for (root, targ), why in sorted(self.failures.items())]
+
+        (output_dir / "batch_parameters.txt").write_text("\n".join(lines))
+
+    def _save_figure(self, path, root, columns, statistic):
+        """One figure per root identity, every target overlaid."""
+        figure = Figure(figsize=(9, 5.5))
+        FigureCanvasAgg(figure)
+        axes = figure.add_subplot(111)
+
+        plotted = 0
+        palette = np.linspace(0, 1, max(len(columns), 2))
+
+        for index, (targ, values) in enumerate(columns.items()):
+            if not np.any(np.isfinite(values)):
+                continue
+            axes.plot(self.r_values, values, lw=1.2,
+                      color=cm.viridis(palette[index]), label=str(targ))
+            plotted += 1
+
+        if statistic == "K":
+            theoretical = (np.pi * self.r_values ** 2 if self.dim == 2
+                           else (4 / 3) * np.pi * self.r_values ** 3)
+            axes.plot(self.r_values, theoretical, 'k--', lw=1.4,
+                      label="CSR")
+            axes.set_ylabel("K(r)")
+        else:
+            axes.axhline(0, color='k', ls='--', lw=1.4)
+            axes.set_ylabel("H(r) = L(r) - r")
+
+        axes.set_xlabel("Distance r (scaled)")
+        axes.set_title(f"Ripley's {statistic}: targets clustering around {root}")
+        axes.grid(True, alpha=0.3)
+
+        # A legend for seventy curves is worse than none. Nothing labelled at
+        # all means every column was blank, so skip it rather than warn.
+        if plotted <= 15 and (plotted > 0 or statistic == "K"):
+            axes.legend(fontsize=8, ncol=2, frameon=False)
+        else:
+            axes.text(0.99, 0.02, f"{plotted} target identities",
+                      transform=axes.transAxes, ha="right", fontsize=8,
+                      alpha=0.7)
+
+        figure.tight_layout()
+        figure.savefig(path, dpi=150)
 
 
 
@@ -1221,3 +1590,481 @@ def label_continuous(to_assign, labels):
     num_labels = np.max(to_assign)
     result = create_label_map(to_assign, labels, num_labels, array_shape)
     return result
+
+
+# Some methods for the nearest neighbors batch method:
+
+import ast
+import numpy as np
+from scipy.spatial import KDTree
+
+EPSILON = 1e-10
+
+
+# ---------------------------------------------------------------- identities
+
+def natural_key(value):
+    """Sort key so 'id2' precedes 'id10' and mixed types don't explode."""
+    s = str(value)
+    out = []
+    num = ''
+    for ch in s:
+        if ch.isdigit():
+            num += ch
+        else:
+            if num:
+                out.append((1, int(num), ''))
+                num = ''
+            out.append((0, 0, ch.lower()))
+    if num:
+        out.append((1, int(num), ''))
+    return out
+
+
+def parse_identity_spec(spec):
+    """
+    Normalize an identity selector into (key, exact).
+
+    exact=False -> membership test: key in node_identities[node]
+    exact=True  -> whole-identity test: str(list(iden)) == key
+
+    Accepts plain strings ('Tumor'), lists/tuples (['Tumor', 'CD8']),
+    and legacy stringified lists ("['Tumor']") for backwards compatibility.
+    A single-element selector is treated as membership, which matches the
+    historical behavior of the old "['x']" format.
+    """
+    if spec is None:
+        return None, False
+
+    if isinstance(spec, (list, tuple, set)):
+        items = list(spec)
+        if len(items) == 0:
+            return None, False
+        if len(items) == 1:
+            return items[0], False
+        return str(list(items)), True
+
+    if isinstance(spec, str):
+        stripped = spec.strip()
+        if stripped[:1] in ('[', '('):
+            try:
+                return parse_identity_spec(ast.literal_eval(stripped))
+            except Exception:
+                return spec, False
+        return spec, False
+
+    return spec, False
+
+
+def identity_label(spec):
+    """Human-readable label for a spec (no stringified-list noise)."""
+    key, exact = parse_identity_spec(spec)
+    if not exact:
+        return str(key)
+    try:
+        return " + ".join(str(m) for m in ast.literal_eval(key))
+    except Exception:
+        return str(key)
+
+
+def enumerate_identity_specs(node_identities, include_multi=False):
+    """
+    Build the list of identity selectors for a batch run.
+
+    include_multi=False -> every individual identity string (multi-identity
+                           nodes contribute to each of their identities)
+    include_multi=True  -> every unique identity combination, matched exactly
+                           (single-element combos still behave as membership,
+                           matching the old dialog's semantics)
+    """
+    if include_multi:
+        combos = {tuple(iden) for iden in node_identities.values()}
+        ordered = sorted(combos, key=lambda c: (len(c), [natural_key(x) for x in c]))
+        return [list(c) for c in ordered]
+
+    singles = set()
+    for iden in node_identities.values():
+        singles.update(iden)
+    return sorted(singles, key=natural_key)
+
+
+def resolve_identity_sets(node_identities, specs, restrict_to=None):
+    """
+    Map identity selectors -> node id arrays in a single pass over the nodes.
+
+    Returns (identity_sets, labels) where identity_sets is {label: np.array(ids)}
+    and labels preserves the order of `specs`.
+    """
+    valid = set(restrict_to) if restrict_to is not None else None
+
+    resolved = []
+    used_labels = set()
+    for spec in specs:
+        key, exact = parse_identity_spec(spec)
+        label = identity_label(spec)
+        while label in used_labels:          # defensive; labels should be unique
+            label += "'"
+        used_labels.add(label)
+        resolved.append({'label': label, 'key': key, 'exact': exact, 'ids': []})
+
+    for node, iden in node_identities.items():
+        if valid is not None and node not in valid:
+            continue
+        iden_str = None
+        for entry in resolved:
+            if entry['exact']:
+                if iden_str is None:
+                    iden_str = str(list(iden))
+                if iden_str == entry['key']:
+                    entry['ids'].append(node)
+            elif entry['key'] in iden:
+                entry['ids'].append(node)
+
+    identity_sets = {e['label']: np.asarray(e['ids']) for e in resolved}
+    labels = [e['label'] for e in resolved]
+    return identity_sets, labels
+
+
+# ---------------------------------------------------------------- geometry
+
+def scale_coords(coords, xy_scale=1.0, z_scale=1.0):
+    """(N, 3) -> z on axis 0; (N, 2) -> xy on both axes."""
+    out = np.asarray(coords, dtype=float).copy()
+    if out.shape[1] >= 3:
+        out[:, 0] *= z_scale
+        out[:, 1:] *= xy_scale
+    else:
+        out *= xy_scale
+    return out
+
+
+def build_coordinate_index(point_centroids, identity_sets, labels=None):
+    """
+    Pack every node referenced by identity_sets into one coordinate array.
+
+    Returns (all_ids, coords, rows_by_label) where rows_by_label holds integer
+    row indices into `coords`. A node belonging to several identities appears
+    once in `coords` and in several row arrays.
+    """
+    labels = list(identity_sets) if labels is None else labels
+
+    all_ids, row_of = [], {}
+    for label in labels:
+        for nid in identity_sets[label]:
+            if nid in row_of or nid not in point_centroids:
+                continue
+            row_of[nid] = len(all_ids)
+            all_ids.append(nid)
+
+    if not all_ids:
+        return [], np.empty((0, 3)), {label: np.empty(0, dtype=int) for label in labels}
+
+    dim = len(point_centroids[all_ids[0]])
+    coords = np.empty((len(all_ids), dim), dtype=float)
+    for i, nid in enumerate(all_ids):
+        coords[i] = point_centroids[nid]
+
+    rows_by_label = {
+        label: np.array([row_of[n] for n in identity_sets[label] if n in row_of], dtype=int)
+        for label in labels
+    }
+    return all_ids, coords, rows_by_label
+
+
+# ---------------------------------------------------------------- helpers
+ 
+def _mean_of_nearest(dists_sorted, k_eff):
+    """
+    Mean of the k_eff smallest distances per row, ignoring +inf entries
+    (self-matches / coincident points). Rows with no finite entry -> NaN.
+    """
+    sel = dists_sorted[:, :k_eff]
+    finite = np.isfinite(sel)
+    counts = finite.sum(axis=1)
+    sums = np.where(finite, sel, 0.0).sum(axis=1)
+    return np.where(counts > 0, sums / np.maximum(counts, 1), np.nan)
+ 
+ 
+# ---------------------------------------------------------------- batch core
+ 
+def _matrix_from_coords(coords_scaled, rows_by_label, labels, num,
+                        query_rows_by_label=None, return_node_table=False):
+    """
+    One tree per target identity, one vectorized query per tree, sliced per root.
+ 
+    Replicates average_nearest_neighbor_distances() exactly for every pair:
+    self-matches (and any coincident point) are pushed to +inf, the remaining
+    `num_eff` nearest are averaged per root, and roots with no valid neighbor
+    drop out as NaN.
+ 
+    If return_node_table is True, also returns (q_rows, node_table) where
+    node_table has shape (len(q_rows), len(labels)): entry [i, j] is the mean
+    nearest-neighbor distance from node q_rows[i] to identity labels[j], or NaN
+    when that node has no valid neighbor in that identity.
+ 
+    Self-exclusion in the node table is decided by *node membership*: if the
+    node itself belongs to labels[j], one neighbor slot is dropped
+    (num_eff = min(num, n_t - 1)), matching the diagonal convention.
+    """
+    matrix = {r: {t: None for t in labels} for r in labels}
+    if query_rows_by_label is None:
+        query_rows_by_label = rows_by_label
+ 
+    stack = [query_rows_by_label[l] for l in labels if len(query_rows_by_label[l])]
+    if not stack:
+        empty = (np.empty(0, dtype=int), np.empty((0, len(labels))))
+        return (matrix, *empty) if return_node_table else matrix
+ 
+    q_rows = np.unique(np.concatenate(stack))
+    q_coords = coords_scaled[q_rows]
+    q_index = {l: np.searchsorted(q_rows, query_rows_by_label[l]) for l in labels}
+ 
+    node_table = np.full((len(q_rows), len(labels)), np.nan) if return_node_table else None
+ 
+    for col, targ in enumerate(labels):
+        t_rows = rows_by_label[targ]
+        n_t = len(t_rows)
+        if n_t == 0:
+            continue
+ 
+        tree = KDTree(coords_scaled[t_rows])
+        # Cap k at the tree size so scipy never pads with inf.
+        k = int(min(num + 1, n_t))
+        dists, _ = tree.query(q_coords, k=k)
+        dists = np.asarray(dists, dtype=float)
+        if dists.ndim == 1:                       # scipy squeezes when k == 1
+            dists = dists[:, np.newaxis]
+ 
+        dists = np.where(dists < EPSILON, np.inf, dists)
+        dists = np.sort(dists, axis=1)
+ 
+        # ---- per-node column (no extra tree work, just two more slices)
+        if return_node_table:
+            member = np.isin(q_rows, t_rows)
+            for mask, num_eff in ((member, min(num, n_t - 1)),
+                                  (~member, min(num, n_t))):
+                if num_eff <= 0 or not mask.any():
+                    continue
+                node_table[mask, col] = _mean_of_nearest(dists[mask], num_eff)
+ 
+        # ---- unchanged aggregate matrix
+        for root in labels:
+            idx = q_index[root]
+            if len(idx) == 0:
+                continue
+            num_eff = min(num, n_t - 1) if root == targ else min(num, n_t)
+            if num_eff <= 0:
+                continue
+ 
+            per_root = _mean_of_nearest(dists[idx], num_eff)
+            valid = per_root[~np.isnan(per_root)]
+            if valid.size:
+                matrix[root][targ] = float(np.mean(valid))
+ 
+    return (matrix, q_rows, node_table) if return_node_table else matrix
+ 
+ 
+def batch_average_nearest_neighbor_distances(point_centroids, identity_sets, labels=None,
+                                             xy_scale=1.0, z_scale=1.0, num=1,
+                                             return_node_table=True):
+    """
+    Observed nearest-neighbor matrix for every (root, target) identity pair.
+ 
+    Returns (matrix, (all_ids, rows_by_label)) as before. With
+    return_node_table=True, returns
+    (matrix, (all_ids, rows_by_label), (node_ids, node_table)) where node_ids
+    is a list of node ids (rows) and node_table is a float array of shape
+    (len(node_ids), len(labels)) whose columns follow `labels`.
+    """
+    labels = list(identity_sets) if labels is None else labels
+    all_ids, coords, rows_by_label = build_coordinate_index(point_centroids, identity_sets, labels)
+ 
+    if not all_ids:
+        matrix = {r: {t: None for t in labels} for r in labels}
+        if return_node_table:
+            return matrix, (all_ids, rows_by_label), ([], np.empty((0, len(labels))))
+        return matrix, (all_ids, rows_by_label)
+ 
+    coords_scaled = scale_coords(coords, xy_scale, z_scale)
+ 
+    if return_node_table:
+        matrix, q_rows, node_table = _matrix_from_coords(
+            coords_scaled, rows_by_label, labels, num, return_node_table=True)
+        node_ids = [all_ids[r] for r in q_rows]
+        return matrix, (all_ids, rows_by_label), (node_ids, node_table)
+ 
+    matrix = _matrix_from_coords(coords_scaled, rows_by_label, labels, num)
+    return matrix, (all_ids, rows_by_label)
+ 
+ 
+# ---------------------------------------------------------------- convenience
+ 
+def node_table_to_dataframe(node_ids, node_table, labels, identity_sets=None):
+    """
+    Optional pandas view. If identity_sets is given, adds one boolean column per
+    identity recording membership, so you can group rows by root identity.
+    """
+    import pandas as pd
+ 
+    df = pd.DataFrame(node_table, index=pd.Index(node_ids, name="node_id"),
+                      columns=list(labels))
+    if identity_sets is not None:
+        for label in labels:
+            members = set(identity_sets[label])
+            df[f"in_{label}"] = [n in members for n in node_ids]
+    return df
+
+# ---------------------------------------------------------------- simulation
+
+def _positions_to_coords(flat_idx, shape, valid_positions):
+    if valid_positions is not None:
+        return np.stack([axis[flat_idx] for axis in valid_positions], axis=1).astype(float)
+    return np.stack(np.unravel_index(flat_idx, shape), axis=1).astype(float)
+
+
+def _subsample_rows(rows_by_label, labels, num_query, rng):
+    if not num_query:
+        return rows_by_label
+    out = {}
+    for label in labels:
+        rows = rows_by_label[label]
+        if len(rows) > num_query:
+            out[label] = np.sort(rng.choice(rows, size=num_query, replace=False))
+        else:
+            out[label] = rows
+    return out
+
+
+def simulate_batch_nearest_neighbor_distances(rows_by_label, labels, n_points, shape,
+                                              xy_scale=1.0, z_scale=1.0, num=1,
+                                              theoretical='Random', mask=None,
+                                              replicates=1, num_query=None, seed=None):
+    """
+    Null matrix from ONE point placement per replicate.
+
+    All n_points objects are placed once (randomly, or on a uniform lattice),
+    identity membership is permuted across those positions, and the full
+    combination matrix is read off that single arrangement. `replicates`
+    therefore costs `replicates` placements total, not one per pair.
+    """
+    rng = np.random.default_rng(seed)
+    shape = tuple(int(s) for s in shape)
+
+    if mask is not None:
+        valid_positions = np.where(mask)
+        total = len(valid_positions[0])
+    else:
+        valid_positions = None
+        total = int(np.prod(shape))
+
+    if total == 0:
+        raise ValueError("No valid positions available for the simulated distribution")
+
+    replace = n_points > total
+    if replace:
+        print(f"Warning: {n_points} objects but only {total} available positions; "
+              f"sampling simulated positions with replacement.")
+
+    accum = {r: {t: [] for t in labels} for r in labels}
+
+    for _ in range(max(1, int(replicates))):
+        if theoretical == 'Uniform':
+            flat = np.linspace(0, total - 1, n_points).astype(int)
+        else:
+            flat = rng.choice(total, size=n_points, replace=replace)
+
+        coords = _positions_to_coords(flat, shape, valid_positions)
+        # Scramble which object lands on which position so identity groups are
+        # spatially interleaved (matters for the uniform lattice).
+        coords = coords[rng.permutation(len(coords))]
+        coords_scaled = scale_coords(coords, xy_scale, z_scale)
+
+        query_rows = _subsample_rows(rows_by_label, labels, num_query, rng)
+        rep = _matrix_from_coords(coords_scaled, rows_by_label, labels, num,
+                                  query_rows_by_label=query_rows)
+
+        for r in labels:
+            for t in labels:
+                if rep[r][t] is not None:
+                    accum[r][t].append(rep[r][t])
+
+        if theoretical == 'Uniform' and replicates > 1 and len(labels) == 1:
+            break  # nothing left to vary
+
+    matrix = {}
+    for r in labels:
+        matrix[r] = {t: (float(np.mean(accum[r][t])) if accum[r][t] else None) for t in labels}
+    return matrix
+
+def simulate_batch_label_scramble(coords_scaled, rows_by_label, labels, num=1,
+                                  replicates=1, num_query=None, seed=None):
+    """
+    Null matrix from permuting identity labels across FIXED observed positions.
+
+    Positions never move — only which position carries which identity changes.
+    Spatial architecture (clustering, density gradients, tissue boundary) is
+    preserved exactly; the null asks whether identities are exchangeable across
+    the observed arrangement.
+
+    One permutation per replicate feeds the entire combination matrix, matching
+    the cost structure of simulate_batch_nearest_neighbor_distances().
+
+    Multi-identity nodes move as a unit: a single index permutation is applied
+    to every label's row list, so an index appearing under several labels lands
+    at the same new position in all of them.
+
+    Parameters
+    ----------
+    coords_scaled : ndarray, shape (n_points, ndim)
+        Observed centroids, already scaled. Row order must match the indices
+        used in rows_by_label.
+    rows_by_label : dict
+        {label: array of row indices into coords_scaled}
+    """
+    rng = np.random.default_rng(seed)
+    n_points = len(coords_scaled)
+
+    if n_points == 0:
+        raise ValueError("No positions available for the label scramble")
+
+    rows_by_label = {l: np.asarray(rows_by_label.get(l, []), dtype=int) for l in labels}
+
+    accum = {r: {t: [] for t in labels} for r in labels}
+
+    for _ in range(max(1, int(replicates))):
+        perm = rng.permutation(n_points)
+        scrambled = {l: perm[rows] for l, rows in rows_by_label.items()}
+
+        query_rows = _subsample_rows(scrambled, labels, num_query, rng)
+        rep = _matrix_from_coords(coords_scaled, scrambled, labels, num,
+                                  query_rows_by_label=query_rows)
+
+        for r in labels:
+            for t in labels:
+                if rep[r][t] is not None:
+                    accum[r][t].append(rep[r][t])
+
+    matrix = {}
+    for r in labels:
+        matrix[r] = {t: (float(np.mean(accum[r][t])) if accum[r][t] else None) for t in labels}
+    return matrix
+    
+# ---------------------------------------------------------------- formatting
+
+def matrix_to_rows(matrix, labels):
+    """{root: {targ: v}} -> {root: [v aligned to labels]} for the table/heatmap calls."""
+    return {r: [matrix[r][t] for t in labels] for r in labels}
+
+
+def ratio_matrix(numer, denom, labels):
+    """Simulated / observed, cellwise, tolerant of Nones and zeros."""
+    out = {}
+    for r in labels:
+        row = {}
+        for t in labels:
+            a, b = numer[r][t], denom[r][t]
+            ok = (a is not None and b is not None and np.isfinite(a)
+                  and np.isfinite(b) and b != 0)
+            row[t] = float(a / b) if ok else None
+        out[r] = row
+    return out

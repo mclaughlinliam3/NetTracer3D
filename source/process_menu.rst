@@ -1,959 +1,1630 @@
 .. _process_menu:
 
-==========
+========================
 All Process Menu Options
-==========
+========================
 
-The Process Menu offers options for calculating networks and altering image contents.
+The process menu provides options for calculating networks and altering image
+contents. The first submenu, **Calculate Network**, contains functions for
+calculating networks and their properties. The second, **Image**, contains
+functions that transform images.
 
-* The first submenu is the calculate menu, which has functions for calculating the networks and their properties.
+.. contents:: On this page
+   :local:
+   :depth: 2
+
 
 .. _connectivity_network:
 
-'Process -> Calculate Network -> Calculate Connectivity Network...'
--------------------------------------------------------
-* This method is used to connect objects in the nodes channel via objects in the edges channel.
-* Please see :doc:`quickstart` for a detailed walkthrough about using this function.
-* The vast majority of its parameters are optional, however a few of them are advised to be considered for use with each execution of this method.
-* Selecting this function will show the following menu:
+Process → Calculate Network → Calculate Connectivity Network
+-------------------------------------------------------------
+
+Connects objects in the nodes channel via objects in the edges channel. See
+:doc:`quickstart` for a detailed walkthrough. The vast majority of the parameters
+are optional, though a few warrant consideration on each execution.
 
 .. image:: _static/connectivity_network_menu.png
    :width: 800px
    :alt: Connectivity Network Menu
 
-Parameter Explanations
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-#. xy_scale
-    * Enter a float value here if you want your X/Y 2D plane pixel-scaling to correspond to some real world value. (ie, 5 microns per pixel). It is presumed to be 1 by default.
-#. z_scale
-    * Enter a float value here if you want your Z 3D voxel depth to correspond to some real world value. (ie, 5 microns per voxel). It is presumed to be 1 by default.
-#. Node Search (float)
-    * This value is the distance nodes will search the corresponding edge image for connections to other nodes. Note that this value is scaled corresponding to the xy_scale/z_scale parameters. (As in, if you set xy_scale/z_scale correctly, then treat this as a real-value, such as microns, for your image).
-    * Note this value is 0 by default, which will only connect nodes that edges literally pass through.
-#. Edge Reconnection Distance (float)
-    * This value is the distance edges will dilate ('get inflated'). Note that this value is scaled corresponding to the xy_scale/z_scale parameters. (As in, if you set xy_scale/z_scale correctly, then treat this as a real-value, such as microns, for your image).
-    * The point of this parameter is if your segmented edges are not continious structures, due to having holes from imaging/segmenting artifacts. Edges that are totally discrete in 3D space (ie, not touching), as one might expect, will not join together nodes through that pathway. Blowing them up will fill those holes.
-    * Keep in mind that all edges get blown up - so if I have two edges that are ten microns apart, entering a value of 5 (microns) here will cause them to merge.
-    * This method does NOT erode. It only dilates! This also enables edges to search a bit further than the Node Search parameter suggests, because they can then enter a node's search space!
-    * Furthermore, there is an inherent trade off in using dilation to fill hole artifacts, since they also risk merging nearby edges that shouldn't be merged. Use at your own risk!
-    * (FYI if there are holes I do like to use this param a little bit, however a more elegant solution is to run the filament tracer instead as it can fill gaps in your filaments without excessive merging).
-    * Note this value is 0 by default, and shouldn't be anything if your edges don't have hole artifacts, or those were already corrected (such as via the filament tracer).
-#. Re-Label Nodes...:
-    * Makes NetTracer3D label objects in the nodes channel with a simple adjacency-labeling scheme (ie, all discrete objects in space aquire a unique number).
-    * **DISABLE** this option if your nodes were already labeled elsewhere.
-#. Times to remove Edge Trunks (int):
-    * Parameters 6-9 mainly represent different ways to handle 'trunks' in your network. Trunks are edges that can be observed to connect to an excessive number of nodes, and will be common in anatomical structures, where all nerves and vessels increasingly merge to an originating central location. In your image, having every node connect through the trunk into a giant glob may not be desirable nor statistically valid. As such, here are some ways to get around that:
-    * This first trunk handler has NetTracer3D remove the 'edge trunk' prior to network calculation. It will do this a number of times equal to the integer inputted here. So a value of 1 will remove the fattest trunk, then 2 will also remove the second fattest, etc.
-    * Note: This occurs after NetTracer3D has discretized (split up) the edges. It functions similarly but NOT the same as removing the trunk from the network in-post. It will instead remove the highest-volume (literally, the largest) edge.
-    * Meanwhile, removing the trunk from the network in post takes out the most interconnected edge. Many times this will have the same result, but not always. Just make sure you are using the version of trunk removal that you want.
-#. Auto-Simplify Trunk Elements:
-    * Simply removing the trunk can be a good way to ignore it and instead evaluate more legitimate local connections, but at the same time, you may still want to consider local connectivity through the trunk, just not let it connect everything from one end of the image to the other.
-    * Enabling this option will essentially force the trunk to simplify itself to prefer local connections over longer ones, but will still permit distant connections if there aren't other closer nodes available along the path.
-    * It does this by essentially re-computing this entirely 'Calculate Connectivity Network' but with the search regions for the nodes totally maxed out. This will cause all the nodes to systematically partition the trunk based on proximity. However, connections that are made in this new enlarged search that do not exist in your original search distance will then be dropped, ultimately returning a result that is valid for your desired search regions but with a simplified trunk.
-    * Note that since this requires this recomputation, it will at the very minimum double the processing time of this algorithm. Furthemore, the fast-search will not be used for this maxed out search computation (aka voronoi diagram). This is because the fast search strategy of parallel-distance transform into flood labeling is both less accurate and slow at massive dilations. So this has to be computed with the single-core bound scipy.ndimage.distance_transform_edt to get a perfect voronoi and bypass flood labeling.
-#. Use pre-labeled edges...:
-    * This is a niche parameter to enable. Essentially, if you are interested in how your nodes are interacting with specific branches in your edges, you will first have to label your branches with the 'Process -> Generate -> Label Branches' function.
-    * Next, load your nodes and labeled branches and enable this feature. Then, when the network is calculated, rather than connecting the nodes directly, your labeled edges will become nodes as well, and your original nodes will create a network between themselves and all the labeled branches.
-    * The original 'nodes' and new 'edge branch nodes' receive distinct identities so they are still differentiable.
-    * The output tends to be a very dense network in which your original node objects may not be that statistically relevant. But it can be used to evaluate how your nodes interact with discrete branch elements.
-#. Edge -> Node:
-    * The final trunk-handling parameter is probably the most robust one and the one I'd most often enable if I cared about handling the trunks between different images in a statistically-consistent manner.
-    * If you enable this, rather than connecting all your nodes directly, your edges will also be treated as nodes. Trunks will become hub nodes rather than dense webs of connection.
-    * The reason I'd prefer this over just removing the trunk is it's not biased over what a trunk actually is.
-    * However the one downside is it may alter the dynamics of the network. Essentially, the network is forced to be less clustered as groups of nodes that you may consider connected (and thus would bear a high degree) instead all just connect to the edge that is connecting them (each getting a degree + 1). This is just something you should keep in mind when appraising statistics about the network.
-    * You can also run this option in post from the modify network menu.
-#. Downsample for Centroids (int)
-    * Temporarily downsamples the image on the step to calculate centroids to speed that up (it can be somewhat slow on overly large images). The downsample will be performed in all three dimensions corresponding to the factor entered here.
-    * Note that centroids calculated on downsampled images have to be approximated to the upsampled version, so they may not correspond *perfectly*, although they will generally be close enough.
-    * Warning: for any downsample on an image containing small nodes, if those nodes' smallest dimension is smaller than this down factor, they run the risk of being kicked out of the downsampled image, which means their centroid will not be found.
-        * Please use downsampling that corresponds to your node sizes.
-    * (For larger images, I would generally set this param to something assuming your nodes are big enough.)
-    * As a side note, the value here will also essentially enlarge the overlays from this method (assuming you opt to use them). Larger overlays may be desired for visualization purposes. Note that smaller overlays can still be generated from 'Image -> Overlays...' if this behavior is not desired.
-#. Use fast search...:
-    * Selecting this button will have the program attempt to use a faster search algorithm. Search regions and edge dilation are achieved using parallelization via the edt module instead of scipy. (This requires the edt module to be installed and working, see the installation doc for more info).
-    * After search regions are obtained, they are labelled via flooding with the skimage watershed function. This results in slightly rougher search regions along adjacent searching borders, although it is not large enough to make much of a practical difference in output.
-    * For comparison, the not selecting this will use scipy's distance_transform_edt function to solve the search region, which will yield an exact voxel-to-voxel labeling schema, but will be calculated on a single CPU core and thus potentially take a while for larger images. The program will always fall back to this if the parallel calculation fails somehow.
-#. Generate Overlays:
-    * If enabled, NetTracer3D will execute 'Image -> Overlay -> Create Network Overlay' and 'Image -> Overlay -> Create ID Overlay' (which will override Overay 1 and 2, respectively).
-#. Update Node/Edge in NetTracer3D:
-    * While calculating the edges and nodes, NetTracer3D will transform them somewhat based on these params and to discretize (split up) the edges.
-    * When enabled, those new versions will replace what is currently in the nodes/edges channels.
-    * For the edges particularly, this may have them be reloaded with a version that looks a bit chopped up and altered, albiet mostly the same. 
-    * Generally it is recommended to enable this, because it will ensure the data in the images matches the network, which will be required for several NetTracer3D functions, although be sure to save your inputs first.
+Parameter explanations
+~~~~~~~~~~~~~~~~~~~~~~
 
-Algorithm Explanations
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-* The basic premise of this algorithm is demonstrated by this diagram:
+#. **xy_scale** — a float setting the X/Y 2D plane pixel scaling to a real-world
+   value, such as 5 microns per pixel. Presumed to be 1 by default.
+#. **z_scale** — a float setting the Z 3D voxel depth to a real-world value, such
+   as 5 microns per voxel. Presumed to be 1 by default.
+#. **Node Search (float)** — the distance nodes search the corresponding edge
+   image for connections to other nodes. This value is scaled by the ``xy_scale``
+   and ``z_scale`` parameters, so where those are set correctly it can be treated
+   as a real value such as microns. It is 0 by default, which connects only nodes
+   that edges literally pass through.
+#. **Edge Reconnection Distance (float)** — the distance edges dilate, likewise
+   scaled by ``xy_scale`` and ``z_scale``.
+
+   This parameter exists for segmented edges that are not continuous structures
+   because of holes from imaging or segmentation artifacts. Edges that are wholly
+   discrete in 3D space will not join nodes through that pathway, and inflating
+   them fills those holes. Note that all edges are inflated, so two edges ten
+   microns apart will merge if a value of 5 microns is entered. This method only
+   dilates and never erodes, which also enables edges to search slightly further
+   than the node search parameter suggests, since they can then enter a node's
+   search space.
+
+   There is an inherent trade-off in using dilation to fill hole artifacts, as it
+   risks merging nearby edges that should not be merged. A small value is
+   reasonable where holes exist, but running the filament tracer is a more
+   elegant solution, as it fills gaps in filaments without excessive merging. The
+   value is 0 by default and should remain so where edges have no hole artifacts
+   or those have already been corrected.
+#. **Re-Label Nodes...** — labels objects in the nodes channel with a simple
+   adjacency-labeling scheme, so that every discrete object in space acquires a
+   unique number. **Disable this if your nodes were already labeled elsewhere.**
+
+Parameters 6–9 represent different ways of handling trunks. Trunks are edges
+connecting an excessive number of nodes, common in anatomical structures where
+nerves and vessels increasingly merge toward an originating central location.
+Having every node connect through the trunk into a single giant glob may be
+neither desirable nor statistically valid.
+
+#. **Times to remove Edge Trunks (int)** — removes the edge trunk prior to
+   network calculation, as many times as the integer entered: a value of 1
+   removes the fattest trunk, 2 also removes the second fattest, and so on.
+
+   This occurs after NetTracer3D has discretized the edges, and functions
+   similarly to — but not identically with — removing the trunk from the network
+   afterwards. This option removes the highest-volume edge, whereas post-hoc
+   removal takes out the most interconnected edge. The result is often the same,
+   but not always, so make sure you are using the version you intend.
+#. **Auto-Simplify Trunk Elements** — removing the trunk entirely is one way to
+   ignore it and evaluate more legitimate local connections, but local
+   connectivity through the trunk may still be of interest, provided it does not
+   connect everything from one end of the image to the other. This option forces
+   the trunk to prefer local connections over longer ones, while still permitting
+   distant connections where no closer nodes are available along the path.
+
+   It works by recomputing the entire connectivity network with the node search
+   regions maxed out, causing all nodes to systematically partition the trunk by
+   proximity. Connections made in this enlarged search that do not exist at your
+   original search distance are then dropped, returning a result valid for your
+   desired search regions but with a simplified trunk.
+
+   Because of the recomputation, this at minimum doubles processing time.
+   Furthermore, fast search is not used for the maxed-out computation, since the
+   parallel distance transform into flood labeling is both less accurate and slow
+   at massive dilations; the single-core ``scipy.ndimage.distance_transform_edt``
+   is used instead to obtain a perfect voronoi diagram and bypass flood labeling.
+#. **Use pre-labeled edges...** — a niche parameter. To examine how nodes
+   interact with specific branches in the edges, first label the branches with
+   **Process → Generate → Label Branches**, then load the nodes and labeled
+   branches and enable this feature. Rather than connecting the nodes directly,
+   the labeled edges also become nodes, and the original nodes form a network
+   between themselves and all the labeled branches. Original nodes and new
+   edge-branch nodes receive distinct identities and remain differentiable.
+
+   The output tends to be a very dense network in which the original node objects
+   may not be especially statistically relevant, but it does allow evaluation of
+   how nodes interact with discrete branch elements.
+#. **Edge → Node** — the most robust trunk-handling parameter, and the one to
+   prefer when handling trunks across different images in a statistically
+   consistent manner. Rather than connecting nodes directly, edges are treated as
+   nodes, so trunks become hub nodes rather than dense webs of connection. This
+   is preferable to simply removing the trunk because it carries no bias about
+   what a trunk actually is.
+
+   The downside is that it may alter network dynamics: the network is forced to
+   be less clustered, as groups of nodes that might be considered connected — and
+   would therefore bear a high degree — instead each connect to the edge joining
+   them, each gaining a single degree. Keep this in mind when appraising network
+   statistics. This option can also be run afterwards from the modify network
+   menu.
+#. **Downsample for Centroids (int)** — temporarily downsamples the image during
+   the centroid calculation step to speed it up, which can otherwise be slow on
+   very large images. The downsample is applied across all three dimensions.
+
+   Centroids calculated on downsampled images must be approximated back to the
+   full-size version, so they may not correspond perfectly, though they are
+   generally close enough. Nodes whose smallest dimension is smaller than the
+   downsample factor risk being removed from the downsampled image entirely,
+   meaning no centroid is found for them, so use a downsample that corresponds to
+   your node sizes. For larger images, some downsampling is generally advisable
+   provided the nodes can afford it.
+
+   This value also enlarges the overlays produced by this method, which may be
+   desirable for visualization. Smaller overlays can still be generated from
+   **Image → Overlays...** if not.
+#. **Use fast search...** — attempts to use a faster search algorithm, achieving
+   search regions and edge dilation through parallelization via the ``edt``
+   module rather than scipy. This requires ``edt`` to be installed and working;
+   see :doc:`installation`.
+
+   Once search regions are obtained they are labeled by flooding with the skimage
+   watershed function, which yields slightly rougher search regions along
+   adjacent searching borders, though not enough to make much practical
+   difference to the output. Leaving this disabled uses scipy's
+   ``distance_transform_edt`` to solve the search region, giving an exact
+   voxel-to-voxel labeling scheme, but calculated on a single CPU core and
+   therefore potentially slow for larger images. The program always falls back to
+   this if the parallel calculation fails.
+#. **Generate Overlays** — executes **Image → Overlay → Create Network Overlay**
+   and **Image → Overlay → Create ID Overlay**, overriding Overlay1 and Overlay2
+   respectively.
+#. **Update Node/Edge in NetTracer3D** — while calculating the edges and nodes,
+   NetTracer3D transforms them somewhat according to these parameters and to
+   discretize the edges. Enabling this replaces the current contents of the nodes
+   and edges channels with the new versions. Edges in particular may be reloaded
+   looking somewhat chopped up and altered, though mostly the same.
+
+   Enabling this is generally recommended, as it ensures the image data matches
+   the network, which several NetTracer3D functions require. Save your inputs
+   first.
+
+Algorithm explanation
+~~~~~~~~~~~~~~~~~~~~~
+
+The basic premise of the algorithm is shown in this diagram:
 
 .. image:: _static/connectivity_algo.png
    :width: 800px
    :alt: Connectivity Network Menu
 
-1. Nodes are expanded based on their search distance. This expansion is accomplished through the use of a distance transform that assigns outer 'shell' regions a label corresponding to the internal labeled node they are closest to.
-2. The search region is used to split the edges up. Edges outside the search region become 'outer edges', while those inside the search region become 'inner edges'. The edge pieces aquire unique labels, conveying their identity.
-3. (If not using param 5), outer edges are still dilated a single time to force them to once more overlap the search region by a single voxel. The search region for every node can then be evaluated for what 'outer edge' it interacts with.
-4. Since inner edges potentially course through many search regions, an additional step is required to find their node-to-node connections. The border of the search region is acquired via the skimage find_boundaries method. These node borders can be extracted and used to isolate the 'inner edge pieces' that exist inside of them, which all aquire unique label IDs. We can dilate those inner edge pieces once to evaluate which nodes touch them.
-5. The group of edges that each node interacts with can then be sorted through. Any nodes that interact with the same edge are connected.
-6. Finally, the connections are used to create a NetworkX graph object which can be used for network analysis.
+1. Nodes are expanded by their search distance, using a distance transform that
+   assigns outer shell regions a label corresponding to the internal labeled node
+   they are closest to.
+2. The search region splits the edges: edges outside it become outer edges and
+   those inside become inner edges. The edge pieces acquire unique labels
+   conveying their identity.
+3. Where parameter 5 is not used, outer edges are still dilated once to force
+   them to overlap the search region by a single voxel. Each node's search region
+   can then be evaluated for which outer edge it interacts with.
+4. Since inner edges may course through many search regions, an additional step
+   finds their node-to-node connections. The border of the search region is
+   acquired with the skimage ``find_boundaries`` method; these node borders are
+   extracted and used to isolate the inner edge pieces within them, which all
+   acquire unique label IDs. Dilating those pieces once reveals which nodes touch
+   them.
+5. The group of edges each node interacts with is sorted through, and any nodes
+   interacting with the same edge are connected.
+6. The connections create a NetworkX graph object for network analysis.
 
-* Press 'Run Calculate All' to run the method with the desired parameters. The output data populate their respective areas, ie the four channels for images that are loaded, or the right table widgets for any spreadsheet-style properties.
+Press **Run Calculate All** to run the method. Output data populates the relevant
+areas — the four image channels for images, or the right-hand table widgets for
+spreadsheet-style properties.
+
 
 .. _proximity_network:
 
-'Process -> Calculate Network -> Calculate Proximity Network...'
--------------------------------------------------------
-* This method is used to connect objects in the nodes channel based on whether they are within some user-defined distance of each other.
-* These networks are useful for neighborhood based analysis for cells.
-* Please see :doc:`proximity` for a brief walkthrough about using this function.
-* Selecting this function will show the following menu:
+Process → Calculate Network → Calculate Proximity Network
+-----------------------------------------------------------
+
+Connects objects in the nodes channel based on whether they fall within a
+user-defined distance of one another. These networks are useful for
+neighborhood-based analysis of cells. See :doc:`proximity` for a brief
+walkthrough.
 
 .. image:: _static/process1.png
    :width: 800px
    :alt: Proximity Network Menu
 
-Parameter Explanations
-~~~~~~~~~~~~~~~
-#. Search Region Distance...
-    * This value is the distance nodes will search for other nodes to connect to. Note that this value is scaled corresponding to the xy_scale/z_scale parameters. (As in, if you set xy_scale/z_scale correctly, then treat this as a real-value, such as microns, for your image). You can skip this parameter and enter a desired number of nearest neighbors instead if you are using centroids, or you can combine these two to find the 'n' nearest neighbors in some distance.
-#. xy_scale
-    * Enter a float value here if you want your X/Y 2D plane pixel-scaling to correspond to some real world value. (ie, 5 microns per pixel). It is presumed to be 1 by default.
-#. z_scale
-    * Enter a float value here if you want your Z 3D voxel depth to correspond to some real world value. (ie, 5 microns per voxel). It is presumed to be 1 by default.
-#. Execution Mode:
-    * The dropdown menu will display three options.
-        1. 'From Centroids...' - The search is done starting from centroids, looking for other centroids. The algorithm that this uses should be faster for larger datasets. It is ideal to use when your nodes can be represented well by centroids, such as if they are small or relatively homogenous spheroids. Note that because centroids are used, this option allows this function to run without any nodes image whatsoever, assuming the node_centroids property was loaded in. This might be useful when importing data that has already been extracted out of an image elsewhere, as a set of centroids, for example.
-        2. 'From Morphological Shape...' - The search is done starting from each nodes' border in 3D space. This algorithm is slower but is better suited handling non-homogenous or oddly-shaped nodes.
-        3. 'Morphological - Using Distance Transform...' - Similar to above, but will not allow nodes to connect over the search regions of other nodes. Results in nodes finding their immediate neighbors in the specified distance, but overall a simpler network than option 2. 
-#. Create Networks only from a specific Node Identity?
-    * This option will only appear if something is assigned to the node_identities property.
-    * If so, there will be a dropdown menu to select one of your defined node-identities subtypes.
-    * (If not 'None): Whichever node identity subtype is selected - only those nodes will be used to make network connections (however, they will be able to connect to any other node type).
-    * Use this to simplify network structures when you are only interested in one node subtypes' relationship to the rest of the nodes.
-#. Generate Overlays
-    * If enabled, NetTracer3D will execute 'Image -> Overlay -> Create Network Overlay' and 'Image -> Overlay -> Create ID Overlay' (which will override Overay 1 and 2, respectively).
-#. (If Above): Downsample factor for drawing overlays...?
-    * Entering a positive integer greater than 1 here will make the rendered overlays come out that many times larger.
-#. If using centroid search:... Populate Nodes from Centroids?
-    * If enabled and centroid search is run, the centroids will be used to create a new nodes image that will be placed in the nodes channel.
-    * This new image will start at 0 in each dimension and be bounded by the highest value centroid in each dimension.
-    * As described, the centroid search does not require a nodes image, but only that node_centroids is loaded in, so if centroids are extracted elsewhere and loaded in without an image, this method will allow the user to then create an image to explore other functions with.
-#. (If using centroids): Max number of closest neighbors...
-    * Restricts nodes from only making a number of connections to the integer value passed to this param.
-    * They will connect to their n nearest neighbors within the search region.
-    * This is a useful way to simplify dense networks.
-    * You can only do this from the centroid search. Note that you can skip passing a search parameter and just use this nearest neighbor search in that case, if desired.
-#. (If using distance transform morphological) Use Fast Search...?
-    * If you are using the distance transform search method, this will have it calculate the distance transform in parallel, followed by flood filling to expand labelled regions. Requires the edt package. Search regions along connecting boundaries may be slightly rougher.
+Parameter explanations
+~~~~~~~~~~~~~~~~~~~~~~
+
+#. **Search Region Distance...** — the distance nodes search for other nodes to
+   connect to, scaled by the ``xy_scale`` and ``z_scale`` parameters, so where
+   those are set correctly it can be treated as a real value such as microns.
+   This may be skipped in favour of a number of nearest neighbors when using
+   centroids, or the two may be combined to find the n nearest neighbors within a
+   distance.
+#. **xy_scale** — a float setting the X/Y 2D plane pixel scaling to a real-world
+   value, such as 5 microns per pixel. Presumed to be 1 by default.
+#. **z_scale** — a float setting the Z 3D voxel depth to a real-world value, such
+   as 5 microns per voxel. Presumed to be 1 by default.
+#. **Execution Mode**
+
+   1. **From Centroids...** — searches from centroids for other centroids. This
+      algorithm is faster for larger datasets and is ideal where nodes are well
+      represented by centroids, such as small or relatively homogeneous
+      spheroids. Because centroids are used, this option runs without any nodes
+      image at all, provided the ``node_centroids`` property was loaded — useful
+      when importing data already extracted from an image elsewhere as a set of
+      centroids.
+   2. **From Morphological Shape...** — searches from each node's border in 3D
+      space. Slower, but better suited to non-homogeneous or oddly shaped nodes.
+   3. **Morphological — Using Distance Transform...** — as above, but does not
+      allow nodes to connect across the search regions of other nodes. Nodes find
+      their immediate neighbors within the specified distance, producing a
+      simpler network than option 2.
+
+#. **Create Networks only from a specific Node Identity?** — appears only when
+   the ``node_identities`` property is assigned, offering a dropdown of your
+   defined node identity subtypes. Where one is selected, only nodes of that
+   subtype are used to make network connections, though they may connect to any
+   other node type. Use this to simplify network structures when only one
+   subtype's relationship to the rest is of interest.
+#. **Generate Overlays** — executes **Image → Overlay → Create Network Overlay**
+   and **Image → Overlay → Create ID Overlay**, overriding Overlay1 and Overlay2
+   respectively.
+#. **Downsample factor for drawing overlays...?** (where the above is enabled) —
+   a positive integer greater than 1 renders the overlays that many times larger.
+#. **Populate Nodes from Centroids?** (centroid search only) — uses the centroids
+   to create a new nodes image, placed in the nodes channel. The image starts at
+   0 in each dimension and is bounded by the highest-value centroid in each
+   dimension. Since the centroid search requires only that ``node_centroids`` be
+   loaded, this allows an image to be created from centroids extracted elsewhere,
+   opening up the other functions.
+#. **Max number of closest neighbors...** (centroid search only) — restricts
+   nodes to that number of connections, connecting to their n nearest neighbors
+   within the search region. This is a useful way to simplify dense networks. It
+   is available only from the centroid search, and the search parameter may be
+   skipped entirely in favour of this nearest neighbor search.
+#. **Use Fast Search...?** (distance transform morphological only) — calculates
+   the distance transform in parallel, followed by flood filling to expand
+   labeled regions. Requires the ``edt`` package. Search regions along connecting
+   boundaries may be slightly rougher.
+
+Algorithm explanation
+~~~~~~~~~~~~~~~~~~~~~
+
+Using the centroid searcher:
+
+#. Centroids are normalized by the xy and z scalings where these differ.
+#. Centroids are searched directly for connections, optimized via the
+   ``scipy.spatial`` KDTree class, a highly efficient data structure for
+   exploring distances between points
+   (https://docs.scipy.org/doc/scipy/reference/generated/scipy.spatial.KDTree.html).
+#. This tends to be very fast, and for very large data is likely the most
+   feasible way to obtain networks.
+
+Using the morphological searcher:
+
+#. ``scipy.ndimage.find_objects()`` obtains bounding boxes around all labeled
+   objects in the nodes channel.
+#. For each object, a subarray is cut out using its bounding box, including the
+   object plus any additional space needed to perform the search or dilation.
+#. The node object is boolean indexed within its subarray.
+#. ``scipy.ndimage.distance_transform_edt()`` obtains a distance transform for
+   the object, which is thresholded at the desired distance from the node and
+   binarized.
+#. The binary dilated mask is multiplied against the original, non-indexed
+   subarray to isolate other nodes specific to the dilated region.
+#. These other nodes are stored in a growing node:neighbors dictionary used to
+   build the network.
+#. The process is parallelized across all available CPU cores, and will occupy
+   the entire machine when given a large task.
+
+Press **Run Proximity Network** to run the method. Output data populates the
+relevant areas — the four image channels for images, or the right-hand table
+widgets for spreadsheet-style properties.
 
 
-Algorithm Explanations
-~~~~~~~~~~~~~~~
+Process → Calculate Network → Calculate Branchpoint Network
+-------------------------------------------------------------
 
-* If using the centroid searcher:
-#. This method first takes the centroids and normalizes them based on the xy/z_scalings if those differ. 
-#. This method then searches through centroids directly for connections, optimized via the scipy.spatial KDTree class, which is a highly efficient data structure for exploring distances between points: https://docs.scipy.org/doc/scipy/reference/generated/scipy.spatial.KDTree.html
-#. This method tends to be very fast. In fact, regarding very big data, this is likely the most feasible way to get networks.
+Connects the branchpoints of a branchy binary segmented image, such as blood
+vessels, converting them into network nodes. The binary image must begin in the
+edges channel, since nodes are generated at the branchpoints.
 
-* If using the morphological searcher:
-#. The scipy.ndimage.find_objects() method is used to get bounding boxes around all the labeled objects in the nodes channel.
-#. For each object, a subarray is cut out around it using its bounding box, that includes the object plus any additional space that it will need to perform a search/dilation.
-#. The node object in question is boolen indexed within its subarray.
-#. The scipy.ndimage.distance_transform_edt() method is used to get a distance transform for the object. This distance transform is thresholded based on the desired distance away from the node we want, then binarized.
-#. The binary dilated mask is then multiplied against the original, non-indexed subarray to isolate other nodes specific to the dilated region.
-#. These other nodes are stored in a growing node:neighbors dictionary that is used to make the network.
-#. This process is paralellized across all available CPU cores. It *will* hog your entire machine if given a big task.
+This brings up the menu to generate nodes from edge vertices. Once nodes are
+created, they search their immediate 3×3×3 neighborhood and assign connections
+based on which edges they encounter.
 
-* Press 'Run Proximity Network' to run the method with the desired parameters. The output data populate their respective areas, ie the four channels for images that are loaded, or the right table widgets for any spreadsheet-style properties.
+The method forks the node generation from edges method with suggested defaults
+preselected; see :ref:`generate nodes` for parameter and algorithm explanations.
 
-'Process -> Calculate Network -> Calculate Branchpoint Network...'
---------------------------------------
-* This method is used to connect the branchpoints of a branchy binary segmented image (such as blood vessels), converting them into nodes of a network.
-* This method brings up the menu to generate nodes from edge vertices. Once nodes are created, they search their immediate 3x3x3 neighborhood and assign connections based on which edges they encounter.
-* The binary image must begin in the 'edges' channel, since nodes will be generated at the branchpoints.
-* This method just forks the node generation from edges method with some suggested default parameters pre-selected, but see :ref:`generate nodes` for parameter and algorithm explanations.
 
-'Process -> Calculate Network -> Calculate Branch Adjacency Network'
---------------------------------------------------------------------
-* This method is used to connect the adjacent branches of a branchy binary segmented image (such as blood vessels), converting them the branches themselves (as opposed to the branchpoints) into nodes of a network.
-* This method brings up the menu to label branches, followed by running a proximity network of distance = 1.
-* The binary image must begin in the 'edges' channel.
-* This method just forks the branch labelling method with some suggested default parameters pre-selected, but see :ref:`label branches` for parameter and algorithm explanations.
+Process → Calculate Network → Calculate Branch Adjacency Network
+------------------------------------------------------------------
 
-'Process -> Calculate Network -> Calculate Centroids...'
---------------------------------------
-* This method is used to calculate and set the nodes or edge centroid properties.
-* The centroid is the center of mass of an object and can be used as a low-memory way to track its general location.
+Connects the adjacent branches of a branchy binary segmented image, such as blood
+vessels, converting the branches themselves — rather than the branchpoints — into
+network nodes. The binary image must begin in the edges channel.
 
-Parameter Explanations
-~~~~~~~~~~~~~~~
+This brings up the menu to label branches, followed by a proximity network of
+distance 1. The method forks the branch labeling method with suggested defaults
+preselected; see :ref:`label branches` for parameter and algorithm explanations.
 
-* This method has the following parameters:
 
-#. Downsample Factor:
-    * Temporarily downsamples the image to speed up centroid calculation. Downsampling is done in all three dimensions by the inputed factor.
-    * Note that the centroids will be normalized for the full-sized image after calculation, and while not 100% accurate, will be close enough for most purposes.
-    * Generally it is recommended to use some level of downsample for this with larger images, assuming the nodes can afford it.
-    * Note that nodes with dimensions smaller than the downsample factor are at risk of being removed from the image during calculation, which will result in no centroid assignment for them.
-    * Please use a downsample appropriate to your node size.
-#. Execution Mode:
-    * This dropdown menu has the following options:
-        1. Nodes and Edges - Attempt to find centroids for both the node and edge channels.
-        2. Nodes - Attempt to find centroids for just the nodes channel.
-        3. Edges - Attempt to find centroids for just the edges channel.
-#. Skip Node Centroids Without Identity Property?:
-    * If checked, any nodes that do not have an identity will not get a centroid. Useful if I am not interested in those nodes.
+Process → Calculate Network → Calculate Centroids
+---------------------------------------------------
 
-* Press 'Run Calculate Centroids' to run the method with the desired parameters. The output data will be added to the tabulated data widget in the top right, while also setting the respective centroids property.
-* Note that this method runs on whatever channel is designated as 'Active Image' in the bottom left.
-* Many methods that require centroids will auto-prompt the user to run this method if they have not calculated any yet. They are advised to run the centroid method in such cases, or the other method may not run properly.
+Calculates and sets the node or edge centroid properties. A centroid is the
+center of mass of an object, and provides a low-memory way to track its general
+location.
 
-Algorithm Explanations
-~~~~~~~~~~~~~~~
+Parameter explanations
+~~~~~~~~~~~~~~~~~~~~~~
+
+#. **Downsample Factor** — temporarily downsamples the image in all three
+   dimensions by the entered factor to speed up centroid calculation. Centroids
+   are normalized back to the full-size image afterwards and, while not perfectly
+   accurate, are close enough for most purposes. Some level of downsampling is
+   generally recommended for larger images, provided the nodes can afford it.
+
+   Nodes with dimensions smaller than the downsample factor risk being removed
+   from the image during calculation, resulting in no centroid assignment, so use
+   a downsample appropriate to your node size.
+#. **Execution Mode**
+
+   1. **Nodes and Edges** — finds centroids for both the node and edge channels.
+   2. **Nodes** — finds centroids for the nodes channel only.
+   3. **Edges** — finds centroids for the edges channel only.
+
+#. **Skip Node Centroids Without Identity Property?** — when checked, nodes
+   without an identity receive no centroid, which is useful where those nodes are
+   not of interest.
+
+Press **Run Calculate Centroids** to run the method. Output data is added to the
+tabulated data widget in the top right and sets the respective centroids
+property. The method runs on whichever channel is designated the active image in
+the bottom left.
+
+Many methods requiring centroids automatically prompt to run this method if none
+have been calculated; running it in such cases is advised, or the other method
+may not run properly.
+
+Algorithm explanation
+~~~~~~~~~~~~~~~~~~~~~
+
 1. The array is subdivided across all CPU cores for parallel processing.
-2. The indices of all objects in each array are found via the np.argwhere() method.
-3. Once all the indexes have been found, the centroid for each labeled object is obtained by taking the mean of its indices.
+2. The indices of all objects in each array are found via ``np.argwhere()``.
+3. The centroid for each labeled object is obtained by taking the mean of its
+   indices.
 
-* The second submenu is the image menu, which has various functions that can transform aspects about images.
 
+Process → Image → Resize
+--------------------------
 
-'Process -> Image -> Resize'
--------------------------------------------------------
-* This method is used to resize the image.
-* Downsampling is especially useful for speeding up many process functions when resolution loss is not a major issue.
-* Upsampling can likewise be used to restore an image to its original dimensions.
-* Selecting this function will show the following menu:
+Resizes the image. Downsampling is especially useful for speeding up many process
+functions where resolution loss is not a major issue, and upsampling can restore
+an image to its original dimensions.
 
 .. image:: _static/process2.png
    :width: 800px
    :alt: Resize Menu
 
-Parameter Explanations
-~~~~~~~~~~~~~~~~~~~~~~~
+Parameter explanations
+~~~~~~~~~~~~~~~~~~~~~~
 
-#. Resize Factor (All Dimensions)
-    * Enter a float value greater than 0 to resize the image in all three dimensions by that factor.
-    * Please note that while the majority of functions ask for a 'downsample factor', which uses a factor greater than 1 to apply a downsample, this function actually expects a decimal value between 0 and 1 for downsamples.
-    * A positive value here will actually apply an upsample instead. So 0.33 will downsample my img in all dims by a factor of 3, but 3 will upsample my img in all dims by a factor of 3.
-#. Resize Z Factor
-    * The same as the resize factor, except the resample will only be applied in the Z-dimension, while the X and Y dimensions will remain the same.
-    * Please note that entering any number for param 1 will override this value.
-#. Resize Y Factor
-    * The same as the resize factor, except the resample will only be applied in the Y-dimension, while the X and Z dimensions will remain the same.
-    * Please note that entering any number for param 1 will override this value.
-    * Also note that many NetTracer3D functions do not support accurate results on images that are scaled differently in the x and y dimensions, since it assumes your images had equal scaling in the 2D plane.
-#. Resize X Factor
-    * The same as the resize factor, except the resample will only be applied in the X-dimension, while the Z and Y dimensions will remain the same.
-    * Please note that entering any number for param 1 will override this value.
-    * Also note that many NetTracer3D functions do not support accurate results on images that are scaled differently in the x and y dimensions, since it assumes your images had equal scaling in the 2D plane.
-#. Use cubic algorithm
-    * Disable this to use the standard resample algorithm, which is quick and ideal for binary/labeled images.
-    * Enable this to use the cubic resample algorithm, which is slower but may better preserve shapes for visualization purposes only. However, it will not preserve labeling and therefore should not be used on data intended for actual quantification.
-#. Resample to orignal shape
-    * When a downsample is performed (via this method, for example), NetTracer3D will keep track of the shape of the pre-downsampled image.
-    * Pressing this button will return the images to that shape. For example, if I downsampled my images to speed up overlay generation, but wanted them to return to their original sizes, I could use this option.
-    * Note that this option will only appear if images of different shapes have been loaded in during one session. Relatedly, it may not keep track of the correct shape 100% of the time if many heterogenous things are being loaded in and out.
-    * Do note though that NetTracer3D can also do this by reloading the original-sized image, loading the resampled image in another channel, and accepting the option to resize the new channel to match the other one.
-#. Normalize Scaling with upsample
-    * The user can click this button to auto-run an upsample along the low-resolution dimension that normalizes the resolution.
-    * Note that this option will only appear if the xy_scale =/= z_scale.
-#. Normalize Scaling with downsample
-    * Same idea as parameter 7, but instead a downsample is used on the high-resolution axis to normalize the resolution.
-    * Note that this option will only appear if the xy_scale =/= z_scale.
+#. **Resize Factor (All Dimensions)** — a float greater than 0 resizing the image
+   in all three dimensions by that factor.
 
-Algorithm Explanations
+   .. note::
+
+      Most functions ask for a *downsample factor*, where a value greater than 1
+      applies a downsample. This function instead expects a decimal between 0 and
+      1 for downsamples, and values above 1 apply an upsample. A value of 0.33
+      downsamples the image in all dimensions by a factor of 3, while 3 upsamples
+      by a factor of 3.
+#. **Resize Z Factor** — as the resize factor, but applied only in the Z
+   dimension, leaving X and Y unchanged. Any value entered in parameter 1
+   overrides this.
+#. **Resize Y Factor** — as the resize factor, but applied only in the Y
+   dimension, leaving X and Z unchanged. Any value entered in parameter 1
+   overrides this.
+#. **Resize X Factor** — as the resize factor, but applied only in the X
+   dimension, leaving Y and Z unchanged. Any value entered in parameter 1
+   overrides this.
+
+   .. warning::
+
+      Many NetTracer3D functions do not produce accurate results on images scaled
+      differently in the x and y dimensions, as equal scaling in the 2D plane is
+      assumed.
+#. **Downsample Algorithm** - can be used to change from the default algorithm (which is quick and ideal for raw data and segmented images where the structures aren't overly small). Options include using a sparse downsample instead. Sparse downsample
+   will downsample the background while attempting to not eliminate labeled objects, which is ideal if you have a clean segmentation that you would like to preserve
+   the shapes and locations of elements within while downsampling. Sparse downsampling, however, should not be used on raw datasets or on noisy segmentations (as it can enhance noise). 
+   The other option is the 'cubic' algorithm, which is slower and may better preserve shapes for
+   visualization purposes only; it does not preserve labeling and should not be
+   used on data intended for quantification.
+#. **Normalize Scaling with upsample** — automatically runs an upsample along the
+   low-resolution dimension to normalize the resolution. Appears only where
+   ``xy_scale`` and ``z_scale`` differ.
+#. **Normalize Scaling with downsample** — as above, but downsamples the
+   high-resolution axis to normalize the resolution. Appears only where
+   ``xy_scale`` and ``z_scale`` differ.
+#. **Resample to original shape** — NetTracer3D tracks the shape of the
+   pre-downsampled image, and this returns the images to that shape — useful, for
+   example, after downsampling to speed up overlay generation.
+
+   This option appears only where images of different shapes have been loaded
+   during one session, and may not always track the correct shape if many
+   heterogeneous images are loaded in and out. The same result can be achieved by
+   reloading the original-sized image, loading the resampled image into another
+   channel, and accepting the option to resize the new channel to match.
+
+Press **Run Resize** to run the method; pressing parameters 6, 7, or 8 also
+executes it as described. Because NetTracer3D does not support differently sized
+images across its channels, this method runs on all channels currently in use.
+
+Algorithm explanation
 ~~~~~~~~~~~~~~~~~~~~~
 
-* All resize algorithms in NetTracer3D simply use the scipy.ndimage.zoom method: https://docs.scipy.org/doc/scipy/reference/generated/scipy.ndimage.zoom.html
+All resize algorithms use the ``scipy.ndimage.zoom`` method:
+https://docs.scipy.org/doc/scipy/reference/generated/scipy.ndimage.zoom.html
 
-* Press 'Run Resize' to run the method with the desired parameters. (Although pressing params 5, 6, or 7 above will also execute the function as described above).
-* Note that because NetTracer3D does not really support different sized images in its channels, this method will run on all channels/images currently in use.
 
-'Process -> Image -> Clean Segmentation'
--------------------------------------------------------
-* This method is just a small window that pulls up some methods that are helpful for cleaning up segmentations.
+Process → Image → Clean Segmentation
+--------------------------------------
 
-Parameter Explanations
-~~~~~~~~~~~~~~~~~~~~~~~
-#. Close
-    * This method calls the dilation algorithm followed by the erosion algorithm (see their respective sections for more information). 
-    * It is useful for filling small gaps in an image that may not be literal holes in a mask.
-    * This is at the downside of potentially creating false connections and disfiguring the image if used with very large params.
-#. Open
-    * This method is the reverse of the above, eroding before dilating.
-    * It is useful for eliminating noise, smoothing borders of objects, and severing small connections between objects that may not exist.
-    * This is at the downside of potentially eliminating true small objects and disfiguring the image if used with very large params.
-#. Connect Endpoints
-    * Will prompt you to provide a distance. Next, all endpoints (as appraised by 3D skeletonization) in your segmentation within the specified distance will connect to each other. The connection will be a tapered cylinder of the same radii as the branches it merges.
-    * This isn't the most useful method compared to 'Trace Filaments' as it will just merge any endpoints within in its distance, but its conceptually simpler and may be sufficient for certain uses.
-#. Fill Holes
-    * This just calls the fill holes method. Holes are gaps completely enveloped by a mask from the perspective of the 2D stack. Please reference the fill holes algorithm section for more info.
-#. Trace Filaments
-    * This calls the filament tracer (Normally in 'Process -> Generate -> Trace Filaments'), which can clean up segmentations of filamentous objects such as nerves or vessels.
-#. Threshold Noise by Volume
-    * This just brings up the threshold window to filter out objects of a desired volume range, ie to remove small noise. Please see the thresholding section for more info.
+A small window collecting methods useful for cleaning up segmentations.
+
+Parameter explanations
+~~~~~~~~~~~~~~~~~~~~~~
+
+#. **Close** — calls dilation followed by erosion; see their respective sections.
+   Useful for filling small gaps that are not literal holes in a mask, at the
+   risk of creating false connections and disfiguring the image at very large
+   values.
+#. **Open** — the reverse, eroding before dilating. Useful for eliminating noise,
+   smoothing object borders, and severing small connections between objects that
+   may not exist, at the risk of eliminating true small objects and disfiguring
+   the image at very large values.
+#. **Connect Endpoints** — prompts for a distance, then connects all endpoints in
+   the segmentation, as appraised by 3D skeletonization, within that distance.
+   The connection is a tapered cylinder of the same radii as the branches it
+   merges. This is less capable than **Trace Filaments**, as it merges any
+   endpoints within its distance, but is conceptually simpler and may suffice for
+   some uses.
+#. **Fill Holes** — calls the fill holes method. Holes are gaps completely
+   enveloped by a mask from the perspective of the 2D stack; see the fill holes
+   algorithm section.
+#. **Trace Filaments** — calls the filament tracer, normally at **Process →
+   Generate → Trace Filaments**, which cleans up segmentations of filamentous
+   objects such as nerves or vessels.
+#. **Threshold Noise by Volume** — brings up the threshold window to filter
+   objects by volume range, for example to remove small noise. See the
+   thresholding section.
+
 
 .. _dilation:
 
-'Process -> Image -> Dilate'
--------------------------------------------------------
-* This method is used to expand the objects in an image.
-* It has a few variants available and is generally how NetTracer3D evaluates neighborhoods starting from morphological objects, meaning there are many functions that can fork this method.
+Process → Image → Dilate
+--------------------------
 
-Parameter Explanations
-~~~~~~~~~~~~~~~~~~~~~~~
+Expands the objects in an image. Several variants are available. This is
+generally how NetTracer3D evaluates neighborhoods starting from morphological
+objects, so many functions fork this method.
 
-#. Dilation Radius
-    * This is the amount we would like to dilate (or, expand our nodes in each dimension by).
-    * Note that this value is scaled according to the scalings in your image (or that are assigned within the dilate window).
-    * This means if I want 'dilation radius' to be 1-to-1 with voxels, I should set the scalings both to 1 in the window, but if I want 'dilation radius' to correspond to some true distance (ie microns), I should enter the corresponding scalings for my image, and the (for example, microns) distance as dilation radius.
-#. xy_scale
-    * The scaling per-pixel in the 2D xy plane I want to be applied on parameter 1. This box will auto-populate with the xy_scale property set for the images, however any number entered in the box will always be used regardless of the property.
-#. z_scale
-    * The depth per-voxel in the 3D z plane I want to be applied on parameter 1. This box will auto-populate with the z_scale property set for the images, however any number entered in the box will always be used regardless of the property.
-#. Execution mode
-    * This dropdown window provides several options for different dilation strategies.
-        1. 'Parallel Distance Transform Based' - Attempts to use edt module to compute the dilation in parallel on your CPU. If edt is not installed or the parallel computation fails, the program will fall back to option 4 by default.
-        2. 'Preserve Labels' - Use this to dilate objects without binarizing them, preserving labels. A new window for additional params will open, see below.
-        3. 'Psuedo3D Binary Kernels' - Dilates in 2D in the XY and XZ planes, trying to simulate a 3D dilation. The image will be binarized prior to dilation. This is primarily meant for purely visualization purposes (not quantitative) for small-to-medium dilation. This option can save time but will not result in a perfect dilation due to not being able to 'see' diagonally. Note that for particularly large dilations (relative to the starting objects), this option may actually be slower than distance transform.
-        4. 'Distance-Transform Based (Non-Parallel)' - Use this dilate objects via a distance transform, allowing for more perfect dilations, but often being slower. 
+Parameter explanations
+~~~~~~~~~~~~~~~~~~~~~~
 
-* Press 'Run Dilate' to run the method with the desired parameters. Note the channel refered to in 'Active Image' is the one that will be dilated, with the output also being returned there.
-* If using 'Preserve Labels', an additional window will appear requesting more params:
+#. **Dilation Radius** — the amount to dilate, or expand, the nodes by in each
+   dimension. This value is scaled according to the scalings in your image, or
+   those assigned within the dilate window. For a 1-to-1 correspondence with
+   voxels, set both scalings to 1 in the window; to correspond to a true distance
+   such as microns, enter the scalings for your image and give the radius in that
+   unit.
+#. **xy_scale** — the per-pixel scaling in the 2D xy plane applied to parameter 1.
+   This auto-populates with the ``xy_scale`` property set for the images, but any
+   number entered is always used regardless of the property.
+#. **z_scale** — the per-voxel depth in the 3D z plane applied to parameter 1.
+   This auto-populates with the ``z_scale`` property set for the images, but any
+   number entered is always used regardless of the property.
+#. **Execution mode**
 
-#. Fast Dilation:
-    * Selecting this button will have the program attempt to use a faster gray dilation algorithm. Binary dilation is first achieved using parallelization via the edt module instead of scipy. (This requires the edt module to be installed and working, see the installation doc for more info).
-    * After binary dilation regions are obtained, they are labelled via flooding with the skimage watershed function. This results in slightly rougher search regions along adjacent searching borders, which may not be desirable.
-    * For comparison, the not selecting this will use scipy's distance_transform_edt function to solve the gray dilation, which will yield an exact voxel-to-voxel labeling schema, but will be calculated on a single CPU core and thus potentially take a while for larger images. The program will always fall back to this if the parallel calculation fails somehow.
-    * If disabled, it will use the scipy distance transform method.
+   1. **Parallel Distance Transform Based** — attempts to compute the dilation in
+      parallel on the CPU using the ``edt`` module. Falls back to option 4 if
+      ``edt`` is not installed or the parallel computation fails.
+   2. **Preserve Labels** — dilates objects without binarizing them, preserving
+      labels. A window of additional parameters opens; see below.
+   3. **Pseudo3D Binary Kernels** — dilates in 2D across the XY and XZ planes to
+      simulate a 3D dilation, binarizing the image first. This is intended for
+      visualization rather than quantification, at small-to-medium dilations. It
+      saves time but does not produce a perfect dilation, as it cannot see
+      diagonally. For dilations that are particularly large relative to the
+      starting objects, it may actually be slower than the distance transform.
+   4. **Distance-Transform Based (Non-Parallel)** — dilates via a distance
+      transform, allowing more perfect dilations but often more slowly.
 
-Algorithm Explanations
+Press **Run Dilate** to run the method. The channel set as the active image is
+dilated, and the output is returned there.
+
+Using **Preserve Labels** opens an additional window:
+
+#. **Fast Dilation** — attempts a faster gray dilation. Binary dilation is
+   achieved through parallelization via the ``edt`` module rather than scipy,
+   which requires ``edt`` to be installed and working; see :doc:`installation`.
+
+   Once binary dilation regions are obtained they are labeled by flooding with
+   the skimage watershed function, giving slightly rougher search regions along
+   adjacent borders, which may not be desirable. Leaving this disabled uses
+   scipy's ``distance_transform_edt`` to solve the gray dilation, yielding an
+   exact voxel-to-voxel labeling scheme but calculated on a single CPU core and
+   therefore potentially slow on larger images. The program always falls back to
+   this if the parallel calculation fails.
+
+Algorithm explanation
 ~~~~~~~~~~~~~~~~~~~~~
 
-**The Pseudo-3D Kernel Method**
-    1. The psuedo-3D kernel method aims to combine serial dilations in both the XY and XZ planes to simulate a 3D dilation. First, the distance to search in the X vs Y vs Z dimensions is determined based on the scalings for each respective dim.
-    2. This distance is used to generate dilation kernels that expand the pixels in the image until they encompass that search region. For the XY plane, this kernel is a circle (with the search distance being its radius), since NetTracer3D assumes the x and y scalings to always be equal. For the XZ plane, if the x and z scaling are not equal, this kernel is an ellipse instead, with the short axis being the shorter search distance, and the long axis being the longer search distance. (Doing it this way means we can ignore normalizing resolutions).
-    3. The image is then chopped up along the Z-axis to allow 2D dilations to be performed in parallel until all the XY planes have been dilated via the openCV2 dilate algorith, a *quite* optimized function: https://opencv24-python-tutorials.readthedocs.io/en/latest/py_tutorials/py_imgproc/py_morphological_ops/py_morphological_ops.html.
-    4. Likewise, a copy of the image is chopped up along the Y-axis to allow 2D dilations in parallel until all the XZ planes have been dilated via the openCV2 dilate algorithm.
-    5. These outputs are combined to produce the psuedo-3D dilation.
-* There are few things that must be noted about this method:
-    1. In the instance that an array is 2D, this method always hands it off to a distance transform instead. This is because most of the distance transform algos are pretty good in 2D, even faster than 2D dilation in many cases.
-    2. In the instance that the search region is explicitly 1 voxel in all dimensions, this method hands it off to the scipy.ndimage.binary_dilation() method (https://docs.scipy.org/doc/scipy/reference/generated/scipy.ndimage.binary_dilation.html) for dilation with a simple 3x3x3 cubic kernel. While this method can be slow, it generally handles small dilation with simple kernels okay.
+**The pseudo-3D kernel method**
 
-* **Note** the psuedo-3D kernel method is actually rather bad at handling dilation regions much larger than the original node. I previously had an alternative to recursively call this method to preform serial dilations that handled this, but removed it after it became redundant compared to the distance transform method, since the psuedo-3D kernels produce large error with large dilations anyway.
-* The psuedo 3D kernel would essentially be like turning these voxels: ········· into these ++++++++ en masse.
+1. Serial dilations in the XY and XZ planes are combined to simulate a 3D
+   dilation. The distance to search in the X, Y, and Z dimensions is determined
+   from the scalings for each.
+2. That distance generates dilation kernels expanding the pixels until they
+   encompass the search region. In the XY plane this kernel is a circle, with the
+   search distance as its radius, since x and y scalings are assumed equal. In
+   the XZ plane, where x and z scalings differ, the kernel is an ellipse, with
+   the short axis the shorter search distance and the long axis the longer —
+   which avoids the need to normalize resolutions.
+3. The image is chopped along the Z axis so 2D dilations can run in parallel
+   until all XY planes have been dilated, using the highly optimized OpenCV2
+   dilate algorithm
+   (https://opencv24-python-tutorials.readthedocs.io/en/latest/py_tutorials/py_imgproc/py_morphological_ops/py_morphological_ops.html).
+4. A copy of the image is chopped along the Y axis so 2D dilations can run in
+   parallel until all XZ planes have been dilated, again with OpenCV2.
+5. These outputs are combined to produce the pseudo-3D dilation.
 
+Two exceptions apply:
 
-**The Distance Transform method:**
+1. For a 2D array, the method always hands off to a distance transform instead,
+   since most distance transform algorithms perform well in 2D and are often
+   faster than 2D dilation.
+2. Where the search region is explicitly 1 voxel in all dimensions, the method
+   hands off to ``scipy.ndimage.binary_dilation()``
+   (https://docs.scipy.org/doc/scipy/reference/generated/scipy.ndimage.binary_dilation.html)
+   with a simple 3×3×3 cubic kernel. This can be slow but generally handles small
+   dilations with simple kernels well.
 
-* Eventually I just opted to add a distance transform to get perfect dilations in-leui of true 3D kernel-based dilating, since the scipy 3D dilation option was already slow anyway.
-* A distance transform converts an image into a map that conveys how far each non-zero pixel is from zero.
+.. note::
 
-#. If we invert an image, we can obtain this distance transform on the inversion, which tells us how far away each background voxel is from our objects. This is done with the scipy.ndimage.distance_transform_edt() method: 
-#. This dt can be turned into essentially a perfect binary dilation via boolean indexing.
+   The pseudo-3D kernel method handles dilation regions much larger than the
+   original node poorly. An earlier alternative recursively called the method to
+   perform serial dilations, but it was removed as redundant against the distance
+   transform method, since pseudo-3D kernels produce large error at large
+   dilations regardless.
 
-* The downside is this method can be slow (although its slowness is independent of dilation size). For example, on images ~3 GB it might take twenty minutes to finish depending on your CPU.
-* Therefore it exists as an option when we want to ensure accuracy, whereas psuedo-3D kernels are better for small dilations when we don't care about small error regions, or when we just want to know if other objects are in the general vicinity.
-* This cartoon demonstrates how these algorithms work:
+Conceptually, the pseudo-3D kernel turns voxels like ``·········`` into
+``++++++++`` en masse.
+
+**The distance transform method**
+
+A distance transform converts an image into a map conveying how far each non-zero
+pixel is from zero. It was added to obtain perfect dilations in lieu of true 3D
+kernel-based dilating, since the scipy 3D dilation option was already slow.
+
+#. Inverting an image and obtaining the distance transform of the inversion gives
+   how far each background voxel is from the objects, via
+   ``scipy.ndimage.distance_transform_edt()``.
+#. That transform becomes an essentially perfect binary dilation through boolean
+   indexing.
+
+The downside is speed, though the slowness is independent of dilation size: on
+images of around 3 GB this may take twenty minutes depending on your CPU. It
+therefore exists as the accuracy-first option, while pseudo-3D kernels suit small
+dilations where small error regions do not matter, or where the question is
+merely whether other objects are in the general vicinity.
 
 .. image:: _static/process3.png
    :width: 800px
    :alt: Dilation Explained
-*Top left: Example of an object (cyan sphere) with its expansion kernel (red) for a small psuedo-3D kernel dilation. This isn't exactly what the output looks like, instead imagine if these kernels were applied on every single voxel in the image. To the right is what this kernel would look like with a large dilation in a space with different scalings. Applying this one would produce greater error, since the regions 'diagonal' to the sphere would inevitably be excluded. In the bottom is this same scenario but demonstrated with a distance transform, which more or less gives a perfect expansion.*
 
-**If Preserving Labels:**
+*Top left: an object (cyan sphere) with its expansion kernel (red) for a small
+pseudo-3D kernel dilation. This is not exactly what the output looks like —
+imagine these kernels applied to every voxel in the image. To the right is the
+same kernel with a large dilation in a space with different scalings, which
+produces greater error, since regions diagonal to the sphere are inevitably
+excluded. Below is the same scenario with a distance transform, which gives a
+more or less perfect expansion.*
 
-* If we are interested in preserving labels, we do an additional step that I refer to as 'smart dilate'.
-1. Essentially, the same binary dilation as above is determined.
-2. If we did the distance transform method, we also have it return the 'indices' (of the distance transform of the inverted array), which populates each index in the array with the index of the background value it was closest to. Note that this data structure is more cumbersome than just a distance transform. It occupies 3x as much RAM. But we can use it to essentially query any index in the array and see what 'node' it belongs to, since in our inverted image, the nodes became the background. 
-3. The dilated regions are taken by subtracting out the original binary nodes from the binary dilated image. These shell regions are split up and paralellized across all CPU cores.
-4. We then search through the indices of all the shell regions, get the index of the node it 'belongs' to from the distance transform index image, find the label of said node, and finally reassign the binary index in the dilated image to be its proper label instead.
-5. The chunks are recombined to get the label-dilated array.
+**If preserving labels**
+
+Preserving labels adds a step referred to as *smart dilate*:
+
+1. The same binary dilation as above is determined.
+2. With the distance transform method, the indices of the distance transform of
+   the inverted array are also returned, populating each index with the index of
+   the background value it was closest to. This structure is more cumbersome than
+   a plain distance transform and occupies three times the RAM, but allows any
+   index in the array to be queried for which node it belongs to, since in the
+   inverted image the nodes became the background.
+3. The dilated regions are obtained by subtracting the original binary nodes from
+   the binary dilated image. These shell regions are split up and parallelized
+   across all CPU cores.
+4. The indices of all shell regions are searched, the index of the node each
+   belongs to is obtained from the distance transform index image, the label of
+   that node is found, and the binary index in the dilated image is reassigned to
+   its proper label.
+5. The chunks are recombined to give the label-dilated array.
 
 
-'Process -> Image -> Erode'
--------------------------------------------------------
-* This method is used to shrink objects in an image and is essentially a reversal of dilation.
+Process → Image → Erode
+-------------------------
 
+Shrinks objects in an image, essentially reversing dilation.
 
-Parameter Explanations
-~~~~~~~~~~~~~~~~~~~~~~~
-#. Erosion Radius
-    * This is the amount we would like to erode (or, shrink our nodes in each dimension by).
-    * Note that this value is scaled according to the scalings in your image (or that are assigned within the dilate window).
-    * This means if I want 'erosion radius' to be 1-to-1 with voxels, I should set the scalings both to 1 in the window, but if I want 'erosion radius' to correspond to some true distance (ie microns), I should enter the corresponding scalings for my image, and the (for example, microns) distance as erosion radius.
-#. xy_scale
-    * The scaling per-pixel in the 2D xy plane I want to be applied on parameter 1. This box will auto-populate with the xy_scale property set for the images, however any number entered in the box will always be used regardless of the property.
-#. z_scale
-    * The depth per-voxel in the 3D z plane I want to be applied on parameter 1. This box will auto-populate with the z_scale property set for the images, however any number entered in the box will always be used regardless of the property.
-#. Execution mode
-    * This dropdown window provides two erosion options.
-        2. 'Parallel Distance-Transform Based' - Use this erode objects via a distance transform calculated in parallel with the edt module. If edt is not installed or the parallel calculation fails, it will fall back to the scipy version.
-        2. 'Distance-Transform Based (Non-Parallel)' - Use the scipy non-parallel distance transform to perform the erosion.
-        3. 'Preserve Labels (Parallel)' - Use edt to erode while maintaining object labels. Labeled objects that share a border will see that border get eroded as well.
-        4. 'Preserve Labels (Non - Parallel)' - Use scipy non-parallel distance transform to erode while preserving labels. 
+Parameter explanations
+~~~~~~~~~~~~~~~~~~~~~~
 
-* Press 'Run Erode' to run the method with the desired parameters. Note the channel refered to in 'Active Image' is the one that will be eroded, with the output also being returned there.
+#. **Erosion Radius** — the amount to erode, or shrink, the nodes by in each
+   dimension. This value is scaled according to the scalings in your image, or
+   those assigned within the window. For a 1-to-1 correspondence with voxels, set
+   both scalings to 1; to correspond to a true distance such as microns, enter
+   the scalings for your image and give the radius in that unit.
+#. **xy_scale** — the per-pixel scaling in the 2D xy plane applied to parameter 1.
+   This auto-populates with the ``xy_scale`` property set for the images, but any
+   number entered is always used regardless of the property.
+#. **z_scale** — the per-voxel depth in the 3D z plane applied to parameter 1.
+   This auto-populates with the ``z_scale`` property set for the images, but any
+   number entered is always used regardless of the property.
+#. **Execution mode**
 
-Algorithm Explanations
+   1. **Parallel Distance-Transform Based** — erodes objects via a distance
+      transform calculated in parallel with the ``edt`` module, falling back to
+      the scipy version if ``edt`` is not installed or the parallel calculation
+      fails.
+   2. **Distance-Transform Based (Non-Parallel)** — uses the scipy non-parallel
+      distance transform.
+   3. **Preserve Labels (Parallel)** — uses ``edt`` to erode while maintaining
+      object labels. Borders shared between labeled objects are eroded as well.
+   4. **Preserve Labels (Non-Parallel)** — uses the scipy non-parallel distance
+      transform to erode while preserving labels.
+
+Press **Run Erode** to run the method. The channel set as the active image is
+eroded, and the output is returned there.
+
+Algorithm explanation
 ~~~~~~~~~~~~~~~~~~~~~
 
-* Erosion is accomplished by calculating the distance transform and then thresholding at the desired erosion distance.
-* If labels are kept, the skimage find_borders method is used to boolean threshold out the borders so that the resulting distance transform can tell the labeled objects to move away from each other.
-* As a side note, erosion can be combined with dilation to preform something called an 'Open' or 'Close' operation.
-    * An Open operation is an erosion followed by an equivalent level of dilation, which can be a cheap way to split apart objects that are just barely touching, while also eliminating noise, although it can be a bit disfiguring on masks at large values.
-    * A more useful operation is Close, which is a dilation followed by an equivalent erosion. The result will fuse together nearby objects while keeping the image mask a similar shape/size. This is useful for NetTracer3D specically as a way to fix segmentation artifacts (holes), without having to touch the 'diledge' parameter in the main method.
-    * Both of these can be called from the 'Clean Segmentation' function.
+Erosion is accomplished by calculating the distance transform and thresholding at
+the desired erosion distance. Where labels are kept, the skimage
+``find_borders`` method boolean thresholds out the borders so that the resulting
+distance transform tells the labeled objects to move away from one another.
 
-'Process -> Image -> Fill Holes'
--------------------------------------------------------
-* This method is used to fill holes in an image, namely in a binary segmentation, as a way to eliminate artifacts.
-
-Parameter Explanations
-~~~~~~~~~~~~~~~~~~~~~~~
-1. Only Use 2D Slicing Dimensions
-    * If disabled, the algorithm will attempt to fill holes in all 3 dimensional planes. If enabled, it will only attempt in the XY plane.
-    * Note that enabling this may result in unusual artifacts in some segmentations, since they were likely segmented from a 2D XY perspective, although they typically can be removed via Opening.
-2. Fill Small Holes Along Borders
-    * If enabled, 'Hole' like things on the image border will be filled as long as the border they share with the image is less than 8% of the length of that border.
-    * If disabled, no holes on the image border will be filled.
-3. Place Hole Mask in Overlay 2...
-    * This just puts the hole mask in overlay2 instead of directly filling. The idea is that this mask can then be thresholded or arbitrarily selected for more specific holes, then relayed back to the image by selecting the result (right click -> select all) and imposing it back onto the original image (right click with selection -> selection -> override channel with selection).
+Erosion can be combined with dilation to perform an open or close operation. An
+open operation — erosion followed by an equivalent dilation — is a cheap way to
+split apart objects that are barely touching while eliminating noise, though it
+can disfigure masks at large values. A close operation — dilation followed by an
+equivalent erosion — fuses nearby objects while keeping the mask a similar shape
+and size, which is useful in NetTracer3D for fixing segmentation artifacts such
+as holes without touching the ``diledge`` parameter in the main method. Both are
+available from the **Clean Segmentation** function.
 
 
-* Press 'Run Fill Holes' to run the method with the desired parameters. Note the channel refered to in 'Active Image' is the one that will be 'Filled', with the output also being returned there.
+Process → Image → Fill Holes
+------------------------------
 
-Algorithm Explanations
+Fills holes in an image, typically a binary segmentation, to eliminate artifacts.
+
+Parameter explanations
+~~~~~~~~~~~~~~~~~~~~~~
+
+1. **Only Use 2D Slicing Dimensions** — when disabled, the algorithm attempts to
+   fill holes in all three dimensional planes; when enabled, only in the XY
+   plane. Enabling this may produce unusual artifacts in some segmentations,
+   since they were likely segmented from a 2D XY perspective, though these can
+   usually be removed by opening.
+2. **Fill Small Holes Along Borders** — when enabled, hole-like regions on the
+   image border are filled as long as the border they share with the image is
+   less than 8% of the length of that border. When disabled, no holes on the
+   image border are filled.
+3. **Place Hole Mask in Overlay 2...** — places the hole mask in Overlay2 rather
+   than filling directly. The mask can then be thresholded or selected
+   arbitrarily for more specific holes and relayed back to the image by selecting
+   the result (right click → select all) and imposing it onto the original image
+   (right click with selection → selection → override channel with selection).
+
+Press **Run Fill Holes** to run the method. The channel set as the active image
+is filled, and the output is returned there.
+
+Algorithm explanation
 ~~~~~~~~~~~~~~~~~~~~~
-1. This algorithm iterates through the 2D planes of an image (Just XY by default, but also YZ and XZ if param 1 is enabled).
-2. For each plane, the 2D image is inverted and the scipy.ndimage.label() method is used to find contiguous regions. https://docs.scipy.org/doc/scipy/reference/generated/scipy.ndimage.label.html
-3. Regions that do not share a border are designated as holes and filled.
-4. Regions that share a border are filled if they share less then 8% of the length of that border, unless param 2 is disabled.
-5. The output of this image is always binary.
 
-'Process -> Image -> Binarize'
--------------------------------------------------------
-* This method is used to binarize an image, which sets all foreground regions to 255 (8bit max val), and background regions to 0.
+1. The algorithm iterates through the 2D planes of an image — XY only by default,
+   plus YZ and XZ where parameter 1 is enabled.
+2. For each plane, the 2D image is inverted and ``scipy.ndimage.label()`` finds
+   contiguous regions
+   (https://docs.scipy.org/doc/scipy/reference/generated/scipy.ndimage.label.html).
+3. Regions that do not share a border are designated holes and filled.
+4. Regions that share a border are filled if they share less than 8% of the
+   length of that border, unless parameter 2 is disabled.
+5. The output image is always binary.
 
-Parameter Explanations
-~~~~~~~~~~~~~~~~~~~~~~~
-* 'Method' - Dropdown menu to select binarization method.
-    1. Total Binarize - sets all nonzero regions to 255. This method is not really intended for raw data, but can be applied to labeled segmentations to reset them.
-    2. Predict foreground - Uses Otsu's method to predict the foreground, setting it to 255, while predicted background regions are set to 0. This can be a quick option to segment data if the signal-to-noise is good enough.
 
-Press 'Run Binarize' to run the method. Note the channel refered to in 'Active Image' is the one that will be binarized, with the output also being returned there.
+Process → Image → Binarize
+----------------------------
 
-'Process -> Image -> Label Objects'
--------------------------------------------------------
-* This method is used to label objects an image, which assigns all touching, nonzero areas in the image a distinct numerical identity. 
-* One typically would not label raw data, but it can be applied on binary images to reset them seperate them into unique nodes or domains.
-* This method has no parameters. Simply press 'Run Label' to run the method. Note the channel refered to in 'Active Image' is the one that will be labeled, with the output also being returned there.
+Binarizes an image, setting all foreground regions to 255 — the 8-bit maximum —
+and background regions to 0.
 
-'Process -> Image -> Neighborhood Labels'
--------------------------------------------------------
-* This method is used to label objects in one image based on their proximity to labeled objects in a second image. Essentially, all non-zero objects in the first image will take on the label of the closest labeled object in the second region.
-* This is a useful way to define the relationship of objects in one image to another.
+Parameter explanations
+~~~~~~~~~~~~~~~~~~~~~~
 
-Parameter Explanations
-~~~~~~~~~~~~~~~~~~~~~~~
-1. Prelabeled Array
-    * The dropdown menu where you will select the labeled image you want to use as the seeds to label the other image.
-2. Binary Array
-    * The dropdown menu where you will select the other image (presumably binary) that you want to use the first image to label.
-3. Labeling Mode:
-    * 'Label Individual Voxels based on proximity' - The default mode. Each non-zero voxel in the binary image is just assigned the label of the closest object in the labeled image.
-    * 'Label Continuous Domains that border labels' - A more nuanced version that instead labels only nearby voxels that are continuous in space with each label. Binary voxel elements touching no labels get removed. This option is useful, for example, if a 'Binary Close' was used to refine a segmentation, that segmentation was labeled (or with the branch labeling algo), and then you wanted to re-label the original segmentation based on the 'Closed' one.
-4. 'Correct Nontouching Labels in Post' - If the resultant labeled image has any labels that are not touching, the largest instance of that label will keep its label. All other labels will instead merge with the label they are touching the most, or take on a new label if they are touching none. Note that this is executed by default for the second mode in param 3. 
+**Method**
 
-* Press 'Run Smart Label' to run the method with the desired parameters. Note the channel refered to in param 2 is the one that will be labeled, with the output also being returned there.
+1. **Total Binarize** — sets all nonzero regions to 255. This is not intended for
+   raw data, but can reset labeled segmentations.
+2. **Predict foreground** — uses Otsu's method to predict the foreground, setting
+   it to 255 and predicted background regions to 0. A quick option for segmenting
+   data where the signal-to-noise ratio is good enough.
 
-Algorithm Explanations
-~~~~~~~~~~~~~~~~~~~~~~~
-* This method is ostensibly the same one used in smart dilate but applied in a different context.
-* In the case of the primary labeling mode:
-1. The prelabeled array is binarized, inverted, and then a distance transform with indices is calculated for that array, providing a map of which indices 'belong' to labeled regions in the prelabeled array.
-2. The binary array is split up and paralellized across all CPU cores.
-3. We then search through the indices of all the positive binary array regions, get the index of the label it 'belongs' to from the distance transform index image, and finally reassign the binary index in the binary image to be its nearest label instead.
-4. The chunks are recombined to get the label-dilated array.
+Press **Run Binarize** to run the method. The channel set as the active image is
+binarized, and the output is returned there.
 
-* In the case of the second labeling mode:
-1. Rather than just labeling the closest elements outright, the binary image is skeletonized first. The skeleton pieces then check which label they're touching and inherit that label. This labeled image is combined with the skeleton to give it 'extensions' into the nearby binary regions to allow for a more nuanced label.
-2. The 'Correct Nontouching Labels' option is then always performed on top of this.
 
-* For 'Correct Nontouching Labels'
-1. Each label is evaluated whether it is contiguous in space. For those that are not, the largest volume of said label keeps its label. The other pieces evaluate which label they are touching the most and take on that label. If they are touching nothing, they get a new label entirely.
+Process → Image → Label Objects
+---------------------------------
 
-'Process -> Image -> Threshold/Segment'
--------------------------------------------------------
-* This method calls the threshold/segmenter, which can be used for volumetric, intensity-based, or ML thresholding.
-* This window is the same one that will be pulled up when the pencil widget is clicked. Previously I went over using these windows in :doc:`quickstart`, so see :ref:`segmenting` for a tutorial, however I will talk about more of their specifics here.
+Labels objects in an image, assigning all touching, nonzero areas a distinct
+numerical identity. Raw data would not typically be labeled, but this can be
+applied to binary images to reset them or separate them into unique nodes or
+domains.
 
-Parameter Explanations
-~~~~~~~~~~~~~~~~~~~~~~~
-1. Excecution Mode:
-    * This dropdown window contains two options:
-        1. Using Label/Brightness - Opens the threshold window for intensity-based thresholding
-        2. Using Volumes - Opens the threshold window for volume-based thresholding
-        3. Using Radii - Opens the threshold window for radius-based thresholding.
-        4. Using Node Degree - Opens the threshold window for degree-based thresholding (ie number of network connections. Correspondingly, only applies to the nodes image and requires the network to be computed).
-2. Select
-    * Clicking this just starts the threshold window with whatever option was selected in param 1. The image in 'Active Image' will be the threshold target.
-3. Machine Learning
-    * Alternatively, clicking this option starts the Machine Learning segmenter, which is more suited for thresholding based on morphological patterns in the image.
-    * The Macine Learning segmenter will always segment (and require) the image in the nodes channel. Furthermore, it will use Overlay1 to store training data, the Highlight Overlay to actually segment, and Overlay2 to place the output.
-    * For these reasons, ML segmenting should be typically be done in unique sessions as compared to the rest of the analysis.
+This method has no parameters. Press **Run Label** to run it. The channel set as
+the active image is labeled, and the output is returned there.
 
-Algorithm Explanations
-~~~~~~~~~~~~~~~~~~~~~~~
 
-**If Using the Intensity-Based Segmenter**
+Process → Image → Neighborhood Labels
+---------------------------------------
 
-* The intensity based segmenter simply takes the min and max values designated by the user and thresholds the array for values that fall in between.
+Labels objects in one image based on their proximity to labeled objects in a
+second image: every non-zero object in the first image takes on the label of the
+closest labeled object in the second. This is a useful way to define the
+relationship of objects in one image to another.
 
-**If Using the Volume-Based Segmenter**
+Parameter explanations
+~~~~~~~~~~~~~~~~~~~~~~
 
-* The volume thresholder first needs to find volumes for the designated image using the 'Analyze -> Stats -> Calculate Volumes' method, although if they were already calculated this step will be skipped.
-* Note that if this volumes property was designated for a channel earlier, and the image was changed afterward, this method will likely not function properly, and the program should be reset.
-* The volume based segmenter uses the calculated volumes to decide what label values lie between the min and max values designated by the user and thresholds the array for values that fall in between.
+1. **Prelabeled Array** — the labeled image used as the seeds for labeling the
+   other image.
+2. **Binary Array** — the other, presumably binary, image to be labeled by the
+   first.
+3. **Labeling Mode**
 
-* **Note** that for both of the above segmenters, if the thresholder is closed without thresholding, the thresholded regions will instead be selected and highlighted with the highlight overlay, but only if the nodes/edges channels are the Active Images. This can be a good way to arbitrarily select regions by volume or intensity, for use in any function that runs on selected objects.
+   * **Label Individual Voxels based on proximity** — the default. Each non-zero
+     voxel in the binary image is assigned the label of the closest object in the
+     labeled image.
+   * **Label Continuous Domains that border labels** — a more nuanced version
+     labeling only nearby voxels that are continuous in space with each label.
+     Binary voxel elements touching no labels are removed. This is useful where,
+     for example, a binary close was used to refine a segmentation, that
+     segmentation was labeled (or processed with the branch labeling algorithm),
+     and the original segmentation is to be relabeled based on the closed one.
 
-**If Using the Machine Learning Segmenter**
+4. **Correct Nontouching Labels in Post** — where the resulting labeled image
+   contains labels that are not touching, the largest instance keeps its label
+   while the others merge with the label they touch the most, or take a new label
+   if they touch none. This is executed by default for the second mode in
+   parameter 3.
 
-* The goal of the machine learning segmenter is to take user designated training regions, compute feature maps around them, then use the training regions' corresponding feature map points to train a LightGBM Classifier (which can later segment the entire image).
-* The chunks used to make the feature maps are (as of writing) 49^3 for 3D neighborhoods, while 2D neighborhoods will only be chunked (in 2D) if the 2D plane is greater than 64^3 pixels (if it is, the 2D plane will get divided until each chunk is less than 64^3 pixels). Any time chunks are mentioned below, presume these are the sizes.
-* A feature map is essentially some abstracted dataset (via some neighborhood-considering algorithm such as Gaussian Blur) that allows a coordinate in an image to somewhat inform about what its neighborhood looks like.
+Press **Run Smart Label** to run the method. The channel referenced in parameter
+2 is labeled, and the output is returned there.
 
-1. First, the sk.learn RandomForestClassifier class is initiated with the parameters n_estimators set to 100 and the param max_depth set to None. https://scikit-learn.org/stable/modules/generated/sklearn.ensemble.RandomForestClassifier.html
-2. Whenever a model is trained, chunks around the training data are extracted and turned into mini feature maps. Positive training regions have their values from the feature maps fed to the LightGBM classifier as 'good' numbers while negative training regions have their values from the feature maps fed to the LightGBM classifier as 'bad' numbers.
-3. When the volume is segmented, chunks are handed off to be converted into feature maps, and each voxel in the chunk shows its corresponding index in the feature map to the LightGBM classifier to determine whether it ought to be considered foreground.
-4. When this process finishes, it places its output in Overlay2. Note that the Preview Segment method works similar, except it does not interrupt the user, instead initiating a parallel thread that processes chunks at the user's Z-plane, near their mouse position.
+Algorithm explanation
+~~~~~~~~~~~~~~~~~~~~~
 
-* The feature maps for the 'Quick Model' (sigmas 1, 2, 4, 8) are as follows:
+This is ostensibly the same method used in smart dilate, applied in a different
+context.
+
+In the primary labeling mode:
+
+1. The prelabeled array is binarized, inverted, and a distance transform with
+   indices is calculated, providing a map of which indices belong to labeled
+   regions in the prelabeled array.
+2. The binary array is split up and parallelized across all CPU cores.
+3. The indices of all positive binary array regions are searched, the index of
+   the label each belongs to is obtained from the distance transform index image,
+   and the binary index is reassigned to its nearest label.
+4. The chunks are recombined to give the label-dilated array.
+
+In the second labeling mode:
+
+1. Rather than labeling the closest elements outright, the binary image is
+   skeletonized first. The skeleton pieces check which label they are touching
+   and inherit it. This labeled image is combined with the skeleton to give it
+   extensions into the nearby binary regions, allowing a more nuanced label.
+2. **Correct Nontouching Labels** is then always performed on top of this.
+
+For **Correct Nontouching Labels**, each label is evaluated for contiguity in
+space. Where a label is not contiguous, its largest volume keeps the label, while
+the other pieces take on whichever label they touch most, or a new label entirely
+if they touch nothing.
+
+
+Process → Image → Threshold/Segment
+-------------------------------------
+
+Calls the threshold/segmenter, which supports volumetric, intensity-based, and ML
+thresholding. This is the same window opened by the pencil widget; see
+:ref:`segmenting` for a tutorial walkthrough.
+
+Parameter explanations
+~~~~~~~~~~~~~~~~~~~~~~
+
+1. **Execution Mode**
+
+   1. **Using Label/Brightness** — opens the threshold window for intensity-based
+      thresholding.
+   2. **Using Volumes** — opens the threshold window for volume-based
+      thresholding.
+   3. **Using Radii** — opens the threshold window for radius-based thresholding.
+   4. **Using Node Degree** — opens the threshold window for degree-based
+      thresholding, meaning the number of network connections. This applies only
+      to the nodes image and requires the network to have been computed.
+
+2. **Select** — starts the threshold window with the option chosen above. The
+   active image is the threshold target.
+3. **Machine Learning** — starts the machine learning segmenter, which is better
+   suited to thresholding based on morphological patterns in the image.
+
+   The ML segmenter always segments, and requires, the image in the nodes
+   channel. It uses Overlay1 to store training data, the highlight overlay to
+   segment, and Overlay2 for the output. For these reasons ML segmenting should
+   typically be done in a session separate from the rest of the analysis.
+
+Algorithm explanation
+~~~~~~~~~~~~~~~~~~~~~
+
+**Intensity-based segmenter**
+
+Takes the minimum and maximum values designated by the user and thresholds the
+array for values falling between them.
+
+**Volume-based segmenter**
+
+The volume thresholder first finds volumes for the image using **Analyze → Stats
+→ Calculate Volumes**, skipping this step where they have already been
+calculated. It then uses those volumes to decide which label values lie between
+the user-designated minimum and maximum, and thresholds accordingly.
+
+.. warning::
+
+   Where the volumes property was designated for a channel earlier and the image
+   was changed afterward, this method will likely not function properly and the
+   program should be reset.
+
+.. note::
+
+   For both of the above segmenters, closing the thresholder without thresholding
+   selects and highlights the thresholded regions in the highlight overlay
+   instead, provided the nodes or edges channels are active. This is a good way to
+   select regions arbitrarily by volume or intensity for use in any function that
+   runs on selected objects.
+
+**Machine learning segmenter**
+
+The segmenter takes user-designated training regions, computes feature maps
+around them, and uses the corresponding feature map points to train a LightGBM
+classifier that can later segment the entire image.
+
+A feature map is an abstracted dataset — produced by a neighborhood-considering
+algorithm such as a Gaussian blur — that allows a coordinate in an image to
+convey something about what its neighborhood looks like. The chunks used to build
+feature maps are, as of writing, 49³ for 3D neighborhoods. 2D neighborhoods are
+chunked in 2D only where the 2D plane exceeds 64³ pixels, in which case the plane
+is divided until each chunk falls below that size. All chunks mentioned below are
+these sizes.
+
+1. A LightGBM Classifier is initialized.
+   (https://lightgbm.readthedocs.io/en/latest/Python-Intro.html).
+2. Whenever a model is trained, chunks around the training data are extracted and
+   turned into mini feature maps. Values from positive training regions are fed
+   to the LightGBM classifier as good numbers, and those from negative training
+   regions as bad numbers.
+3. When the volume is segmented, chunks are converted into feature maps, and each
+   voxel in the chunk shows its corresponding index in the feature map to the
+   classifier to determine whether it should be considered foreground.
+4. The output is placed in Overlay2. The preview segment method works similarly,
+   except that it does not interrupt the user, instead initiating a parallel
+   thread that processes chunks at the user's Z-plane near their mouse position.
+
+The feature maps for the **quick model** (sigmas 1, 2, 4, 8) are:
 
 #. The original image.
-#. Gaussian Blurs for sigma values 1, 2, 4, 8.
+#. Gaussian blurs for sigma values 1, 2, 4, 8.
 #. Difference of Gaussians for all sigma pairs: 1-2, 1-4, 1-8, 2-4, 2-8, 4-8.
-#. Gradient Magnitude for the original image and each Gaussian-smoothed image, computed via finite-difference kernels in each spatial dimension.
-#. Laplacian (sum of second derivatives) for the original image and each Gaussian-smoothed image.
+#. Gradient magnitude for the original image and each Gaussian-smoothed image,
+   computed via finite-difference kernels in each spatial dimension.
+#. Laplacian, the sum of second derivatives, for the original image and each
+   Gaussian-smoothed image.
 
-* The feature maps for the 'Detailed Model' (sigmas 1, 2, 4, 8, 16) include everything above (with the additional sigma=16 scale) plus:
+The feature maps for the **detailed model** (sigmas 1, 2, 4, 8, 16) include
+everything above, with the additional sigma=16 scale, plus:
 
-#. Hessian Eigenvalues — All eigenvalues of the Hessian matrix at each voxel/pixel, computed for the original and each Gaussian-smoothed image. In 2D this yields 2 eigenvalues (smallest and largest); in 3D this yields 3 eigenvalues (sorted ascending). Captures local curvature, tubular, and sheet-like structures.
-#. Structure Tensor Eigenvalues — The gradient outer-product tensor is smoothed at integration scales γ = 1 and γ = 3, and its eigenvalues are extracted. Computed for the original and each Gaussian-smoothed image at each integration scale. Captures local orientation and anisotropy (edges, ridges, corners).
-#. Local Statistics — For each sigma value, a sliding window of size (1 + 2·sigma) is applied to the original image to compute: local minimum, local maximum, local mean, and local variance.
+#. **Hessian eigenvalues** — all eigenvalues of the Hessian matrix at each voxel
+   or pixel, computed for the original and each Gaussian-smoothed image. 2D
+   yields 2 eigenvalues, smallest and largest; 3D yields 3, sorted ascending.
+   Captures local curvature and tubular and sheet-like structures.
+#. **Structure tensor eigenvalues** — the gradient outer-product tensor is
+   smoothed at integration scales γ = 1 and γ = 3 and its eigenvalues extracted,
+   computed for the original and each Gaussian-smoothed image at each integration
+   scale. Captures local orientation and anisotropy, meaning edges, ridges, and
+   corners.
+#. **Local statistics** — for each sigma value, a sliding window of size (1 +
+   2·sigma) is applied to the original image to compute the local minimum,
+   maximum, mean, and variance.
 
-* In general, the quick model is preferable for images with good SNR, while the detailed model can be used for tougher segmentations.
-* For RGB images, each channel is processed independently, meaning it requires 3x as many maps.
-* Training by 2D patterns simply uses 2D alternatives to the above described maps.
-* Training with GPU simply uses cupy methods to get the above described maps.
+The quick model is generally preferable for images with good SNR, while the
+detailed model suits tougher segmentations. For RGB images each channel is
+processed independently, requiring three times as many maps. Training by 2D
+patterns uses 2D alternatives to the maps described above, and training with GPU
+uses cupy methods to obtain them.
 
-* Note these feature maps are computed in parallel, so while chunk processing is done sequentially to preserve RAM (especially due to feature map bloat), some speed can be recouped by parellel computing of the maps themselves.
-
-
-'Process -> Image -> Mask Channel'
--------------------------------------------------------
-* This method can be used for masking, or in otherwords, using the binarized version of one channel to mask another.
-
-Parameter Explanations
-~~~~~~~~~~~~~~~~~~~~~~~
-1. Masker
-    * The array that will be used to create a mask. The mask array will always be binarized first, with regions of the mask not equal to 0 serving as regions that will remain in the target array. Any of the four main channels may selected, or the highlight overlay.
-2. To be Masked
-    * The target array that will get masked. Any regions in this array that exist outside the mask will be excluded. Any of the four main channels may selected.
-3. Output Location: 
-    * Where the masked output will be placed. Any of the four main channels may selected, or the highlight overlay.
-
-* Press 'Mask' to run the method with the desired parameters.
-
-'Process -> Image -> Crop Channels'
--------------------------------------------------------
-* This method can be used to crop all the avialable channels.
-* Note that it can be auto-called for a target region by holding Shift while left clicking and dragging in the Image Viewer Window.
-
-Parameter Explanations
-~~~~~~~~~~~~~~~~~~~~~~~
-
-* The parameters are just the min and max values in Z, Y, and X to include in the cropped output.
-
-* Press run to crop the channel. This will crop all four channels but will do nothing to the current properties.
-* To purge nodes that no longer exist from the centroids, identities, etc properties, centroids can be recalculated or any absent nodes can be removed from their properties more efficiently with 'Process -> Modify Network -> Remove Any Nodes not in Nodes Channel from Properties'
+Feature maps are computed in parallel. Chunk processing is sequential to preserve
+RAM, especially given feature map bloat, but some speed is recouped by computing
+the maps themselves in parallel.
 
 
+Process → Image → Mask Channel
+--------------------------------
 
-'Process -> Image -> Channel dtype'
--------------------------------------------
-* This method can be used to change the data type of a channel.
-* It can be useful to preserve memory, when larger data types are not needed.
+Uses the binarized version of one channel to mask another.
 
-Parameter Explanations
-~~~~~~~~~~~~~~~~~~~~~~~
-* This method has a single param.
-1. Change to?:
-    * This is the datatype that the 'Active Image' will be changed to. Options include unsigned 8bit int, unsigned 16bit int, unsigned 32bit int, 32bit float, or 64bit float.
+Parameter explanations
+~~~~~~~~~~~~~~~~~~~~~~
 
-* Press 'Run' to change the 'Active Image' to the desired datatype.
+1. **Masker** — the array used to create the mask. It is always binarized first,
+   with regions not equal to 0 serving as the regions that remain in the target
+   array. Any of the four main channels may be selected, or the highlight
+   overlay.
+2. **To be Masked** — the target array to be masked. Any regions outside the mask
+   are excluded. Any of the four main channels may be selected.
+3. **Output Location** — where the masked output is placed. Any of the four main
+   channels may be selected, or the highlight overlay.
 
-'Process -> Image -> Skeletonize'
--------------------------------------
-* This method can be used to skeletonize an image, which reduces it to its most medial axis.
-* Image skeletons are a good way to extract a simplified version the locations/shapes of image objects.
+Press **Mask** to run the method.
 
-Parameter Explanations
-~~~~~~~~~~~~~~~~~~~~~~~
-1. Remove Branches Pixel Length...?
-    * The length (in pixels/voxels, not scaled) of terminal branches (or spines) to remove from the skeleton output.
-    * This method only removes terminal branches. Internal branches will never be effected regardless of how large this param is.
-    * This method will not trim branches that are longer than the designated length.
-    * However, it will punch holes into branchpoints to fully remove branches. Holes can be filled by dilating the image once, then skeletonizing it again/eroding it once. Currently, these holes are not filled by default.
-2. Spine removal mode:
-    * If set to 'external spines only' - Will remove all spines below the designated length as long as they are not deep to other skeleton structures.
-    * If set to 'Can remove deeper spines' - Will remove spines beyond external ones as long as the involved vertices can be reached from any external segment. Essentially just chews down further, so if you have some kind of meshed up skeleton sticking out at points along a main filament, you can use this mode to get rid of those but keep the main filament.
-3. Attempt to Auto Correct Skeleton looping
-    * The skeletonize algo used here has a tendency to leave fat loop artifacts in thick regions of skeletonization.
-    * Enabling this method will have NetTracer3D attempt to remove those artifacts and replace them with simple medial skeletons.
 
-Algorithm Explanations
-~~~~~~~~~~~~~~~~~~~~~~~
-1. 3D skeletonization is achieved via the sklearn.morphology.skeletonize() algorithm: https://scikit-image.org/docs/stable/auto_examples/edges/plot_skeleton.html
-2. If param 2 is enabled, NetTracer3D will run its 'Process -> Image -> Fill Holes' method, which will for the most part succesfully fill loop artifacts, returning them into 3D blobs. It will then just run the skeletonization again, which is often able to accurately skeletonize the blobs.
-3. If param 1 is enabled, NetTracer3D will iterate along the skeleton and identify endpoints as those regions that only have one neighbor. It will 'crawl' up from those endpoints along the skeleton a number of times equal to the inputed value (or until it hits a junction), and remove all associated positive voxels. If a branch is too long though (and it never reaches its parent branch), it will not get trimmed at all. Because this will leave holes in the skeleton if a branch gets back to its parent branch, the method actually dilates the result once, then skeletonizes that an additional time, which will fill those holes. 
+Process → Image → Crop Channels
+---------------------------------
 
-'Process -> Image -> Binary Watershed'
--------------------------------------
-* This method can be used to watershed a binary image, which splits (via labeling) apart fused objects that 'look' like two seperate objects.
-* It is meant to be applied to binary segmentations, not segmentations of raw images.
-* This method is ideal for seperating overlapping objects in a binary segmentation, for example adjacent cells.
+Crops all available channels. This can also be called automatically for a target
+region by holding :kbd:`Shift` while left clicking and dragging in the image
+viewer window.
 
-Parameter Explanations
-~~~~~~~~~~~~~~~~~~~~~~~
-Running Watershed 
+Parameter explanations
+~~~~~~~~~~~~~~~~~~~~~~
 
-#. Smallest Radius
-    * The smallest radius of objects that you want to be split off by the watershed. Objects any smaller may get thresholded out - this value always overrides below 'proportion' param. Somewhat more intuitive param then below, use a conservative value a bit smaller than your smallest object's radius.
-#. Proportion
-    * Controls how 'aggressive' the watershed is. See algorithm explanation.
-    * Proportion (0-1) of distance transform value set [ie unique elements] to exclude (ie 0.2 = 20% of the set of all values of the distance transform get excluded).Essentially, vals closer to 0 are less likely to split objects but also won't kick out small objects from the output, vals slightly further from 0 will split more aggressively, but vals closer to 1 become unstable, leading to objects being evicted or labelling errors. Recommend something between 0.05 and 0.4, but it depends on the data (Or just enter a smallest radius above to avoid using this). Will tell you in command window what equivalent 'smallest radius' this is.
-#. Execution mode:
-    1. Parallel - Use edt to solve the distance transform in parallel (faster). If edt is not found or the parallel calculation fails somehow, the program will fall back to the scipy version.
-    2. Non-Parallel - Use scipy's non-parallel distance_transform_edt to do the watershed.
+The parameters are the minimum and maximum values in Z, Y, and X to include in
+the cropped output.
 
-Algorithm Explanations
-~~~~~~~~~~~~~~~~~~~~~~~
-1. This algorithm computes a distance transform on the binary image, telling the computer what regions lie close to the background. 
-2. These regions are then eroded based on the value 'Proportion' - Essentially for a proportion of 0.05 (default), only the internal distance values with in the top 5% of the set of all distance values will be kept, to be used as seed kernels for relabeling the image. If you opted to use the smallest radius parameter instead, the program will compute what 'proportion' that corresponds to.
-3. These seed kernels are assigned unique labels with the scipy.ndimage.label() method, before they are used to relabel the original binary image.
-4. The relabelling (and ultimate watershed) from the kernels unto the binary image is then completed with the skimage watershed method.
+Press **Run** to crop. All four channels are cropped, but the current properties
+are unaffected. To purge nodes that no longer exist from the centroids,
+identities, and other properties, recalculate the centroids, or remove absent
+nodes more efficiently with **Process → Modify Network → Remove Any Nodes not in
+Nodes Channel from Properties**.
 
-* This algorithm can be a bit slow on large images. The 'proportion' param is a bit hard to select; therefore, smallest radius is the better option, if it is known (The measurement points can be used to obtain this value). For proportion, 0.05 works rather well for many cases, but if watershed outputs are not quite right, please try varying values for 'proportion', increasing from 0.05 to around 0.5 typically.
-* Below is an example:
 
-*Before Watershedding*
+Process → Image → Channel dtype
+---------------------------------
+
+Changes the data type of a channel, which is useful for preserving memory where
+larger data types are not needed.
+
+Parameter explanations
+~~~~~~~~~~~~~~~~~~~~~~
+
+1. **Change to?** — the datatype the active image is changed to. Options are
+   unsigned 8-bit int, unsigned 16-bit int, unsigned 32-bit int, 32-bit float,
+   and 64-bit float.
+
+Press **Run** to change the active image to the desired datatype.
+
+
+Process → Image → Skeletonize
+-------------------------------
+
+Skeletonizes an image, reducing it to its most medial axis. Skeletons are a good
+way to extract a simplified version of the locations and shapes of image objects.
+
+Parameter explanations
+~~~~~~~~~~~~~~~~~~~~~~
+
+1. **Remove Branches Pixel Length...?** — the length, in unscaled pixels or
+   voxels, of terminal branches or spines to remove from the skeleton output.
+   Only terminal branches are removed; internal branches are never affected
+   regardless of how large this value is, and branches longer than the designated
+   length are not trimmed.
+
+   Removing branches punches holes into branchpoints in order to remove them
+   fully. These holes are not filled by default, but can be filled by dilating
+   the image once, then skeletonizing again or eroding once.
+2. **Spine removal mode**
+
+   * **External spines only** — removes all spines below the designated length,
+     provided they are not deep to other skeleton structures.
+   * **Can remove deeper spines** — removes spines beyond external ones, provided
+     the involved vertices can be reached from any external segment. This chews
+     further down, so a meshed skeleton protruding at points along a main
+     filament can be cleaned away while retaining the main filament.
+3. **Attempt to Auto Correct Skeleton looping** — the skeletonize algorithm tends
+   to leave fat loop artifacts in thick regions. Enabling this has NetTracer3D
+   attempt to remove those artifacts and replace them with simple medial
+   skeletons.
+
+Algorithm explanation
+~~~~~~~~~~~~~~~~~~~~~
+
+1. 3D skeletonization is achieved via ``skimage.morphology.skeletonize()``
+   (https://scikit-image.org/docs/stable/auto_examples/edges/plot_skeleton.html).
+2. Where parameter 2 is enabled, NetTracer3D runs its **Process → Image → Fill
+   Holes** method, which for the most part successfully fills loop artifacts and
+   returns them to 3D blobs, then runs skeletonization again, which is often able
+   to skeletonize the blobs accurately.
+3. Where parameter 1 is enabled, NetTracer3D iterates along the skeleton and
+   identifies endpoints as regions with only one neighbor. It crawls up from
+   those endpoints along the skeleton a number of times equal to the entered
+   value, or until it hits a junction, removing all associated positive voxels. A
+   branch that is too long, never reaching its parent branch, is not trimmed at
+   all. Because this leaves holes in the skeleton where a branch reaches its
+   parent, the method dilates the result once and skeletonizes again to fill
+   them.
+
+
+Process → Image → Binary Watershed
+------------------------------------
+
+Watersheds a binary image, splitting apart — by labeling — fused objects that
+look like two separate objects. It is intended for binary segmentations rather
+than segmentations of raw images, and is ideal for separating overlapping objects
+such as adjacent cells.
+
+Parameter explanations
+~~~~~~~~~~~~~~~~~~~~~~
+
+#. **Smallest Radius** — the smallest radius of objects to be split off by the
+   watershed. Objects smaller than this may be thresholded out. This value always
+   overrides the proportion parameter below and is the more intuitive of the two;
+   use a conservative value slightly smaller than your smallest object's radius.
+#. **Proportion** — controls how aggressive the watershed is; see the algorithm
+   explanation. This is the proportion, from 0 to 1, of the distance transform
+   value set — that is, its unique elements — to exclude, so 0.2 excludes 20% of
+   the set of all distance transform values.
+
+   Values closer to 0 are less likely to split objects but also will not evict
+   small objects from the output. Values slightly further from 0 split more
+   aggressively, while values closer to 1 become unstable, leading to evicted
+   objects or labeling errors. Something between 0.05 and 0.4 is recommended
+   depending on the data, or enter a smallest radius above to avoid using this
+   parameter. The equivalent smallest radius is reported in the command window.
+#. **Execution mode**
+
+   1. **Parallel** — uses ``edt`` to solve the distance transform in parallel,
+      which is faster. Falls back to the scipy version if ``edt`` is not found or
+      the parallel calculation fails.
+   2. **Non-Parallel** — uses scipy's ``distance_transform_edt``.
+
+Algorithm explanation
+~~~~~~~~~~~~~~~~~~~~~
+
+1. A distance transform is computed on the binary image, identifying regions that
+   lie close to the background.
+2. These regions are eroded according to **Proportion**: at the default of 0.05,
+   only internal distance values within the top 5% of the set of all distance
+   values are kept, to serve as seed kernels for relabeling. Where the smallest
+   radius parameter is used instead, the program computes the corresponding
+   proportion.
+3. The seed kernels are assigned unique labels with ``scipy.ndimage.label()``.
+4. Relabeling — the watershed itself — from the kernels onto the binary image is
+   completed with the skimage watershed method.
+
+This algorithm can be slow on large images. **Proportion** is difficult to
+select, so smallest radius is the better option where it is known; the
+measurement points can be used to obtain that value. For proportion, 0.05 works
+well in many cases, but where watershed outputs are not quite right, try
+increasing it from 0.05 toward around 0.5.
+
+*Before watershedding*
 
 .. image:: _static/shed1.png
    :width: 600px
    :alt: Watershed Pre
 
-*After Watershedding*
+*After watershedding*
 
 .. image:: _static/shed2.png
    :width: 600px
    :alt: Watershed Post
 
-'Process -> Image -> Gray Watershed'
--------------------------------------
-* This method can be used to watershed a grayscale image that has had its foreground segmented out, which seperates and labels objects based on their user-designated size and the object's blobbiness.
-* This is best used as a quick way to segment cells without training ML models.
-* The foreground must still be segmented out first, however. This can be easily done by intensity thresholding (accessible via the pencil widget).
-    * If the foreground is not segmented, the entire image will end up getting labeled based on the peaks, which is typically not desired.
 
-Parameter Explanations
-~~~~~~~~~~~~~~~~~~~~~~~
-#. Minimum Peak Distance...
-    * This value is important to set correctly to make this function perform well. This 'minimum peak' is the shortest distance between labeled components. For cells, for example, you can measure the distance between two adjacent, touching cells (with the measurement points tool).
-    * The 'peak' is based on the intensity of the cells so it would be between a pair of high intensity values on said cells. 
-    * If this value is too small, groups of cells may be over-labelled. If it is too large, under-labelled.
-#. Minimum Peak Intensity...
-    * This value can be set to ignore any part of the image below this intensity when finding peaks.
+Process → Image → Gray Watershed
+----------------------------------
 
-Algorithm Explanations
+Watersheds a grayscale image whose foreground has been segmented out, separating
+and labeling objects by their user-designated size and blobbiness. This is best
+used as a quick way to segment cells without training ML models.
+
+The foreground must be segmented first, which is easily done by intensity
+thresholding via the pencil widget. Without it, the entire image ends up labeled
+based on the peaks, which is rarely desired.
+
+Parameter explanations
 ~~~~~~~~~~~~~~~~~~~~~~
-#. This skimage 'peaklocal_max' function is used to find the peaks in the image (regions of high intensity), separated by the above params.
+
+#. **Minimum Peak Distance...** — the shortest distance between labeled
+   components, and important to set correctly for this function to perform well.
+   For cells, measure the distance between two adjacent, touching cells with the
+   measurement points tool. The peak is based on cell intensity, so this is the
+   distance between a pair of high intensity values on those cells. Too small a
+   value over-labels groups of cells; too large a value under-labels them.
+#. **Minimum Peak Intensity...** — ignores any part of the image below this
+   intensity when finding peaks.
+
+Algorithm explanation
+~~~~~~~~~~~~~~~~~~~~~
+
+#. The skimage ``peak_local_max`` function finds the peaks in the image — regions
+   of high intensity — separated by the parameters above.
 #. These peaks are drawn onto a copy of the array.
-#. The original array is binarized, and its cells are labeled by proximity to the peaks via the skimage watershed method.
-
-'Process -> Image -> Invert'
--------------------------------------------------------
-* This method inverts an image, which sets its high values to low values and vice versa.
-* This method has no parameters. Simply press 'Run Inverted' to run the method. Note the channel refered to in 'Active Image' is the one that will be inverted, with the output also being returned there.
-
-'Process -> Image -> Z-Project'
--------------------------------------------------------
-* This method is used to Z-Project an image, which superimposes all XY slices into a single 2D slice.
-* Its only parameter is 'Execution Mode'
-    * These options control how the z-project is generated. 'max' assembles it from the maximum value at each location in the stack. 'mean' takes the means of the stack, 'min' uses the minimum value, 'sum' uses the sum of the values, and 'std' uses the standard deviation of the values.
-* Press 'Run Z-Project' to run the method. Note this method projects all four channels.
-
-'Process -> Image -> Normalize Brigthness'
------------------------------------------------------
-* This method will try to normalize the brightness of a 3D image. Sometimes 3D images are brighter closer to where the light hits them. This is typically at the top of the Z-stack, but can be biased in the X/Y plane as well.
-* This method uses a stack of 2D Distance Transforms to pick out shells at varying depths in your image. It takes the median brightness of the shells and uses it to assemble a vector field of how the brightness tends to change as you get deeper into the tissue.
-* Every voxel is then transformed to mitigate said changes in brightness.
-* Note this will not necessarily perfectly transform your data so that it appears identical to how it would if light scattering did not exist. But I feel like it's a reasonable approximation in datasets that you want to use intensity-appraising methods on (such as the identity assignment functions).
-* When you run this method, it will normalize the 'active channel'. The only parameter is the number of shells you want to use which is 5 by default.
-* Each axis is normalized individually, serially. 
+#. The original array is binarized and its cells labeled by proximity to the
+   peaks via the skimage watershed method.
 
 
-* The third submenu is the generate menu, which has a few functions that use your data to create new datasets
+Process → Image → Invert
+--------------------------
 
-'Process -> Generate -> Generate Nodes (From Node Centroids)'
--------------------------------------------------------------------
-* This is a simple method that takes your node_centroids property and uses the centroids to populate a new image (where each centroid is assigned as a labeled point), and places this image in the nodes channel.
-* The idea behind this method is if the user loaded the centroids property alone, for example from a previous session or extracted from another analysis tool, and then wanted to access the image functions.
-* This method has no parameters. Simply press run it and the node centroids (if assigned) will become a new nodes image.
+Inverts an image, setting high values to low and vice versa. This method has no
+parameters. Press **Run Inverted** to run it; the channel set as the active image
+is inverted, and the output is returned there.
+
+
+Process → Image → Z-Project
+-----------------------------
+
+Z-projects an image, superimposing all XY slices into a single 2D slice.
+
+Its only parameter is **Execution Mode**, which controls how the projection is
+generated: **max** assembles it from the maximum value at each location in the
+stack, **mean** takes the means, **min** the minimum values, **sum** the sum of
+the values, and **std** the standard deviation.
+
+Press **Run Z-Project** to run the method. All four channels are projected.
+
+
+Process → Image → Find Borders of Labels
+----------------------------------------
+
+Alters a labeled channel to instead just be the borders of said labels. There are no
+parameters, this method simply runs the skimage.segmentation.find_boundaries method on the active channel.
+
+Process → Image → Normalize Brightness
+----------------------------------------
+
+Normalizes the brightness of a 3D image. 3D images are sometimes brighter closer
+to where the light hits them, typically at the top of the Z-stack, though the
+bias may also lie in the X/Y plane.
+
+A stack of 2D distance transforms picks out shells at varying depths in the
+image. The median brightness of those shells assembles a vector field describing
+how brightness changes with depth into the tissue, and every voxel is then
+transformed to mitigate those changes. Each axis is normalized individually and
+serially.
+
+This will not necessarily transform data to appear exactly as it would in the
+absence of light scattering, but it is a reasonable approximation for datasets
+intended for intensity-appraising methods such as the identity assignment
+functions.
+
+Running this normalizes the active channel. The only parameter is the number of
+shells to use, which is 5 by default.
+
+
+Process → Generate → Generate Nodes (From Node Centroids)
+-----------------------------------------------------------
+
+The third submenu, **Generate**, contains functions that use your data to create
+new datasets.
+
+This method takes the ``node_centroids`` property and uses the centroids to
+populate a new image, with each centroid assigned as a labeled point, placing it
+in the nodes channel. It exists for cases where the centroids property alone was
+loaded — from a previous session, or extracted from another analysis tool — and
+the image functions are now needed.
+
+This method has no parameters. Run it and the node centroids, where assigned,
+become a new nodes image.
+
 
 .. _generate nodes:
 
-'Process -> Generate -> Generate Nodes (From 'Edge' Vertices)'
--------------------------------------------------------------------
-* This method is designed to be used to create branchpoint networks. See :ref:`branchpoint` for a brief walkthrough.
-* It takes a binary segmentation in the edges channel and skeletonizes it, before placing new nodes along any branchpoints in the skeleton.
-* Selecting this function will show the following menu:
+Process → Generate → Generate Nodes (From Edge Vertices)
+----------------------------------------------------------
+
+Creates branchpoint networks; see :ref:`branchpoint` for a brief walkthrough. It
+takes a binary segmentation in the edges channel, skeletonizes it, and places new
+nodes along any branchpoints in the skeleton.
 
 .. image:: _static/process5.png
    :width: 800px
    :alt: GenNodes Menu
 
-Parameter Explanations
-~~~~~~~~~~~~~~~~~~~~~~~
+Parameter explanations
+~~~~~~~~~~~~~~~~~~~~~~
 
-#. Skeleton Voxel Branch Length to remove...
-    * The length (in pixels/voxels, not scaled) of terminal branches (or spines) to remove from the skeleton output.
-    * This method only removes terminal branches. Internal branches will never be effected regardless of how large this param is.
-    * Branches that are completely removed will not result in a branchpoint. Therefore, this parameter is an effective way to handle artifacts due to spiny skeletons.
-#. Spine removal mode:
-    * If set to 'external spines only' - Will remove all spines below the designated length as long as they are not deep to other skeleton structures.
-    * If set to 'Can remove deeper spines' - Will remove spines beyond external ones as long as the involved vertices can be reached from any external segment. Essentially just chews down further, so if you have some kind of meshed up skeleton sticking out at points along a main filament, you can use this mode to get rid of those but keep the main filament.
-#. Amount to expand nodes...
-    * If a numbered is entered here, branchpoint nodes will be enlarged before they are labeled, meaning nearby ones will merge. This can be a way to handle an abundance of nearby nodes resulting from odd skeleton structures, although I generally feel like it can be ignored.
-#. Use fast dilation:
-    * Selecting this button will have the program attempt to use parallelization to 'merge nodes' (presuming that is happening at all) via the edt module instead of scipy. (This requires the edt module to be installed and working, see the installation doc for more info).
-    * For comparison, the not selecting this will use scipy's distance_transform_edt function to expand nodes, which will be calculated on a single CPU core and thus potentially take a while for larger images. The program will always fall back to this if the parallel calculation fails somehow.
-#. Downsample Factor:
-    * Temporarily downsamples the image to speed up calculation. Downsampling is done in all three dimensions by the inputed factor.
-    * Note that for branch-related functions, downsampling doesn't just speed up calculation, but may also be useful in simplifying the skeletonization of thick objects. The trade off is losing resolution of thin objects, which should be considered if using the downsample to alter skeletonization specifically.
+#. **Skeleton Voxel Branch Length to remove...** — the length, in unscaled pixels
+   or voxels, of terminal branches or spines to remove from the skeleton output.
+   Only terminal branches are removed; internal branches are never affected
+   regardless of how large this value is. Branches removed entirely do not produce
+   a branchpoint, making this an effective way to handle artifacts caused by spiny
+   skeletons.
+#. **Spine removal mode**
 
-* Select 'Run Node Generation' to run this method with the desired parameters. The edges will be skeletonized, while the new nodes will load into the nodes channel.
+   * **External spines only** — removes all spines below the designated length,
+     provided they are not deep to other skeleton structures.
+   * **Can remove deeper spines** — removes spines beyond external ones, provided
+     the involved vertices can be reached from any external segment. This chews
+     further down, so a meshed skeleton protruding at points along a main
+     filament can be cleaned away while retaining the main filament.
+#. **Amount to expand nodes...** — enlarges branchpoint nodes before labeling, so
+   that nearby ones merge. This is one way to handle an abundance of nearby nodes
+   resulting from odd skeleton structures, though it can generally be ignored.
+#. **Use fast dilation** — attempts to parallelize node merging, where it is
+   happening at all, via the ``edt`` module rather than scipy. This requires
+   ``edt`` to be installed and working; see :doc:`installation`. Leaving it
+   disabled uses scipy's ``distance_transform_edt`` to expand nodes on a single
+   CPU core, which may be slow on larger images. The program always falls back to
+   this if the parallel calculation fails.
+#. **Downsample Factor** — temporarily downsamples the image in all three
+   dimensions by the entered factor to speed up calculation. For branch-related
+   functions, downsampling not only speeds up calculation but may also simplify
+   the skeletonization of thick objects; the trade-off is a loss of resolution on
+   thin objects, which should be considered when using downsampling to alter
+   skeletonization specifically.
 
-Algorithm Explanations
-~~~~~~~~~~~~~~~~~~~~~~~
-1. 3D skeletonization is achieved via the sklearn.morphology.skeletonize() algorithm: https://scikit-image.org/docs/stable/auto_examples/edges/plot_skeleton.html
-2. For 3D volumes, NetTracer3D will run its 'Process -> Image -> Fill Holes' method, which will for the most part succesfully fill loop artifacts, returning them into 3D blobs. It will then just run the skeletonization again, which is often able to accurately skeletonize the blobs.
-3. If param 1 is enabled, NetTracer3D will iterate along the skeleton and identify endpoints as those regions that only have one neighbor. It will 'crawl' up from those endpoints along the skeleton a number of times equal to the inputed value (or until it hits a junction), and remove all associated positive voxels.
-4. NetTracer3D will then iterate through the entire skeleton, exploring the immediate 3x3x3 neighborhood for each voxel. Branchpoints are identified by setting the center skeleton piece of the 3x3x3 neighborhood to 0, then using the scipy.ndimage.label() method to assign distinct IDs to all non-touching elements remaining. If there are at least 3 distinct elements, this location is considered a branchpoint and added to an output array.
-5. If param 3 is enabled, the branchpoints are dilated as described, in order to merge nearby branchpoints. The resulting branchpoints are relabeled. Enabling fast dilation utilizes a parallelized (rather than single core) distance transform to calculate this.
-6. The newly labeled branchpoint array is placed in the nodes channel to be used to make branchpoint networks.
+Select **Run Node Generation** to run the method. The edges are skeletonized and
+the new nodes load into the nodes channel.
+
+Algorithm explanation
+~~~~~~~~~~~~~~~~~~~~~
+
+1. 3D skeletonization is achieved via ``skimage.morphology.skeletonize()``
+   (https://scikit-image.org/docs/stable/auto_examples/edges/plot_skeleton.html).
+2. For 3D volumes, NetTracer3D runs its **Process → Image → Fill Holes** method,
+   which for the most part successfully fills loop artifacts and returns them to
+   3D blobs, then runs skeletonization again, which is often able to skeletonize
+   the blobs accurately.
+3. Where parameter 1 is enabled, NetTracer3D iterates along the skeleton and
+   identifies endpoints as regions with only one neighbor. It crawls up from
+   those endpoints along the skeleton a number of times equal to the entered
+   value, or until it hits a junction, removing all associated positive voxels.
+4. NetTracer3D iterates through the entire skeleton, exploring the immediate
+   3×3×3 neighborhood of each voxel. Branchpoints are identified by setting the
+   center skeleton piece of the neighborhood to 0, then using
+   ``scipy.ndimage.label()`` to assign distinct IDs to all non-touching elements
+   remaining. Where at least 3 distinct elements exist, the location is considered
+   a branchpoint and added to an output array.
+5. Where parameter 3 is enabled, the branchpoints are dilated to merge nearby
+   branchpoints, and the results relabeled. Fast dilation uses a parallelized
+   rather than single-core distance transform for this.
+6. The newly labeled branchpoint array is placed in the nodes channel for use in
+   making branchpoint networks.
+
 
 .. _label branches:
 
-'Process -> Generate -> Label Branches'
--------------------------------------------------------------------
-* This method is designed to be used to label the branches of a binary mask (presumably, segmented from a branchy structure). See :ref:`branches` for a brief walkthrough.
-* Labeling branches can be a way to create networks (via branch proximity), or to label an image with meaningful domains that can be used for connectivity networks, calculating radii, etc.
-* Selecting this function will show the following menu:
+Process → Generate → Label Branches
+-------------------------------------
+
+Labels the branches of a binary mask, presumably segmented from a branchy
+structure; see :ref:`branches` for a brief walkthrough. Labeling branches is a
+way to create networks through branch proximity, or to label an image with
+meaningful domains for use in connectivity networks, radius calculations, and so
+on.
 
 .. image:: _static/process6.png
    :width: 800px
    :alt: Branch Menu
 
-Parameter Explanations
-~~~~~~~~~~~~~~~~~~~~~~~
+Parameter explanations
+~~~~~~~~~~~~~~~~~~~~~~
 
-#. Auto-Correct Internal Branches Mode:
-    * If enabled, thick branches that get wrongly split up due to the skeletonization not handling them well (Usually due to messy segmentations) get handled by an additional algorithm that attempts to fix them by merging any branches not touching the background with nearby branch regions that are touching the background. The default setting 'Merge Internal Labels with All External Neighbors' will just cause any label that is not touching the background to combine, together with the external neighbors they touch, into a single label. This is generally the version that should be enabled. Changing this to 'Merge Internal Labels With Non-Branch-Like External Neighbors' will cause a similar merger, but will leave alone any 'external' branches touching the merging region if those branches appear to be more branch-like (this is based on the ratio of surface area bordering the merging region vs the background). This is particularly useful to set if it seems like the merge is causing obviously separate branches to merge with a label region, which is only really prevelant if param 3 is enabled. This option can also be disabled entirely.
-#. Auto-Correct Nontouching Branches...?
-    * Branches essentially get labeled by splitting up their skeleton at the branchpoints and assigning the skeleton pieces labels. The larger branch regions are then labeled just based on what internal filament each nonzero voxel is closest to. What this means is that a very thick branch that has small branches next to it may inadvertently assume the wrong label in its outer regions. I should note this is generally rather uncommon but it can happen. This option is a correction that takes any labels that are not physically joined in space and relabels them. The largest instance of the non-contiguous label keeps its label, but the other pieces inherit the label of the other label they border the most (or they get a new one if they border nothing). 
-#. Reunify Main Branches
-    * By default, a branch is just the structure between two branch points.
-    * However, you might want to consider a 'large branch' a single object regardless of what's branching off of it. Such as a whole tree trunk rather than a bunch of trunk segments.
-    * Enabling this will have the program attempt to reunify these contiguous branches.
-    * Note that at each branchpoint junction, only a single pair can remake a connection.
-#. (For Reunify) Minimum score to merge...?
-    * This val only applies to the above parameter.
-    * If you are doing the reunification, a more positive value here makes branch reconnections less likely to occur.
-    * In my testing, only values 20-40 really made a difference. Those below 20 tended to always connect a pair at a branchpoint, while those above 40 made 0 reconnections.
-#. Internal downsample...
-    * Temporarily downsamples the image to speed up calculation. Downsampling is done in all three dimensions by the inputed factor.
-    * Note that for branch-related functions, downsampling doesn't just speed up calculation, but may also be useful in simplifying the skeletonization of thick objects. The trade off is losing resolution of thin objects, which should be considered if using the downsample to alter skeletonization specifically.
-#. Algorithm...
-    1. Standard - Uses scipy's distance_transform_edt to compute what branch labels belong to which skeleton segment. This can be a slow calculation on large images but results in well-labeled borders.
-    2. Fast - Uses skimage's watershed function to flood branch regions from their skeleton segments to achieve labeling. This is generally faster but will result in rougher labels along borders, where certain branches may have odd shapes there. Enable this for large images if processing time is more important than exactness along these borders.
-#. Compute branch stats:
-    * Will also calculate the branch lengths and tortuosities for each branch.
-#. Generate Nodes from edges?
-    * This method actually forks 'Process -> Generate -> Generate Nodes (From 'Edge' Vertices)' (above), and relies on the nodes it generates for its labeling scheme.
-    * Usually when you run this you would leave this enabled (which will let it populate its own nodes), but in the instance you already ran 'Process -> Generate -> Generate Nodes (From 'Edge' Vertices)', and were satisfied with the result that was placed in the nodes channel, you could skip running it again by disabling this.
+#. **Auto-Correct Internal Branches Mode** — thick branches wrongly split up
+   because skeletonization handled them poorly, usually due to messy
+   segmentations, are addressed by an additional algorithm that merges branches
+   not touching the background with nearby branch regions that are.
 
-* Selecting 'Run Branch Label' will call the 'Process -> Generate -> Generate Nodes (From 'Edge' Vertices)' window, meaning all its corrections can additionally be applied. Please see the above section for info on 'Process -> Generate -> Generate Nodes (From 'Edge' Vertices)'.
-* Select 'Run Node Generation' to run this method with the desired parameters. The edges will be branch-labeled, while the new nodes (branchpoints) will load into the nodes channel.
+   The default, **Merge Internal Labels with All External Neighbors**, combines
+   any label not touching the background, together with the external neighbors it
+   touches, into a single label. This is generally the version to enable.
 
-Algorithm Explanations
-~~~~~~~~~~~~~~~~~~~~~~~
-1. The branch labeler starts with the same set of steps as 'Process -> Generate -> Generate Nodes (From 'Edge' Vertices)', so please see its section above for an outline of those steps.
-2. Once branchpoint nodes are generated, however, they are used as a mask to break up the skeleton. 
-3. The broken skeleton pieces are labeled with the scipy.ndimage.label() method, which assigns nontouching objects unique label IDs. What results is (ideally) a skeleton piece with a unique ID within each branch.
-4. The branches themselves then aquire the label of their branch piece via Smart Label. (see Process -> Image -> Neighbor Labels).
-5. If the 'reunify parameter is being used' — each branchpoint junction of endpoints compares all branches that are considering reconnecting. The branches are scored based on shared characteristics, such as similar radii and similar direction. Those with the highest score get reconnected, so long as any are above the threshold.
-6. See 'Analyze -> Stats -> Morphological -> Calculate Branch Stats' for information about how the branch stats are obtained.
+   **Merge Internal Labels With Non-Branch-Like External Neighbors** performs a
+   similar merger but leaves alone any external branches touching the merging
+   region if those branches appear more branch-like, judged by the ratio of
+   surface area bordering the merging region against the background. This is
+   useful where the merge appears to be causing obviously separate branches to
+   merge with a label region, which is mainly prevalent when parameter 3 is
+   enabled. The option can also be disabled entirely.
+#. **Auto-Correct Nontouching Branches...?** — branches are labeled by splitting
+   their skeleton at the branchpoints and labeling the skeleton pieces. The larger
+   branch regions are then labeled according to which internal filament each
+   nonzero voxel is closest to, which means a very thick branch with small
+   branches beside it may inadvertently assume the wrong label in its outer
+   regions. This is uncommon but possible.
+
+   This correction takes any labels not physically joined in space and relabels
+   them: the largest instance of the non-contiguous label keeps its label, while
+   the other pieces inherit the label of whichever neighbor they border most, or
+   receive a new one if they border nothing.
+#. **Reunify Main Branches** — by default a branch is the structure between two
+   branch points, but a large branch may warrant treatment as a single object
+   regardless of what branches off it — a whole tree trunk rather than a series of
+   trunk segments. This has the program attempt to reunify contiguous branches. At
+   each branchpoint junction, only a single pair can remake a connection.
+#. **Minimum score to merge...?** (for reunify) — a more positive value makes
+   branch reconnections less likely. In testing, only values between 20 and 40
+   made a difference: below 20 a pair was almost always connected at a
+   branchpoint, and above 40 no reconnections occurred.
+#. **Internal downsample...** — temporarily downsamples the image in all three
+   dimensions by the entered factor to speed up calculation. For branch-related
+   functions, downsampling not only speeds up calculation but may also simplify
+   the skeletonization of thick objects; the trade-off is a loss of resolution on
+   thin objects.
+#. **Algorithm**
+
+   1. **Standard** — uses scipy's ``distance_transform_edt`` to compute which
+      branch labels belong to which skeleton segment. This can be slow on large
+      images but produces well-labeled borders.
+   2. **Fast** — uses skimage's watershed function to flood branch regions from
+      their skeleton segments. Generally faster, but produces rougher labels
+      along borders where certain branches may take on odd shapes. Use this for
+      large images where processing time matters more than exactness at borders.
+
+#. **Compute branch stats** — also calculates the branch lengths and tortuosities
+   for each branch.
+#. **Generate Nodes from edges?** — this method forks **Process → Generate →
+   Generate Nodes (From Edge Vertices)** and relies on the nodes it generates for
+   its labeling scheme. Usually this should be left enabled so it can populate its
+   own nodes, but where that function has already been run and its result in the
+   nodes channel is satisfactory, disabling this skips running it again.
+
+Selecting **Run Branch Label** calls the **Generate Nodes (From Edge Vertices)**
+window, so all of its corrections can additionally be applied; see that section
+above. Select **Run Node Generation** to run the method. The edges are branch
+labeled and the new nodes, the branchpoints, load into the nodes channel.
+
+Algorithm explanation
+~~~~~~~~~~~~~~~~~~~~~
+
+1. The branch labeler begins with the same steps as **Generate Nodes (From Edge
+   Vertices)**; see its section above.
+2. Once branchpoint nodes are generated, they are used as a mask to break up the
+   skeleton.
+3. The broken skeleton pieces are labeled with ``scipy.ndimage.label()``, which
+   assigns non-touching objects unique label IDs, ideally producing one skeleton
+   piece with a unique ID within each branch.
+4. The branches themselves acquire the label of their branch piece via smart
+   label; see **Process → Image → Neighborhood Labels**.
+5. Where the reunify parameter is used, each branchpoint junction of endpoints
+   compares all branches considering reconnection. Branches are scored on shared
+   characteristics such as similar radii and similar direction, and those with the
+   highest score are reconnected, provided any exceed the threshold.
+6. See **Analyze → Stats → Morphological → Calculate Branch Stats** for how the
+   branch statistics are obtained.
 
 
-'Process -> Generate -> Trace Filaments'
--------------------------------------------------
-* This method is meant to be used on segmented data for filamentous structures (ie, nerves, vessels). They can either be binary or just have the background removed.
-* It will attempt to trace a refined filamentous structure over the segmentation, serving as a way to remove noise, fill gaps, and smooth edges.
-* The point of this is to refine filamental segmentations before branch labeling, in a way that is hopefully straightforward.
-* Selecting this function will show the following menu:
+Process → Generate → Trace Filaments
+--------------------------------------
+
+Intended for segmented data of filamentous structures such as nerves or vessels,
+which may be binary or simply have the background removed. It traces a refined
+filamentous structure over the segmentation, removing noise, filling gaps, and
+smoothing edges — a straightforward way to refine filament segmentations before
+branch labeling.
 
 .. image:: _static/filaments.png
    :width: 800px
    :alt: filament
-   
 
-Parameter Explanations
-~~~~~~~~~~~~~~~~~~~~~~~
-1. Kernel Spacing
-    * Increase this value to utilize fewer kernels for tracing the filaments. This may slightly decrease accuracy but will generally speed it up in larger images quite noticeably.
-2. Temporary Downsample Factor
-    * Enter an integer greater than 1 to apply that level of downsample when tracing the filaments. Again, this is just a way to speed up the results at the cost of possible accuracy.
-3. Max Distance to Consider Connecting Filaments
-    * Each endpoint of a filament needs to evaluate each other nearby filament to decide if it should make a connection. By default, it will only look outward 20 voxels to do this. Increasing this value will allow for considerations of larger distances, but note that the task increases with cubic complexity since it's a sphere.
-4. Gap Tolerance...
-    * By default, the filaments will not like to connect over large distances even if searching across them. Increasing this parameter will make it more likely.
-5. Connection Quality Threshold
-    * Lower this value to make any sort of connection less likely to occur. Increase it to make connections more frequent.
-6. Minimum Compoment Size to Include
-    * After the filaments have all been connected, those with internal points fewer than this value will get filtered out. Essentially just a way to remove noise for small things.
-7. Spherical Objects...
-    * This represents the sphericity of filaments (after tracing) that should get removed. At the default value of 1.0, this param will actually do nothing and will skip the sphere filtering. But enter a lower value, and any objects with sphericities greater than that will get filtered out. Sphericities can be 0-1, with 1 representing more spherical. Of course, filaments should not be spherical usually, so this option exists to try to remove any such artifacts that arise.
-8. If filtering spheroids...
-    * If you enable the above option, only detected spheroids that are larger than the indicated volume in this parameter will actually get removed. This is because small objects are better handled in param 6, so this is more to get out any obviously incorrect large spheres.
-9. Remove Branch Spines...?
-    * When drawing filaments, enter a value here to remove spines along branches that are below the entered length. This can smooth out some potentially jagged filaments, although it usually can be skipped.
-10. Spine removal mode:
-    * If set to 'external spines only' - Will remove all spines below the designated length as long as they are not deep to other skeleton structures.
-    * If set to 'Can remove deeper spines' - Will remove spines beyond external ones as long as the involved vertices can be reached from any external segment. Essentially just chews down further, so if you have some kind of meshed up skeleton sticking out at points along a main filament, you can use this mode to get rid of those but keep the main filament.
+Parameter explanations
+~~~~~~~~~~~~~~~~~~~~~~
 
-* As a demo, here is the filament tracer applied to the below image:
+1. **Kernel Spacing** — higher values use fewer kernels to trace the filaments,
+   which may slightly decrease accuracy but noticeably speeds up processing on
+   larger images.
+2. **Temporary Downsample Factor** — an integer greater than 1 applies that level
+   of downsample while tracing, again trading possible accuracy for speed.
+3. **Max Distance to Consider Connecting Filaments** — each filament endpoint
+   evaluates nearby filaments to decide whether to connect, looking outward 20
+   voxels by default. Increasing this allows larger distances to be considered,
+   but the task grows with cubic complexity, since the search region is a sphere.
+4. **Gap Tolerance...** — filaments are reluctant to connect over large distances
+   even when searching across them; increasing this makes such connections more
+   likely.
+5. **Connection Quality Threshold** — lower values make connections of any sort
+   less likely, higher values make them more frequent.
+6. **Minimum Component Size to Include** — once filaments are connected, those
+   with fewer internal points than this value are filtered out, which removes
+   small noise.
+7. **Spherical Objects...** — the sphericity of traced filaments that should be
+   removed. At the default of 1.0 this does nothing and sphere filtering is
+   skipped; entering a lower value filters out any object with a sphericity above
+   it. Sphericities range from 0 to 1, with 1 the most spherical. Filaments should
+   not usually be spherical, so this option removes such artifacts.
+8. **If filtering spheroids...** — only detected spheroids larger than the
+   indicated volume are removed. Small objects are better handled by parameter 6,
+   so this targets obviously incorrect large spheres.
+9. **Remove Branch Spines...?** — removes spines along branches below the entered
+   length while drawing filaments, which smooths potentially jagged filaments.
+   This can usually be skipped.
+10. **Spine removal mode**
+
+    * **External spines only** — removes all spines below the designated length,
+      provided they are not deep to other skeleton structures.
+    * **Can remove deeper spines** — removes spines beyond external ones,
+      provided the involved vertices can be reached from any external segment.
+      This chews further down, so a meshed skeleton protruding at points along a
+      main filament can be cleaned away while retaining the main filament.
 
 .. image:: _static/filament2.png
    :width: 800px
    :alt: filament2
-*The gray image is an angiogram of a brain. I created a somewhat messy segmentation (green) of the cranial vessels. The results of the filament tracer are shown in red. These are with the default params. As we can see, it cleaned up the segmentation quite nicely.*
 
-Algorithm Explanations
-~~~~~~~~~~~~~~~~~~~~~~~
-1. Remove small noise objects - Filter out tiny connected components (< 10 voxels)
-2. Compute skeleton - Extract the 3D skeleton of the binary segmentation
-3. Compute distance transform - Calculate distances to nearest background voxel for radius estimation
-4. Sample kernel points - Select evenly-spaced points along the skeleton using topology-aware subsampling
-5. Extract kernel features - Compute geometric features (radius, direction, endpoint status) for each kernel point
-6. Build skeleton backbone graph - Connect all neighboring kernel points along the skeleton
-7. Connect endpoints across gaps - Bridge gaps between disconnected endpoints that should be connected. This is accomplished by scoring each potential endpoint connection based on similar characteristics. For example, filaments traveling in the same direction with similarly sized radii are likely to get connected
-8. Screen noise filaments - Remove entire connected components that are likely noise based on geometric scores
-9. Reconstruct vessel structure - Draw tapered cylinders between connected kernels to create the final traced structure
-10. Filter spherical artifacts (optional) - Remove large spherical blobs that don't match vessel morphology, by calculating sphericity in the manner described in 'Analyze -> Stats -> Morphological -> Calculate Sphericities'
+*The gray image is an angiogram of a brain, with a somewhat messy segmentation of
+the cranial vessels in green. The results of the filament tracer, using default
+parameters, are shown in red — the segmentation has been cleaned up considerably.*
+
+Algorithm explanation
+~~~~~~~~~~~~~~~~~~~~~
+
+1. **Remove small noise objects** — filters out tiny connected components under
+   10 voxels.
+2. **Compute skeleton** — extracts the 3D skeleton of the binary segmentation.
+3. **Compute distance transform** — calculates distances to the nearest
+   background voxel for radius estimation.
+4. **Sample kernel points** — selects evenly spaced points along the skeleton
+   using topology-aware subsampling.
+5. **Extract kernel features** — computes geometric features for each kernel
+   point: radius, direction, and endpoint status.
+6. **Build skeleton backbone graph** — connects all neighboring kernel points
+   along the skeleton.
+7. **Connect endpoints across gaps** — bridges gaps between disconnected
+   endpoints that should be connected, scoring each potential connection on
+   shared characteristics; filaments travelling in the same direction with
+   similarly sized radii are likely to be connected.
+8. **Screen noise filaments** — removes entire connected components that are
+   likely noise, based on geometric scores.
+9. **Reconstruct vessel structure** — draws tapered cylinders between connected
+   kernels to create the final traced structure.
+10. **Filter spherical artifacts** (optional) — removes large spherical blobs
+    that do not match vessel morphology, calculating sphericity as described
+    under **Analyze → Stats → Morphological → Calculate Sphericities**.
 
 
-'Process -> Generate -> Generate Voronoi Diagram'
--------------------------------------------------------------------
-* This method can be used to generate a Voronoi digram from the node_centroids property.
-* A voronoi diagram turns the centroids into an image where labeled cells now represent the region closest to said centroid.
-* This can be used as an alternative way to define node neighborhoods, as opposed to using the distance transform, which can then be used for connectivity networks.
-* Note that the Voronoi diagram is limited to defining neighborhoods surrounding centroids, however, so the above only applies for nodes that are small or homogenous spheroids.
-* Voronoi diagrams have other uses in spatial mathematics but NetTracer3D only offers the option to generate one - it does not use it directly for anything.
-* To run this method, simply select it from the menu bar. If node_centroids exist, their Voronoi diagram will be generated and loaded into Overlay2.
+Process → Generate → Generate Voronoi Diagram
+-----------------------------------------------
 
-Algorithm Explanations
-~~~~~~~~~~~~~~~~~~~~~~~
-* This method now just runs smart dilate with a maximal dimension length of the image as the dilation parameter.
+Generates a Voronoi diagram from the ``node_centroids`` property, turning the
+centroids into an image whose labeled cells represent the region closest to each
+centroid. This offers an alternative to the distance transform for defining node
+neighborhoods, which can then be used for connectivity networks.
 
-'Process -> Generate -> Generate Convex Hull'
------------------------------------------------------
-* This method can be run to create a Convex Hull around the non-background data for the active image.
-* The convex hull is the smallest convex 3D shape that can encapsulate your data. It will be generated as a binary mask in Overlay2.
-* You can essentially use this to define the volume that your data exists in. It can also be used to create a mask to inform the foreground vs background region of your data, for functions that care about that such as the Ripley's function and the 3D nearest neighbor heatmaps.
+Because the Voronoi diagram is limited to defining neighborhoods surrounding
+centroids, this applies only to nodes that are small or homogeneous spheroids.
+Voronoi diagrams have other uses in spatial mathematics, but NetTracer3D only
+offers the option to generate one and does not use it directly for anything else.
 
-'Process -> Generate -> Generate Artificial Hexagonal Nodes'
---------------------------------------------------------
-* This method can be used to create a set of labeled hexagons of arbitrary size. They will be created in Overlay2, either filling the entire image or only within a masked region.
-* You essentially can use this to create 'artificial cells' for neighborhood detection via proximity networks. If you have multichannel data, you can assign the hexagons identities via 'File -> Images -> Node Identities -> Assign Node Identities...'. Then, generate a proximity network followed by 'Analyze -> Network -> Create Communities based on Nodes' Immediate Neighbors'. 
-* When generating the hexagons, you will specify side length, and optionally apply an xy and z_scale if your data is anisotropic in z. You can apply a downsample factor to generate these faster.
-* For 3D data specifically, it will actually try to generate 'Rhombic Dodecahedrons' by default, which is a 3D shape that tesselates well. You can change it to create hexagonal prisms, which is faster but not a true 3D tesselator.
-* You can select whether you'd like the output to be masked by some binary data in the Nodes' channel, such as if your image has background you want to exclude from getting hexagons.
+Select the method from the menu bar to run it. Where ``node_centroids`` exist,
+their Voronoi diagram is generated and loaded into Overlay2.
 
-'Process -> Modify Network/Properties'
+**Algorithm explanation:** the method runs smart dilate with a maximal dimension
+length of the image as the dilation parameter.
+
+
+Process → Generate → Generate Convex Hull
+--------------------------------------------
+
+Creates a convex hull around the non-background data of the active image. The
+convex hull is the smallest convex 3D shape that can encapsulate your data, and
+is generated as a binary mask in Overlay2.
+
+This defines the volume your data occupies, and can also serve as a mask
+distinguishing foreground from background for functions that require one, such as
+the Ripley's function and the 3D nearest neighbor heatmaps.
+
+
+Process → Generate → Generate Artificial Hexagonal Nodes
+----------------------------------------------------------
+
+Creates a set of labeled hexagons of arbitrary size in Overlay2, filling either
+the entire image or only a masked region. These serve as artificial cells for
+neighborhood detection via proximity networks.
+
+With multichannel data, assign the hexagons identities via **File → Images → Node
+Identities → Assign Node Identities...**, then generate a proximity network
+followed by **Analyze → Network → Create Communities Based on Node's Immediate
+Neighbors**.
+
+When generating the hexagons, specify a side length and optionally apply an xy
+and z scale where the data is anisotropic in z. A downsample factor generates
+them faster. The output can be masked by binary data in the nodes channel, which
+is useful for excluding background from receiving hexagons.
+
+For 3D data, the method generates rhombic dodecahedrons by default, a 3D shape
+that tessellates well. This can be changed to hexagonal prisms, which is faster
+but not a true 3D tessellator.
+
+
+Process → Modify Network/Properties
 -------------------------------------
-* The final option in 'Process' is 'Modify Network/Properties', which provides several options for transforming network structure post calculation.
-* Selecting it shows the following menu:
+
+The final option in **Process** provides several ways to transform network
+structure after calculation.
 
 .. image:: _static/process7.png
    :width: 800px
    :alt: Modify Menu
 
+Parameter explanations
+~~~~~~~~~~~~~~~~~~~~~~
 
-Parameter Explanations
-~~~~~~~~~~~~~~~~~~~~~~~
-#. Remove Unsassigned IDs from Centroid List?
-    * Some of the ID-oriented functions expect all the nodes to have an id.
-    * This method specifically removes all centroids of nodes that are not associated with an id.
-    * Then we can use the centroids to make proximity networks without having to worry about unassigned ids.
-#. Force Any Multiple IDs to Pick a Random Single ID?
-    * If a node has multiple identities associated with it, it will randomly pick a single one to be.
-    * This is useful with identity visualization (ie, code identities), when we have a lot of identity permutations but don't want them cluttering things.
-#. Remove Negative IDs
-    * If you created negative IDs for nodes showing what identities they lack (ie, from the threshold identity assigner), you can remove those negative identities by choosing this.
-#. Remove Any Nodes Not in Nodes Channel From Properties?
-    * This method will remove any nodes from the network, node_centroids, communities, and node_identities properties if their label is not present in the image in the nodes channel.
-    * This method is essentially here to support cropping datasets. If you crop an image and would like to eliminate any additional labels from the other properties that are no longer in the image, this is the way to do it.
-#. Remove Trunk...?
-    * Sometimes networks will have regions that are widely connected by a central trunk structure.
-    * If we are interested in evaluating more downstream connections, it may be a good idea to remove the trunk, or otherwise it will dominate the network.
-    * Selecting this option will remove the trunk (Which is defined as the most interconnected edge here) from the network.
-#. Convert Trunk to Node...?
-    * This is the same idea as above, but it converts the trunk into a new node instead.
-    * Not only does this update the network structure, but it will also take said trunk from the edges image and write it into the nodes image.
-    * Since this preserves network structure by considering trunks as a central hub rather than a series of connections, this can often be a better alternative to the above (which may instead shatter the network into subgraphs).
-#. Convert 'Edges' to node objects?
-    * Like Trunk -> Node, however the conversion will be done on all edges in the image. The edge image and the nodes image will resultantly be merged, while the network will be updated to pair nodes to the edge they previously shared (with the identified edge column being set to all 0s).
-    * Due to the merge, edges will also be transposed to take on new labels that do not overlap with any previous node labels, if necesarry.
-    * Furthermore, any edges (which are now nodes) will be updated in the node_identities menu to now have the identity 'edge'.
-    * This method can be a good way to look at exact connectivity between two objects, especially for visualization via generating a network overlay.
-#. Remove Network Weights?
-    * Connectivity Networks that get generated by default assign additional weight to any nodes that are joined by multiple labeled edges.
-    * Running this method removes those weights, reducing each edge to a parameter of absolute connectivity.
-#. Prune connections between nodes of the same type...?
-    * If the node_identities property is set, any two nodes with the same identity will have their connections removed.
-    * This can be useful if we are only interested in connections between different types of nodes, rather than connections those nodes share with themselves.
-#. Isolate Connections between two specific node types...?
-    * If the node_identities property is set, the user will be prompted with another window that will ask them to select two of the node identities present in the image.
-    * The network will then remove any connections belonging to nodes not of those two identities.
-    * Identities between the selected node types (including within their own identity) will be kept.
-#. Rearrange Community IDs by size?:
-    * Assigns community IDs to be by the number of nodes they contain, starting with 1 for the largest community and so forth.
-    * Equally sized communities will just be placed in arbitrary sequential order.
-    * This can be used with the UMAP, for example, to assign more significance to the community IDs.
-#. Convert communities to nodes?
-    * If the nodes have been partitioned into communities, this method will replace the network between the nodes with a network between its communities instead.
-    * Additionally, any labeled nodes in the nodes channel will take on a label belonging to their community, rather than their original ID.
-#. Change/Remove Identities:
-    * Opens a menu with two functions: 1. You can remove any number of node identities from your session. 2. You can create groups of identities with positive gates (ie find nodes that have this identity) and negative gates (ie disclude nodes that have this identity) and rename them to some new identity. Use this if you have multi-identity nodes that you'd like to reduce to a singular identity, or if you just want to rename some identity.
-#. Add/Remove Network Pairs
-    * Opens a new window where the user can enter new pairs of nodes to add to (or remove from) the network (along with an optional edge ID associated with them if applicable).
-    * Removing a pair of nodes without entering an edge ID will remove all examples of that node-pair (regardless of which edge), while specifying an edge ID will only remove the node pair that was joined by that edge.
-    * This method allows arbitrary modification of the network, since the table widgets don't allow direct editing (although they can be exported, edited in something like Microsoft Excel, then reloaded, if desired).
+#. **Remove Unassigned IDs from Centroid List?** — some ID-oriented functions
+   expect all nodes to have an ID. This removes all centroids of nodes not
+   associated with one, so that the centroids can be used to make proximity
+   networks without concern for unassigned IDs.
+#. **Force Any Multiple IDs to Pick a Random Single ID?** — a node with multiple
+   identities randomly picks one. This is useful for identity visualization, such
+   as code identities, where many identity permutations would otherwise clutter
+   the output.
+#. **Remove Negative IDs** — removes negative identities created to show which
+   identities nodes lack, for example from the threshold identity assigner.
+#. **Remove Any Nodes Not in Nodes Channel From Properties?** — removes any node
+   from the network, ``node_centroids``, ``communities``, and ``node_identities``
+   properties whose label is not present in the nodes channel image. This exists
+   to support cropping: after cropping an image, this eliminates labels from the
+   other properties that are no longer present.
+#. **Remove Trunk...?** — networks sometimes have regions widely connected by a
+   central trunk structure, which will dominate the network when downstream
+   connections are of interest. This removes the trunk, defined here as the most
+   interconnected edge.
+#. **Convert Trunk to Node...?** — as above, but converts the trunk into a new
+   node instead, updating the network structure and moving the trunk from the
+   edges image into the nodes image. Because this preserves network structure by
+   treating trunks as a central hub rather than a series of connections, it is
+   often a better alternative to removal, which may shatter the network into
+   subgraphs.
+#. **Convert 'Edges' to node objects?** — like trunk-to-node, but applied to all
+   edges in the image. The edge and node images are merged and the network updated
+   to pair nodes to the edge they previously shared, with the identified edge
+   column set to all 0s. Because of the merge, edges are transposed to take on new
+   labels that do not overlap any previous node labels where necessary, and any
+   edges — now nodes — are updated in the node identities menu to carry the
+   identity ``edge``. This is a good way to examine exact connectivity between two
+   objects, especially for visualization via a generated network overlay.
+#. **Remove Network Weights?** — connectivity networks assign additional weight by
+   default to nodes joined by multiple labeled edges. This removes those weights,
+   reducing each edge to a parameter of absolute connectivity.
+#. **Prune connections between nodes of the same type...?** — where the
+   ``node_identities`` property is set, removes connections between any two nodes
+   sharing an identity. This is useful when only connections between different
+   node types are of interest.
+#. **Isolate Connections between two specific node types...?** — where the
+   ``node_identities`` property is set, prompts for two of the node identities
+   present in the image, then removes any connections belonging to nodes not of
+   those two identities. Connections between the selected node types, including
+   within their own identity, are kept.
+#. **Rearrange Community IDs by size?** — assigns community IDs by the number of
+   nodes they contain, starting with 1 for the largest. Equally sized communities
+   are placed in arbitrary sequential order. This can be used with the UMAP, for
+   example, to give the community IDs more significance.
+#. **Convert communities to nodes?** — where nodes have been partitioned into
+   communities, replaces the network between nodes with a network between their
+   communities. Labeled nodes in the nodes channel take on a label belonging to
+   their community rather than their original ID.
+#. **Change/Remove Identities** — opens a menu with two functions: removing any
+   number of node identities from the session, and creating groups of identities
+   with positive gates, finding nodes that have an identity, and negative gates,
+   excluding nodes that have one, then renaming them to a new identity. Use this
+   to reduce multi-identity nodes to a single identity, or simply to rename an
+   identity.
+#. **Add/Remove Network Pairs** — opens a window for entering new pairs of nodes
+   to add to or remove from the network, along with an optional associated edge
+   ID. Removing a pair without an edge ID removes all instances of that node pair
+   regardless of edge, while specifying an edge ID removes only the pair joined by
+   that edge. This allows arbitrary modification of the network, since the table
+   widgets do not permit direct editing — though they can be exported, edited in
+   software such as Microsoft Excel, and reloaded.
 
-* Press 'Make Changes' to run the selected modifications. If multiple modifications are selected, NetTracer3D will attempt to do them all, however this may lead to unpredictable results due to the serial order these transformations occur in. Because of this, doing one transformation at a time is advisable.
+Press **Make Changes** to run the selected modifications.
+
+.. warning::
+
+   Where multiple modifications are selected, NetTracer3D attempts all of them,
+   which may lead to unpredictable results given the serial order in which the
+   transformations occur. Performing one transformation at a time is advisable.
 
 
 Next Steps
----------
-This concludes the explanations of the process menu. Next, proceed to :doc:`image_menu` for information on the image menu functions.
+----------
+
+This concludes the process menu. Next, proceed to :doc:`image_menu` for
+information on the image menu functions.

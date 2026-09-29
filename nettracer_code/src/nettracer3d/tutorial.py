@@ -2497,6 +2497,8 @@ def setup_analysis_tutorial(window):
 
         f"""--The last stats functions are as follows:
 
+        \n\n--Use 'Identity Coexpression Matrix' to yield a table/heatmap showing what identities your nodes tend to co-express (if your nodes have multiple identities). 
+
         \n\n--Use 'Significance Testing' to open a dedicated GUI for statistical testing on your data. Arrange data in Excel format, drag columns to compare, and select from various tests including t-tests, ANOVA, Mann-Whitney U, Pearson, Shapiro-Wilk, and Chi-squared tests.
 
         \n\n--Use 'Show Identities Violin/UMAP' to visualize normalized violin plots and UMAPs for nodes assigned identities via multiple channel markers. Displays intensity expression patterns for specific identities or communities/neighborhoods based on channel marker data. Nodes can also be grouped into neighborhoods based on shared intensity expressions across channels. This requires use of the table obtained from 'File -> Images -> Node Identities -> Assign Node Identities from Overlap with Other Images.""",

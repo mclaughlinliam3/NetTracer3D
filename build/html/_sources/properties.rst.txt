@@ -1,44 +1,83 @@
 .. _properties:
 
-============
+================================
 Properties of a Network3D Object
-============
+================================
+
+The Network3D object is how NetTracer3D groups together the data of an ongoing
+session. Its properties are saved and loaded with **File → Save (As) Network 3D
+Object** and the equivalent load option, and many of NetTracer3D's methods
+reference one or more of them to function correctly.
+
+.. contents:: On this page
+   :local:
+   :depth: 2
+
 
 Main Properties
-------------------------------
-The Network3D Object is how NetTracer3D groups together the data in an ongoing session. These properties will be saved/loaded when using 'File -> Save (As) Network 3D Object', or the equivalent load.
-Many of NetTracer3D's methods may need to reference one or more of these properties to function correctly.
+---------------
 
-* These properties are as follows:
-    1. Nodes - the image in the nodes channel that represents objects to be grouped in a network.
-    2. Edges - the image in the edges channel that represents objects to use to connect nodes together.
-    3. Overlay 1 - the image in the overlay1 channel
-    4. Overlay 2 - the image in the overlay2 channel
-    5. Network - The network itself.
-    6. Node Centroids - The [Z,Y,X] centroid of each node.
-    7. Edge Centroids - The [Z, Y, X] centroid of each edge.
-    8. Node Communities - The communities that nodes in the network belong to.
-    9. Node identities - The assigned identities of nodes in the network.
-    10. xy_scale - The real-dimension per pixel of the 2D x/y plane (ie, 5 microns per pixel). This value will always be the same for both x and y. NetTracer3D does not currently support differentially scaled x and y dimensions.
-    11. z_scale - The real dimension per voxel-depth of the 3D z plane.
-* Whenever 'Process -> Calculate Connectivity Network' is run, NetTracer3D will aquire an additional hidden property.
-    12. Search Region - An image of the nodes after they have been expanded by the desired parameter to search for edge connections.
-    * Note this property does occupy RAM. It will be saved alongside the 'Network 3D Object' if it exists, but it will not be loaded in when loading 'Network 3D Object'.
-    * The main reason this exists is to allow it to be saved, after which the user can simply load the Search Region itself into the nodes channel, so that they may compute Connectivity Networks under new parameters, while being able to skip the node_search step completely (which is the slow step).
-* Note that the majority of the properties can be purged from RAM by using 'Image -> Properties'. **The xy_scale and z_scale values should also be assigned here.**
+1. **Nodes** — the image in the nodes channel, representing objects to be grouped
+   in a network.
+2. **Edges** — the image in the edges channel, representing objects used to
+   connect nodes together.
+3. **Overlay 1** — the image in the overlay1 channel.
+4. **Overlay 2** — the image in the overlay2 channel.
+5. **Network** — the network itself.
+6. **Node Centroids** — the [Z, Y, X] centroid of each node.
+7. **Edge Centroids** — the [Z, Y, X] centroid of each edge.
+8. **Node Communities** — the communities that nodes in the network belong to.
+9. **Node Identities** — the assigned identities of nodes in the network.
+10. **xy_scale** — the real dimension per pixel of the 2D x/y plane (for example,
+    5 microns per pixel). This value is always the same for both x and y;
+    differentially scaled x and y dimensions are not currently supported.
+11. **z_scale** — the real dimension per voxel-depth of the 3D z plane.
 
-Necessary Structures to Properties stored in CSVs
----------------------------------------
-* When NetTracer3D saves its properties, it organizes several into csv spreadsheets, containing specific data organization that it expects to find when loading the same properties back in.
-* Some users may wish to load these properties in from elsewhere (.csv or .xlsx can be used to load). For example, if they want to manually assign nodes to certain centroids or identities by editing microsoft excel, or batch organizing datasets for import this way using something like the pandas module in python.
-* Note that node identities specifically will also save into a .json that will be take priority over the .csv when loading. If you want to load the .csv instead, please delete the .json.
-* Note that .xlsx files have a row limit, so I generally recommend saving as .CSV if possible, especially for large property lists.
-* These structures are as follows (make sure to use correct headers):
+Running **Process → Calculate Connectivity Network** acquires an additional
+hidden property:
 
-1. network property:
+12. **Search Region** — an image of the nodes after expansion by the desired
+    parameter to search for edge connections.
 
-* Network tables are organized with this structure. Adjacent nodes in the same row are connected. The edge to the right of a node-pair in the same row is the edge that was found to connect them. If labeled edges were not used, this value is simply 0.
-* For example, this table specifically is saying node 18 is paired to node 20, connected via edge 175, etc.
+This property occupies RAM. It is saved alongside the Network3D object if it
+exists, but is not loaded back in with one. Its purpose is to allow the search
+region to be saved and then loaded directly into the nodes channel, so that
+connectivity networks can be computed under new parameters while skipping the
+node search step entirely — the slow step of the process.
+
+Most properties can be purged from RAM using **Image → Properties**. **The
+xy_scale and z_scale values should also be assigned there.**
+
+
+Structures Required for Properties Stored in CSVs
+-------------------------------------------------
+
+NetTracer3D organises several properties into CSV spreadsheets with a specific
+data layout, which it expects to find when loading those properties back in.
+Users may wish to supply these properties from elsewhere — both ``.csv`` and
+``.xlsx`` can be loaded — for example to assign nodes to particular centroids or
+identities by hand in Microsoft Excel, or to batch-organise datasets for import
+using a library such as pandas.
+
+.. note::
+
+   Node identities are also saved to a ``.json``, which takes priority over the
+   ``.csv`` when loading. To load the ``.csv`` instead, delete the ``.json``.
+
+.. note::
+
+   ``.xlsx`` files have a row limit, so saving as ``.csv`` is generally
+   recommended, especially for large property lists.
+
+The required structures are given below. Be sure to use the correct headers.
+
+1. network
+~~~~~~~~~~
+
+Adjacent nodes in the same row are connected, and the edge to the right of a
+node-pair in that row is the edge found to connect them. If labeled edges were
+not used, this value is simply 0. The table below states that node 18 is paired
+with node 20 via edge 175, and node 16 with node 20 via edge 176.
 
 +------------+------------+-----------+
 | Node A     | Node B     | Edge C    |
@@ -48,12 +87,13 @@ Necessary Structures to Properties stored in CSVs
 | 16         | 20         | 176       |
 +------------+------------+-----------+
 
+Additional column sets should be read as their own rows — node 21 paired to node
+22, connected by edge 177.
 
-* These new columns should be thought of their own rows, as in node 21 is paired to node 22, connected by edge 177.
+2. node_identities
+~~~~~~~~~~~~~~~~~~
 
-2. node_identities:
-
-* Node identities are organized with a simple Node:Identity structure.
+Node identities use a simple Node:Identity structure.
 
 +--------+----------+
 | NodeID | Identity |
@@ -65,11 +105,16 @@ Necessary Structures to Properties stored in CSVs
 | 3      | [Value]  |
 +--------+----------+
 
-* Note that node identities typically pair a node to a single identity value, however nodes can also be assigned multiple identities. In such a case, the identity value is assigned as a list of all corresponding identities. This list is stored as a string in memory, for compatibility with other methods, however it is returned to a list in relevant functions using ast.literal_eval().
+Node identities typically pair a node to a single identity value, but nodes may
+also be assigned multiple identities. In that case the identity value is a list
+of all corresponding identities, stored as a string in memory for compatibility
+with other methods and converted back to a list in relevant functions using
+``ast.literal_eval()``.
 
-3. node_communities:
+3. node_communities
+~~~~~~~~~~~~~~~~~~~
 
-* This property has the same structure as node_identities.
+This property shares the structure of node_identities.
 
 +--------+-----------+
 | NodeID | Community |
@@ -81,11 +126,12 @@ Necessary Structures to Properties stored in CSVs
 | 3      | [Value]   |
 +--------+-----------+
 
-4. node_centroids:
+4. node_centroids
+~~~~~~~~~~~~~~~~~
 
-* Node centroids organize using Node:Zval:Yval:Xval.
-* Make sure to use Z, Y, X. This is because of the way numpy organizes dimensions.
-* Coordinates should generally be ints greater than 0.
+Node centroids are organised as Node:Zval:Yval:Xval. The Z, Y, X order reflects
+the way numpy organises dimensions. Coordinates should generally be integers
+greater than 0.
 
 +---------+-------+-------+-------+
 | Node ID | Z     | Y     | X     |
@@ -97,9 +143,10 @@ Necessary Structures to Properties stored in CSVs
 | 3       | [Val] | [Val] | [Val] |
 +---------+-------+-------+-------+
 
-4. edge_centroids:
+5. edge_centroids
+~~~~~~~~~~~~~~~~~
 
-* Edge centroids are ostensibly the same as node centroids, albeit with a different header.
+Edge centroids are identical to node centroids apart from the header.
 
 +---------+-------+-------+-------+
 | Edge ID | Z     | Y     | X     |
@@ -111,17 +158,22 @@ Necessary Structures to Properties stored in CSVs
 | 3       | [Val] | [Val] | [Val] |
 +---------+-------+-------+-------+
 
-Temp Properties
-------------------
 
-* The following properties will be maintained for the duration of an active session but are neither saved nor loaded with 'Network 3D Objects':
-    1. Object volumes.
-    2. Object Radii.
-    
-    * While both of these properties exist in the active session, they will be displayed when their corresponding objects are clicked in the 'Info on Object' table.
+Temporary Properties
+--------------------
 
+The following properties are maintained for the duration of an active session but
+are neither saved nor loaded with Network3D objects:
+
+1. Object volumes
+2. Object radii
+
+While these properties exist in the active session, they are displayed in the
+**Info on Object** table when their corresponding objects are clicked.
 
 
 Next Steps
----------
-Next, you can read the doc :doc:`excel_helper` for help using the excel loader GUI (this is a tool to help load data from excel files).
+----------
+
+Next, read :doc:`excel_helper` for guidance on the excel loader GUI, a tool for
+loading data from excel files.

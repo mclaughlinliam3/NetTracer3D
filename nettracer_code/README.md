@@ -81,21 +81,24 @@ While not related to NetTracer3D, if you want to use Cellpose (for which GPU-usa
 This gui is built from the PyQt6 package and therefore may not function on dockers or virtual envs that are unable to support PyQt6 displays.
 
 
-NetTracer3D is freely available for academic and nonprofit use and can obtained from pip (pip install nettracer3d), provided that citation is included in any abstract, paper, or presentation utilizing NetTracer3D.
+NetTracer3D is freely available for academic and nonprofit use and can obtained from pip (pip install nettracer3d), provided that citation is included in any abstract, paper, or presentation utilizing NetTracer3D. Please see 'usage' in the documentation for the license, or download the code from the GitHub/python package page which also includes the license.
 
-If you use NetTracer3D for your research, we just ask you please cite this paper: https://doi.org/10.64898/2026.03.25.714104
+If you use NetTracer3D for your research, we ask you please cite this paper: https://doi.org/10.64898/2026.03.25.714104
 
 NetTracer3D was developed by Liam McLaughlin while working under Dr. Sanjay Jain at Washington University School of Medicine.
 
--- Version 1.6.0 Updates --
+-- Version 2.0.0 Updates --
+	
+	* Fixed tables to stop leaking memory by not emptying memory once closed.
+	* The Average Nearest Neighbors (spatial analysis function) now has an option to restrict nearest neighbor analysis to labeled components within a separate channel mask.
+	* Added a process function to get the borders of labeled objects.
+	* Added label permutation as an alternative for random simulation within the 'Identity Distribution of Neighbors' Function.
+	* Updated License Language
+	
+	
 
-	* Removed some of the optional pip install commands. Napari is now included as a default install, and so all of the visualization derivative pip installs are gone.
-	* Added plugin support. There is currently no online plugin distributor present so this is more of an early beta than anything; also I wanted to move the Cellpose manager out of the main window and into a more compartmentalized area. But what is set up is a plugin manager and associated api that allows essential variables and functions from the gui to be accessed by external modules for more customizable interactions. The api has a set of safe functions available to use to make plugins. Plugins should then be named __init__.py and distributed in a folder alongside a requirements.txt file. Plugins can be placed in the plugins directory under the main NetTracer3D package directory. If these were ever to be distributed online, this would be handled automatically ideally. Once the 1.6.0 documentation has been updated, there will be a plugin page to read more in depth about this.
-	* For data tables that are generated - you can now auto filter them for specific node identities. Useful if you want to just analyze a specific population but you're getting data on everything.
-	* From the 'Select All' right click menu - there is now an option to select all the labels available within the 'active_channel', but to select the nodes matching those labels. Useful if you have a subset of node masks in the overlays or similar but just want to select those objects within the nodes channel.
-	* Not really a main feature but if you specify channel tiff names to end with 'compressed.tif', they will now save as compressed files. They are compressed by default when saving the entire session but this gives a way to do it for single channels.
-	* The 'Network Nearest Neighbors' function now has some additional features for computing the overlay1 output. Before you could just optionally compute an overlay showing the shortest paths between your objects of interest. Now, you can also compute a 'Steiner Subgraph', which is similar to the former but also forces all the objects to exist in the same interconnected subgraph (so you'll get a shortest, snaking path between all the objects). The shortest paths overlay would just make each object find each other object and not necessarily have everything be connected. You can also compute a 'Minimal Connecting Subgraph', which essentially computes short paths between all your objects while also connecting them if a path exists. This tends to be a busier graph than the steiner, often yielding multiple short paths between objects, while also forcing complete connection of the subgraph. This last instance will also send its subgraph to the 'Selection Table' in the lower right if the user wants to do more with it.
-	* A few other bug fixes.
+	
+
 	
 	
 	
