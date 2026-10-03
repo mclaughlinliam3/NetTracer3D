@@ -5640,6 +5640,8 @@ class ImageViewerWindow(QMainWindow):
             return df
 
         except:
+            #import traceback
+            #traceback.print_exc()
             pass
 
 
@@ -9482,7 +9484,7 @@ class TabbedDataWidget(QTabWidget):
                 self.parent_window.data_table.remove(old_table)
             if idx >= 0:
                 self.removeTab(idx)
-            _destroy_table(self, old_table)
+            self._destroy_table(old_table)
             del old_table
      
         new_table = CustomTableView(self.parent_window, is_top_table=True)  # noqa: F821

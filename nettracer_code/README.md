@@ -87,15 +87,9 @@ If you use NetTracer3D for your research, we ask you please cite this paper: htt
 
 NetTracer3D was developed by Liam McLaughlin while working under Dr. Sanjay Jain at Washington University School of Medicine.
 
--- Version 2.0.0 Updates --
+-- Version 2.0.1 Updates --
 	
-	* Fixed tables to stop leaking memory by not emptying memory once closed.
-	* The Average Nearest Neighbors (spatial analysis function) now has an option to restrict nearest neighbor analysis to labeled components within a separate channel mask.
-	* Added a process function to get the borders of labeled objects.
-	* Added label permutation as an alternative for random simulation within the 'Identity Distribution of Neighbors' Function.
-	* Updated License Language
-	
-	
+	* Fixed bug with tables with the same name not properly replacing each other.
 
 	
 
